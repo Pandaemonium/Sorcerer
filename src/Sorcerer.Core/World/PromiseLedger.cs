@@ -5,7 +5,11 @@ public sealed record WorldPromise(
     string Kind,
     string Text,
     string Status,
-    bool PlayerVisible);
+    bool PlayerVisible,
+    string Source = "unknown",
+    int Salience = 1,
+    string? BoundPlace = null,
+    string? RealizedIn = null);
 
 public sealed class PromiseLedger
 {
@@ -25,5 +29,12 @@ public sealed class PromiseLedger
         _promises.Add(promise);
         return promise;
     }
-}
 
+    public IReadOnlyList<WorldPromise> Snapshot() => _promises.ToArray();
+
+    public void ReplaceAll(IEnumerable<WorldPromise> promises)
+    {
+        _promises.Clear();
+        _promises.AddRange(promises);
+    }
+}

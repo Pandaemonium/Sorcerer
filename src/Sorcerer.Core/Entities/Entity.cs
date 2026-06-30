@@ -54,5 +54,35 @@ public sealed class Entity
         throw new InvalidOperationException(
             $"Entity {Id} does not have component {typeof(TComponent).Name}.");
     }
-}
 
+    public bool Remove<TComponent>()
+        where TComponent : IEntityComponent =>
+        _components.Remove(typeof(TComponent));
+
+    public Entity Clone()
+    {
+        var clone = new Entity(Id, Name);
+        foreach (var pair in _components)
+        {
+            clone._components[pair.Key] = CloneComponent(pair.Value);
+        }
+
+        return clone;
+    }
+
+    private static IEntityComponent CloneComponent(IEntityComponent component) =>
+        component switch
+        {
+            InventoryComponent inventory => inventory with
+            {
+                Items = new Dictionary<string, int>(inventory.Items, StringComparer.OrdinalIgnoreCase),
+                TreasuredItems = new HashSet<string>(inventory.TreasuredItems, StringComparer.OrdinalIgnoreCase),
+            },
+            EquipmentComponent equipment => equipment with
+            {
+                Slots = new Dictionary<string, string>(equipment.Slots, StringComparer.OrdinalIgnoreCase),
+                FocusSlots = new HashSet<string>(equipment.FocusSlots, StringComparer.OrdinalIgnoreCase),
+            },
+            _ => component,
+        };
+}

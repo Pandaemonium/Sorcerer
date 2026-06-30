@@ -17,6 +17,10 @@ public sealed class GameState
 
     public int Turn { get; set; }
 
+    public int Seed { get; set; }
+
+    public string RegionId { get; set; } = "imperial_encounter";
+
     public EntityId ControlledEntityId { get; set; } = EntityId.Create("player");
 
     public GridPoint? SelectedTarget { get; set; }
@@ -28,6 +32,20 @@ public sealed class GameState
     public List<string> Messages { get; } = new();
 
     public PromiseLedger PromiseLedger { get; } = new();
+
+    public DeedLedger Deeds { get; } = new();
+
+    public FactionLedger Factions { get; } = new();
+
+    public LegendLedger Legend { get; } = new();
+
+    public MemoryLedger Memories { get; } = new();
+
+    public CanonLedger Canon { get; } = new();
+
+    public BondLedger Bonds { get; } = new();
+
+    public ScheduledEventLedger ScheduledEvents { get; } = new();
 
     public Entity ControlledEntity => Entities[ControlledEntityId];
 
@@ -44,4 +62,3 @@ public sealed class GameState
         }
     }
 }
-

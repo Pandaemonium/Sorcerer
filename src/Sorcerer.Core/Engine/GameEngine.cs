@@ -1,6 +1,9 @@
 using Sorcerer.Core.Entities;
+using Sorcerer.Core.Items;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Status;
+using Sorcerer.Core.Validation;
 using Sorcerer.Core.Views;
 using Sorcerer.Core.World;
 
@@ -8,6 +11,9 @@ namespace Sorcerer.Core.Engine;
 
 public sealed class GameEngine
 {
+    private readonly InventoryService _inventoryService = new(ItemCatalog.CreateMinimal());
+    private readonly StatusRegistry _statusRegistry = StatusRegistry.CreateDefault();
+
     public GameEngine(GameState state)
     {
         State = state;
@@ -116,6 +122,19 @@ public sealed class GameEngine
             messages.ToArray());
     }
 
+    public ActionResult Unsupported(string action, bool free = true)
+    {
+        var message = $"{action} is part of the Sorcerer architecture stub, but is not implemented yet.";
+        State.AddMessage(message);
+        return ActionResult.Simple(
+            action,
+            success: false,
+            consumedTurn: !free,
+            State.Turn,
+            State.Turn,
+            message);
+    }
+
     public void AdvanceTurn() => State.Turn += 1;
 
     public void AddMessage(string message) => State.AddMessage(message);
@@ -190,6 +209,8 @@ public sealed class GameEngine
             });
     }
 
+    public StateValidationReport ValidateState() => StateValidator.Validate(State);
+
     public Entity? EntityById(string id) =>
         State.Entities.TryGetValue(EntityId.Create(id), out var entity) ? entity : null;
 
@@ -228,6 +249,11 @@ public sealed class GameEngine
                 promise.PlayerVisible))
             .ToArray();
 
+        var tiles = BuildTiles();
+        var inventory = _inventoryService.BuildInventoryCards(State.ControlledEntity);
+        var reagents = _inventoryService.BuildReagentCards(State.ControlledEntity);
+        var statuses = BuildStatusCards(State.ControlledEntity);
+
         return new GameView(
             State.Width,
             State.Height,
@@ -235,17 +261,31 @@ public sealed class GameEngine
             State.ControlledEntityId.Value,
             entities,
             promises,
-            State.Messages.ToArray());
+            State.Messages.ToArray(),
+            tiles,
+            inventory,
+            reagents,
+            statuses);
     }
 
     public AgentObservation Observation(bool debug)
     {
+        var validation = ValidateState();
         var debugState = debug
             ? new DebugStateView(
                 State.Entities.Count,
                 State.Entities.Keys.Select(id => id.Value).OrderBy(id => id).ToArray(),
                 State.PromiseLedger.Promises.Select(p => p.Id).ToArray(),
-                State.SelectedTarget)
+                State.SelectedTarget,
+                new LedgerSummary(
+                    State.Deeds.Records.Count,
+                    State.Factions.Factions.Count,
+                    State.Legend.Tags.Count,
+                    State.Memories.Records.Count,
+                    State.Canon.Records.Count,
+                    State.Bonds.Bonds.Count,
+                    State.ScheduledEvents.Events.Count),
+                validation.Issues.Select(issue => $"{issue.Code}: {issue.Message}").ToArray())
             : null;
 
         return new AgentObservation(View(), debugState);
@@ -295,6 +335,47 @@ public sealed class GameEngine
 
     private static int Distance(GridPoint a, GridPoint b) =>
         Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
+
+    private IReadOnlyList<MapTileCard> BuildTiles()
+    {
+        var tiles = new List<MapTileCard>(State.Width * State.Height);
+        for (var y = 0; y < State.Height; y++)
+        {
+            for (var x = 0; x < State.Width; x++)
+            {
+                var point = new GridPoint(x, y);
+                var blocks = State.BlockingTerrain.Contains(point);
+                tiles.Add(new MapTileCard(
+                    x,
+                    y,
+                    blocks ? "wall" : "floor",
+                    blocks,
+                    blocks));
+            }
+        }
+
+        return tiles;
+    }
+
+    private IReadOnlyList<StatusCard> BuildStatusCards(Entity entity)
+    {
+        if (!entity.TryGet<StatusContainerComponent>(out var container))
+        {
+            return Array.Empty<StatusCard>();
+        }
+
+        return container.Statuses
+            .Select(status =>
+            {
+                var definition = _statusRegistry.Find(status.Id);
+                return new StatusCard(
+                    status.Id,
+                    status.DisplayName.Length > 0 ? status.DisplayName : definition?.DisplayName ?? status.Id,
+                    status.ExpiresTurn,
+                    status.Intensity);
+            })
+            .ToArray();
+    }
 
     private static EntityCard ToEntityCard(Entity entity)
     {

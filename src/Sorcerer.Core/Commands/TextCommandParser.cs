@@ -29,8 +29,30 @@ public static class TextCommandParser
             "move" => ParseMove(rest),
             "wait" or "." => new WaitCommand(),
             "inspect" or "look" => new InspectCommand(),
+            "map" => ParseMap(rest),
             "cast" => new CastCommand(rest, CastPerformance.Neutral),
             "target" => ParseTarget(rest),
+            "untarget" or "cleartarget" => new ClearTargetCommand(),
+            "pickup" or "get" => new PickupCommand(NullIfEmpty(rest)),
+            "drop" => new DropCommand(rest),
+            "use" => new UseItemCommand(rest),
+            "equip" => new EquipCommand(rest),
+            "unequip" => new UnequipCommand(rest),
+            "focus" => new FocusCommand(rest),
+            "unfocus" => new UnfocusCommand(NullIfEmpty(rest)),
+            "protect" => new ProtectItemCommand(rest),
+            "unprotect" => new UnprotectItemCommand(rest),
+            "reagents" => new ReagentsCommand(),
+            "journal" or "promises" or "rumors" => new JournalCommand(),
+            "talk" or "say" or "speak" => new TalkCommand(rest),
+            "read" => new ReadCommand(NullIfEmpty(rest)),
+            "examine" or "study" => new ExamineCommand(NullIfEmpty(rest)),
+            "open" => new OpenCommand(NullIfEmpty(rest)),
+            "possess" => new PossessCommand(NullIfEmpty(rest)),
+            "standing" => new StandingCommand(),
+            "followers" => new FollowersCommand(),
+            "jobs" => new JobsCommand(),
+            "help" or "?" => new HelpCommand(),
             "quit" or "exit" => new QuitCommand(),
             _ => new UnknownCommand(text),
         };
@@ -51,5 +73,10 @@ public static class TextCommandParser
 
         return new UnknownCommand($"target {text}");
     }
-}
 
+    private static GameCommand ParseMap(string text) =>
+        int.TryParse(text, out var radius) ? new MapCommand(radius) : new MapCommand();
+
+    private static string? NullIfEmpty(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

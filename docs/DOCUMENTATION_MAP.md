@@ -27,6 +27,8 @@ agent work aligned once code starts moving.
 ## Architecture
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): the overall C#/Godot architecture.
+- [ARCHITECTURE_STUB_MAP.md](ARCHITECTURE_STUB_MAP.md): the compile-safe system lanes
+  created before deep implementation begins.
 - [ENTITY_MODEL.md](ENTITY_MODEL.md): unified entities, components, body swap, items, and
   props.
 - [WILD_MAGIC_CONTRACT.md](WILD_MAGIC_CONTRACT.md): the initial wild-magic JSON contract.

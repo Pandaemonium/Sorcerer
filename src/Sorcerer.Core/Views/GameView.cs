@@ -14,6 +14,40 @@ public sealed record EntityCard(
     int? MaxHitPoints,
     IReadOnlyList<string> Tags);
 
+public sealed record MapTileCard(
+    int X,
+    int Y,
+    string Terrain,
+    bool BlocksMovement,
+    bool BlocksSight,
+    bool Visible = true,
+    bool Explored = true);
+
+public sealed record ItemCard(
+    string Id,
+    string Name,
+    int Quantity,
+    int Value,
+    string Material,
+    IReadOnlyList<string> Tags,
+    bool Protected,
+    bool Equipped,
+    bool Focused);
+
+public sealed record ReagentCard(
+    string Name,
+    int Quantity,
+    int UnitValue,
+    int TotalValue,
+    string Material,
+    IReadOnlyList<string> Tags);
+
+public sealed record StatusCard(
+    string Id,
+    string DisplayName,
+    int? ExpiresTurn,
+    int Intensity);
+
 public sealed record PromiseCard(
     string Id,
     string Kind,
@@ -28,15 +62,29 @@ public sealed record GameView(
     string ControlledEntityId,
     IReadOnlyList<EntityCard> Entities,
     IReadOnlyList<PromiseCard> Promises,
-    IReadOnlyList<string> Messages);
+    IReadOnlyList<string> Messages,
+    IReadOnlyList<MapTileCard>? Tiles = null,
+    IReadOnlyList<ItemCard>? Inventory = null,
+    IReadOnlyList<ReagentCard>? Reagents = null,
+    IReadOnlyList<StatusCard>? Statuses = null);
+
+public sealed record LedgerSummary(
+    int Deeds,
+    int Factions,
+    int LegendTags,
+    int Memories,
+    int CanonRecords,
+    int Bonds,
+    int ScheduledEvents);
 
 public sealed record DebugStateView(
     int EntityCount,
     IReadOnlyList<string> EntityIds,
     IReadOnlyList<string> PromiseIds,
-    GridPoint? SelectedTarget);
+    GridPoint? SelectedTarget,
+    LedgerSummary? Ledgers = null,
+    IReadOnlyList<string>? ValidationIssues = null);
 
 public sealed record AgentObservation(
     GameView View,
     DebugStateView? Debug);
-

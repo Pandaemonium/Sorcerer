@@ -14,6 +14,50 @@ public sealed record CastCommand(string Text, CastPerformance? Performance = nul
 
 public sealed record TargetCommand(GridPoint Position) : GameCommand;
 
+public sealed record ClearTargetCommand() : GameCommand;
+
+public sealed record MapCommand(int Radius = 8) : GameCommand;
+
+public sealed record PickupCommand(string? Target = null) : GameCommand;
+
+public sealed record DropCommand(string Item) : GameCommand;
+
+public sealed record UseItemCommand(string Item) : GameCommand;
+
+public sealed record EquipCommand(string Item) : GameCommand;
+
+public sealed record UnequipCommand(string SlotOrItem) : GameCommand;
+
+public sealed record FocusCommand(string SlotOrItem) : GameCommand;
+
+public sealed record UnfocusCommand(string? SlotOrItem = null) : GameCommand;
+
+public sealed record ProtectItemCommand(string Item) : GameCommand;
+
+public sealed record UnprotectItemCommand(string Item) : GameCommand;
+
+public sealed record ReagentsCommand() : GameCommand;
+
+public sealed record JournalCommand() : GameCommand;
+
+public sealed record TalkCommand(string Text) : GameCommand;
+
+public sealed record ReadCommand(string? Target = null) : GameCommand;
+
+public sealed record ExamineCommand(string? Target = null) : GameCommand;
+
+public sealed record OpenCommand(string? Target = null) : GameCommand;
+
+public sealed record PossessCommand(string? Target = null) : GameCommand;
+
+public sealed record StandingCommand() : GameCommand;
+
+public sealed record FollowersCommand() : GameCommand;
+
+public sealed record JobsCommand() : GameCommand;
+
+public sealed record HelpCommand() : GameCommand;
+
 public sealed record QuitCommand() : GameCommand;
 
 public sealed record UnknownCommand(string Text) : GameCommand;
@@ -32,4 +76,3 @@ public sealed record CastPerformance(
         WildnessModifier: 1.0f,
         Source: "neutral");
 }
-

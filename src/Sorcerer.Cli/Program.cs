@@ -5,6 +5,7 @@ using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Views;
 using Sorcerer.Llm;
+using Sorcerer.Llm.Auditing;
 using Sorcerer.Magic;
 
 namespace Sorcerer.Cli;
@@ -20,7 +21,8 @@ public static class Program
     {
         var options = CliOptions.Parse(args);
         var provider = SpellProviderFactory.Create(options.Provider, options.Host, options.Model);
-        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider));
+        var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
 
         if (options.Commands.Count > 0)
         {
@@ -109,7 +111,18 @@ public static class Program
 
     private static GameCommand ParseJsonCommand(string json)
     {
-        using var document = JsonDocument.Parse(json);
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return new UnknownCommand(json);
+        }
+
+        using (document)
+        {
         var root = document.RootElement;
         var type = root.TryGetProperty("type", out var typeElement)
             ? typeElement.GetString() ?? ""
@@ -120,11 +133,34 @@ public static class Program
             "move" => new MoveCommand(ParseDirection(ReadString(root, "direction", "east"))),
             "wait" => new WaitCommand(),
             "inspect" => new InspectCommand(),
+            "map" => new MapCommand(ReadInt(root, "radius", 8)),
             "cast" => new CastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
             "target" => new TargetCommand(new GridPoint(ReadInt(root, "x", 0), ReadInt(root, "y", 0))),
+            "untarget" => new ClearTargetCommand(),
+            "pickup" => new PickupCommand(ReadNullableString(root, "target")),
+            "drop" => new DropCommand(ReadString(root, "item", "")),
+            "use" => new UseItemCommand(ReadString(root, "item", "")),
+            "equip" => new EquipCommand(ReadString(root, "item", "")),
+            "unequip" => new UnequipCommand(ReadString(root, "item", "")),
+            "focus" => new FocusCommand(ReadString(root, "item", "")),
+            "unfocus" => new UnfocusCommand(ReadNullableString(root, "item")),
+            "protect" => new ProtectItemCommand(ReadString(root, "item", "")),
+            "unprotect" => new UnprotectItemCommand(ReadString(root, "item", "")),
+            "reagents" => new ReagentsCommand(),
+            "journal" => new JournalCommand(),
+            "talk" => new TalkCommand(ReadString(root, "text", "")),
+            "read" => new ReadCommand(ReadNullableString(root, "target")),
+            "examine" => new ExamineCommand(ReadNullableString(root, "target")),
+            "open" => new OpenCommand(ReadNullableString(root, "target")),
+            "possess" => new PossessCommand(ReadNullableString(root, "target")),
+            "standing" => new StandingCommand(),
+            "followers" => new FollowersCommand(),
+            "jobs" => new JobsCommand(),
+            "help" => new HelpCommand(),
             "quit" => new QuitCommand(),
             _ => new UnknownCommand(json),
         };
+        }
     }
 
     private static Direction ParseDirection(string value) =>
@@ -145,6 +181,11 @@ public static class Program
         root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? fallback
             : fallback;
+
+    private static string? ReadNullableString(JsonElement root, string property) =>
+        root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     private static int ReadInt(JsonElement root, string property, int fallback) =>
         root.TryGetProperty(property, out var value) && value.TryGetInt32(out var parsed)
@@ -202,4 +243,3 @@ public sealed record CliOptions(
         return new CliOptions(provider, host, model, json, debugState, commands);
     }
 }
-

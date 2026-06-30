@@ -15,8 +15,10 @@ public static class SpellProviderFactory
             "ollama" or "local" => new OllamaSpellProvider(
                 host ?? "http://127.0.0.1:11434",
                 model ?? "qwen3.5:9b"),
+            "api" or "openai" or "openai-compatible" => new OpenAiCompatibleSpellProvider(
+                host ?? "https://api.openai.com/v1",
+                model ?? "default"),
             _ => new MockSpellProvider(),
         };
     }
 }
-

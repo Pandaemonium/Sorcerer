@@ -13,10 +13,16 @@ public sealed record PositionComponent(GridPoint Position) : IEntityComponent;
 
 public sealed record RenderableComponent(char Glyph, string Palette = "default") : IEntityComponent;
 
+public sealed record TagsComponent(IReadOnlyList<string> Tags) : IEntityComponent;
+
+public sealed record DescriptionComponent(string Text) : IEntityComponent;
+
 public sealed record PhysicalComponent(
     bool BlocksMovement = true,
     bool BlocksSight = false,
-    string Material = "flesh") : IEntityComponent;
+    string Material = "flesh",
+    int Size = 1,
+    int Durability = 0) : IEntityComponent;
 
 public sealed record ActorComponent(
     int HitPoints,
@@ -39,11 +45,21 @@ public sealed record InventoryComponent(
     public static InventoryComponent Empty() => new(new Dictionary<string, int>(), new HashSet<string>());
 }
 
+public sealed record EquipmentComponent(
+    Dictionary<string, string> Slots,
+    HashSet<string> FocusSlots) : IEntityComponent
+{
+    public static EquipmentComponent Empty() => new(new Dictionary<string, string>(), new HashSet<string>());
+}
+
 public sealed record ItemComponent(
     string ItemType,
     int Value,
     string Material,
-    IReadOnlyList<string> Tags) : IEntityComponent;
+    IReadOnlyList<string> Tags,
+    string StackPolicy = "commodity",
+    string UseProfile = "inert",
+    string? EquipmentSlot = null) : IEntityComponent;
 
 public sealed record FixtureComponent(
     string FixtureType,
@@ -56,5 +72,46 @@ public sealed record InteractableComponent(IReadOnlyList<string> Verbs) : IEntit
 
 public sealed record SoulComponent(string SoulId) : IEntityComponent;
 
-public sealed record PromiseAnchorComponent(string PromiseId) : IEntityComponent;
+public sealed record ProfileComponent(
+    string PublicName,
+    string Appearance,
+    string Origin = "",
+    string MagicalSignature = "",
+    string Backstory = "") : IEntityComponent;
 
+public sealed record StatusInstance(
+    string Id,
+    string DisplayName,
+    int? ExpiresTurn,
+    int Intensity = 1,
+    IReadOnlyDictionary<string, object?>? Details = null);
+
+public sealed record StatusContainerComponent(IReadOnlyList<StatusInstance> Statuses) : IEntityComponent
+{
+    public static StatusContainerComponent Empty() => new(Array.Empty<StatusInstance>());
+}
+
+public sealed record EntityMemoryRecord(
+    string Id,
+    string Text,
+    string Source,
+    string Provenance,
+    int Salience,
+    bool Shareable);
+
+public sealed record MemoryComponent(IReadOnlyList<EntityMemoryRecord> Records) : IEntityComponent
+{
+    public static MemoryComponent Empty() => new(Array.Empty<EntityMemoryRecord>());
+}
+
+public sealed record FactionComponent(
+    string FactionId,
+    IReadOnlyList<string> Roles) : IEntityComponent;
+
+public sealed record DoorComponent(bool IsOpen, string? KeyId = null) : IEntityComponent;
+
+public sealed record AiComponent(string PolicyId, IReadOnlyDictionary<string, object?>? Parameters = null) : IEntityComponent;
+
+public sealed record SummonedComponent(string Source, int? ExpiresTurn = null) : IEntityComponent;
+
+public sealed record PromiseAnchorComponent(string PromiseId) : IEntityComponent;
