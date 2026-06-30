@@ -1,11 +1,13 @@
+using Sorcerer.Core.Views;
+
 namespace Sorcerer.Magic.Operations;
 
 public sealed class OperationRegistry
 {
-    private readonly Dictionary<string, OperationSpec> _operations;
+    private readonly Dictionary<string, IOperation> _operations;
     private readonly Dictionary<string, string> _aliases;
 
-    private OperationRegistry(IEnumerable<OperationSpec> operations)
+    private OperationRegistry(IEnumerable<IOperation> operations)
     {
         _operations = operations.ToDictionary(op => op.Name, StringComparer.OrdinalIgnoreCase);
         _aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -19,37 +21,64 @@ public sealed class OperationRegistry
         }
     }
 
-    public IReadOnlyCollection<OperationSpec> Operations => _operations.Values;
+    public IReadOnlyCollection<IOperation> Operations => _operations.Values;
 
     public string Canonicalize(string name) =>
         _aliases.TryGetValue(name.Trim(), out var canonical) ? canonical : name.Trim();
 
-    public bool Supports(string name) => _operations.ContainsKey(Canonicalize(name));
+    public IOperation? Resolve(string name) =>
+        _operations.TryGetValue(Canonicalize(name), out var operation) ? operation : null;
+
+    public bool Supports(string name) => Resolve(name) is not null;
+
+    public OperationIndex ToIndex() =>
+        new(
+            _operations.Keys.OrderBy(name => name).ToArray(),
+            _operations.Values
+                .OrderBy(op => op.Name)
+                .Select(op => op.Card.ToView())
+                .ToArray());
+
+    public static OperationRegistry Build(IEnumerable<IOperation> operations, IEnumerable<OperationCard>? cards = null)
+    {
+        var ops = operations.ToArray();
+        if (cards is not null)
+        {
+            var byName = ops.ToDictionary(op => op.Name, StringComparer.OrdinalIgnoreCase);
+            foreach (var card in cards)
+            {
+                if (byName.TryGetValue(card.Name, out var operation) && operation is OperationBase operationBase)
+                {
+                    operationBase.AttachCard(card);
+                }
+            }
+        }
+
+        return new OperationRegistry(ops);
+    }
 
     public static OperationRegistry CreateDefault() =>
-        new(new[]
+        Build(new IOperation[]
         {
-            new OperationSpec("damage", new[] { "harm", "attack" }, "Damage one target.", new[] { "target", "amount" }),
-            new OperationSpec("areaDamage", new[] { "area_damage" }, "Damage entities in an area.", new[] { "target", "amount", "radius" }),
-            new OperationSpec("heal", new[] { "restoreHealth" }, "Restore HP.", new[] { "target", "amount" }),
-            new OperationSpec("restoreMana", new[] { "restore_mana" }, "Restore mana.", new[] { "target", "amount" }),
-            new OperationSpec("push", Array.Empty<string>(), "Move a target away.", new[] { "target", "distance" }),
-            new OperationSpec("pull", Array.Empty<string>(), "Move a target closer.", new[] { "target", "distance" }),
-            new OperationSpec("teleport", Array.Empty<string>(), "Move an entity to a tile.", new[] { "target", "x", "y" }),
-            new OperationSpec("createTile", new[] { "create_tile", "set_tile" }, "Create or alter one terrain tile.", new[] { "tile" }),
-            new OperationSpec("addStatus", new[] { "status", "applyStatus" }, "Apply a status.", new[] { "target", "status" }),
-            new OperationSpec("removeStatus", new[] { "remove_status" }, "Remove a status.", new[] { "target", "status" }),
-            new OperationSpec("createTiles", new[] { "create_tiles", "terrain" }, "Create or alter terrain.", new[] { "tile" }),
-            new OperationSpec("summon", new[] { "createEntity" }, "Create a bounded entity.", new[] { "name" }),
-            new OperationSpec("createEntity", Array.Empty<string>(), "Create a bounded entity.", new[] { "name" }),
-            new OperationSpec("transformEntity", Array.Empty<string>(), "Transform an entity.", new[] { "target" }),
-            new OperationSpec("transformItem", new[] { "transformFixture" }, "Transform an item or fixture.", new[] { "target" }),
-            new OperationSpec("changeFaction", new[] { "change_faction" }, "Change an entity faction.", new[] { "target", "faction" }),
-            new OperationSpec("addTrait", new[] { "add_trait" }, "Add a durable semantic trait.", new[] { "target", "trait" }),
-            new OperationSpec("scheduleEvent", new[] { "schedule_event" }, "Schedule an event for a future turn.", new[] { "turns", "eventType" }),
-            new OperationSpec("createTrigger", new[] { "create_trigger" }, "Create a charged reaction to a later event.", new[] { "trigger" }),
-            new OperationSpec("addCurse", new[] { "curse", "add_curse" }, "Add a curse or magical debt.", new[] { "name" }),
-            new OperationSpec("createPromise", new[] { "promise", "prophecy" }, "Add a promise to the world.", new[] { "text" }),
-            new OperationSpec("message", Array.Empty<string>(), "Add a message.", new[] { "text" }),
+            new DamageOperation(),
+            new AreaDamageOperation(),
+            new HealOperation(),
+            new RestoreManaOperation(),
+            new PushOperation(),
+            new PullOperation(),
+            new TeleportOperation(),
+            new CreateTileOperation(),
+            new CreateTilesOperation(),
+            new AddStatusOperation(),
+            new RemoveStatusOperation(),
+            new SummonOperation(),
+            new TransformEntityOperation(),
+            new TransformItemOperation(),
+            new ChangeFactionOperation(),
+            new AddTraitOperation(),
+            new ScheduleEventOperation(),
+            new AddCurseOperation(),
+            new CreatePromiseOperation(),
+            new MessageOperation(),
         });
 }

@@ -42,6 +42,59 @@ public sealed record ReagentCard(
     string Material,
     IReadOnlyList<string> Tags);
 
+public sealed record CasterView(
+    string Id,
+    string Name,
+    int X,
+    int Y,
+    int HitPoints,
+    int MaxHitPoints,
+    int Mana,
+    int MaxMana,
+    string SoulId,
+    IReadOnlyList<StatusCard> Statuses);
+
+public sealed record PerceivedEntity(
+    string Id,
+    string Name,
+    char Glyph,
+    int X,
+    int Y,
+    int RelativeX,
+    int RelativeY,
+    string? Faction,
+    string Material,
+    IReadOnlyList<string> Tags,
+    int? HitPoints,
+    int? MaxHitPoints);
+
+public sealed record TileNote(
+    int X,
+    int Y,
+    string Terrain,
+    IReadOnlyList<string> Tags);
+
+public sealed record OperationCardView(
+    string Name,
+    IReadOnlyList<string> Aliases,
+    string Summary,
+    string PromptGuidance,
+    IReadOnlyDictionary<string, string> Fields,
+    IReadOnlyList<object> Examples);
+
+public sealed record OperationIndex(
+    IReadOnlyList<string> Names,
+    IReadOnlyList<OperationCardView> Cards);
+
+public sealed record MagicContextView(
+    CasterView Caster,
+    IReadOnlyList<PerceivedEntity> Visible,
+    IReadOnlyList<TileNote> Terrain,
+    GridPoint? SelectedTarget,
+    IReadOnlyList<string> RecentEvents,
+    IReadOnlyList<PromiseCard> KnownPromises,
+    OperationIndex Operations);
+
 public sealed record StatusCard(
     string Id,
     string DisplayName,

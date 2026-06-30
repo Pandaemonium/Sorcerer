@@ -6,6 +6,58 @@ namespace Sorcerer.Core.References;
 
 public static class ReferenceBinder
 {
+    private static readonly HashSet<string> Selectors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "self",
+        "caster",
+        "here",
+        "selected_target",
+        "target",
+        "nearest_enemy",
+        "nearest_ally",
+        "all_enemies",
+        "all_allies",
+        "all_in_radius",
+        "random_enemy",
+    };
+
+    public static EntityRef NormalizeEntityRef(object? value, int? radius = null, string? filter = null)
+    {
+        if (value is null)
+        {
+            return EntityRef.Self;
+        }
+
+        var text = Convert.ToString(value)?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return EntityRef.Self;
+        }
+
+        var selector = text.Trim().ToLowerInvariant() switch
+        {
+            "player" or "self" or "caster" => "self",
+            "here" => "here",
+            "nearest" or "enemy" or "nearest enemy" or "nearest_enemy" or "nearest foe" => "nearest_enemy",
+            "ally" or "nearest ally" or "nearest_ally" => "nearest_ally",
+            "target" or "selected target" or "selected_target" or "there" or "that" => "selected_target",
+            "all enemies" or "all_enemies" or "enemies" => "all_enemies",
+            "all allies" or "all_allies" or "allies" => "all_allies",
+            "all in radius" or "all_in_radius" => "all_in_radius",
+            "random enemy" or "random_enemy" => "random_enemy",
+            _ => "",
+        };
+
+        if (!string.IsNullOrWhiteSpace(selector))
+        {
+            return new EntityRef("selector", selector, radius, filter);
+        }
+
+        return text.Contains('_') || text.Any(char.IsDigit)
+            ? new EntityRef("id", text, radius, filter)
+            : new EntityRef("name", text, radius, filter);
+    }
+
     public static GameReference Normalize(object? value)
     {
         if (value is null)
@@ -111,5 +163,222 @@ public static class ReferenceBinder
         return group.Length == 0
             ? BoundReference.Failure(reference, $"No entities currently represent faction {factionId}.")
             : new BoundReference(reference, null, null, group, null);
+    }
+}
+
+public sealed class EngineReferenceResolver : IReferenceResolver
+{
+    private static readonly HashSet<string> SupportedSelectors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "self",
+        "caster",
+        "here",
+        "selected_target",
+        "target",
+        "nearest_enemy",
+        "nearest_ally",
+        "all_enemies",
+        "all_allies",
+        "all_in_radius",
+        "random_enemy",
+    };
+
+    private readonly GameEngine _engine;
+    private readonly Entity _caster;
+    private readonly int _groupCap;
+
+    public EngineReferenceResolver(GameEngine engine, Entity caster, int groupCap = 8)
+    {
+        _engine = engine;
+        _caster = caster;
+        _groupCap = groupCap;
+    }
+
+    public ResolvedEntitySet Resolve(EntityRef reference) =>
+        reference.Kind.Trim().ToLowerInvariant() switch
+        {
+            "id" => ResolveId(reference),
+            "selector" => ResolveSelector(reference),
+            "name" => ResolveName(reference),
+            _ => ResolvedEntitySet.Failure(reference, $"Unsupported reference kind {reference.Kind}."),
+        };
+
+    private ResolvedEntitySet ResolveId(EntityRef reference)
+    {
+        var entity = _engine.EntityById(reference.Value);
+        if (entity is null)
+        {
+            return ResolvedEntitySet.Failure(reference, $"No visible entity has id {reference.Value}.");
+        }
+
+        return new ResolvedEntitySet(reference, new[] { entity }, PositionOf(entity), null);
+    }
+
+    private ResolvedEntitySet ResolveSelector(EntityRef reference)
+    {
+        var selector = SupportedSelectors.Contains(reference.Value) ? reference.Value : reference.Value.ToLowerInvariant();
+        return selector switch
+        {
+            "self" or "caster" => new ResolvedEntitySet(reference, new[] { _caster }, PositionOf(_caster), null),
+            "here" => new ResolvedEntitySet(reference, new[] { _caster }, PositionOf(_caster), null),
+            "selected_target" or "target" => ResolveSelectedTarget(reference),
+            "nearest_enemy" => ResolveNearest(reference, hostile: true),
+            "nearest_ally" => ResolveNearest(reference, hostile: false),
+            "all_enemies" => ResolveGroup(reference, hostile: true),
+            "all_allies" => ResolveGroup(reference, hostile: false),
+            "all_in_radius" => ResolveAllInRadius(reference),
+            "random_enemy" => ResolveRandomEnemy(reference),
+            _ => ResolvedEntitySet.Failure(reference, $"Unsupported selector {reference.Value}."),
+        };
+    }
+
+    private ResolvedEntitySet ResolveName(EntityRef reference)
+    {
+        var origin = PositionOf(_caster);
+        var tokens = reference.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(token => token.Length > 2)
+            .Select(token => token.ToLowerInvariant())
+            .ToArray();
+        if (tokens.Length == 0)
+        {
+            return ResolvedEntitySet.Failure(reference, $"Name reference is too vague: {reference.Value}.");
+        }
+
+        var matches = _engine.State.Entities.Values
+            .Where(entity => entity.TryGet<PositionComponent>(out _))
+            .Select(entity => new
+            {
+                Entity = entity,
+                Score = NameScore(entity, tokens),
+                Distance = origin is null || PositionOf(entity) is not { } pos
+                    ? 999
+                    : Math.Abs(origin.Value.X - pos.X) + Math.Abs(origin.Value.Y - pos.Y),
+            })
+            .Where(match => match.Score > 0)
+            .OrderByDescending(match => match.Score)
+            .ThenBy(match => match.Distance)
+            .ThenBy(match => match.Entity.Id.Value)
+            .ToArray();
+
+        if (matches.Length == 0)
+        {
+            return ResolvedEntitySet.Failure(reference, $"No visible entity matches {reference.Value}.");
+        }
+
+        if (matches.Length > 1
+            && matches[0].Score == matches[1].Score
+            && matches[0].Distance == matches[1].Distance)
+        {
+            return ResolvedEntitySet.Failure(reference, $"Reference {reference.Value} is ambiguous.");
+        }
+
+        var entity = matches[0].Entity;
+        return new ResolvedEntitySet(reference, new[] { entity }, PositionOf(entity), null);
+    }
+
+    private ResolvedEntitySet ResolveSelectedTarget(EntityRef reference)
+    {
+        if (_engine.State.SelectedTarget is not { } target)
+        {
+            return ResolvedEntitySet.Failure(reference, "No target is selected.");
+        }
+
+        var occupant = _engine.State.Entities.Values
+            .FirstOrDefault(entity => PositionOf(entity) == target);
+        return occupant is null
+            ? new ResolvedEntitySet(reference, Array.Empty<Entity>(), target, null)
+            : new ResolvedEntitySet(reference, new[] { occupant }, target, null);
+    }
+
+    private ResolvedEntitySet ResolveNearest(EntityRef reference, bool hostile)
+    {
+        var candidates = CandidateActors(hostile).ToArray();
+        if (candidates.Length == 0)
+        {
+            return ResolvedEntitySet.Failure(reference, hostile ? "No hostile target is visible." : "No ally is visible.");
+        }
+
+        var origin = PositionOf(_caster);
+        var entity = candidates
+            .OrderBy(entity => origin is null || PositionOf(entity) is not { } pos
+                ? 999
+                : Math.Abs(origin.Value.X - pos.X) + Math.Abs(origin.Value.Y - pos.Y))
+            .ThenBy(entity => entity.Id.Value)
+            .First();
+        return new ResolvedEntitySet(reference, new[] { entity }, PositionOf(entity), null);
+    }
+
+    private ResolvedEntitySet ResolveGroup(EntityRef reference, bool hostile)
+    {
+        var group = CandidateActors(hostile).Take(_groupCap).ToArray();
+        return group.Length == 0
+            ? ResolvedEntitySet.Failure(reference, hostile ? "No hostile targets are visible." : "No allies are visible.")
+            : new ResolvedEntitySet(reference, group, null, null);
+    }
+
+    private ResolvedEntitySet ResolveAllInRadius(EntityRef reference)
+    {
+        var radius = reference.Radius ?? 2;
+        var origin = _engine.State.SelectedTarget ?? PositionOf(_caster);
+        if (origin is null)
+        {
+            return ResolvedEntitySet.Failure(reference, "No origin exists for radius targeting.");
+        }
+
+        var group = _engine.State.Entities.Values
+            .Where(entity => entity.TryGet<PositionComponent>(out var pos)
+                && Math.Abs(origin.Value.X - pos.Position.X) + Math.Abs(origin.Value.Y - pos.Position.Y) <= radius)
+            .Take(_groupCap)
+            .ToArray();
+        return group.Length == 0
+            ? ResolvedEntitySet.Failure(reference, "No entities are in the requested radius.")
+            : new ResolvedEntitySet(reference, group, origin, null);
+    }
+
+    private ResolvedEntitySet ResolveRandomEnemy(EntityRef reference)
+    {
+        var group = CandidateActors(hostile: true).ToArray();
+        if (group.Length == 0)
+        {
+            return ResolvedEntitySet.Failure(reference, "No hostile target is visible.");
+        }
+
+        var entity = group[_engine.State.Rng.NextInt(0, group.Length)];
+        return new ResolvedEntitySet(reference, new[] { entity }, PositionOf(entity), null);
+    }
+
+    private IEnumerable<Entity> CandidateActors(bool hostile)
+    {
+        var casterFaction = _caster.TryGet<ActorComponent>(out var actor) ? actor.Faction : "";
+        return _engine.State.Entities.Values
+            .Where(entity => entity.Id != _caster.Id)
+            .Where(entity => entity.TryGet<ActorComponent>(out var targetActor) && targetActor.Alive)
+            .Where(entity => hostile
+                ? entity.Get<ActorComponent>().Faction != casterFaction && entity.Get<ActorComponent>().Faction != "neutral"
+                : entity.Get<ActorComponent>().Faction == casterFaction);
+    }
+
+    private static GridPoint? PositionOf(Entity entity) =>
+        entity.TryGet<PositionComponent>(out var position) ? position.Position : null;
+
+    private static int NameScore(Entity entity, IReadOnlyList<string> tokens)
+    {
+        var haystack = entity.Name.ToLowerInvariant();
+        if (entity.TryGet<TagsComponent>(out var tags))
+        {
+            haystack += " " + string.Join(' ', tags.Tags).ToLowerInvariant();
+        }
+
+        if (entity.TryGet<ItemComponent>(out var item))
+        {
+            haystack += " " + string.Join(' ', item.Tags).ToLowerInvariant() + " " + item.Material.ToLowerInvariant();
+        }
+
+        if (entity.TryGet<FixtureComponent>(out var fixture))
+        {
+            haystack += " " + string.Join(' ', fixture.Tags).ToLowerInvariant();
+        }
+
+        return tokens.Count(token => haystack.Contains(token, StringComparison.OrdinalIgnoreCase));
     }
 }

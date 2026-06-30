@@ -8,8 +8,11 @@ public sealed record GameStateSnapshot(
     int Turn,
     EntityId ControlledEntityId,
     GridPoint? SelectedTarget,
+    ulong RngState,
+    int NextEntitySerial,
     IReadOnlyDictionary<EntityId, Entity> Entities,
     IReadOnlySet<GridPoint> BlockingTerrain,
+    IReadOnlyDictionary<GridPoint, string> Terrain,
     IReadOnlyList<string> Messages,
     IReadOnlyList<WorldPromise> Promises)
 {
@@ -18,8 +21,11 @@ public sealed record GameStateSnapshot(
             state.Turn,
             state.ControlledEntityId,
             state.SelectedTarget,
+            state.Rng.State,
+            state.NextEntitySerial,
             state.Entities.ToDictionary(pair => pair.Key, pair => pair.Value.Clone()),
             new HashSet<GridPoint>(state.BlockingTerrain),
+            new Dictionary<GridPoint, string>(state.Terrain),
             state.Messages.ToArray(),
             state.PromiseLedger.Snapshot());
 
@@ -28,6 +34,8 @@ public sealed record GameStateSnapshot(
         state.Turn = Turn;
         state.ControlledEntityId = ControlledEntityId;
         state.SelectedTarget = SelectedTarget;
+        state.Rng = new DeterministicRng(RngState);
+        state.NextEntitySerial = NextEntitySerial;
 
         state.Entities.Clear();
         foreach (var pair in Entities)
@@ -39,6 +47,12 @@ public sealed record GameStateSnapshot(
         foreach (var tile in BlockingTerrain)
         {
             state.BlockingTerrain.Add(tile);
+        }
+
+        state.Terrain.Clear();
+        foreach (var pair in Terrain)
+        {
+            state.Terrain[pair.Key] = pair.Value;
         }
 
         state.Messages.Clear();

@@ -19,7 +19,11 @@ public sealed class GameState
 
     public int Seed { get; set; }
 
+    public DeterministicRng Rng { get; set; } = new(1);
+
     public string RegionId { get; set; } = "imperial_encounter";
+
+    public int NextEntitySerial { get; set; } = 1;
 
     public EntityId ControlledEntityId { get; set; } = EntityId.Create("player");
 
@@ -28,6 +32,8 @@ public sealed class GameState
     public Dictionary<EntityId, Entity> Entities { get; } = new();
 
     public HashSet<GridPoint> BlockingTerrain { get; } = new();
+
+    public Dictionary<GridPoint, string> Terrain { get; } = new();
 
     public List<string> Messages { get; } = new();
 
@@ -48,6 +54,9 @@ public sealed class GameState
     public ScheduledEventLedger ScheduledEvents { get; } = new();
 
     public Entity ControlledEntity => Entities[ControlledEntityId];
+
+    public EntityId NextEntityId(string prefix) =>
+        EntityId.Create($"{prefix}_{NextEntitySerial++}");
 
     public void AddMessage(string message)
     {

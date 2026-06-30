@@ -139,6 +139,11 @@ public sealed class GameEngine
 
     public void AddMessage(string message) => State.AddMessage(message);
 
+    public Entity? EntityAt(GridPoint point) =>
+        State.Entities.Values.FirstOrDefault(entity =>
+            entity.TryGet<PositionComponent>(out var position)
+            && position.Position == point);
+
     public Entity? FindNearestHostile()
     {
         var actor = State.ControlledEntity;
@@ -176,6 +181,22 @@ public sealed class GameEngine
             });
     }
 
+    public StateDelta RestoreMana(Entity target, int amount)
+    {
+        var actor = target.Get<ActorComponent>();
+        var restored = Math.Max(0, Math.Min(amount, actor.MaxMana - actor.Mana));
+        target.Set(actor with { Mana = actor.Mana + restored });
+        var message = restored == 0
+            ? $"{target.Name} is already bright with mana."
+            : $"{target.Name} regains {restored} mana.";
+        State.AddMessage(message);
+        return new StateDelta(
+            "restoreMana",
+            target.Id.Value,
+            message,
+            new Dictionary<string, object?> { ["amount"] = restored });
+    }
+
     public StateDelta HealEntity(Entity target, int amount)
     {
         var actor = target.Get<ActorComponent>();
@@ -191,6 +212,120 @@ public sealed class GameEngine
             target.Id.Value,
             message,
             new Dictionary<string, object?> { ["amount"] = healed });
+    }
+
+    public StateDelta MoveEntity(Entity entity, GridPoint destination, string operation)
+    {
+        var before = entity.Get<PositionComponent>().Position;
+        if (!InBounds(destination)
+            || State.BlockingTerrain.Contains(destination)
+            || BlockingEntityAt(destination) is not null)
+        {
+            var blocked = $"{entity.Name} cannot move to {destination.X},{destination.Y}.";
+            State.AddMessage(blocked);
+            return new StateDelta(
+                operation,
+                entity.Id.Value,
+                blocked,
+                new Dictionary<string, object?>
+                {
+                    ["fromX"] = before.X,
+                    ["fromY"] = before.Y,
+                    ["blocked"] = true,
+                });
+        }
+
+        entity.Set(new PositionComponent(destination));
+        var message = $"{entity.Name} moves to {destination.X},{destination.Y}.";
+        State.AddMessage(message);
+        return new StateDelta(
+            operation,
+            entity.Id.Value,
+            message,
+            new Dictionary<string, object?>
+            {
+                ["fromX"] = before.X,
+                ["fromY"] = before.Y,
+                ["toX"] = destination.X,
+                ["toY"] = destination.Y,
+            });
+    }
+
+    public StateDelta SetTerrain(GridPoint point, string terrain, int? duration = null)
+    {
+        State.Terrain[point] = terrain;
+        if (TerrainBlocksMovement(terrain))
+        {
+            State.BlockingTerrain.Add(point);
+        }
+        else if (!IsBoundaryWall(point))
+        {
+            State.BlockingTerrain.Remove(point);
+        }
+
+        var message = $"The tile at {point.X},{point.Y} becomes {terrain.Replace('_', ' ')}.";
+        State.AddMessage(message);
+        return new StateDelta(
+            "createTile",
+            $"tile:{point.X},{point.Y}",
+            message,
+            new Dictionary<string, object?>
+            {
+                ["x"] = point.X,
+                ["y"] = point.Y,
+                ["terrain"] = terrain,
+                ["duration"] = duration,
+            });
+    }
+
+    public StateDelta ApplyStatus(Entity target, string status, int duration, string displayName = "")
+    {
+        var current = target.TryGet<StatusContainerComponent>(out var container)
+            ? container.Statuses.ToList()
+            : new List<StatusInstance>();
+        current.Add(new StatusInstance(status, string.IsNullOrWhiteSpace(displayName) ? status : displayName, State.Turn + duration));
+        target.Set(new StatusContainerComponent(current));
+        var message = $"{target.Name} is {status.Replace('_', ' ')}.";
+        State.AddMessage(message);
+        return new StateDelta(
+            "addStatus",
+            target.Id.Value,
+            message,
+            new Dictionary<string, object?> { ["status"] = status, ["duration"] = duration });
+    }
+
+    public StateDelta RemoveStatus(Entity target, string status)
+    {
+        if (!target.TryGet<StatusContainerComponent>(out var container))
+        {
+            var unchanged = $"{target.Name} has no {status} to remove.";
+            State.AddMessage(unchanged);
+            return new StateDelta("removeStatus", target.Id.Value, unchanged, new Dictionary<string, object?> { ["status"] = status });
+        }
+
+        var remaining = container.Statuses
+            .Where(instance => !instance.Id.Equals(status, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        target.Set(new StatusContainerComponent(remaining));
+        var message = $"{status.Replace('_', ' ')} leaves {target.Name}.";
+        State.AddMessage(message);
+        return new StateDelta("removeStatus", target.Id.Value, message, new Dictionary<string, object?> { ["status"] = status });
+    }
+
+    public Entity SpawnEntity(string prefix, string name, char glyph, GridPoint position, string faction, int hp, int attack, IReadOnlyList<string> tags)
+    {
+        var entity = new Entity(State.NextEntityId(prefix), name)
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent(glyph, faction))
+            .Set(new TagsComponent(tags))
+            .Set(new PhysicalComponent(BlocksMovement: true, Material: "summoned"))
+            .Set(new ActorComponent(hp, hp, 0, 0, attack, 0, faction))
+            .Set(new ControllerComponent(ControllerKind.Ai))
+            .Set(new AiComponent(faction == "player" ? "ally" : "hostile_guard"))
+            .Set(StatusContainerComponent.Empty())
+            .Set(new SoulComponent($"{prefix}_{State.NextEntitySerial}_soul"));
+        State.Entities.Add(entity.Id, entity);
+        return entity;
     }
 
     public StateDelta AddPromise(string kind, string text)
@@ -231,6 +366,75 @@ public sealed class GameEngine
         }
 
         return EntityById(target);
+    }
+
+    public MagicContextView MagicContext(OperationIndex operations)
+    {
+        var caster = State.ControlledEntity;
+        var casterPosition = caster.Get<PositionComponent>().Position;
+        var casterActor = caster.Get<ActorComponent>();
+        var soulId = caster.TryGet<SoulComponent>(out var soul) ? soul.SoulId : caster.Id.Value;
+        var statuses = BuildStatusCards(caster);
+        var visible = State.Entities.Values
+            .Where(entity => entity.TryGet<PositionComponent>(out _))
+            .OrderBy(entity => entity.Id.Value)
+            .Select(entity =>
+            {
+                var pos = entity.Get<PositionComponent>().Position;
+                var actor = entity.TryGet<ActorComponent>(out var entityActor) ? entityActor : null;
+                var physical = entity.TryGet<PhysicalComponent>(out var phys) ? phys : null;
+                var tags = TagsFor(entity);
+                return new PerceivedEntity(
+                    entity.Id.Value,
+                    entity.Name,
+                    entity.TryGet<RenderableComponent>(out var renderable) ? renderable.Glyph : '?',
+                    pos.X,
+                    pos.Y,
+                    pos.X - casterPosition.X,
+                    pos.Y - casterPosition.Y,
+                    actor?.Faction,
+                    physical?.Material ?? "unknown",
+                    tags,
+                    actor?.HitPoints,
+                    actor?.MaxHitPoints);
+            })
+            .ToArray();
+
+        var terrain = BuildTiles()
+            .Where(tile => tile.BlocksMovement || !tile.Terrain.Equals("floor", StringComparison.OrdinalIgnoreCase))
+            .Select(tile => new TileNote(
+                tile.X,
+                tile.Y,
+                tile.Terrain,
+                tile.BlocksMovement ? new[] { "blocking" } : Array.Empty<string>()))
+            .ToArray();
+
+        return new MagicContextView(
+            new CasterView(
+                caster.Id.Value,
+                caster.Name,
+                casterPosition.X,
+                casterPosition.Y,
+                casterActor.HitPoints,
+                casterActor.MaxHitPoints,
+                casterActor.Mana,
+                casterActor.MaxMana,
+                soulId,
+                statuses),
+            visible,
+            terrain,
+            State.SelectedTarget,
+            State.Messages.TakeLast(8).ToArray(),
+            State.PromiseLedger.Promises
+                .Where(promise => promise.PlayerVisible)
+                .Select(promise => new PromiseCard(
+                    promise.Id,
+                    promise.Kind,
+                    promise.Status,
+                    promise.Text,
+                    promise.PlayerVisible))
+                .ToArray(),
+            operations);
     }
 
     public GameView View()
@@ -321,7 +525,7 @@ public sealed class GameEngine
         };
     }
 
-    private static bool IsHostile(Entity actor, Entity target)
+    public bool IsHostile(Entity actor, Entity target)
     {
         if (!actor.TryGet<ActorComponent>(out var actorStats)
             || !target.TryGet<ActorComponent>(out var targetStats))
@@ -333,7 +537,7 @@ public sealed class GameEngine
             && targetStats.Faction != "neutral";
     }
 
-    private static int Distance(GridPoint a, GridPoint b) =>
+    public static int Distance(GridPoint a, GridPoint b) =>
         Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
 
     private IReadOnlyList<MapTileCard> BuildTiles()
@@ -344,11 +548,12 @@ public sealed class GameEngine
             for (var x = 0; x < State.Width; x++)
             {
                 var point = new GridPoint(x, y);
+                var terrain = State.Terrain.TryGetValue(point, out var tile) ? tile : State.BlockingTerrain.Contains(point) ? "wall" : "floor";
                 var blocks = State.BlockingTerrain.Contains(point);
                 tiles.Add(new MapTileCard(
                     x,
                     y,
-                    blocks ? "wall" : "floor",
+                    terrain,
                     blocks,
                     blocks));
             }
@@ -401,6 +606,11 @@ public sealed class GameEngine
             tags.AddRange(fixture.Tags);
         }
 
+        if (entity.TryGet<TagsComponent>(out var tagComponent))
+        {
+            tags.AddRange(tagComponent.Tags);
+        }
+
         return new EntityCard(
             entity.Id.Value,
             entity.Name,
@@ -412,5 +622,33 @@ public sealed class GameEngine
             actor?.HitPoints,
             actor?.MaxHitPoints,
             tags.Distinct().OrderBy(tag => tag).ToArray());
+    }
+
+    private bool IsBoundaryWall(GridPoint point) =>
+        point.X == 0 || point.Y == 0 || point.X == State.Width - 1 || point.Y == State.Height - 1;
+
+    private static bool TerrainBlocksMovement(string terrain) =>
+        terrain is "wall" or "ice_wall" or "rubble" or "vines";
+
+    private static IReadOnlyList<string> TagsFor(Entity entity)
+    {
+        var tags = new List<string>();
+        if (entity.TryGet<TagsComponent>(out var tagComponent))
+        {
+            tags.AddRange(tagComponent.Tags);
+        }
+
+        if (entity.TryGet<ItemComponent>(out var item))
+        {
+            tags.AddRange(item.Tags);
+            tags.Add(item.Material);
+        }
+
+        if (entity.TryGet<FixtureComponent>(out var fixture))
+        {
+            tags.AddRange(fixture.Tags);
+        }
+
+        return tags.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(tag => tag).ToArray();
     }
 }

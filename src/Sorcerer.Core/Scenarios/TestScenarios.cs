@@ -11,6 +11,8 @@ public static class TestScenarios
         var state = new GameState(width: 16, height: 10)
         {
             ControlledEntityId = EntityId.Create("player"),
+            Seed = 7,
+            Rng = new DeterministicRng(7),
         };
 
         state.Factions.AddOrGet("player", "The Sorcerer", "player");

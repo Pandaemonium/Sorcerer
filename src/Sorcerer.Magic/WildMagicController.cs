@@ -2,7 +2,7 @@ using Sorcerer.Core.Commands;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Magic;
-using Sorcerer.Core.Primitives;
+using Sorcerer.Core.References;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Transactions;
 using Sorcerer.Magic.Auditing;
@@ -17,7 +17,6 @@ public sealed class WildMagicController : IWildMagicController
     private readonly ISpellAuditSink _audit;
     private readonly ISpellProvider _provider;
     private readonly OperationRegistry _registry;
-    private readonly SpellValidator _validator = new();
 
     public WildMagicController(
         ISpellProvider provider,
@@ -35,10 +34,12 @@ public sealed class WildMagicController : IWildMagicController
         CancellationToken cancellationToken)
     {
         var turnBefore = engine.State.Turn;
+        var operationIndex = _registry.ToIndex();
+        var contextView = engine.MagicContext(operationIndex);
         var request = new SpellRequest(
             command.Text,
-            engine.View(),
-            _registry.Operations.Select(op => op.Name).OrderBy(name => name).ToArray());
+            contextView,
+            operationIndex.Names);
 
         var providerResult = await _provider.ResolveAsync(request, cancellationToken);
         if (providerResult.TechnicalFailure || providerResult.Resolution is null)
@@ -65,37 +66,34 @@ public sealed class WildMagicController : IWildMagicController
             return result;
         }
 
-        var resolution = providerResult.Resolution;
+        var resolution = Normalize(providerResult.Resolution);
         if (!resolution.Accepted)
         {
-            var reason = resolution.RejectedReason ?? "The spell refuses to become real.";
-            engine.AddMessage(reason);
-            engine.AdvanceTurn();
-            var result = new ActionResult
-            {
-                Action = "cast",
-                Success = false,
-                ConsumedTurn = true,
-                TurnBefore = turnBefore,
-                TurnAfter = engine.State.Turn,
-                Messages = new[] { reason },
-                Magic = new MagicResolutionRecord(
-                    providerResult.Provider,
-                    Accepted: false,
-                    TechnicalFailure: false,
-                    EffectTypes: Array.Empty<string>(),
-                    Error: reason),
-            };
+            var result = Rejected(
+                engine,
+                providerResult.Provider,
+                turnBefore,
+                resolution.RejectedReason ?? "The spell refuses to become real.",
+                Array.Empty<string>());
             Audit(providerResult, command, request.Context, result, Array.Empty<string>());
             return result;
         }
 
-        var validation = _validator.Validate(engine, resolution, _registry);
-        if (!validation.IsValid)
+        var effectContext = new EffectContext(
+            engine,
+            engine.State.ControlledEntity,
+            new EngineReferenceResolver(engine, engine.State.ControlledEntity));
+        var validationIssues = ValidateResolution(engine, resolution, effectContext);
+        if (validationIssues.Count > 0)
         {
-            var error = string.Join("; ", validation.Issues.Select(issue => issue.Message));
-            var result = TechnicalFailure(engine, providerResult.Provider, turnBefore, error);
-            Audit(providerResult, command, request.Context, result, validation.Issues.Select(issue => issue.Code).ToArray());
+            var reason = string.Join("; ", validationIssues.Select(issue => issue.Message));
+            var result = Rejected(
+                engine,
+                providerResult.Provider,
+                turnBefore,
+                reason,
+                resolution.Effects.Select(effect => effect.Type).ToArray());
+            Audit(providerResult, command, request.Context, result, validationIssues.Select(issue => issue.Code).ToArray());
             return result;
         }
 
@@ -112,7 +110,9 @@ public sealed class WildMagicController : IWildMagicController
 
             foreach (var effect in resolution.Effects)
             {
-                deltas.AddRange(ApplyEffect(engine, effect));
+                var operation = _registry.Resolve(effect.Type)
+                    ?? throw new InvalidOperationException($"Unsupported effect type {effect.Type}.");
+                deltas.AddRange(operation.Apply(effectContext, effect));
             }
 
             deltas.AddRange(SpellCostApplier.Apply(engine, resolution.Costs));
@@ -180,6 +180,114 @@ public sealed class WildMagicController : IWildMagicController
             result,
             validationErrors));
 
+    private SpellResolution Normalize(SpellResolution resolution) =>
+        resolution with
+        {
+            Effects = resolution.Effects
+                .Select(effect => effect with { Type = _registry.Canonicalize(effect.Type) })
+                .ToArray(),
+        };
+
+    private IReadOnlyList<SpellValidationIssue> ValidateResolution(
+        GameEngine engine,
+        SpellResolution resolution,
+        EffectContext effectContext)
+    {
+        var issues = new List<SpellValidationIssue>();
+        if (resolution.Accepted && resolution.Effects.Count == 0)
+        {
+            issues.Add(new SpellValidationIssue(
+                "no_effects",
+                "Accepted spell resolutions need at least one effect."));
+        }
+
+        foreach (var effect in resolution.Effects)
+        {
+            var operation = _registry.Resolve(effect.Type);
+            if (operation is null)
+            {
+                issues.Add(new SpellValidationIssue(
+                    "unsupported_effect",
+                    $"Unsupported effect type {effect.Type}."));
+                continue;
+            }
+
+            var outcome = operation.Validate(effectContext, effect);
+            if (!outcome.Ok)
+            {
+                issues.Add(new SpellValidationIssue(
+                    "operation_rejected",
+                    outcome.RejectReason ?? $"{effect.Type} could not be applied."));
+            }
+        }
+
+        issues.AddRange(ValidateCosts(engine, resolution.Costs));
+        return issues;
+    }
+
+    private static IReadOnlyList<SpellValidationIssue> ValidateCosts(
+        GameEngine engine,
+        IReadOnlyList<SpellCost> costs)
+    {
+        var issues = new List<SpellValidationIssue>();
+        foreach (var cost in costs)
+        {
+            switch (cost.Type)
+            {
+                case "mana":
+                case "health":
+                case "hp":
+                case "maxHealth":
+                case "max_health":
+                case "maxMana":
+                case "max_mana":
+                case "status":
+                case "curse":
+                    break;
+                case "item":
+                    ValidateItemCost(engine, cost, issues);
+                    break;
+                default:
+                    issues.Add(new SpellValidationIssue(
+                        "unsupported_cost",
+                        $"Unsupported cost type {cost.Type}."));
+                    break;
+            }
+        }
+
+        return issues;
+    }
+
+    private static void ValidateItemCost(
+        GameEngine engine,
+        SpellCost cost,
+        List<SpellValidationIssue> issues)
+    {
+        var name = ReadString(cost.Fields, "item", ReadString(cost.Fields, "name", ""));
+        var quantity = Math.Max(1, ReadInt(cost.Fields, "quantity", ReadInt(cost.Fields, "amount", 1)));
+        var allowProtected = ReadBool(cost.Fields, "allowProtected", ReadBool(cost.Fields, "allow_protected", false));
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            issues.Add(new SpellValidationIssue("item_cost_missing_name", "Item cost does not name an item."));
+            return;
+        }
+
+        if (!engine.State.ControlledEntity.TryGet<InventoryComponent>(out var inventory)
+            || !inventory.Items.TryGetValue(name, out var available)
+            || available < quantity)
+        {
+            issues.Add(new SpellValidationIssue("item_cost_unavailable", $"Item cost is unavailable: {name}."));
+            return;
+        }
+
+        if (!allowProtected && inventory.TreasuredItems.Contains(name))
+        {
+            issues.Add(new SpellValidationIssue(
+                "item_cost_protected",
+                $"The spell reaches for protected item {name}; the casting fizzles before consuming it."));
+        }
+    }
+
     private static ActionResult TechnicalFailure(
         GameEngine engine,
         string provider,
@@ -202,171 +310,44 @@ public sealed class WildMagicController : IWildMagicController
                 Error: error),
         };
 
-    private static IEnumerable<StateDelta> ApplyEffect(GameEngine engine, SpellEffect effect)
+    private static ActionResult Rejected(
+        GameEngine engine,
+        string provider,
+        int turnBefore,
+        string reason,
+        IReadOnlyList<string> effectTypes)
     {
-        switch (effect.Type)
+        engine.AddMessage(reason);
+        engine.AdvanceTurn();
+        return new ActionResult
         {
-            case "damage":
-            {
-                var target = engine.ResolveEntity(ReadString(effect, "target", "nearest_enemy"));
-                if (target is null)
-                {
-                    yield break;
-                }
-
-                yield return engine.DamageEntity(
-                    target,
-                    ReadInt(effect, "amount", 4),
-                    ReadString(effect, "damageType", ReadString(effect, "damage_type", "arcane")));
-                yield break;
-            }
-
-            case "heal":
-            {
-                var target = engine.ResolveEntity(ReadString(effect, "target", "player"));
-                if (target is null)
-                {
-                    yield break;
-                }
-
-                yield return engine.HealEntity(target, ReadInt(effect, "amount", 4));
-                yield break;
-            }
-
-            case "restoreMana":
-            {
-                var target = engine.ResolveEntity(ReadString(effect, "target", "player"));
-                if (target is null)
-                {
-                    yield break;
-                }
-
-                var actor = target.Get<ActorComponent>();
-                var amount = ReadInt(effect, "amount", 4);
-                var restored = Math.Max(0, Math.Min(amount, actor.MaxMana - actor.Mana));
-                target.Set(actor with { Mana = actor.Mana + restored });
-                var message = $"{target.Name} regains {restored} mana.";
-                engine.AddMessage(message);
-                yield return new StateDelta(
-                    "restoreMana",
-                    target.Id.Value,
-                    message,
-                    new Dictionary<string, object?> { ["amount"] = restored });
-                yield break;
-            }
-
-            case "message":
-            {
-                var text = ReadString(effect, "text", string.Empty);
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    engine.AddMessage(text);
-                    yield return new StateDelta(
-                        "message",
-                        "",
-                        text,
-                        new Dictionary<string, object?>());
-                }
-
-                yield break;
-            }
-
-            case "createPromise":
-            {
-                var text = ReadString(effect, "text", string.Empty);
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    yield return engine.AddPromise(ReadString(effect, "kind", "omen"), text);
-                }
-
-                yield break;
-            }
-
-            case "addCurse":
-            {
-                var text = ReadString(effect, "description", ReadString(effect, "name", "Wild Debt"));
-                yield return engine.AddPromise("debt", text);
-                yield break;
-            }
-
-            case "scheduleEvent":
-            {
-                var turns = Math.Max(1, ReadInt(effect, "turns", 3));
-                var eventType = ReadString(effect, "eventType", ReadString(effect, "event_type", "wild_magic"));
-                var scheduled = engine.State.ScheduledEvents.Schedule(
-                    engine.State.Turn + turns,
-                    eventType,
-                    null,
-                    effect.Fields);
-                var summary = $"Something is scheduled for turn {scheduled.DueTurn}: {eventType}.";
-                engine.AddMessage(summary);
-                yield return new StateDelta(
-                    "scheduleEvent",
-                    scheduled.Id,
-                    summary,
-                    effect.Fields);
-                yield break;
-            }
-
-            case "addStatus":
-            {
-                var target = engine.ResolveEntity(ReadString(effect, "target", "nearest_enemy"));
-                if (target is null)
-                {
-                    yield break;
-                }
-
-                var status = ReadString(effect, "status", "marked");
-                var duration = ReadInt(effect, "duration", 3);
-                var current = target.TryGet<StatusContainerComponent>(out var container)
-                    ? container.Statuses.ToList()
-                    : new List<StatusInstance>();
-                current.Add(new StatusInstance(status, status, engine.State.Turn + duration));
-                target.Set(new StatusContainerComponent(current));
-                var summary = $"{target.Name} is {status}.";
-                engine.AddMessage(summary);
-                yield return new StateDelta(
-                    "addStatus",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["status"] = status, ["duration"] = duration });
-                yield break;
-            }
-
-            case "push":
-            case "pull":
-            case "teleport":
-            case "areaDamage":
-            case "createTile":
-            case "createTiles":
-            case "summon":
-            case "createEntity":
-            case "transformEntity":
-            case "transformItem":
-            case "removeStatus":
-            case "changeFaction":
-            case "addTrait":
-            case "createTrigger":
-            {
-                var summary = $"{effect.Type} is registered but not implemented yet.";
-                engine.AddMessage(summary);
-                yield return new StateDelta(
-                    effect.Type,
-                    ReadString(effect, "target", ""),
-                    summary,
-                    effect.Fields);
-                yield break;
-            }
-        }
+            Action = "cast",
+            Success = false,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = engine.State.Turn,
+            Messages = new[] { reason },
+            Magic = new MagicResolutionRecord(
+                provider,
+                Accepted: false,
+                TechnicalFailure: false,
+                EffectTypes: effectTypes,
+                Error: reason),
+        };
     }
 
-    private static string ReadString(SpellEffect effect, string key, string fallback) =>
-        effect.Fields.TryGetValue(key, out var value) && value is not null
+    private static string ReadString(IReadOnlyDictionary<string, object?> fields, string key, string fallback) =>
+        fields.TryGetValue(key, out var value) && value is not null
             ? Convert.ToString(value) ?? fallback
             : fallback;
 
-    private static int ReadInt(SpellEffect effect, string key, int fallback) =>
-        effect.Fields.TryGetValue(key, out var value) && int.TryParse(Convert.ToString(value), out var parsed)
+    private static int ReadInt(IReadOnlyDictionary<string, object?> fields, string key, int fallback) =>
+        fields.TryGetValue(key, out var value) && int.TryParse(Convert.ToString(value), out var parsed)
+            ? parsed
+            : fallback;
+
+    private static bool ReadBool(IReadOnlyDictionary<string, object?> fields, string key, bool fallback) =>
+        fields.TryGetValue(key, out var value) && bool.TryParse(Convert.ToString(value), out var parsed)
             ? parsed
             : fallback;
 }

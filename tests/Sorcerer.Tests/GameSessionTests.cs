@@ -51,7 +51,7 @@ public sealed class GameSessionTests
     }
 
     [Fact]
-    public async Task ProtectedItemCostFailsWithoutConsumingTurn()
+    public async Task ProtectedItemCostFizzleConsumesTurnWithoutMutation()
     {
         var provider = new ProtectedItemCostProvider();
         var session = GameSession.CreateImperialEncounter(new WildMagicController(provider));
@@ -61,9 +61,9 @@ public sealed class GameSessionTests
         var result = await session.ExecuteAsync(new CastCommand("shatter the moon pearl to strike"));
 
         Assert.False(result.Success);
-        Assert.True(result.TechnicalFailure);
-        Assert.False(result.ConsumedTurn);
-        Assert.Equal(0, result.TurnAfter);
+        Assert.False(result.TechnicalFailure);
+        Assert.True(result.ConsumedTurn);
+        Assert.Equal(1, result.TurnAfter);
         Assert.Equal(hpBefore, soldier.Get<Sorcerer.Core.Entities.ActorComponent>().HitPoints);
     }
 
