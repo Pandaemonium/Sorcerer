@@ -33,6 +33,31 @@ dotnet build C:\Games\Sorcerer\Sorcerer.sln
 dotnet test C:\Games\Sorcerer\Sorcerer.sln
 ```
 
+## Formatting And Pre-Commit
+
+Sorcerer uses C#/.NET hygiene rather than the Python/Ruff setup from Wild Magic.
+
+Install the hooks once per clone:
+
+```powershell
+pipx install pre-commit
+pre-commit install
+```
+
+Run all hooks manually:
+
+```powershell
+pre-commit run --all-files
+```
+
+The configured hooks check whitespace, final newlines, YAML syntax, JSON syntax, merge
+conflicts, and `dotnet format whitespace --verify-no-changes`. To fix C# whitespace before
+committing, run:
+
+```powershell
+dotnet format C:\Games\Sorcerer\Sorcerer.sln whitespace
+```
+
 CLI mock run:
 
 ```powershell

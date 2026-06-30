@@ -179,48 +179,48 @@ public static class Program
 
         using (document)
         {
-        var root = document.RootElement;
-        var type = root.TryGetProperty("type", out var typeElement)
-            ? typeElement.GetString() ?? ""
-            : "";
+            var root = document.RootElement;
+            var type = root.TryGetProperty("type", out var typeElement)
+                ? typeElement.GetString() ?? ""
+                : "";
 
-        return type.Trim().ToLowerInvariant() switch
-        {
-            "move" => new MoveCommand(ParseDirection(ReadString(root, "direction", "east"))),
-            "wait" => new WaitCommand(),
-            "inspect" => new InspectCommand(),
-            "map" => new MapCommand(ReadInt(root, "radius", 8)),
-            "cast" => ReadBool(root, "await", true)
-                ? new CastCommand(ReadString(root, "text", ""), CastPerformance.Neutral)
-                : new BeginCastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
-            "begin_cast" or "submit_cast" or "start_cast" => new BeginCastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
-            "await_cast" or "resolve_cast" => new AwaitCastCommand(),
-            "cancel_cast" => new CancelCastCommand(),
-            "target" => new TargetCommand(new GridPoint(ReadInt(root, "x", 0), ReadInt(root, "y", 0))),
-            "untarget" => new ClearTargetCommand(),
-            "pickup" => new PickupCommand(ReadNullableString(root, "target")),
-            "drop" => new DropCommand(ReadString(root, "item", "")),
-            "use" => new UseItemCommand(ReadString(root, "item", "")),
-            "equip" => new EquipCommand(ReadString(root, "item", "")),
-            "unequip" => new UnequipCommand(ReadString(root, "item", "")),
-            "focus" => new FocusCommand(ReadString(root, "item", "")),
-            "unfocus" => new UnfocusCommand(ReadNullableString(root, "item")),
-            "protect" => new ProtectItemCommand(ReadString(root, "item", "")),
-            "unprotect" => new UnprotectItemCommand(ReadString(root, "item", "")),
-            "reagents" => new ReagentsCommand(),
-            "journal" => new JournalCommand(),
-            "talk" => new TalkCommand(ReadString(root, "text", "")),
-            "read" => new ReadCommand(ReadNullableString(root, "target")),
-            "examine" => new ExamineCommand(ReadNullableString(root, "target")),
-            "open" => new OpenCommand(ReadNullableString(root, "target")),
-            "possess" => new PossessCommand(ReadNullableString(root, "target")),
-            "standing" => new StandingCommand(),
-            "followers" => new FollowersCommand(),
-            "jobs" => new JobsCommand(),
-            "help" => new HelpCommand(),
-            "quit" => new QuitCommand(),
-            _ => new UnknownCommand(json),
-        };
+            return type.Trim().ToLowerInvariant() switch
+            {
+                "move" => new MoveCommand(ParseDirection(ReadString(root, "direction", "east"))),
+                "wait" => new WaitCommand(),
+                "inspect" => new InspectCommand(),
+                "map" => new MapCommand(ReadInt(root, "radius", 8)),
+                "cast" => ReadBool(root, "await", true)
+                    ? new CastCommand(ReadString(root, "text", ""), CastPerformance.Neutral)
+                    : new BeginCastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
+                "begin_cast" or "submit_cast" or "start_cast" => new BeginCastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
+                "await_cast" or "resolve_cast" => new AwaitCastCommand(),
+                "cancel_cast" => new CancelCastCommand(),
+                "target" => new TargetCommand(new GridPoint(ReadInt(root, "x", 0), ReadInt(root, "y", 0))),
+                "untarget" => new ClearTargetCommand(),
+                "pickup" => new PickupCommand(ReadNullableString(root, "target")),
+                "drop" => new DropCommand(ReadString(root, "item", "")),
+                "use" => new UseItemCommand(ReadString(root, "item", "")),
+                "equip" => new EquipCommand(ReadString(root, "item", "")),
+                "unequip" => new UnequipCommand(ReadString(root, "item", "")),
+                "focus" => new FocusCommand(ReadString(root, "item", "")),
+                "unfocus" => new UnfocusCommand(ReadNullableString(root, "item")),
+                "protect" => new ProtectItemCommand(ReadString(root, "item", "")),
+                "unprotect" => new UnprotectItemCommand(ReadString(root, "item", "")),
+                "reagents" => new ReagentsCommand(),
+                "journal" => new JournalCommand(),
+                "talk" => new TalkCommand(ReadString(root, "text", "")),
+                "read" => new ReadCommand(ReadNullableString(root, "target")),
+                "examine" => new ExamineCommand(ReadNullableString(root, "target")),
+                "open" => new OpenCommand(ReadNullableString(root, "target")),
+                "possess" => new PossessCommand(ReadNullableString(root, "target")),
+                "standing" => new StandingCommand(),
+                "followers" => new FollowersCommand(),
+                "jobs" => new JobsCommand(),
+                "help" => new HelpCommand(),
+                "quit" => new QuitCommand(),
+                _ => new UnknownCommand(json),
+            };
         }
     }
 

@@ -167,35 +167,35 @@ public static class ReferenceBinder
                     new[] { engine.State.ControlledEntity },
                     null);
             case "nearest_enemy":
-            {
-                var target = engine.FindNearestHostile();
-                return target is null
-                    ? BoundReference.Failure(reference, "No hostile target is visible.")
-                    : new BoundReference(
-                        reference,
-                        target,
-                        target.Get<PositionComponent>().Position,
-                        new[] { target },
-                        null);
-            }
+                {
+                    var target = engine.FindNearestHostile();
+                    return target is null
+                        ? BoundReference.Failure(reference, "No hostile target is visible.")
+                        : new BoundReference(
+                            reference,
+                            target,
+                            target.Get<PositionComponent>().Position,
+                            new[] { target },
+                            null);
+                }
             case "selected_target":
                 return engine.State.SelectedTarget is { } selected
                     ? new BoundReference(reference, null, selected, Array.Empty<Entity>(), null)
                     : BoundReference.Failure(reference, "No target is selected.");
             case "all_enemies":
-            {
-                var actor = engine.State.ControlledEntity;
-                var faction = actor.TryGet<ActorComponent>(out var actorStats) ? actorStats.Faction : "";
-                var group = engine.State.Entities.Values
-                    .Where(entity => entity.TryGet<ActorComponent>(out var targetStats)
-                        && targetStats.Alive
-                        && targetStats.Faction != faction
-                        && targetStats.Faction != "neutral")
-                    .ToArray();
-                return group.Length == 0
-                    ? BoundReference.Failure(reference, "No hostile group is visible.")
-                    : new BoundReference(reference, null, null, group, null);
-            }
+                {
+                    var actor = engine.State.ControlledEntity;
+                    var faction = actor.TryGet<ActorComponent>(out var actorStats) ? actorStats.Faction : "";
+                    var group = engine.State.Entities.Values
+                        .Where(entity => entity.TryGet<ActorComponent>(out var targetStats)
+                            && targetStats.Alive
+                            && targetStats.Faction != faction
+                            && targetStats.Faction != "neutral")
+                        .ToArray();
+                    return group.Length == 0
+                        ? BoundReference.Failure(reference, "No hostile group is visible.")
+                        : new BoundReference(reference, null, null, group, null);
+                }
             default:
                 return BoundReference.Failure(reference, $"Unsupported selector {selector}.");
         }

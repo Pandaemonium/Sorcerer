@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: dotnet-format-whitespace
+        name: dotnet format whitespace
+        entry: dotnet format Sorcerer.sln whitespace --verify-no-changes --no-restore --verbosity minimal
+        language: system
+        pass_filenames: false
+        files: \.(cs|csproj|props|targets|sln)$

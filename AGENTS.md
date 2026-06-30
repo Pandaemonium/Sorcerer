@@ -224,6 +224,8 @@ For Godot GUI changes, verify that the same behavior is reachable through the CL
 
 - Read existing docs before editing.
 - Keep changes scoped.
+- Use the C# hygiene path: `.editorconfig`, `dotnet format`, and pre-commit hooks. Ruff is
+  for the old Python repo and should not be added here unless Sorcerer grows Python tooling.
 - Do not add one-off handlers for a single spell phrase.
 - Do not build GUI-only mechanics.
 - Do not let malformed LLM output partially mutate state.
