@@ -83,6 +83,55 @@ public sealed class GameEngine
             "You wait.");
     }
 
+    public IReadOnlyList<StateDelta> RunActorTurns()
+    {
+        var player = State.ControlledEntity;
+        if (!player.TryGet<ActorComponent>(out var playerActor) || !playerActor.Alive)
+        {
+            return Array.Empty<StateDelta>();
+        }
+
+        var deltas = new List<StateDelta>();
+        foreach (var actor in State.Entities.Values
+            .Where(entity => entity.Id != player.Id)
+            .Where(entity => entity.TryGet<ControllerComponent>(out var controller)
+                && controller.Kind == ControllerKind.Ai)
+            .Where(entity => entity.TryGet<ActorComponent>(out var stats)
+                && stats.Alive
+                && IsHostile(entity, player))
+            .OrderBy(entity => entity.Id.Value))
+        {
+            if (!player.Get<ActorComponent>().Alive)
+            {
+                break;
+            }
+
+            if (!actor.TryGet<PositionComponent>(out var actorPosition)
+                || !player.TryGet<PositionComponent>(out var playerPosition))
+            {
+                continue;
+            }
+
+            var distance = Distance(actorPosition.Position, playerPosition.Position);
+            if (distance <= 1)
+            {
+                deltas.Add(AttackEntity(actor, player));
+                continue;
+            }
+
+            if (distance <= 8)
+            {
+                var destination = StepToward(actorPosition.Position, playerPosition.Position);
+                if (CanEnter(destination))
+                {
+                    deltas.Add(MoveEntity(actor, destination, "aiMove"));
+                }
+            }
+        }
+
+        return deltas;
+    }
+
     public ActionResult Inspect()
     {
         var player = State.ControlledEntity;
@@ -176,6 +225,29 @@ public sealed class GameEngine
             message,
             new Dictionary<string, object?>
             {
+                ["amount"] = actual,
+                ["damageType"] = damageType,
+            });
+    }
+
+    public StateDelta AttackEntity(Entity attacker, Entity defender, string damageType = "physical")
+    {
+        var attackerActor = attacker.Get<ActorComponent>();
+        var defenderActor = defender.Get<ActorComponent>();
+        var actual = Math.Max(1, attackerActor.Attack - defenderActor.Defense);
+        var updated = defenderActor with { HitPoints = Math.Max(0, defenderActor.HitPoints - actual) };
+        defender.Set(updated);
+        var message = updated.Alive
+            ? $"{attacker.Name} strikes {defender.Name} for {actual} {damageType} damage."
+            : $"{attacker.Name} drops {defender.Name}.";
+        State.AddMessage(message);
+        return new StateDelta(
+            "attack",
+            defender.Id.Value,
+            message,
+            new Dictionary<string, object?>
+            {
+                ["attacker"] = attacker.Id.Value,
                 ["amount"] = actual,
                 ["damageType"] = damageType,
             });
@@ -508,10 +580,7 @@ public sealed class GameEngine
 
     private ActionResult Attack(Entity attacker, Entity defender, int turnBefore)
     {
-        var attackerActor = attacker.Get<ActorComponent>();
-        var defenderActor = defender.Get<ActorComponent>();
-        var damage = Math.Max(1, attackerActor.Attack - defenderActor.Defense);
-        var delta = DamageEntity(defender, damage, "physical");
+        var delta = AttackEntity(attacker, defender);
         AdvanceTurn();
         return new ActionResult
         {
@@ -539,6 +608,14 @@ public sealed class GameEngine
 
     public static int Distance(GridPoint a, GridPoint b) =>
         Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
+
+    private bool CanEnter(GridPoint point) =>
+        InBounds(point)
+        && !State.BlockingTerrain.Contains(point)
+        && BlockingEntityAt(point) is null;
+
+    private static GridPoint StepToward(GridPoint from, GridPoint to) =>
+        from.Translate(Math.Sign(to.X - from.X), Math.Sign(to.Y - from.Y));
 
     private IReadOnlyList<MapTileCard> BuildTiles()
     {

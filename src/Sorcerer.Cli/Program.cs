@@ -134,7 +134,12 @@ public static class Program
             "wait" => new WaitCommand(),
             "inspect" => new InspectCommand(),
             "map" => new MapCommand(ReadInt(root, "radius", 8)),
-            "cast" => new CastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
+            "cast" => ReadBool(root, "await", true)
+                ? new CastCommand(ReadString(root, "text", ""), CastPerformance.Neutral)
+                : new BeginCastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
+            "begin_cast" or "submit_cast" or "start_cast" => new BeginCastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
+            "await_cast" or "resolve_cast" => new AwaitCastCommand(),
+            "cancel_cast" => new CancelCastCommand(),
             "target" => new TargetCommand(new GridPoint(ReadInt(root, "x", 0), ReadInt(root, "y", 0))),
             "untarget" => new ClearTargetCommand(),
             "pickup" => new PickupCommand(ReadNullableString(root, "target")),
@@ -190,6 +195,11 @@ public static class Program
     private static int ReadInt(JsonElement root, string property, int fallback) =>
         root.TryGetProperty(property, out var value) && value.TryGetInt32(out var parsed)
             ? parsed
+            : fallback;
+
+    private static bool ReadBool(JsonElement root, string property, bool fallback) =>
+        root.TryGetProperty(property, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
             : fallback;
 }
 

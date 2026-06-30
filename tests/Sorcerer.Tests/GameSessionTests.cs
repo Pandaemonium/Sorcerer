@@ -1,5 +1,6 @@
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Magic;
 using Sorcerer.Magic.Resolution;
@@ -48,6 +49,49 @@ public sealed class GameSessionTests
         Assert.Equal("cast", result.Action);
         Assert.NotEmpty(result.Deltas);
         Assert.Equal(1, result.TurnAfter);
+    }
+
+    [Fact]
+    public async Task PendingCastDoesNotMutateUntilAwaited()
+    {
+        var provider = new FixtureSpellProvider();
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider));
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var hpBefore = soldier.Get<Sorcerer.Core.Entities.ActorComponent>().HitPoints;
+
+        var begin = await session.ExecuteAsync(new BeginCastCommand("strike the nearest soldier"));
+
+        Assert.True(begin.Success);
+        Assert.False(begin.ConsumedTurn);
+        Assert.Equal(0, begin.TurnAfter);
+        Assert.Equal(hpBefore, soldier.Get<Sorcerer.Core.Entities.ActorComponent>().HitPoints);
+        Assert.NotNull(session.Observation().PendingCast);
+
+        var blocked = await session.ExecuteAsync(new MoveCommand(Direction.East));
+        Assert.False(blocked.Success);
+        Assert.False(blocked.ConsumedTurn);
+
+        var resolved = await session.ExecuteAsync(new AwaitCastCommand());
+
+        Assert.True(resolved.Success);
+        Assert.True(resolved.ConsumedTurn);
+        Assert.Null(session.Observation().PendingCast);
+        Assert.True(soldier.Get<Sorcerer.Core.Entities.ActorComponent>().HitPoints < hpBefore);
+    }
+
+    [Fact]
+    public async Task HostileActorsMoveAfterConsumedTurn()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var before = soldier.Get<PositionComponent>().Position;
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        var after = soldier.Get<PositionComponent>().Position;
+        Assert.True(result.ConsumedTurn);
+        Assert.NotEqual(before, after);
+        Assert.Contains(result.Deltas, delta => delta.Operation == "aiMove");
     }
 
     [Fact]

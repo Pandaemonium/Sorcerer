@@ -138,6 +138,12 @@ public sealed record DebugStateView(
     LedgerSummary? Ledgers = null,
     IReadOnlyList<string>? ValidationIssues = null);
 
+public sealed record PendingCastView(
+    string Id,
+    string Text,
+    string State);
+
 public sealed record AgentObservation(
     GameView View,
-    DebugStateView? Debug);
+    DebugStateView? Debug,
+    PendingCastView? PendingCast = null);

@@ -12,6 +12,12 @@ public sealed record InspectCommand() : GameCommand;
 
 public sealed record CastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
 
+public sealed record BeginCastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
+
+public sealed record AwaitCastCommand() : GameCommand;
+
+public sealed record CancelCastCommand() : GameCommand;
+
 public sealed record TargetCommand(GridPoint Position) : GameCommand;
 
 public sealed record ClearTargetCommand() : GameCommand;
