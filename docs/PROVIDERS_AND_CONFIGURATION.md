@@ -51,7 +51,7 @@ keys for different jobs.
 Anything the player actively triggers can be on the urgent path:
 
 - wild spells
-- dialogue
+- dialogue interpretation and NPC response
 - reading or examining
 - item identification
 - other explicit interactions
@@ -111,4 +111,3 @@ Record:
 - validation errors
 - elapsed time
 - token counts when available
-

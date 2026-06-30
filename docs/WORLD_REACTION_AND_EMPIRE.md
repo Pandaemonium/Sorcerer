@@ -7,6 +7,8 @@ The Empire is marble. The rest of the world is color.
 ## The Long Arc
 
 The long-term win condition is to kill the emperor.
+The emperor should exist as a killable character so the run can be technically won even before
+the full late-game access, court, and final-encounter systems are elaborate.
 
 The path to the emperor should eventually involve:
 
@@ -55,6 +57,7 @@ These lanes should answer:
 
 - what did the player do?
 - who saw it?
+- who merely saw the effect and became suspicious?
 - who cares?
 - what did it cost?
 - what might answer later?
@@ -68,6 +71,7 @@ It should be common enough to invite wild spells, but not so common that provide
 turns play into waiting. Combat can also threaten:
 
 - cover
+- attribution
 - reputation
 - faction standing
 - promises
@@ -117,4 +121,3 @@ Allowed cross-run traces:
 - optional player-facing history
 
 These should commemorate, not empower.
-

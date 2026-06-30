@@ -38,6 +38,11 @@ zone transition - not per turn, not on a real-time clock, and never from a backg
 mutating state directly. This is the same pump discipline as background jobs and pending
 casts in the RFC: durable change enters state only at controlled apply points.
 
+This restriction is for social/world reaction: deeds, factions, promises, rumors, narration,
+and geopolitics. Tactical mechanics such as status ticks, auras, terrain reactions, and delayed
+effects can run through explicit engine turn-tick systems when the player needs immediate,
+legible consequences.
+
 (This replaces Wild Magic's once-per-in-game-day tick. The daily clock was an arbitrary
 heartbeat; pump points tie reaction to what actually happened.)
 
@@ -46,8 +51,11 @@ heartbeat; pump points tie reaction to what actually happened.)
 - A **deed** is the atom: what the player did, plus who saw it. Recorded the instant it
   happens; applied at the next pump point. **Bound to the soul, not the body** - body swap
   does not launder reputation.
-- **Visibility gates everything.** A deed is secret, witnessed, public, or mythic, and only
-  enters the legend through one of those channels. A secret deed shapes only those who know.
+- **Visibility gates everything.** A deed is secret, suspicious, witnessed, public, or mythic, and
+  only enters the legend through one of those channels. A secret deed shapes only those who know.
+  A suspicious deed is one where someone saw the effect or harmed target but not the caster; it
+  becomes attributed to the player only if that witness gets line of sight to the player within
+  20 turns. If they never see the player in that window, they do not magically know who caused it.
 - **Legend** is a few weighted tags (defiant, butcher, merciful, uncanny) that dialogue,
   rumors, and NPC feeling all read. Keep it in two forms: bounded tags that systems reason
   over, and prose notes that only prompts read.
@@ -61,7 +69,9 @@ heartbeat; pump points tie reaction to what actually happened.)
 A reaction is an expenditure, not a threshold trip. A crackdown is "the Empire spends a
 patrol and an informant," not "fear > 70." Because resources are finite, an overspent faction
 goes quiet and pressure ebbs and flows instead of ratcheting forever. This is also how
-escalation stays bounded and the game stays winnable.
+escalation stays bounded and the game stays winnable. Exact resource pools are developer/debug
+state; player-facing views should show pressure, mood, warrants, rumors, and visible consequences
+rather than raw numbers.
 
 ## Bonds, organizations, followers (reserved lane, built late)
 
@@ -84,8 +94,8 @@ conquered or defiant, who rules them, where traditions survive, how hard the Emp
 each province. **Procedural rolls the structure** (deterministic, replay-safe); the model
 **names and flavors it**. Every rolled feature must imply at least one tactical affordance the
 player can act on - a safer region, a recruitable tradition, a conflict to exploit - not just
-lore. The win condition resolves within a single run: reach and kill the emperor once
-geopolitical pressure has spent down imperial defenses.
+lore. The win condition resolves within a single run: kill the emperor. The emperor should exist as
+a killable character even before the elaborate systems for reaching him are fully built.
 
 ## Legibility is first-class
 

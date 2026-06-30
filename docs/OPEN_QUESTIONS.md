@@ -27,9 +27,13 @@ first-playable slice) and have been removed from this list.
 
 ## Persistence
 
-- What save format should be used once saves begin?
-- How much schema versioning should be introduced before actual saves?
-- Should replay records be stored beside audit logs, under runs, or in a separate folder?
+The high-level persistence direction is now settled in BUILD_PLAN.md: full mid-run
+quicksave/resume, `System.Text.Json` with a versioned envelope and migration hook, and replays
+under `runs/<id>/`.
+
+- What migration tests and compatibility guarantees should we keep once real saves exist in the
+  wild?
+- How much of the audit/log bundle should ship with ordinary player saves versus developer builds?
 
 ## Collaboration
 

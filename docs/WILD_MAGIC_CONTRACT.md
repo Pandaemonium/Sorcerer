@@ -211,9 +211,8 @@ authoritative.
 The resolver should receive compact state views:
 
 - caster profile and controlled body
-- visible entities
+- entities and terrain relevant to the cast, annotated by player visibility
 - selected target
-- nearby terrain
 - spell anchors
 - inventory and reagents
 - protected inventory
@@ -223,6 +222,12 @@ The resolver should receive compact state views:
 - optional cast performance, once GUI minigames exist
 
 Do not dump all state into every prompt. Use routed context once the operation surface grows.
+Player perception is not the resolver's hard knowledge boundary: hidden or debug-only facts may be
+included when useful for coherent magic, but they must be labeled as hidden from the player, and
+renderers must not reveal them until the engine makes them observable. Wild magic is not limited by
+what the player knows; a hidden target is not invalid merely because it is hidden. The engine
+remains authoritative about references, range, costs, curse limits, transaction safety, and whether
+a proposed operation can actually be applied.
 
 The CLI should pass neutral cast performance. See
 [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).

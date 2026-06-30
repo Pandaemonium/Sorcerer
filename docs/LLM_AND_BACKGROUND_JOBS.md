@@ -11,7 +11,8 @@ Ollama can be supported, but it should not be the only real path.
 Each model call should have a purpose:
 
 - `wild`: resolve typed wild-magic spells
-- `dialogue`: NPC conversation
+- `dialogue`: parse organic player speech into structured dialogue intent/proposals and voice NPC
+  responses
 - `item`: identify/adapt item abilities
 - `canon`: on-demand examine/read materialization
 - `background`: non-urgent world enrichment
@@ -24,7 +25,7 @@ Purposes allow separate models, hosts, timeouts, and concurrency limits.
 Foreground calls block player action:
 
 - wild spell resolution
-- dialogue response
+- dialogue interpretation/response
 - item identification
 - on-demand reading/examination
 

@@ -170,7 +170,7 @@ Three reference kinds, all supported:
 - selector: engine-computed, reliable, relative to the caster. Initial set:
   `self`, `caster`, `here`, `selected_target`, `nearest_enemy`, `nearest_ally`,
   `all_enemies`, `all_allies`, `all_in_radius` (uses `Radius`), `random_enemy` (uses RNG).
-- name: fuzzy match against visible entities by name and tags, e.g. `"the brass brazier"`.
+- name: fuzzy match against context-surfaced entities by name and tags, e.g. `"the brass brazier"`.
   Case-insensitive token overlap; ties broken by nearest to caster; no match or ambiguous
   match is a validation reject, not a silent no-op.
 
@@ -187,22 +187,26 @@ keeps the common case cheap and the addressable case unified.
 ## 4. Cast Context View and Agent Perception
 
 The provider is currently sent only the spell text and a list of operation names, so it is
-blind. It must instead receive a `MagicContextView`: a compact, perception-bounded packet.
+blind. It must instead receive a `MagicContextView`: a compact, visibility-annotated packet.
 
 ```csharp
 public sealed record MagicContextView(
     CasterView Caster,                       // id, name, hp/mp, position, statuses, soul id
-    IReadOnlyList<PerceivedEntity> Visible,  // id, name, glyph, rel position, faction, materials, tags, hp?
-    IReadOnlyList<TileNote> Terrain,         // notable tiles/fixtures in view
+    IReadOnlyList<ContextEntity> Entities,   // id, name, glyph, rel position, faction, materials, tags, hp?, visibility
+    IReadOnlyList<TileNote> Terrain,         // notable tiles/fixtures, with visibility annotations
     EntityRef? SelectedTarget,
     IReadOnlyList<string> RecentEvents,      // last few message-log lines
-    IReadOnlyList<PromiseCard> KnownPromises,// player-visible promises only
+    IReadOnlyList<PromiseCard> Promises,     // relevant promises, annotated by player visibility
     OperationIndex Operations);              // one-line index + full cards for routed ops
 ```
 
-Perception boundary: the view is built from what the caster can perceive (FOV-limited once
-FOV exists; full-room for the test chamber is acceptable initially). This same builder
-feeds both the provider and the agent observation.
+Resolver context boundary: player perception is not the resolver's hard knowledge limit. The
+context may include hidden or debug-only facts when useful for coherent magic, but every entity
+and tile note must say whether it is visible, explored, hidden from the player, or debug-only.
+Renderer views remain player-perception bounded, and the engine remains authoritative about
+references, operation legality, costs, curse limits, and transactional state. A target is not
+illegal merely because it is hidden from the player. The same view-building code can feed provider
+context and agent observations, but it must filter or annotate according to the consumer.
 
 Agent perception (decision 3): `AgentObservation` defaults to the player-equivalent view so
 unattended playtests surface "the player cannot tell what just happened" bugs. `--debug-state`

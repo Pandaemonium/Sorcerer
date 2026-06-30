@@ -71,6 +71,11 @@ references inside them to Python modules or the old name.
 
 - [DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md): tool requirements and first build commands.
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): staged build plan.
+- [MATURITY_ROADMAP.md](MATURITY_ROADMAP.md): the phased path from the first-playable slice to
+  full Wild Magic-level maturity, building general systems over the reserved state lanes.
+- [BUILD_PLAN.md](BUILD_PLAN.md): the executable, file-level handoff plan - engine refactor,
+  perception/FOV, and Phases 1-4 (character, deeds/legend/reputation, factions, social) in
+  implementation detail, with Wild Magic keep/change/drop guidance.
 - [FIRST_PLAYABLE.md](FIRST_PLAYABLE.md): the first vertical slice worth building.
 - [CLI_AND_AGENT_PLAYTESTING.md](CLI_AND_AGENT_PLAYTESTING.md): JSON-first CLI and agent
   play.

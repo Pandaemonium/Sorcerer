@@ -36,7 +36,8 @@ have to recover them from chat history.
 - Debug and audit tools should exist early as developer affordances, even if they later
   become hidden screens or separate tools.
 - Runs should be long.
-- The eventual win condition is killing the emperor.
+- The eventual win condition is killing the emperor; the emperor should exist as a killable
+  character so the game can be technically won before the final encounter systems are elaborate.
 - There is no meta-progression; grave markers or chronicles are acceptable memorials.
 - The Empire is not reformable in the main arc. It can be destroyed, evaded, or hidden
   from.
@@ -76,9 +77,11 @@ Locked while specifying the core execution model and adapting the inherited desi
 - A seeded engine RNG is threaded from the start; replay records resolved model JSON so live
   magic stays reproducible. This is the cheap determinism the earlier replay decision wanted.
 - The default agent observation is player-equivalent perception; perfect debug state is opt-in.
-- The resolver receives a perception-bounded cast context view so magic can be local and
-  specific; targets resolve by id, selector, or fuzzy name to a set, so single and group
-  targeting are one mechanism.
+- Resolver context is allowed to know more than the player when useful for coherent magic, but
+  hidden facts must be annotated as hidden/debug-only and must not leak into player renderers.
+  Targets resolve by id, selector, or fuzzy name to a set, so single and group targeting are one
+  mechanism; the engine remains authoritative about whether a target can actually be affected. A
+  target is not illegal merely because it is hidden from the player.
 - Entity descriptions and traits are dormant mechanics the resolver surfaces and may cash into
   effects: semantic by default, mechanical on demand, never on the critical path.
 - Traits are resolver-authored only. The player never directly authors a trait; they may only
@@ -89,8 +92,18 @@ Locked while specifying the core execution model and adapting the inherited desi
   real-time or daily tick.
 - The model interprets meaning and narrates reaction; it never simulates. The deterministic
   skeleton must stand with zero model calls.
-- The character stat model is the Vigor / Attunement / Composure triad; Composure is the
-  wildness dial tied to casting performance.
+- The character stat model is the Vigor / Attunement / Composure triad; Vigor follows the body,
+  while Attunement and Composure follow the soul. HP follows the body; mana follows the soul.
+  Composure is the wildness dial tied to casting performance.
+- Exploration memory follows the soul, while current FOV follows the controlled body.
+- Witnessed deeds distinguish suspicion from attribution: seeing an effect without seeing the
+  caster creates suspicion, and only line of sight to the player within 20 turns can connect the
+  deed to the player.
+- Faction finite-resource pools are debug-visible only; player-facing standing uses pressure,
+  mood, warrants, and visible consequences rather than raw resource numbers.
+- Dialogue uses the same engine-authoritative pattern as wild magic: a model may parse organic
+  player speech into structured intent and voice the NPC, but engine rules validate and apply any
+  mechanical outcome.
 - The promise economy is always-honor (yes-and): not everything said binds, but every bound
   promise the world keeps.
 - GRAND_VISION.md is the central guiding vision and supersedes GAME_VISION.

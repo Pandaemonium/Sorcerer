@@ -124,12 +124,22 @@ For actors and bodies:
 
 - name others use
 - appearance
-- backstory
-- magical signature
-- stats
+- body-facing backstory or public history
+- body stats such as Vigor
 - origin
 
-On body swap, the controlled body supplies the profile and stats.
+Soul-facing character state should be separate enough to travel with the soul:
+
+- magical signature
+- personal backstory
+- soul stats such as Attunement and Composure
+- current and max mana
+- personal and exploration memory
+- reputation, legend, and explored-memory ownership
+
+On body swap, the controlled body supplies public name, appearance, inventory, equipment,
+physical condition, HP, and Vigor. The player soul keeps Attunement, Composure, mana, magical
+signature, reputation, legend, and exploration memory.
 
 ### Memory
 
@@ -158,11 +168,14 @@ but should be rare and severe in play.
 Rules:
 
 - `GameState.ControlledEntityId` points at the body the player currently controls.
-- The controlled body supplies HP, mana, stats, profile, inventory, equipment, and focus.
+- The controlled body supplies HP, Vigor, public profile, inventory, equipment, and focus.
+- The occupying soul supplies Attunement, Composure, mana, magical signature, personal memory,
+  reputation, legend, and explored map memory.
 - Inventory stays with the body.
 - The player soul id remains stable for deeds, promises, reputation, and consequences.
 - The vacated body becomes an entity with no controller.
-- The renderer, camera, FOV, resolver context, and CLI all follow `ControlledEntityId`.
+- The renderer, camera, current FOV, resolver context, and CLI all follow
+  `ControlledEntityId`; explored map memory follows the soul.
 - Some spells may be soul swaps rather than possession, meaning another soul can occupy
   the player's former body.
 
