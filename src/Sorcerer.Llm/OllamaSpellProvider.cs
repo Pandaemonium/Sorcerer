@@ -31,20 +31,41 @@ public sealed class OllamaSpellProvider : ISpellProvider
         CancellationToken cancellationToken)
     {
         var supported = string.Join(", ", request.SupportedOperations);
+        var contextJson = JsonSerializer.Serialize(
+            request.Context,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            {
+                WriteIndented = false,
+            });
         var system = "You are the wild magic resolver for Sorcerer. Return exactly one JSON object. "
             + "Use this shape: {\"accepted\":true,\"severity\":\"minor|moderate|major|catastrophic\","
             + "\"outcomeText\":\"short vivid result\",\"effects\":[],\"costs\":[],\"rejectedReason\":null}. "
-            + $"Supported effect types: {supported}. The engine validates everything.";
+            + $"Supported effect types: {supported}. "
+            + "Use only supported effect types and the provided target references. "
+            + "Prefer reusable operations over custom mechanics. "
+            + "Reject spells that are too broad, too remote, or impossible in the current encounter. "
+            + "Technical JSON mistakes are failures, but intentional in-world rejection should be accepted:false. "
+            + "The engine validates everything and applies all effects transactionally.";
 
         var payload = new
         {
             model = _model,
             stream = false,
             format = "json",
+            think = false,
+            options = new
+            {
+                temperature = 0.2,
+                num_predict = 1200,
+            },
             messages = new[]
             {
                 new { role = "system", content = system },
-                new { role = "user", content = request.SpellText },
+                new
+                {
+                    role = "user",
+                    content = $"Spell: {request.SpellText}\n\nCurrent magic context JSON:\n{contextJson}",
+                },
             },
         };
 
@@ -93,4 +114,3 @@ public sealed class OllamaSpellProvider : ISpellProvider
             TechnicalFailure: true,
             Error: error);
 }
-

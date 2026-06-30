@@ -3,6 +3,7 @@ using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Magic;
+using Sorcerer.Magic.Operations;
 using Sorcerer.Magic.Resolution;
 using Xunit;
 
@@ -92,6 +93,32 @@ public sealed class GameSessionTests
         Assert.True(result.ConsumedTurn);
         Assert.NotEqual(before, after);
         Assert.Contains(result.Deltas, delta => delta.Operation == "aiMove");
+    }
+
+    [Fact]
+    public void SpellJsonNormalizesCommonOperationAliases()
+    {
+        const string raw = """
+            {
+              "accepted": true,
+              "severity": "minor",
+              "outcomeText": "Blue webbing binds the soldier.",
+              "effects": [
+                {
+                  "name": "addStatus",
+                  "target": { "id": "soldier_1" },
+                  "status": "webbed"
+                }
+              ],
+              "costs": [],
+              "rejectedReason": null
+            }
+            """;
+
+        var parsed = SpellResolutionJson.Parse(raw, OperationRegistry.CreateDefault());
+
+        Assert.Equal("addStatus", parsed.Effects.Single().Type);
+        Assert.IsType<Dictionary<string, object?>>(parsed.Effects.Single().Fields["target"]);
     }
 
     [Fact]

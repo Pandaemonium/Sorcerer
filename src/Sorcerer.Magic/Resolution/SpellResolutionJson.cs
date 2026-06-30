@@ -19,9 +19,7 @@ public static class SpellResolutionJson
         var effects = ReadObjects(root, "effects")
             .Select(fields =>
             {
-                var type = fields.TryGetValue("type", out var rawType)
-                    ? Convert.ToString(rawType) ?? string.Empty
-                    : string.Empty;
+                var type = ReadType(fields);
                 return new SpellEffect(registry.Canonicalize(type), fields);
             })
             .ToArray();
@@ -29,9 +27,7 @@ public static class SpellResolutionJson
         var costs = ReadObjects(root, "costs")
             .Select(fields =>
             {
-                var type = fields.TryGetValue("type", out var rawType)
-                    ? Convert.ToString(rawType) ?? string.Empty
-                    : string.Empty;
+                var type = ReadType(fields);
                 return new SpellCost(type, fields);
             })
             .ToArray();
@@ -43,6 +39,19 @@ public static class SpellResolutionJson
             effects,
             costs,
             rejectedReason);
+    }
+
+    private static string ReadType(IReadOnlyDictionary<string, object?> fields)
+    {
+        foreach (var key in new[] { "type", "operation", "op", "effect", "effectType", "effect_type", "name" })
+        {
+            if (fields.TryGetValue(key, out var rawType))
+            {
+                return Convert.ToString(rawType) ?? string.Empty;
+            }
+        }
+
+        return string.Empty;
     }
 
     private static bool ReadBool(JsonElement root, string property, bool fallback) =>
@@ -97,4 +106,3 @@ public static class SpellResolutionJson
             _ => null,
         };
 }
-

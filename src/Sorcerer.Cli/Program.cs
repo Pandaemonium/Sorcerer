@@ -22,6 +22,11 @@ public static class Program
         var options = CliOptions.Parse(args);
         var provider = SpellProviderFactory.Create(options.Provider, options.Host, options.Model);
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
+        if (options.Eval)
+        {
+            return await SpellEvalHarness.RunAsync(provider, audit, options.Json);
+        }
+
         var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
 
         if (options.Commands.Count > 0)
@@ -213,6 +218,7 @@ public sealed record CliOptions(
     string? Model,
     bool Json,
     bool DebugState,
+    bool Eval,
     IReadOnlyList<string> Commands)
 {
     public static CliOptions Parse(string[] args)
@@ -222,6 +228,7 @@ public sealed record CliOptions(
         string? model = null;
         var json = false;
         var debugState = false;
+        var eval = false;
         var commands = new List<string>();
 
         for (var index = 0; index < args.Length; index++)
@@ -244,12 +251,16 @@ public sealed record CliOptions(
                 case "--debug-state":
                     debugState = true;
                     break;
+                case "--eval":
+                case "--eval-spells":
+                    eval = true;
+                    break;
                 case "--command" when index + 1 < args.Length:
                     commands.Add(args[++index]);
                     break;
             }
         }
 
-        return new CliOptions(provider, host, model, json, debugState, commands);
+        return new CliOptions(provider, host, model, json, debugState, eval, commands);
     }
 }

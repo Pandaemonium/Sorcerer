@@ -28,6 +28,17 @@ public static class ReferenceBinder
             return EntityRef.Self;
         }
 
+        if (value is IReadOnlyDictionary<string, object?> fields)
+        {
+            foreach (var key in new[] { "id", "entityId", "entity_id", "selector", "name", "target" })
+            {
+                if (fields.TryGetValue(key, out var nested) && nested is not null)
+                {
+                    return NormalizeEntityRef(nested, radius, filter);
+                }
+            }
+        }
+
         var text = Convert.ToString(value)?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(text))
         {

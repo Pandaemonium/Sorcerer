@@ -106,6 +106,11 @@ public sealed class GameEngine
                 break;
             }
 
+            if (IsUnableToAct(actor))
+            {
+                continue;
+            }
+
             if (!actor.TryGet<PositionComponent>(out var actorPosition)
                 || !player.TryGet<PositionComponent>(out var playerPosition))
             {
@@ -616,6 +621,26 @@ public sealed class GameEngine
 
     private static GridPoint StepToward(GridPoint from, GridPoint to) =>
         from.Translate(Math.Sign(to.X - from.X), Math.Sign(to.Y - from.Y));
+
+    private bool IsUnableToAct(Entity entity)
+    {
+        if (!entity.TryGet<StatusContainerComponent>(out var container))
+        {
+            return false;
+        }
+
+        return container.Statuses.Any(status =>
+            (status.ExpiresTurn is null || status.ExpiresTurn > State.Turn)
+            && status.Id is "bound"
+                or "frozen"
+                or "asleep"
+                or "petrified"
+                or "rooted"
+                or "webbed"
+                or "sticky_webbed"
+                or "immobilized"
+                or "restrained");
+    }
 
     private IReadOnlyList<MapTileCard> BuildTiles()
     {

@@ -17,3 +17,10 @@
 - Added a CLI/backend pending-cast seam: `begin_cast` records a cast without mutating state, `await_cast` resolves it through the same magic controller, and `cancel_cast` clears it for free. JSON agents can also send `{"type":"cast","text":"...","await":false}`.
 - Added tests for pending casts and hostile actor turns, bringing the suite to 7 passing tests.
 - Verification after this checkpoint: `dotnet build C:\Games\Sorcerer\Sorcerer.sln`, `dotnet test C:\Games\Sorcerer\Sorcerer.sln`, a text CLI wait/cast/wait run, and a JSON CLI submit/inspect/await run all passed.
+- Expanded the mock resolver into broad reusable spell families: damage, area damage, bindings/statuses, transformations, summons, terrain, promises, delayed events, charm/faction change, push/pull, teleport, healing, mana restoration, curses, and overreach rejection.
+- Added `dotnet run --project src/Sorcerer.Cli -- --provider mock --eval`, a 25-prompt spell eval harness that starts each prompt from a fresh imperial encounter and checks expected operation families.
+- Made restraint statuses (`bound`, `webbed`, `frozen`, `asleep`, `petrified`, etc.) suppress hostile AI turns while active.
+- Improved Ollama requests by sending the compact magic context plus operation cards, disabling model thinking when supported, and setting a bounded generation budget.
+- Added normalization for common LLM shapes: effect operation keys such as `name`, `operation`, and `effectType`, plus object targets like `{ "id": "soldier_1" }`.
+- Live Ollama spot-check with `qwen3.5:9b-cpu` initially failed by thinking into an empty response, then by returning `name` instead of `type`; after the prompt and normalization repairs, `cast bind the nearest enemy in sticky blue webbing` resolved and applied `webbed` plus minor damage.
+- Verification after this checkpoint: `dotnet build C:\Games\Sorcerer\Sorcerer.sln`, `dotnet test C:\Games\Sorcerer\Sorcerer.sln --no-build` (8 tests), mock spell eval (25/25), and the live Ollama spot-check all passed.
