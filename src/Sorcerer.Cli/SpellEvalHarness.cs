@@ -34,6 +34,7 @@ public static class SpellEvalHarness
         new("make the captain brass and strangely reflective", new[] { "transformEntity" }),
         new("grow vines across the floor", new[] { "createTiles" }),
         new("put the enemy to sleep inside a borrowed dream", new[] { "addStatus" }),
+        new("possess the nearest soldier's body", Array.Empty<string>(), ExpectRejection: true),
         new("kill the emperor instantly from here", Array.Empty<string>(), ExpectRejection: true),
         new("mend me before I fall apart", new[] { "heal" }),
         new("blast the nearest soldier with impossible color", new[] { "areaDamage" }),

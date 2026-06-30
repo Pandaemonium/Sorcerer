@@ -169,6 +169,23 @@ Rules:
 Body swap should not copy all fields from one player object to another. It should move the
 control pointer and adjust components.
 
+Current implementation:
+
+- `possess [target]` exists as a shared `GameSession` command, and `possess` also exists
+  as a wild-magic operation.
+- The target must be a nearby living actor.
+- Alert hostile bodies resist possession, consume the turn, and do not move the control
+  pointer.
+- Incapacitated bodies can be possessed.
+- On success, the player soul moves into the new body, the displaced soul moves into the
+  old body, `ControlledEntityId` follows the new body, factions/controllers are swapped,
+  and inventory remains on whichever body carried it.
+- The old body receives a short `disoriented` status so it does not immediately act during
+  the same turn.
+
+This is a narrow engine seam, not the final body-swap design. It proves the actor-agnostic
+control path and gives later magic operations a concrete behavior to call.
+
 ## Items And Props
 
 Items and props differ by components, not by separate identity systems.

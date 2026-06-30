@@ -216,6 +216,17 @@ public sealed class MockSpellProvider : ISpellProvider
                 }));
         }
 
+        if (HasAny(spell, "possess", "body swap", "bodyswap", "soul swap", "take their body"))
+        {
+            return Accepted(
+                "major",
+                "Your soul knocks on the wrong door and waits to see if it opens.",
+                Effect("possess", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                }));
+        }
+
         if (HasAny(spell, "charm", "befriend", "ally", "turn them", "make them help"))
         {
             return Accepted(

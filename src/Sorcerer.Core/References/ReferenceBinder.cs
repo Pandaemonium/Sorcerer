@@ -30,13 +30,24 @@ public static class ReferenceBinder
 
         if (value is IReadOnlyDictionary<string, object?> fields)
         {
-            foreach (var key in new[] { "id", "entityId", "entity_id", "selector", "name", "target" })
+            foreach (var key in new[] { "id", "entityId", "entity_id", "selector", "name", "target", "value" })
             {
                 if (fields.TryGetValue(key, out var nested) && nested is not null)
                 {
                     return NormalizeEntityRef(nested, radius, filter);
                 }
             }
+
+            if (TryReadPoint(fields, out var x, out var y))
+            {
+                return new EntityRef("point", $"{x},{y}", radius, filter);
+            }
+
+            return new EntityRef(
+                "malformed",
+                "Malformed target object; expected id, name, selector, target, value, or x/y.",
+                radius,
+                filter);
         }
 
         var text = Convert.ToString(value)?.Trim() ?? "";
@@ -67,6 +78,30 @@ public static class ReferenceBinder
         return text.Contains('_') || text.Any(char.IsDigit)
             ? new EntityRef("id", text, radius, filter)
             : new EntityRef("name", text, radius, filter);
+    }
+
+    private static bool TryReadPoint(IReadOnlyDictionary<string, object?> fields, out int x, out int y)
+    {
+        x = 0;
+        y = 0;
+        return TryReadInt(fields, "x", out x)
+            && TryReadInt(fields, "y", out y);
+    }
+
+    private static bool TryReadInt(IReadOnlyDictionary<string, object?> fields, string key, out int value)
+    {
+        value = 0;
+        if (!fields.TryGetValue(key, out var raw) || raw is null)
+        {
+            return false;
+        }
+
+        if (raw is System.Collections.IEnumerable enumerable && raw is not string)
+        {
+            raw = enumerable.Cast<object?>().FirstOrDefault();
+        }
+
+        return int.TryParse(Convert.ToString(raw), out value);
     }
 
     public static GameReference Normalize(object? value)
@@ -211,6 +246,8 @@ public sealed class EngineReferenceResolver : IReferenceResolver
             "id" => ResolveId(reference),
             "selector" => ResolveSelector(reference),
             "name" => ResolveName(reference),
+            "point" => ResolvePoint(reference),
+            "malformed" => ResolvedEntitySet.Failure(reference, reference.Value),
             _ => ResolvedEntitySet.Failure(reference, $"Unsupported reference kind {reference.Kind}."),
         };
 
@@ -223,6 +260,29 @@ public sealed class EngineReferenceResolver : IReferenceResolver
         }
 
         return new ResolvedEntitySet(reference, new[] { entity }, PositionOf(entity), null);
+    }
+
+    private ResolvedEntitySet ResolvePoint(EntityRef reference)
+    {
+        var parts = reference.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2
+            || !int.TryParse(parts[0], out var x)
+            || !int.TryParse(parts[1], out var y))
+        {
+            return ResolvedEntitySet.Failure(reference, "Malformed point target.");
+        }
+
+        var point = new GridPoint(x, y);
+        if (!_engine.InBounds(point))
+        {
+            return ResolvedEntitySet.Failure(reference, $"Target point {x},{y} is outside the encounter.");
+        }
+
+        var occupant = _engine.State.Entities.Values
+            .FirstOrDefault(entity => PositionOf(entity) == point);
+        return occupant is null
+            ? new ResolvedEntitySet(reference, Array.Empty<Entity>(), point, null)
+            : new ResolvedEntitySet(reference, new[] { occupant }, point, null);
     }
 
     private ResolvedEntitySet ResolveSelector(EntityRef reference)

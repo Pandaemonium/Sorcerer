@@ -200,9 +200,7 @@ public sealed class CreateTileOperation : OperationBase
     }
 
     public override ValidationOutcome Validate(EffectContext context, SpellEffect effect) =>
-        ResolveOrigin(context, effect, "selected_target") is not null
-            ? ValidationOutcome.Pass
-            : ValidationOutcome.Reject("Terrain magic needs a tile target.");
+        RequireOrigin(context, effect, "selected_target", "Terrain magic needs a tile target.");
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
     {
@@ -231,9 +229,7 @@ public sealed class CreateTilesOperation : OperationBase
     }
 
     public override ValidationOutcome Validate(EffectContext context, SpellEffect effect) =>
-        ResolveOrigin(context, effect, "selected_target") is not null
-            ? ValidationOutcome.Pass
-            : ValidationOutcome.Reject("Terrain magic needs a tile target.");
+        RequireOrigin(context, effect, "selected_target", "Terrain magic needs a tile target.");
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
     {
@@ -281,7 +277,7 @@ public sealed class AddStatusOperation : OperationBase
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
     {
-        var status = NormalizeToken(Text(effect, "status", "marked"));
+        var status = NormalizeToken(Text(effect, "status", Text(effect, "trait", Text(effect, "name", "marked"))));
         var displayName = Text(effect, "displayName", Text(effect, "display_name", status));
         var duration = Int(effect, "duration", 3, min: 1, max: 99);
         return ResolveTargets(context, effect, "nearest_enemy")
@@ -325,7 +321,7 @@ public sealed class SummonOperation : OperationBase
     }
 
     public override ValidationOutcome Validate(EffectContext context, SpellEffect effect) =>
-        !string.IsNullOrWhiteSpace(Text(effect, "name", ""))
+        !string.IsNullOrWhiteSpace(SummonName(effect, ""))
             ? ValidationOutcome.Pass
             : ValidationOutcome.Reject("Summoning needs a name.");
 
@@ -339,7 +335,7 @@ public sealed class SummonOperation : OperationBase
             return new[] { Message(context, "summon", "", "The summoning has nowhere to stand.") };
         }
 
-        var name = Text(effect, "name", "summoned wonder");
+        var name = SummonName(effect, "summoned wonder");
         var faction = Text(effect, "faction", "player");
         var glyphText = Text(effect, "glyph", "*");
         var tags = Tags(effect, "tags", new[] { "summoned", "wild_magic" });
@@ -367,9 +363,12 @@ public sealed class SummonOperation : OperationBase
                     ["y"] = position.Value.Y,
                     ["faction"] = faction,
                     ["tags"] = tags,
-                }),
+            }),
         };
     }
+
+    private static string SummonName(SpellEffect effect, string fallback) =>
+        Text(effect, "name", Text(effect, "entityName", Text(effect, "entity_name", fallback)));
 }
 
 public sealed class TransformEntityOperation : OperationBase
@@ -486,6 +485,51 @@ public sealed class TransformItemOperation : OperationBase
             .ToArray();
 }
 
+public sealed class PossessOperation : OperationBase
+{
+    public PossessOperation()
+        : base(
+            "possess",
+            new[] { "bodySwap", "soulSwap", "takeBody" },
+            "Move the caster's soul into a nearby vulnerable body.",
+            "Use for rare possession/body-swap magic. Fields: target. Alert hostile bodies resist; incapacitated bodies can be taken.")
+    {
+    }
+
+    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect)
+    {
+        var resolved = ResolveTargetSet(context, effect, "nearest_enemy");
+        if (IsMalformedTarget(resolved))
+        {
+            return ValidationOutcome.Technical(resolved.Error ?? "Malformed target reference.");
+        }
+
+        var targets = resolved.Entities
+            .Where(target => target.TryGet<ActorComponent>(out var actor) && actor.Alive)
+            .ToArray();
+        if (targets.Length == 0)
+        {
+            return ValidationOutcome.Reject("Possession needs a living target body.");
+        }
+
+        if (!context.Engine.CanPossess(targets[0], out var reason))
+        {
+            return ValidationOutcome.Reject(reason ?? "The target body resists possession.");
+        }
+
+        return ValidationOutcome.Pass;
+    }
+
+    public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
+    {
+        var target = ResolveTargets(context, effect, "nearest_enemy")
+            .FirstOrDefault(entity => entity.TryGet<ActorComponent>(out var actor) && actor.Alive);
+        return target is null
+            ? Array.Empty<StateDelta>()
+            : context.Engine.PossessEntity(target);
+    }
+}
+
 public sealed class ChangeFactionOperation : OperationBase
 {
     public ChangeFactionOperation()
@@ -520,6 +564,7 @@ public sealed class ChangeFactionOperation : OperationBase
             })
             .ToArray();
     }
+
 }
 
 public sealed class AddTraitOperation : OperationBase
@@ -538,12 +583,7 @@ public sealed class AddTraitOperation : OperationBase
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
     {
-        var traits = Tags(effect, "traits", Tags(effect, "tags", Array.Empty<string>())).ToList();
-        var single = Text(effect, "trait", "");
-        if (!string.IsNullOrWhiteSpace(single))
-        {
-            traits.Add(NormalizeToken(single));
-        }
+        var traits = Tags(effect, "traits", Tags(effect, "tags", Tags(effect, "trait", Array.Empty<string>()))).ToList();
 
         if (traits.Count == 0)
         {
@@ -621,7 +661,9 @@ public sealed class AddCurseOperation : OperationBase
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
     {
         var text = Text(effect, "description", Text(effect, "name", "Wild Debt"));
-        return new[] { context.Engine.AddPromise("debt", text) };
+        var anchor = ResolveTargets(context, effect, "selected_target").FirstOrDefault();
+        var triggerHint = Text(effect, "trigger", Text(effect, "triggerHint", Text(effect, "trigger_hint", "")));
+        return new[] { context.Engine.AddPromise("debt", text, anchor, triggerHint) };
     }
 }
 
@@ -641,8 +683,19 @@ public sealed class CreatePromiseOperation : OperationBase
             ? ValidationOutcome.Pass
             : ValidationOutcome.Reject("A promise needs text.");
 
-    public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
-        new[] { context.Engine.AddPromise(Text(effect, "kind", "omen"), Text(effect, "text", "Something has been promised.")) };
+    public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
+    {
+        var anchor = ResolveTargets(context, effect, "selected_target").FirstOrDefault();
+        var triggerHint = Text(effect, "trigger", Text(effect, "triggerHint", Text(effect, "trigger_hint", "")));
+        return new[]
+        {
+            context.Engine.AddPromise(
+                Text(effect, "kind", "omen"),
+                Text(effect, "text", "Something has been promised."),
+                anchor,
+                triggerHint),
+        };
+    }
 }
 
 public sealed class MessageOperation : OperationBase
@@ -667,10 +720,39 @@ public sealed class MessageOperation : OperationBase
 
 internal static class OperationHelpers
 {
+    public static ResolvedEntitySet ResolveTargetSet(EffectContext context, SpellEffect effect, string fallback) =>
+        context.Refs.Resolve(OperationBaseAccess.TargetRef(effect, fallback));
+
     public static IReadOnlyList<Entity> ResolveTargets(EffectContext context, SpellEffect effect, string fallback)
     {
-        var resolved = context.Refs.Resolve(OperationBaseAccess.TargetRef(effect, fallback));
+        var resolved = ResolveTargetSet(context, effect, fallback);
         return resolved.Entities.Take(context.GroupTargetCap).ToArray();
+    }
+
+    public static ValidationOutcome RequireOrigin(
+        EffectContext context,
+        SpellEffect effect,
+        string fallback,
+        string rejectReason)
+    {
+        if (TryPoint(effect, out _))
+        {
+            return ValidationOutcome.Pass;
+        }
+
+        var resolved = ResolveTargetSet(context, effect, fallback);
+        if (IsMalformedTarget(resolved))
+        {
+            return ValidationOutcome.Technical(resolved.Error ?? "Malformed target reference.");
+        }
+
+        if (resolved.Position is not null
+            || resolved.Entities.Any(entity => entity.TryGet<PositionComponent>(out _)))
+        {
+            return ValidationOutcome.Pass;
+        }
+
+        return ValidationOutcome.Reject(resolved.Error ?? rejectReason);
     }
 
     public static GridPoint? ResolveOrigin(EffectContext context, SpellEffect effect, string fallback)
@@ -680,7 +762,7 @@ internal static class OperationHelpers
             return explicitPoint;
         }
 
-        var resolved = context.Refs.Resolve(OperationBaseAccess.TargetRef(effect, fallback));
+        var resolved = ResolveTargetSet(context, effect, fallback);
         if (resolved.Position is { } point)
         {
             return point;
@@ -705,19 +787,34 @@ internal static class OperationHelpers
 
     public static ValidationOutcome RequireActorTargets(EffectContext context, SpellEffect effect, string fallback)
     {
-        var targets = ResolveTargets(context, effect, fallback);
-        return targets.Count > 0 && targets.All(target => target.TryGet<ActorComponent>(out _))
+        var resolved = ResolveTargetSet(context, effect, fallback);
+        if (IsMalformedTarget(resolved))
+        {
+            return ValidationOutcome.Technical(resolved.Error ?? "Malformed target reference.");
+        }
+
+        var targets = resolved.Entities.Take(context.GroupTargetCap).ToArray();
+        return targets.Length > 0 && targets.All(target => target.TryGet<ActorComponent>(out _))
             ? ValidationOutcome.Pass
             : ValidationOutcome.Reject("Spell needs one or more actor targets.");
     }
 
     public static ValidationOutcome RequirePositionedTargets(EffectContext context, SpellEffect effect, string fallback)
     {
-        var targets = ResolveTargets(context, effect, fallback);
-        return targets.Count > 0 && targets.All(target => target.TryGet<PositionComponent>(out _))
+        var resolved = ResolveTargetSet(context, effect, fallback);
+        if (IsMalformedTarget(resolved))
+        {
+            return ValidationOutcome.Technical(resolved.Error ?? "Malformed target reference.");
+        }
+
+        var targets = resolved.Entities.Take(context.GroupTargetCap).ToArray();
+        return targets.Length > 0 && targets.All(target => target.TryGet<PositionComponent>(out _))
             ? ValidationOutcome.Pass
             : ValidationOutcome.Reject("Spell needs one or more positioned targets.");
     }
+
+    public static bool IsMalformedTarget(ResolvedEntitySet resolved) =>
+        resolved.Reference.Kind.Equals("malformed", StringComparison.OrdinalIgnoreCase);
 
     public static IReadOnlyList<StateDelta> MoveLinearly(EffectContext context, SpellEffect effect, bool away)
     {
@@ -801,9 +898,10 @@ internal static class OperationHelpers
             return fallback;
         }
 
-        if (raw is IEnumerable<object> objects)
+        if (raw is System.Collections.IEnumerable enumerable && raw is not string)
         {
-            return objects.Select(value => NormalizeToken(Convert.ToString(value) ?? ""))
+            return enumerable.Cast<object?>()
+                .Select(value => NormalizeToken(Convert.ToString(value) ?? ""))
                 .Where(value => value.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
@@ -843,10 +941,26 @@ internal static class OperationHelpers
 
     private static bool TryPoint(SpellEffect effect, out GridPoint point)
     {
-        if (effect.Fields.TryGetValue("x", out var rawX)
-            && effect.Fields.TryGetValue("y", out var rawY)
-            && int.TryParse(Convert.ToString(rawX), out var x)
-            && int.TryParse(Convert.ToString(rawY), out var y))
+        if (TryPoint(effect.Fields, out point))
+        {
+            return true;
+        }
+
+        if (effect.Fields.TryGetValue("target", out var rawTarget)
+            && rawTarget is IReadOnlyDictionary<string, object?> targetFields
+            && TryPoint(targetFields, out point))
+        {
+            return true;
+        }
+
+        point = default;
+        return false;
+    }
+
+    private static bool TryPoint(IReadOnlyDictionary<string, object?> fields, out GridPoint point)
+    {
+        if (TryIntField(fields, "x", out var x)
+            && TryIntField(fields, "y", out var y))
         {
             point = new GridPoint(x, y);
             return true;
@@ -854,6 +968,22 @@ internal static class OperationHelpers
 
         point = default;
         return false;
+    }
+
+    private static bool TryIntField(IReadOnlyDictionary<string, object?> fields, string key, out int value)
+    {
+        value = 0;
+        if (!fields.TryGetValue(key, out var raw) || raw is null)
+        {
+            return false;
+        }
+
+        if (raw is System.Collections.IEnumerable enumerable && raw is not string)
+        {
+            raw = enumerable.Cast<object?>().FirstOrDefault();
+        }
+
+        return int.TryParse(Convert.ToString(raw), out value);
     }
 }
 

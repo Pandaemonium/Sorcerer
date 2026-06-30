@@ -106,7 +106,15 @@ public sealed record PromiseCard(
     string Kind,
     string Status,
     string Text,
-    bool PlayerVisible);
+    bool PlayerVisible,
+    string Source = "unknown",
+    string Subject = "",
+    string? ClaimedPlace = null,
+    string? BoundPlace = null,
+    string? BoundTargetId = null,
+    string? TriggerHint = null,
+    string? RealizationKind = null,
+    string? RealizedIn = null);
 
 public sealed record GameView(
     int Width,
@@ -119,7 +127,8 @@ public sealed record GameView(
     IReadOnlyList<MapTileCard>? Tiles = null,
     IReadOnlyList<ItemCard>? Inventory = null,
     IReadOnlyList<ReagentCard>? Reagents = null,
-    IReadOnlyList<StatusCard>? Statuses = null);
+    IReadOnlyList<StatusCard>? Statuses = null,
+    GridPoint? SelectedTarget = null);
 
 public sealed record LedgerSummary(
     int Deeds,
@@ -136,7 +145,21 @@ public sealed record DebugStateView(
     IReadOnlyList<string> PromiseIds,
     GridPoint? SelectedTarget,
     LedgerSummary? Ledgers = null,
-    IReadOnlyList<string>? ValidationIssues = null);
+    IReadOnlyList<string>? ValidationIssues = null,
+    IReadOnlyList<BackgroundJobCard>? BackgroundJobs = null);
+
+public sealed record BackgroundJobCard(
+    string Id,
+    string Purpose,
+    string TargetId,
+    string State,
+    int Priority,
+    int CreatedTurn,
+    int? StartedTurn,
+    int? CompletedTurn,
+    int? AppliedTurn,
+    string? ResultText,
+    string? Error);
 
 public sealed record PendingCastView(
     string Id,

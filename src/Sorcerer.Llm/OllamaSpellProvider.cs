@@ -30,6 +30,8 @@ public sealed class OllamaSpellProvider : ISpellProvider
         SpellRequest request,
         CancellationToken cancellationToken)
     {
+        var rawResponse = string.Empty;
+        var content = string.Empty;
         var supported = string.Join(", ", request.SupportedOperations);
         var contextJson = JsonSerializer.Serialize(
             request.Context,
@@ -75,17 +77,17 @@ public sealed class OllamaSpellProvider : ISpellProvider
                 $"{_host}/api/chat",
                 payload,
                 cancellationToken);
-            var rawResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+            rawResponse = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return Failure(rawResponse, $"Ollama returned HTTP {(int)response.StatusCode}.");
             }
 
             using var document = JsonDocument.Parse(rawResponse);
-            var content = document.RootElement
+            content = document.RootElement
                 .GetProperty("message")
                 .GetProperty("content")
-                .GetString();
+                .GetString() ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(content))
             {
@@ -102,7 +104,8 @@ public sealed class OllamaSpellProvider : ISpellProvider
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
-            return Failure("", ex.Message);
+            var raw = string.IsNullOrWhiteSpace(content) ? rawResponse : content;
+            return Failure(raw, ex.Message);
         }
     }
 

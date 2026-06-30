@@ -6,29 +6,54 @@ agent work aligned once code starts moving.
 
 ## Start Here
 
+- [GRAND_VISION.md](GRAND_VISION.md): the central guiding vision - what the game plays like,
+  the systems, and how they interact.
 - [../NORTHSTAR.md](../NORTHSTAR.md): the core vision and non-negotiable contracts.
 - [../README.md](../README.md): project overview and current status.
 - [../AGENTS.md](../AGENTS.md): instructions for coding agents working in this repo.
 - [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md): durable decisions already made.
 - [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): questions still worth answering later.
 
+## Tone & Canon (inherited from Wild Magic)
+
+The soul of the game, carried over verbatim from the prototype. Engine-agnostic; ignore any
+references inside them to Python modules or the old name.
+
+- [INHERITED_FROM_WILD_MAGIC.md](INHERITED_FROM_WILD_MAGIC.md): what these are and how to
+  read them.
+- [AESTHETICS_AND_TONE.md](AESTHETICS_AND_TONE.md): the voice/look/feel bible (COLOR vs
+  MARBLE).
+- [WORLDBUILDING.md](WORLDBUILDING.md): the canon - Vigovia, the realms, the traditions.
+- [SPELL_COMPENDIUM.md](SPELL_COMPENDIUM.md): example spells (tone bar + eval corpus) and the
+  taxonomy of harder spells.
+
 ## Game Design
 
-- [GAME_VISION.md](GAME_VISION.md): the player promise, feel, run structure, and win arc.
+- [GRAND_VISION.md](GRAND_VISION.md): the central vision (supersedes GAME_VISION) - play, the
+  systems, and how they interact.
 - [WORLD_REACTION_AND_EMPIRE.md](WORLD_REACTION_AND_EMPIRE.md): the Empire, factions,
   consequences, and player-driven emergence.
-- [PROMISES_AND_PROPHECY.md](PROMISES_AND_PROPHECY.md): the promise ledger and prophecy
-  as foundational systems.
+- [EMERGENT_WORLD.md](EMERGENT_WORLD.md): how the world responds to the player - deeds,
+  legend, multidimensional reputation, the interpret/narrate (never simulate) model, and
+  event-driven world reaction.
+- [PROMISES_AND_PROPHECY.md](PROMISES_AND_PROPHECY.md): the promise ledger, always-honor, and
+  prophecy as foundational systems.
+- [SEMANTIC_EFFECTS.md](SEMANTIC_EFFECTS.md): entity descriptions/traits as dormant mechanics
+  the resolver surfaces (semantic by default, mechanical on demand).
 - [COSTS_REAGENTS_AND_TREASURED_ITEMS.md](COSTS_REAGENTS_AND_TREASURED_ITEMS.md): post-cast
   costs, protected inventory, and item fuel.
 - [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md): the future casting-performance
   minigame contract.
+- [CHARACTER_AND_STATS.md](CHARACTER_AND_STATS.md): the Vigor/Attunement/Composure triad,
+  origins, and how stats modulate the resolver.
 
 ## Architecture
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): the overall C#/Godot architecture.
 - [ARCHITECTURE_STUB_MAP.md](ARCHITECTURE_STUB_MAP.md): the compile-safe system lanes
   created before deep implementation begins.
+- [CORE_EXECUTION_MODEL.md](CORE_EXECUTION_MODEL.md): the buildable RFC for the cast pipeline,
+  operations, targeting, transactions, RNG, and the pending-cast model.
 - [ENTITY_MODEL.md](ENTITY_MODEL.md): unified entities, components, body swap, items, and
   props.
 - [WILD_MAGIC_CONTRACT.md](WILD_MAGIC_CONTRACT.md): the initial wild-magic JSON contract.

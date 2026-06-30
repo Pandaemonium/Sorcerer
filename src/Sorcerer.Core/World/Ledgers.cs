@@ -168,6 +168,14 @@ public sealed class CanonLedger
         _records.Add(record);
         return record;
     }
+
+    public IReadOnlyList<CanonRecord> Snapshot() => _records.ToArray();
+
+    public void ReplaceAll(IEnumerable<CanonRecord> records)
+    {
+        _records.Clear();
+        _records.AddRange(records);
+    }
 }
 
 public sealed record BondRecord(
@@ -216,5 +224,33 @@ public sealed class ScheduledEventLedger
             payload);
         _events.Add(record);
         return record;
+    }
+
+    public IReadOnlyList<ScheduledEventRecord> PopDue(int turn)
+    {
+        var due = _events
+            .Where(record => record.DueTurn <= turn)
+            .OrderBy(record => record.DueTurn)
+            .ThenBy(record => record.Id)
+            .ToArray();
+        if (due.Length == 0)
+        {
+            return due;
+        }
+
+        foreach (var record in due)
+        {
+            _events.Remove(record);
+        }
+
+        return due;
+    }
+
+    public IReadOnlyList<ScheduledEventRecord> Snapshot() => _events.ToArray();
+
+    public void ReplaceAll(IEnumerable<ScheduledEventRecord> records)
+    {
+        _events.Clear();
+        _events.AddRange(records);
     }
 }

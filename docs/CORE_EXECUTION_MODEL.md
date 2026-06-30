@@ -392,6 +392,6 @@ The implementation of this RFC is correct when:
 
 This RFC refines, and where they differ supersedes, the implementation-level details in
 [ARCHITECTURE.md](ARCHITECTURE.md) and [MAGIC_RESOLVER_ARCHITECTURE.md](MAGIC_RESOLVER_ARCHITECTURE.md).
-The vision and scope in [GAME_VISION.md](GAME_VISION.md), [FIRST_PLAYABLE.md](FIRST_PLAYABLE.md),
+The vision and scope in [GRAND_VISION.md](GRAND_VISION.md), [FIRST_PLAYABLE.md](FIRST_PLAYABLE.md),
 and [NORTHSTAR.md](../NORTHSTAR.md) are unchanged. On approval, the four locked decisions
 should be appended to [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md).

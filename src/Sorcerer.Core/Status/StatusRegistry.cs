@@ -25,8 +25,27 @@ public sealed class StatusRegistry
         }
     }
 
-    public string Canonicalize(string idOrAlias) =>
-        _aliases.TryGetValue(idOrAlias.Trim(), out var id) ? id : idOrAlias.Trim();
+    public string Canonicalize(string idOrAlias)
+    {
+        var trimmed = idOrAlias.Trim();
+        if (_aliases.TryGetValue(trimmed, out var id))
+        {
+            return id;
+        }
+
+        var normalized = trimmed.Replace('-', '_');
+        foreach (var alias in _aliases.Keys
+            .Where(alias => alias.Length >= 4)
+            .OrderByDescending(alias => alias.Length))
+        {
+            if (normalized.Contains(alias, StringComparison.OrdinalIgnoreCase))
+            {
+                return _aliases[alias];
+            }
+        }
+
+        return trimmed;
+    }
 
     public StatusDefinition? Find(string idOrAlias)
     {
@@ -34,14 +53,19 @@ public sealed class StatusRegistry
         return _statuses.TryGetValue(id, out var status) ? status : null;
     }
 
+    public bool BlocksAction(string idOrAlias) => Find(idOrAlias)?.BlocksAction == true;
+
+    public bool BlocksMovement(string idOrAlias) => Find(idOrAlias)?.BlocksMovement == true;
+
     public static StatusRegistry CreateDefault()
     {
         var registry = new StatusRegistry();
         registry.Add(new StatusDefinition("burning", "burning", Array.Empty<string>(), DefaultDuration: 3));
         registry.Add(new StatusDefinition("poisoned", "poisoned", Array.Empty<string>(), DefaultDuration: 5));
-        registry.Add(new StatusDefinition("frozen", "frozen", new[] { "petrified", "crystallized" }, BlocksMovement: true, BlocksAction: true, DefaultDuration: 2));
-        registry.Add(new StatusDefinition("rooted", "rooted", new[] { "webbed", "bound" }, BlocksMovement: true, DefaultDuration: 3));
-        registry.Add(new StatusDefinition("stunned", "stunned", Array.Empty<string>(), BlocksAction: true, DefaultDuration: 1));
+        registry.Add(new StatusDefinition("frozen", "frozen", new[] { "petrified", "crystallized", "ice_locked" }, BlocksMovement: true, BlocksAction: true, DefaultDuration: 2));
+        registry.Add(new StatusDefinition("rooted", "rooted", new[] { "webbed", "bound", "sticky_webbed", "immobilized", "restrained" }, BlocksMovement: true, BlocksAction: true, DefaultDuration: 3));
+        registry.Add(new StatusDefinition("stunned", "stunned", new[] { "asleep", "dazed", "bewildered", "disoriented", "staggered" }, BlocksAction: true, DefaultDuration: 1));
+        registry.Add(new StatusDefinition("borrowed_body", "borrowed body", new[] { "soul_swapped", "possessed" }, DefaultDuration: 8));
         registry.Add(new StatusDefinition("revealed", "revealed", Array.Empty<string>(), DefaultDuration: 5));
         return registry;
     }

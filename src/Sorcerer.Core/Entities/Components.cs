@@ -61,6 +61,8 @@ public sealed record ItemComponent(
     string UseProfile = "inert",
     string? EquipmentSlot = null) : IEntityComponent;
 
+public sealed record StackComponent(int Quantity = 1) : IEntityComponent;
+
 public sealed record FixtureComponent(
     string FixtureType,
     IReadOnlyList<string> Tags,
@@ -114,4 +116,10 @@ public sealed record AiComponent(string PolicyId, IReadOnlyDictionary<string, ob
 
 public sealed record SummonedComponent(string Source, int? ExpiresTurn = null) : IEntityComponent;
 
-public sealed record PromiseAnchorComponent(string PromiseId) : IEntityComponent;
+public sealed record PromiseAnchorComponent(IReadOnlyList<string> PromiseIds) : IEntityComponent
+{
+    public PromiseAnchorComponent(string promiseId)
+        : this(new[] { promiseId })
+    {
+    }
+}

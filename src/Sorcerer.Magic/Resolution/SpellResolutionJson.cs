@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Sorcerer.Magic.Operations;
 
 namespace Sorcerer.Magic.Resolution;
@@ -7,7 +8,7 @@ public static class SpellResolutionJson
 {
     public static SpellResolution Parse(string raw, OperationRegistry registry)
     {
-        using var document = JsonDocument.Parse(raw);
+        using var document = JsonDocument.Parse(ExtractFirstJsonObject(raw));
         var root = document.RootElement;
 
         var accepted = ReadBool(root, "accepted", true);
@@ -16,15 +17,16 @@ public static class SpellResolutionJson
         var rejectedReason = ReadNullableString(root, "rejectedReason")
             ?? ReadNullableString(root, "rejected_reason");
 
-        var effects = ReadObjects(root, "effects")
-            .Select(fields =>
-            {
-                var type = ReadType(fields);
-                return new SpellEffect(registry.Canonicalize(type), fields);
-            })
+        var effectFields = ReadObjects(root, "effects")
+            .Select(fields => NormalizeFields(fields))
+            .ToList();
+        MergeSummonTraitFollowups(effectFields);
+
+        var effects = effectFields
+            .Select(fields => new SpellEffect(registry.Canonicalize(ReadType(fields)), fields))
             .ToArray();
 
-        var costs = ReadObjects(root, "costs")
+        var costs = ReadCosts(root, "costs")
             .Select(fields =>
             {
                 var type = ReadType(fields);
@@ -41,9 +43,72 @@ public static class SpellResolutionJson
             rejectedReason);
     }
 
+    private static string ExtractFirstJsonObject(string raw)
+    {
+        var start = raw.IndexOf('{');
+        if (start < 0)
+        {
+            return raw;
+        }
+
+        var depth = 0;
+        var inString = false;
+        var escaped = false;
+        for (var index = start; index < raw.Length; index++)
+        {
+            var current = raw[index];
+            if (inString)
+            {
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+
+                if (current == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+
+                if (current == '"')
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (current == '"')
+            {
+                inString = true;
+                continue;
+            }
+
+            if (current == '{')
+            {
+                depth++;
+                continue;
+            }
+
+            if (current != '}')
+            {
+                continue;
+            }
+
+            depth--;
+            if (depth == 0)
+            {
+                return raw[start..(index + 1)];
+            }
+        }
+
+        return raw[start..];
+    }
+
     private static string ReadType(IReadOnlyDictionary<string, object?> fields)
     {
-        foreach (var key in new[] { "type", "operation", "op", "effect", "effectType", "effect_type", "name" })
+        foreach (var key in new[] { "type", "operation", "op", "kind", "effect", "effectType", "effect_type", "name" })
         {
             if (fields.TryGetValue(key, out var rawType))
             {
@@ -52,6 +117,252 @@ public static class SpellResolutionJson
         }
 
         return string.Empty;
+    }
+
+    private static Dictionary<string, object?> NormalizeFields(
+        IReadOnlyDictionary<string, object?> fields)
+    {
+        var normalized = new Dictionary<string, object?>(fields, StringComparer.OrdinalIgnoreCase);
+        if (normalized.TryGetValue("details", out var details)
+            && details is IReadOnlyDictionary<string, object?> detailFields)
+        {
+            foreach (var pair in detailFields)
+            {
+                normalized.TryAdd(pair.Key, pair.Value);
+            }
+        }
+
+        if (normalized.TryGetValue("target/x/y", out var compactPoint)
+            && TryReadPointPair(compactPoint, out var pointX, out var pointY))
+        {
+            normalized["x"] = pointX;
+            normalized["y"] = pointY;
+        }
+
+        if (normalized.TryGetValue("targetId", out var targetId) && !normalized.ContainsKey("target"))
+        {
+            normalized["target"] = targetId;
+        }
+
+        if (normalized.TryGetValue("target_id", out var targetSnake) && !normalized.ContainsKey("target"))
+        {
+            normalized["target"] = targetSnake;
+        }
+
+        if (normalized.TryGetValue("entityName", out var entityName) && !normalized.ContainsKey("name"))
+        {
+            normalized["name"] = entityName;
+        }
+
+        if (normalized.TryGetValue("entity_name", out var entitySnake) && !normalized.ContainsKey("name"))
+        {
+            normalized["name"] = entitySnake;
+        }
+
+        if (string.IsNullOrWhiteSpace(ReadType(normalized))
+            && normalized.TryGetValue("effectId", out var rawEffectId)
+            && rawEffectId is not null)
+        {
+            ApplyCompactEffectId(Convert.ToString(rawEffectId) ?? string.Empty, normalized);
+        }
+
+        var explicitType = ReadExplicitType(normalized);
+        if ((explicitType.Equals("addStatus", StringComparison.OrdinalIgnoreCase)
+                || explicitType.Equals("status", StringComparison.OrdinalIgnoreCase)
+                || explicitType.Equals("applyStatus", StringComparison.OrdinalIgnoreCase))
+            && !normalized.ContainsKey("status")
+            && normalized.TryGetValue("name", out var statusName))
+        {
+            normalized["status"] = statusName;
+        }
+
+        return normalized;
+    }
+
+    private static string ReadExplicitType(IReadOnlyDictionary<string, object?> fields)
+    {
+        foreach (var key in new[] { "type", "operation", "op", "kind", "effect", "effectType", "effect_type" })
+        {
+            if (fields.TryGetValue(key, out var rawType))
+            {
+                return Convert.ToString(rawType) ?? string.Empty;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static void MergeSummonTraitFollowups(List<Dictionary<string, object?>> effects)
+    {
+        for (var index = effects.Count - 1; index >= 0; index--)
+        {
+            var fields = effects[index];
+            if (!ReadType(fields).Equals("addTrait", StringComparison.OrdinalIgnoreCase)
+                && !ReadType(fields).Equals("tag", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var target = TargetText(fields);
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                continue;
+            }
+
+            var summon = effects.FirstOrDefault(candidate =>
+                ReadType(candidate).Equals("summon", StringComparison.OrdinalIgnoreCase)
+                && FieldText(candidate, "name").Equals(target, StringComparison.OrdinalIgnoreCase));
+            if (summon is null)
+            {
+                continue;
+            }
+
+            var tags = FieldValues(fields, "traits")
+                .Concat(FieldValues(fields, "tags"))
+                .Concat(FieldValues(fields, "trait"))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .ToArray();
+            if (tags.Length == 0)
+            {
+                continue;
+            }
+
+            var existing = FieldValues(summon, "tags").Concat(tags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            summon["tags"] = existing;
+            effects.RemoveAt(index);
+        }
+    }
+
+    private static string TargetText(IReadOnlyDictionary<string, object?> fields)
+    {
+        if (!fields.TryGetValue("target", out var target) || target is null)
+        {
+            return string.Empty;
+        }
+
+        if (target is IReadOnlyDictionary<string, object?> targetFields)
+        {
+            return FieldText(targetFields, "id", FieldText(targetFields, "name"));
+        }
+
+        return Convert.ToString(target) ?? string.Empty;
+    }
+
+    private static string FieldText(IReadOnlyDictionary<string, object?> fields, string key, string fallback = "")
+    {
+        if (!fields.TryGetValue(key, out var raw) || raw is null)
+        {
+            return fallback;
+        }
+
+        if (raw is IReadOnlyDictionary<string, object?> nested)
+        {
+            foreach (var nestedKey in new[] { "name", "id", "value", "text", "type" })
+            {
+                var value = FieldText(nested, nestedKey, "");
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+        }
+
+        if (raw is System.Collections.IEnumerable enumerable && raw is not string)
+        {
+            foreach (var item in enumerable)
+            {
+                return Convert.ToString(item) ?? fallback;
+            }
+        }
+
+        return Convert.ToString(raw) ?? fallback;
+    }
+
+    private static IEnumerable<string> FieldValues(IReadOnlyDictionary<string, object?> fields, string key)
+    {
+        if (!fields.TryGetValue(key, out var raw) || raw is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        if (raw is System.Collections.IEnumerable enumerable && raw is not string)
+        {
+            return enumerable.Cast<object?>()
+                .Select(value => Convert.ToString(value) ?? string.Empty)
+                .Where(value => !string.IsNullOrWhiteSpace(value));
+        }
+
+        var text = Convert.ToString(raw) ?? string.Empty;
+        return string.IsNullOrWhiteSpace(text) ? Array.Empty<string>() : new[] { text };
+    }
+
+    private static bool TryReadPointPair(object? raw, out int x, out int y)
+    {
+        x = 0;
+        y = 0;
+        if (raw is System.Collections.IEnumerable outer && raw is not string)
+        {
+            foreach (var first in outer)
+            {
+                if (first is System.Collections.IEnumerable inner && first is not string)
+                {
+                    var values = inner.Cast<object?>().Select(Convert.ToString).ToArray();
+                    return values.Length >= 2
+                        && int.TryParse(values[0], out x)
+                        && int.TryParse(values[1], out y);
+                }
+            }
+        }
+
+        var text = Convert.ToString(raw) ?? string.Empty;
+        var parts = text.Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length >= 2
+            && int.TryParse(parts[0], out x)
+            && int.TryParse(parts[1], out y);
+    }
+
+    private static void ApplyCompactEffectId(string text, Dictionary<string, object?> fields)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        if (text.StartsWith("status_", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("status-", StringComparison.OrdinalIgnoreCase))
+        {
+            fields["type"] = "addStatus";
+            var status = Regex.Match(text, @"^status[_-](?<value>[^_:]+)", RegexOptions.IgnoreCase);
+            if (status.Success)
+            {
+                fields["status"] = status.Groups["value"].Value;
+            }
+
+            var typedStatus = Regex.Match(text, @"(?:^|_)type:(?<value>.*?)(?:_(?:target|source|color|duration):|$)", RegexOptions.IgnoreCase);
+            if (typedStatus.Success && !fields.ContainsKey("status"))
+            {
+                fields["status"] = typedStatus.Groups["value"].Value;
+            }
+
+            var target = Regex.Match(text, @"target[_-]?id:(?<value>.*?)(?:_(?:type|source|color|duration):|$)", RegexOptions.IgnoreCase);
+            if (target.Success)
+            {
+                fields["target"] = target.Groups["value"].Value;
+            }
+
+            return;
+        }
+
+        if (text.StartsWith("message_", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("message-", StringComparison.OrdinalIgnoreCase))
+        {
+            fields["type"] = "message";
+            var message = Regex.Match(text, @"(?:^message[_-])?text:(?<value>.+)$", RegexOptions.IgnoreCase);
+            if (message.Success)
+            {
+                fields["text"] = message.Groups["value"].Value;
+            }
+        }
     }
 
     private static bool ReadBool(JsonElement root, string property, bool fallback) =>
@@ -86,6 +397,59 @@ public static class SpellResolutionJson
                     item => ConvertJsonValue(item.Value),
                     StringComparer.OrdinalIgnoreCase))
             .ToArray();
+    }
+
+    private static IReadOnlyList<IReadOnlyDictionary<string, object?>> ReadCosts(
+        JsonElement root,
+        string property)
+    {
+        if (!root.TryGetProperty(property, out var array) || array.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<IReadOnlyDictionary<string, object?>>();
+        }
+
+        return array.EnumerateArray()
+            .Select(element => element.ValueKind switch
+            {
+                JsonValueKind.Object => element.EnumerateObject()
+                    .ToDictionary(
+                        item => item.Name,
+                        item => ConvertJsonValue(item.Value),
+                        StringComparer.OrdinalIgnoreCase),
+                JsonValueKind.String => ParseCostString(element.GetString() ?? string.Empty),
+                JsonValueKind.Number when element.TryGetInt32(out var amount) => new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["type"] = "mana",
+                    ["amount"] = amount,
+                },
+                _ => null,
+            })
+            .Where(fields => fields is not null)
+            .Select(fields => (IReadOnlyDictionary<string, object?>)fields!)
+            .ToArray();
+    }
+
+    private static Dictionary<string, object?> ParseCostString(string text)
+    {
+        var lower = text.Trim().ToLowerInvariant();
+        var amountMatch = Regex.Match(lower, @"\d+");
+        var amount = amountMatch.Success && int.TryParse(amountMatch.Value, out var parsed)
+            ? parsed
+            : 1;
+        var type = lower switch
+        {
+            var value when value.Contains("max mana") || value.Contains("max_mana") => "maxMana",
+            var value when value.Contains("max hp") || value.Contains("max health") || value.Contains("max_health") => "maxHealth",
+            var value when value.Contains("mana") => "mana",
+            var value when value.Contains("hp") || value.Contains("health") => "health",
+            _ => "curse",
+        };
+        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["type"] = type,
+            ["amount"] = amount,
+            ["description"] = text,
+        };
     }
 
     private static object? ConvertJsonValue(JsonElement element) =>

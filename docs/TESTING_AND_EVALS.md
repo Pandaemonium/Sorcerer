@@ -56,9 +56,10 @@ Current command:
 dotnet run --project src/Sorcerer.Cli -- --provider mock --eval
 ```
 
-The current harness runs 25 prompts from fresh imperial encounters and checks required
+The current harness runs 26 prompts from fresh imperial encounters and checks required
 operation families such as `addStatus`, `transformEntity`, `summon`, `createTiles`,
-`scheduleEvent`, `changeFaction`, `areaDamage`, and intentional rejection.
+`scheduleEvent`, `changeFaction`, `areaDamage`, `possess` rejection, and intentional
+rejection.
 
 Each eval case should include:
 
@@ -93,7 +94,20 @@ human review.
 
 ## Agent Playtesting
 
-The JSON CLI should support unattended episodes.
+The JSON CLI supports an initial unattended episode runner:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --episode --episodes 5 --max-turns 40 --episode-log logs\episode_smoke.jsonl
+```
+
+Use `--json` for a machine-readable summary. The JSONL log is diagnostic-first and
+comprehensive enough to be lightweight replay material where practical. It contains:
+
+- `episode_start` with seed, limits, and the initial debug observation
+- `episode_step` with command text, action result summary, magic effect families, player
+  HP, entity/promise counts, pending-cast state, invariant issues, and the full debug
+  observation after the command
+- `episode_final` with the episode summary and final debug observation
 
 The harness should:
 
@@ -105,6 +119,20 @@ The harness should:
 - check invariants after each step
 - write JSONL logs
 - write a summary report
+
+Current runner behavior is deterministic and heuristic-driven. It equips/focuses useful
+items, picks up nearby items, reads nearby notices, opens the cell when it has the key,
+casts through the selected provider, moves toward encounter objectives, and checks
+invariants after each command.
+
+Normal scripted runs can also write diagnostic transcripts:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --script content\scripts\background_smoke.txt --transcript logs\cli_transcript_smoke.jsonl
+```
+
+These transcripts are command-oriented rather than autonomous-agent episodes. They preserve
+the command text, action result, and debug observation for each step.
 
 Agents may access perfect debug state. Their job is to find bugs and boring outcomes, not
 to imitate a human player's limited perception.

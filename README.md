@@ -37,17 +37,21 @@ The short pitch:
 
 ## Current Status
 
-This repository now contains the first architecture stub for the Godot/C# project. The
-stub defines the solution layout, shared core/session contracts, JSON-first CLI shell,
-minimal Godot shell, mock/Ollama provider seams, initial operation registry, and an
-imperial encounter scenario.
+This repository now contains the first playable Godot/C# slice. The shared backend drives
+both the JSON-first CLI and a Godot ASCII GUI with map interaction, spell entry, command
+entry, Ollama model controls, pending casts, inventory/status/promise panels, and an imperial
+encounter scenario. The current chamber also includes shared-engine item verbs,
+equipment/focus handling, readable and examinable fixtures, a locked cell, a prisoner
+rescue consequence, and a visible promise that can be realized in play. The CLI includes
+both a spell eval harness and an unattended episode runner with JSONL logs and invariant
+checks for agent playtesting.
 
 Recommended first read:
 
 - [NORTHSTAR.md](NORTHSTAR.md)
 - [AGENTS.md](AGENTS.md)
 - [docs/DOCUMENTATION_MAP.md](docs/DOCUMENTATION_MAP.md)
-- [docs/GAME_VISION.md](docs/GAME_VISION.md)
+- [docs/GRAND_VISION.md](docs/GRAND_VISION.md)
 - [docs/DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
@@ -81,10 +85,10 @@ Sorcerer.Tests
   unit and integration tests for contracts, rules, CLI, and resolver behavior
 ```
 
-The GUI and CLI must both drive:
+The GUI and CLI both drive:
 
 ```csharp
-ActionResult result = session.Execute(command);
+ActionResult result = await session.ExecuteAsync(command);
 GameView view = session.View();
 ```
 
@@ -104,7 +108,7 @@ The CLI should support:
 - perfect debug state when requested
 - visible enemies, NPCs, floor items, props, and terrain
 - inventory, equipment, reagents, curses, promises, journal, standing, and messages
-- mock LLM mode for fast deterministic agent testing
+- mock LLM mode for fast deterministic CLI/agent testing
 - live provider mode for resolver evaluation
 
 For details, see [docs/CLI_AND_AGENT_PLAYTESTING.md](docs/CLI_AND_AGENT_PLAYTESTING.md).

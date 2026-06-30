@@ -87,12 +87,14 @@ public sealed class WildMagicController : IWildMagicController
         if (validationIssues.Count > 0)
         {
             var reason = string.Join("; ", validationIssues.Select(issue => issue.Message));
-            var result = Rejected(
-                engine,
-                providerResult.Provider,
-                turnBefore,
-                reason,
-                resolution.Effects.Select(effect => effect.Type).ToArray());
+            var result = validationIssues.Any(issue => issue.TechnicalFailure)
+                ? TechnicalFailure(engine, providerResult.Provider, turnBefore, reason)
+                : Rejected(
+                    engine,
+                    providerResult.Provider,
+                    turnBefore,
+                    reason,
+                    resolution.Effects.Select(effect => effect.Type).ToArray());
             Audit(providerResult, command, request.Context, result, validationIssues.Select(issue => issue.Code).ToArray());
             return result;
         }
@@ -216,8 +218,9 @@ public sealed class WildMagicController : IWildMagicController
             if (!outcome.Ok)
             {
                 issues.Add(new SpellValidationIssue(
-                    "operation_rejected",
-                    outcome.RejectReason ?? $"{effect.Type} could not be applied."));
+                    outcome.Fatal ? "operation_shape" : "operation_rejected",
+                    outcome.RejectReason ?? $"{effect.Type} could not be applied.",
+                    outcome.Fatal));
             }
         }
 
@@ -292,8 +295,10 @@ public sealed class WildMagicController : IWildMagicController
         GameEngine engine,
         string provider,
         int turnBefore,
-        string error) =>
-        new()
+        string error)
+    {
+        engine.AddMessage(error);
+        return new ActionResult
         {
             Action = "cast",
             Success = false,
@@ -309,6 +314,7 @@ public sealed class WildMagicController : IWildMagicController
                 EffectTypes: Array.Empty<string>(),
                 Error: error),
         };
+    }
 
     private static ActionResult Rejected(
         GameEngine engine,

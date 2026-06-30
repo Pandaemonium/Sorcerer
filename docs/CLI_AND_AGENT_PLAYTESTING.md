@@ -13,11 +13,61 @@ play is the primary design target.
 
 - Let agents play the whole game without visual screen scraping.
 - Let developers reproduce bugs with short command scripts.
-- Support fast mock-provider playtests.
-- Support live provider resolver evaluation.
+- Make live-provider playtesting the normal way to judge game feel and resolver quality.
+- Support fast mock-provider runs for focused troubleshooting and regression checks.
 - Expose structured observations and action results.
 - Expose optional perfect debug state for agents.
 - Keep text commands convenient for humans where it is cheap.
+
+## Default Agent Guidance
+
+When playtesting Sorcerer, agents should usually use the live Ollama resolver. The point of
+playtesting is to see the real spell pipeline under realistic model behavior: latency,
+schema dialects, boring resolutions, surprising costs, target mistakes, and all. Mock mode
+is valuable, but it does not test the heart of the game.
+
+Use mock mode when:
+
+- isolating a specific engine, CLI, or turn-accounting issue
+- reproducing a bug from a known command sequence
+- checking deterministic invariant failures quickly
+- running the fixed spell eval corpus
+- working while Ollama or the selected live model is unavailable
+
+Use live Ollama when:
+
+- evaluating whether magic outcomes feel vivid, specific, and consequential
+- testing new operation cards, prompt changes, or schema repairs
+- checking whether the GUI/CLI flow survives real provider latency and weird output
+- gathering audit logs for resolver improvement
+- doing general exploratory playtests
+
+The CLI currently defaults to `mock` for quick local execution, so agents should pass
+`--provider ollama` explicitly for ordinary playtesting.
+
+## Quick Start: Live Ollama Playtest
+
+Start Ollama and make sure the target model is available, then run:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b --json --debug-state `
+  --transcript logs\cli_ollama_playtest.jsonl `
+  --command "inspect" `
+  --command "cast bind the nearest soldier in sticky blue glass" `
+  --command "cast promise that the notice will remember my name when read" `
+  --command "read notice" `
+  --command "jobs"
+```
+
+Useful live-provider outputs to inspect after a run:
+
+- terminal JSON envelopes for command results and observations
+- `logs\cli_ollama_playtest.jsonl` for step-by-step diagnostic transcript
+- `logs\wild_magic_audit.jsonl` for prompt, raw model output, repaired resolution, and
+  validation errors
+
+Report the provider, model, command sequence, transcript path, and audit symptoms when a
+playtest finds a problem.
 
 ## Recommended Modes
 
@@ -90,6 +140,30 @@ journal
 quit
 ```
 
+Scripted shared-engine smoke:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b `
+  --command "inspect" `
+  --command "move east" `
+  --command "pickup red tincture" `
+  --command "use red tincture" `
+  --command "equip charcoal wand" `
+  --command "focus charcoal wand" `
+  --command "journal"
+```
+
+Scripted diagnostic run with transcript:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --script content\scripts\background_smoke.txt --transcript logs\cli_transcript_smoke.jsonl
+```
+
+Blank lines and `#` comments in script files are ignored. Any `--command` entries are
+appended after script commands. The example above intentionally uses `mock` because it is
+a deterministic troubleshooting smoke; exploratory playtest scripts should usually use
+`--provider ollama`.
+
 ## Agent Observation
 
 Agents need a compact structured view after each command.
@@ -130,17 +204,17 @@ Important observation details:
 
 Agents should not need to infer coordinates from rendered glyphs alone.
 
-## Commands To Support Early
+## Commands Implemented Early
 
-Core:
+Core shared commands currently route through `GameSession`:
 
 - `inspect`
 - `map [radius]`
 - `move <direction>`
 - direction aliases: `north`, `south`, `east`, `west`, etc.
 - `wait`
-- `open`
-- `pickup`
+- `open [target]`
+- `pickup [target]`
 - `drop <item>`
 - `use <item>`
 - `equip <item>`
@@ -154,49 +228,61 @@ Core:
 - `await_cast`
 - `cancel_cast`
 - `journal`
+- `read [target]`
+- `examine [target]`
+- `talk [target-or-message]`
+- `possess [target]`
+- `standing`
+- `followers`
+- `jobs`
 - `help`
 - `quit`
 
 Later:
 
-- `talk <message>`
-- `read <target>`
-- `examine [target]`
+- `wares`
+
+Inventory protection and reagent inspection are also implemented:
+
 - `protect <item>`
 - `unprotect <item>`
 - `reagents`
-- `possess [target]`
-- `standing`
-- `followers`
-- `wares`
 
 ## Provider Flags
 
 Recommended CLI flags:
 
 ```text
---provider mock|local|api|auto
+--provider ollama|local|mock|api|openai-compatible
+--host <url>
+--model <name>
 --seed <int>
---scenario <id>
 --command <text>
 --script <path>
 --json
---no-render
 --debug-state
 --eval
---record <path>
+--episode
+--episodes <n>
 --max-turns <n>
+--transcript <path>
+--episode-log <path>
+--record <path>
 ```
 
-`mock` should be fast and deterministic enough for frequent agent checks.
+`ollama` and `local` currently select the live Ollama provider. `mock` is deterministic and
+fast enough for frequent focused checks, but it should not be treated as the ordinary
+playtest resolver.
 
-Live providers should exercise the real resolver and write audit logs.
+Live providers exercise the real resolver and write audit logs. They are the right choice
+when judging wild magic quality.
 
 Current implemented flags are `--provider`, `--host`, `--model`, `--json`,
-`--debug-state`, `--command`, and `--eval`.
+`--debug-state`, `--command`, `--script`, `--transcript`, `--eval`, `--episode`,
+`--episodes`, `--max-turns`, `--seed`, and `--episode-log`/`--record`.
 
-`auto` can be useful for casual play, but strict LLM evaluation should prefer an explicit
-live provider so provider failures are visible.
+Unknown provider names fall back to mock today, so strict live evaluation should use an
+explicit known provider name and check the result's `magic.provider` field.
 
 ## Replay
 
@@ -227,6 +313,11 @@ If replay becomes expensive, prefer preserving:
 
 over building a complicated rewind system early.
 
+The current lightweight path is diagnostic transcripts: `--transcript` writes JSONL
+records for `transcript_start`, each `transcript_step`, and `transcript_final`. Each record
+includes command text, action results, and debug observations. These logs are meant for
+troubleshooting first and replay-like reproduction second.
+
 ## Agent QA Harness
 
 The first spell eval harness is available:
@@ -235,11 +326,30 @@ The first spell eval harness is available:
 dotnet run --project src/Sorcerer.Cli -- --provider mock --eval
 ```
 
-It runs a fixed spell corpus from fresh imperial encounters and checks that the resolver
-selects the expected operation families. This is not a substitute for free-play agents,
-but it catches resolver drift quickly.
+It runs a fixed spell corpus from fresh imperial encounters and checks that the mock
+resolver selects the expected operation families. This is not a substitute for free-play
+agents or live Ollama testing, but it catches engine and registry drift quickly.
 
-Eventually, add an unattended playtest harness that:
+The first unattended episode runner is also available:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --episode --episodes 5 --max-turns 40 --episode-log logs\episode_smoke.jsonl
+```
+
+With `mock`, it uses a deterministic heuristic agent over the real `GameSession`, writes
+diagnostic JSONL records when `--episode-log` is provided, and fails the process if hard
+invariants fail. Logs include `episode_start`, `episode_step`, and `episode_final` records
+with full debug observations, so they can support troubleshooting first and lightweight
+replay material where practical. This is intentionally simple, but it is already useful
+for catching engine regressions.
+
+For a slower but more realistic unattended playtest, use Ollama:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b --episode --episodes 1 --max-turns 20 --episode-log logs\episode_ollama.jsonl --json
+```
+
+Eventually, deepen the unattended harness so it:
 
 - starts many episodes
 - chooses commands through a mock/random/live-provider agent

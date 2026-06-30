@@ -10,6 +10,37 @@ The core rule:
 Your job as an agent is to help build a clean, renderer-agnostic, agent-playable
 simulation where strange spell prompts become reusable mechanics.
 
+## What We Are Building (read `docs/GRAND_VISION.md`)
+
+The pitch is one line: **you can do anything, and it actually matters what you do.** Sorcerer
+is a long roguelike where the player improvises wild magic in a living world that keeps
+answering. The feeling, in priority order, is **authorship, wonder, and mischief**, then
+tactical cleverness - danger is real, but this is not a punishing survival game. The arc is
+long: grow in power, weaken the Empire, and eventually kill the emperor. No meta-progression;
+each death rolls a new world.
+
+The setting is **color under marble**: a lush, peculiar, culturally-specific world of folk
+traditions, policed by the cold, reasonable, genuinely-not-evil Empire of Vigovia. You are the
+pest. The tone is **wonder with teeth** - ecstatic, feral magic with strange, gorgeous costs,
+never generic grimdark. See `docs/WORLDBUILDING.md` (canon) and `docs/AESTHETICS_AND_TONE.md`
+(voice).
+
+**The one engine idea: prose becomes mechanics.** There is no wall between flavor and rules. A
+description - a trait, a rumor, a secret, a name - is a *dormant mechanic* that becomes real
+when the model, resolving an action, decides the situation squarely calls for it. The player
+improvises in language; the model proposes meaning; the engine validates, prices, and applies
+it as authoritative truth. Freedom on the surface, coherence underneath - **structured
+freedom**.
+
+**Richness comes from interaction, not from scripted content.** We build a small number of
+general systems - wild magic, items and entities, traits, promises, deeds and reputation,
+factions, relationships, regions - and let them collide. A spell witnessed by a villager
+becomes a rumor becomes a recruit; an imbued gift becomes a bond becomes a confided secret
+becomes a place the world then delivers. None of that is coded as a story; it falls out of
+systems handing off to each other. So when you build a mechanic, ask whether it **creates more
+combinations than it adds complexity**, and build the smallest *general* capability that
+unlocks it - never a handler for one spell or one story.
+
 ## First-Class Requirements
 
 - The authoritative engine lives in Godot/C#.
@@ -129,10 +160,10 @@ commands are fine, but agents should not need screen scraping.
 
 Good agent-facing affordances:
 
-- `--provider mock` for quick deterministic playtests
-- live provider mode for resolver evaluation
-- `--no-render` for compact command output
+- `--provider ollama` for ordinary playtesting and resolver quality evaluation
+- `--provider mock` for quick deterministic troubleshooting, evals, and regression checks
 - `--json` for machine-readable observations/results
+- `--command`, `--script`, `--transcript`, and `--episode-log` for reproducible runs
 - `inspect` or equivalent structured state view
 - optional perfect debug state
 - local coordinate map
@@ -162,10 +193,11 @@ Keep durable docs current when you add or change architecture:
 - `AGENTS.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DOCUMENTATION_MAP.md`
-- `docs/GAME_VISION.md`
+- `docs/GRAND_VISION.md`
 - `docs/CLI_AND_AGENT_PLAYTESTING.md`
 - `docs/WILD_MAGIC_CONTRACT.md`
 - `docs/MAGIC_RESOLVER_ARCHITECTURE.md`
+- `docs/SEMANTIC_EFFECTS.md`
 - relevant subsystem docs
 
 Do not leave important behavior only in private notes, chat history, or comments inside
@@ -197,7 +229,9 @@ For Godot GUI changes, verify that the same behavior is reachable through the CL
 - Do not let malformed LLM output partially mutate state.
 - Do not hide a second spell engine inside fallback code.
 - Do not make semantic flavor mechanically binding unless it crystallizes into an
-  explicit engine operation.
+  explicit engine operation. Entity traits are dormant mechanics the resolver may surface;
+  see `docs/SEMANTIC_EFFECTS.md` (semantic by default, mechanical on demand, never on the
+  critical path; traits are resolver-authored only).
 - Do not let magic become merely valid but boring. When improving the resolver, measure
   specificity, consequence, and surprise as seriously as JSON correctness.
 - Use clear, durable names based on behavior, not temporary planning labels.

@@ -54,6 +54,47 @@ have to recover them from chat history.
 - Content should bias data-first for future modding.
 - Renderer animation should prefer engine `StateDelta` records.
 
+## Settled Decisions (Resolver, Magic, and Systems)
+
+Locked while specifying the core execution model and adapting the inherited design docs. See
+[CORE_EXECUTION_MODEL.md](CORE_EXECUTION_MODEL.md), [SEMANTIC_EFFECTS.md](SEMANTIC_EFFECTS.md),
+[GRAND_VISION.md](GRAND_VISION.md), [EMERGENT_WORLD.md](EMERGENT_WORLD.md),
+[CHARACTER_AND_STATS.md](CHARACTER_AND_STATS.md), and
+[PROMISES_AND_PROPHECY.md](PROMISES_AND_PROPHECY.md).
+
+- Wild-magic operations are code-owned verbs - each owns its own validate and apply - enriched
+  by data-driven cards (prompt guidance, examples, aliases). Code is the one source of truth
+  for the operation set and behavior; data only enriches.
+- Wild magic resolves validate-all-then-apply-all inside a transaction. Malformed or rejected
+  magic never partially mutates state.
+- Turn-cost contract: technical failures (provider down, unparseable JSON, an operation that
+  threw) consume no turn; rejections (model refusal, or engine validation such as an
+  unsupported operation, impossible target, or illegal/overpowered spell) consume a turn.
+- Long casts use a pending-cast async model: the session does not block the turn loop, the turn
+  is consumed only on resolve, and the CLI awaits and returns one final envelope. This is also
+  the seam for the future casting minigame and agent-skip.
+- A seeded engine RNG is threaded from the start; replay records resolved model JSON so live
+  magic stays reproducible. This is the cheap determinism the earlier replay decision wanted.
+- The default agent observation is player-equivalent perception; perfect debug state is opt-in.
+- The resolver receives a perception-bounded cast context view so magic can be local and
+  specific; targets resolve by id, selector, or fuzzy name to a set, so single and group
+  targeting are one mechanism.
+- Entity descriptions and traits are dormant mechanics the resolver surfaces and may cash into
+  effects: semantic by default, mechanical on demand, never on the critical path.
+- Traits are resolver-authored only. The player never directly authors a trait; they may only
+  request through spell text. There is no player-facing trait-authoring command, now or later.
+- Trait crystallization (promotion to a standing mechanic) is the documented target but is
+  deferred until the status/tag system exists.
+- World reaction is event/pause-driven, applied at explicit engine pump points, not a periodic
+  real-time or daily tick.
+- The model interprets meaning and narrates reaction; it never simulates. The deterministic
+  skeleton must stand with zero model calls.
+- The character stat model is the Vigor / Attunement / Composure triad; Composure is the
+  wildness dial tied to casting performance.
+- The promise economy is always-honor (yes-and): not everything said binds, but every bound
+  promise the world keeps.
+- GRAND_VISION.md is the central guiding vision and supersedes GAME_VISION.
+
 ## Architectural Biases
 
 Sorcerer should optimize for:

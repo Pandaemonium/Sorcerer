@@ -14,9 +14,19 @@ public sealed class OperationRegistry
         foreach (var operation in _operations.Values)
         {
             _aliases[operation.Name] = operation.Name;
+        }
+
+        foreach (var operation in _operations.Values)
+        {
+            _aliases[operation.Name] = operation.Name;
             foreach (var alias in operation.Aliases)
             {
-                _aliases[alias] = operation.Name;
+                _aliases.TryAdd(alias, operation.Name);
+            }
+
+            foreach (var alias in operation.Card.Aliases)
+            {
+                _aliases.TryAdd(alias, operation.Name);
             }
         }
     }
@@ -57,9 +67,10 @@ public sealed class OperationRegistry
         return new OperationRegistry(ops);
     }
 
-    public static OperationRegistry CreateDefault() =>
-        Build(new IOperation[]
-        {
+    public static OperationRegistry CreateDefault()
+    {
+        var operations = new IOperation[]
+            {
             new DamageOperation(),
             new AreaDamageOperation(),
             new HealOperation(),
@@ -74,11 +85,14 @@ public sealed class OperationRegistry
             new SummonOperation(),
             new TransformEntityOperation(),
             new TransformItemOperation(),
+            new PossessOperation(),
             new ChangeFactionOperation(),
             new AddTraitOperation(),
             new ScheduleEventOperation(),
             new AddCurseOperation(),
             new CreatePromiseOperation(),
             new MessageOperation(),
-        });
+            };
+        return Build(operations, OperationCardLoader.LoadDefaultContentCards());
+    }
 }

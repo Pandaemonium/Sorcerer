@@ -20,6 +20,10 @@ public static class Program
     public static async Task<int> Main(string[] args)
     {
         var options = CliOptions.Parse(args);
+        options = options with
+        {
+            Commands = LoadScriptCommands(options.ScriptPath).Concat(options.Commands).ToArray(),
+        };
         var provider = SpellProviderFactory.Create(options.Provider, options.Host, options.Model);
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
         if (options.Eval)
@@ -27,17 +31,40 @@ public static class Program
             return await SpellEvalHarness.RunAsync(provider, audit, options.Json);
         }
 
+        if (options.Episode)
+        {
+            return await EpisodeRunner.RunAsync(
+                provider,
+                audit,
+                new EpisodeRunnerOptions(
+                    options.Episodes,
+                    options.MaxTurns,
+                    options.Seed,
+                    options.EpisodeLogPath),
+                options.Json);
+        }
+
         var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
+        await using var transcript = TranscriptWriter.Open(options.TranscriptPath);
+        if (transcript is not null)
+        {
+            await transcript.WriteStartAsync(options, session.Observation(debug: true));
+        }
 
         if (options.Commands.Count > 0)
         {
             foreach (var commandText in options.Commands)
             {
-                var shouldQuit = await ExecuteAndWriteAsync(session, commandText, options);
+                var shouldQuit = await ExecuteAndWriteAsync(session, commandText, options, transcript);
                 if (shouldQuit)
                 {
                     break;
                 }
+            }
+
+            if (transcript is not null)
+            {
+                await transcript.WriteFinalAsync(session.Observation(debug: true));
             }
 
             return 0;
@@ -58,11 +85,16 @@ public static class Program
 
         while (Console.ReadLine() is { } line)
         {
-            var shouldQuit = await ExecuteAndWriteAsync(session, line, options);
+            var shouldQuit = await ExecuteAndWriteAsync(session, line, options, transcript);
             if (shouldQuit)
             {
                 break;
             }
+        }
+
+        if (transcript is not null)
+        {
+            await transcript.WriteFinalAsync(session.Observation(debug: true));
         }
 
         return 0;
@@ -71,13 +103,32 @@ public static class Program
     private static async Task<bool> ExecuteAndWriteAsync(
         GameSession session,
         string commandText,
-        CliOptions options)
+        CliOptions options,
+        TranscriptWriter? transcript = null)
     {
         var command = ParseCommand(commandText);
         var result = await session.ExecuteAsync(command);
         var observation = session.Observation(options.DebugState);
         await WriteEnvelopeAsync(new CommandEnvelope(result, observation), options);
+        if (transcript is not null)
+        {
+            await transcript.WriteStepAsync(commandText, result, session.Observation(debug: true));
+        }
+
         return result.ShouldQuit;
+    }
+
+    private static IReadOnlyList<string> LoadScriptCommands(string? scriptPath)
+    {
+        if (string.IsNullOrWhiteSpace(scriptPath))
+        {
+            return Array.Empty<string>();
+        }
+
+        return File.ReadLines(scriptPath)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith('#'))
+            .ToArray();
     }
 
     private static Task WriteEnvelopeAsync(CommandEnvelope envelope, CliOptions options)
@@ -219,6 +270,13 @@ public sealed record CliOptions(
     bool Json,
     bool DebugState,
     bool Eval,
+    bool Episode,
+    int Episodes,
+    int MaxTurns,
+    int Seed,
+    string? EpisodeLogPath,
+    string? ScriptPath,
+    string? TranscriptPath,
     IReadOnlyList<string> Commands)
 {
     public static CliOptions Parse(string[] args)
@@ -229,6 +287,13 @@ public sealed record CliOptions(
         var json = false;
         var debugState = false;
         var eval = false;
+        var episode = false;
+        var episodes = 1;
+        var maxTurns = 40;
+        var seed = 7;
+        string? episodeLogPath = null;
+        string? scriptPath = null;
+        string? transcriptPath = null;
         var commands = new List<string>();
 
         for (var index = 0; index < args.Length; index++)
@@ -255,12 +320,145 @@ public sealed record CliOptions(
                 case "--eval-spells":
                     eval = true;
                     break;
+                case "--episode":
+                case "--playtest":
+                    episode = true;
+                    break;
+                case "--episodes" when index + 1 < args.Length:
+                    episodes = Math.Max(1, ReadPositiveInt(args[++index], episodes));
+                    break;
+                case "--max-turns" when index + 1 < args.Length:
+                    maxTurns = Math.Max(1, ReadPositiveInt(args[++index], maxTurns));
+                    break;
+                case "--seed" when index + 1 < args.Length:
+                    seed = Math.Max(1, ReadPositiveInt(args[++index], seed));
+                    break;
+                case "--episode-log" when index + 1 < args.Length:
+                case "--record" when index + 1 < args.Length:
+                    episodeLogPath = args[++index];
+                    break;
+                case "--script" when index + 1 < args.Length:
+                    scriptPath = args[++index];
+                    break;
+                case "--transcript" when index + 1 < args.Length:
+                case "--command-log" when index + 1 < args.Length:
+                    transcriptPath = args[++index];
+                    break;
                 case "--command" when index + 1 < args.Length:
                     commands.Add(args[++index]);
                     break;
             }
         }
 
-        return new CliOptions(provider, host, model, json, debugState, eval, commands);
+        return new CliOptions(
+            provider,
+            host,
+            model,
+            json,
+            debugState,
+            eval,
+            episode,
+            episodes,
+            maxTurns,
+            seed,
+            episodeLogPath,
+            scriptPath,
+            transcriptPath,
+            commands);
     }
+
+    private static int ReadPositiveInt(string value, int fallback) =>
+        int.TryParse(value, out var parsed) && parsed > 0 ? parsed : fallback;
+}
+
+public sealed class TranscriptWriter : IAsyncDisposable
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = false,
+    };
+
+    private readonly StreamWriter _writer;
+    private int _step;
+
+    private TranscriptWriter(StreamWriter writer)
+    {
+        _writer = writer;
+    }
+
+    public static TranscriptWriter? Open(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        return new TranscriptWriter(new StreamWriter(path, append: false));
+    }
+
+    public Task WriteStartAsync(CliOptions options, AgentObservation observation) =>
+        WriteAsync(new TranscriptStartRecord(
+            "transcript_start",
+            DateTimeOffset.UtcNow,
+            options.Provider,
+            options.Model,
+            options.ScriptPath,
+            options.Commands,
+            observation));
+
+    public Task WriteStepAsync(string commandText, ActionResult result, AgentObservation observation) =>
+        WriteAsync(new TranscriptStepRecord(
+            "transcript_step",
+            DateTimeOffset.UtcNow,
+            _step++,
+            commandText,
+            result,
+            observation));
+
+    public Task WriteFinalAsync(AgentObservation observation) =>
+        WriteAsync(new TranscriptFinalRecord(
+            "transcript_final",
+            DateTimeOffset.UtcNow,
+            _step,
+            observation));
+
+    public async ValueTask DisposeAsync()
+    {
+        await _writer.DisposeAsync();
+    }
+
+    private async Task WriteAsync(object record)
+    {
+        await _writer.WriteLineAsync(JsonSerializer.Serialize(record, JsonOptions));
+        await _writer.FlushAsync();
+    }
+
+    private sealed record TranscriptStartRecord(
+        string RecordType,
+        DateTimeOffset Timestamp,
+        string Provider,
+        string? Model,
+        string? ScriptPath,
+        IReadOnlyList<string> Commands,
+        AgentObservation InitialObservation);
+
+    private sealed record TranscriptStepRecord(
+        string RecordType,
+        DateTimeOffset Timestamp,
+        int Step,
+        string Command,
+        ActionResult Result,
+        AgentObservation Observation);
+
+    private sealed record TranscriptFinalRecord(
+        string RecordType,
+        DateTimeOffset Timestamp,
+        int Steps,
+        AgentObservation FinalObservation);
 }

@@ -1,5 +1,6 @@
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Runtime;
 
 namespace Sorcerer.Core.World;
 
@@ -35,6 +36,8 @@ public sealed class GameState
 
     public Dictionary<GridPoint, string> Terrain { get; } = new();
 
+    public Dictionary<GridPoint, int> TerrainExpirations { get; } = new();
+
     public List<string> Messages { get; } = new();
 
     public PromiseLedger PromiseLedger { get; } = new();
@@ -52,6 +55,10 @@ public sealed class GameState
     public BondLedger Bonds { get; } = new();
 
     public ScheduledEventLedger ScheduledEvents { get; } = new();
+
+    public BackgroundJobSettings BackgroundSettings { get; set; } = new();
+
+    public BackgroundJobQueue BackgroundJobs { get; } = new();
 
     public Entity ControlledEntity => Entities[ControlledEntityId];
 

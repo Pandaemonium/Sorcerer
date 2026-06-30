@@ -52,6 +52,11 @@
       "aliases": ["transformFixture"]
     },
     {
+      "name": "possess",
+      "summary": "Move the caster's soul into a vulnerable nearby body.",
+      "aliases": ["bodySwap", "soulSwap", "takeBody"]
+    },
+    {
       "name": "createPromise",
       "summary": "Add a promise to the world.",
       "aliases": ["promise", "prophecy"]
@@ -63,4 +68,3 @@
     }
   ]
 }
-

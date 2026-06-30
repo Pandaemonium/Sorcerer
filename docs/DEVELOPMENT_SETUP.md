@@ -8,19 +8,7 @@ Sorcerer is scaffolded as a .NET solution plus a Godot C# project.
 - Godot 4.7 .NET editor, or a compatible Godot 4.x .NET editor after updating the Godot
   project SDK reference.
 
-This machine currently has .NET runtimes but no .NET SDK, so `dotnet build` and
-`dotnet test` cannot run until the SDK is installed.
-
-Current local check:
-
-```text
-dotnet --info
-  .NET runtimes present
-  No SDKs were found
-
-godot
-  not found on PATH
-```
+Current local verification uses .NET SDK 8 and Godot 4.7 .NET.
 
 ## Solution Layout
 
@@ -51,6 +39,30 @@ CLI mock run:
 dotnet run --project C:\Games\Sorcerer\src\Sorcerer.Cli -- --json --debug-state --command "inspect" --command "cast blue fire at the nearest soldier"
 ```
 
+Spell eval:
+
+```powershell
+dotnet run --project C:\Games\Sorcerer\src\Sorcerer.Cli -- --provider mock --eval
+```
+
+Unattended mock episode runner:
+
+```powershell
+dotnet run --project C:\Games\Sorcerer\src\Sorcerer.Cli -- --provider mock --episode --episodes 2 --max-turns 30 --episode-log C:\Games\Sorcerer\logs\episode_smoke.jsonl
+```
+
+Background job smoke:
+
+```powershell
+dotnet run --project C:\Games\Sorcerer\src\Sorcerer.Cli -- --provider mock --command "move east" --command "move northeast" --command "examine brazier" --command "jobs" --command "wait" --command "jobs"
+```
+
+Script and transcript smoke:
+
+```powershell
+dotnet run --project C:\Games\Sorcerer\src\Sorcerer.Cli -- --provider mock --script C:\Games\Sorcerer\content\scripts\background_smoke.txt --transcript C:\Games\Sorcerer\logs\cli_transcript_smoke.jsonl
+```
+
 Ollama run:
 
 ```powershell
@@ -65,6 +77,13 @@ Open:
 C:\Games\Sorcerer\src\Sorcerer.Godot\project.godot
 ```
 
-The Godot shell is intentionally minimal. It constructs the same `GameSession` as the CLI
-and renders a simple `GameView` placeholder. The real ASCII renderer should replace the
-placeholder after the backend contracts settle.
+Or launch directly:
+
+```powershell
+& "C:\Tools\Godot\Godot_v4.7-stable_mono_win64\Godot_v4.7-stable_mono_win64.exe" --path C:\Games\Sorcerer\src\Sorcerer.Godot
+```
+
+The Godot GUI constructs the same `GameSession` as the CLI. It currently provides a
+playable ASCII encounter with keyboard movement, mouse targeting, spell entry, command
+entry, quick spells, Ollama model controls, pending casts, and read-only state panels.
+Mock provider mode is intentionally CLI-only for deterministic agent testing.

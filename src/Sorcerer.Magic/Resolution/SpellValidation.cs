@@ -5,7 +5,7 @@ using Sorcerer.Magic.Operations;
 
 namespace Sorcerer.Magic.Resolution;
 
-public sealed record SpellValidationIssue(string Code, string Message);
+public sealed record SpellValidationIssue(string Code, string Message, bool TechnicalFailure = false);
 
 public sealed record SpellValidationReport(IReadOnlyList<SpellValidationIssue> Issues)
 {

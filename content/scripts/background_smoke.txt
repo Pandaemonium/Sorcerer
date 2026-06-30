@@ -1,0 +1,8 @@
+# Shared-engine CLI smoke script for diagnostics and replay-like transcripts.
+inspect
+move east
+move northeast
+examine brazier
+jobs
+wait
+jobs

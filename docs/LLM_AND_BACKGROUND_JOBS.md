@@ -130,7 +130,23 @@ create a second hidden engine in mocks.
 
 ## Background Job Queue
 
-Suggested job record:
+Current implementation:
+
+- `GameState` owns `BackgroundJobSettings` and `BackgroundJobQueue`.
+- Background generation defaults on but low: one job per turn, with a small queue cap.
+- `read` and `examine` can enqueue deterministic background detail jobs for the target.
+- `AdvanceTurn` is the explicit apply point: it starts at most the configured number of
+  queued jobs, produces deterministic placeholder text, writes durable canon, and marks
+  the job `Applied`.
+- `jobs` exposes the queue through the shared CLI/Godot command path.
+- Debug observations include background job cards so diagnostic episode transcripts can
+  capture the queue without scraping text.
+
+This is intentionally not a real background LLM worker yet. It proves the state,
+throttling, visibility, and apply-boundary architecture before any provider call can
+consume user resources.
+
+Current job record:
 
 ```csharp
 public sealed record BackgroundJob(
@@ -139,7 +155,13 @@ public sealed record BackgroundJob(
     string TargetEntityId,
     int Priority,
     BackgroundJobState State,
-    DateTime CreatedAt
+    int CreatedTurn,
+    DateTimeOffset CreatedAt,
+    int? StartedTurn,
+    int? CompletedTurn,
+    int? AppliedTurn,
+    string? ResultText,
+    string? Error
 );
 ```
 
@@ -149,8 +171,8 @@ Queue should expose a read-only developer view:
 - queued jobs
 - completed waiting-to-apply jobs
 - failed jobs
-- current provider/model
+- current provider/model, once real background providers are wired in
 - elapsed time
 
-The GUI can render this as a hidden developer panel. The CLI can expose it with a command
-such as `jobs`.
+The GUI can render this as a hidden developer panel. The CLI already exposes it with
+`jobs`.

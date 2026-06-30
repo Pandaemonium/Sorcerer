@@ -14,7 +14,7 @@ Godot application
 
 Sorcerer.Core
   game state, entities, components, actions, turns, combat, items, props, world rules,
-  pending cast coordination, actor turns
+  interactables, pending cast coordination, actor turns
 
 Sorcerer.Magic
   operation registry, effect validation/application, costs, transactions, audit records
@@ -249,7 +249,42 @@ The first actor scheduler is intentionally simple: after a consumed player turn,
 actors either step toward the controlled body or attack if adjacent. Movement and attacks
 use the same engine mutation methods as player actions. Restraint statuses such as
 `bound`, `webbed`, `frozen`, `asleep`, and `petrified` suppress hostile AI turns while
-active.
+active through `StatusRegistry` traits rather than hard-coded engine string checks. Timed
+statuses expire during turn advancement. Movement-blocking status traits also prevent the
+controlled body from walking and consume the attempted movement turn.
+
+The first interactable slice also lives here. `pickup`, `drop`, `use`, `equip`,
+`unequip`, `focus`, `unfocus`, `read`, `examine`, `open`, `talk`, `journal`,
+`standing`, and `followers` are shared engine/session actions, so Godot, CLI agents, and
+tests all exercise the same behavior. Opening the first locked cell demonstrates how a
+plain door entity can realize a promise, update ledgers, and change an NPC's faction
+without scripting a separate renderer path.
+
+Promise binding also lives at this layer. `GameEngine.AddPromise` writes one ledger record
+with source, subject, claimed place, bound place, optional bound target, trigger hint,
+realization kind, and realization location. Bound target entities receive
+`PromiseAnchorComponent` ids. Ordinary verbs such as `read`, `open`, and `talk` can then
+realize matching anchored promises and emit `realizePromise` deltas through the same
+`ActionResult` surface used by CLI, GUI, and tests. The first realization handlers are
+small but concrete: memories write to ledgers and entity memory, threats spawn a hostile
+claimant, items become pickupable entities, and less concrete quest/site/omen outcomes
+enter durable canon.
+
+The first body-control seam is also implemented as shared engine behavior and as a
+wild-magic operation. `possess` targets a nearby living actor: alert hostile bodies resist
+and consume the turn, while an incapacitated body can be taken over. On success,
+`ControlledEntityId` follows the new body, soul components swap, controllers/factions
+update, and inventory stays with the body that carried it. This is intentionally narrow,
+but it proves actions, views, and resolver operations follow the control pointer instead
+of a hard-coded player object.
+
+Temporary terrain is tracked with expiry turns. When terrain expires, the tile returns to
+ordinary floor and temporary blocking is removed unless the tile is a boundary wall. This
+keeps terrain spells useful without committing yet to a deep terrain simulation.
+
+The current delayed-event implementation is deliberately small: due scheduled events are
+popped during turn advancement and surfaced as log messages. This gives spell-created
+future consequences an engine-owned place to land before richer event handlers exist.
 
 ## Magic System
 
@@ -288,6 +323,11 @@ The current implementation uses `IOperation` classes in `Sorcerer.Magic.Operatio
 `OperationRegistry` maps canonical names and aliases to operation objects. Each operation
 owns validation and application, while `WildMagicController` owns provider calls,
 normalization, transaction boundaries, cost application, turn semantics, and audit logging.
+`createPromise` and `addCurse` can optionally pass a target plus trigger hint into the
+engine promise binder, but the engine remains authoritative about whether and where the
+promise actually binds.
+The default registry also loads matching prompt/capability cards from `content/operations`
+when available, falling back to built-in cards when content is absent.
 
 Important contracts:
 
@@ -355,6 +395,16 @@ Recommended minimum:
 This is enough to reproduce many bugs without re-calling the model. Avoid building a
 heavy rewind system until a concrete mechanic requires it.
 
+Current lightweight replay/debug path:
+
+- `--script <path>` plays newline-delimited CLI commands, ignoring blank lines and `#`
+  comments.
+- `--transcript <path>` writes diagnostic JSONL records for normal CLI runs:
+  `transcript_start`, `transcript_step`, and `transcript_final`.
+- Transcript step records include command text, `ActionResult`, and full debug
+  observations. They are troubleshooting artifacts first and replay-like material where
+  practical, not a full save/rewind system.
+
 ## Background Jobs
 
 Background jobs enrich the world:
@@ -373,5 +423,12 @@ They must be:
 - visible to developer tools
 - isolated from foreground action legality
 - recorded when their output becomes durable
+
+Current implementation is a deterministic, low-resource lane rather than a live LLM
+worker. `GameState` owns `BackgroundJobSettings` and `BackgroundJobQueue`; `read` and
+`examine` can enqueue target-detail jobs; `AdvanceTurn` starts and applies at most one job
+by default; durable output enters `CanonLedger`; and `jobs` plus debug observations expose
+the queue. This proves the state and apply boundary before provider-backed background
+generation is added.
 
 See [LLM_AND_BACKGROUND_JOBS.md](LLM_AND_BACKGROUND_JOBS.md).

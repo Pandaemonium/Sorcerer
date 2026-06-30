@@ -22,6 +22,22 @@ The first playable should let a human and an AI agent:
 - inspect audit records after casts
 - run the same scenario through CLI
 
+## Current Encounter Shape
+
+The current imperial encounter is still deliberately small, but it now contains enough
+world affordances to exercise the architecture:
+
+- two imperial soldiers with simple hostile turns
+- the player with protected reagents and an equippable/focusable wand
+- a containment brazier and readable imperial notice
+- loose floor items, including a healing tincture and a cell key
+- a locked cell door represented as an ordinary entity with `DoorComponent`
+- Lio of Hollowmere as a prisoner who can become a follower when freed
+- a visible promise that is realized by opening the cell
+
+All of these are reached through the same `GameSession` commands used by the CLI and
+Godot GUI.
+
 ## Required Pieces
 
 - Godot 4 C# project skeleton.
@@ -89,4 +105,3 @@ The build is successful when:
 - agents can run a scripted JSON episode
 - renderer code does not own rules
 - the team feels excited to make the resolver richer
-

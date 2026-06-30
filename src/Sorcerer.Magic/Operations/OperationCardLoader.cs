@@ -4,6 +4,21 @@ namespace Sorcerer.Magic.Operations;
 
 public static class OperationCardLoader
 {
+    public static IReadOnlyList<OperationCard> LoadDefaultContentCards()
+    {
+        foreach (var root in CandidateRoots())
+        {
+            var directory = Path.Combine(root, "content", "operations");
+            var cards = LoadFrom(directory);
+            if (cards.Count > 0)
+            {
+                return cards;
+            }
+        }
+
+        return Array.Empty<OperationCard>();
+    }
+
     public static IReadOnlyList<OperationCard> LoadFrom(string directory)
     {
         if (!Directory.Exists(directory))
@@ -57,4 +72,17 @@ public static class OperationCardLoader
         root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? fallback
             : fallback;
+
+    private static IEnumerable<string> CandidateRoots()
+    {
+        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        {
+            var directory = new DirectoryInfo(start);
+            while (directory is not null)
+            {
+                yield return directory.FullName;
+                directory = directory.Parent;
+            }
+        }
+    }
 }

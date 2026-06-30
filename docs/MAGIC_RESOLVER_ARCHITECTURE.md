@@ -76,6 +76,49 @@ Each operation should eventually own or point to:
 This keeps magic extensible. Adding a new mechanic should mean adding one disciplined verb,
 not editing scattered prompt strings, validators, docs, and handlers by memory.
 
+Current implementation:
+
+- C# operation classes own validation and application.
+- `OperationRegistry.CreateDefault()` registers the code-owned operation set.
+- `OperationCardLoader` searches upward from the current/app base directory for
+  `content/operations` and attaches any matching data cards.
+- Built-in operation cards remain the fallback when content files are absent.
+- Data aliases from cards are exposed to provider context and can supplement resolver
+  aliases, but exact operation names stay authoritative.
+
+This means prompt guidance can improve without creating a second source of truth for
+mechanics.
+
+## Live Output Repair
+
+Live local models often return semantically useful JSON in a dialect that is not quite the
+schema. The parser should repair broad, reusable shape mistakes before validation, while
+the engine still decides legality.
+
+Current repairs include:
+
+- operation keys: `type`, `operation`, `op`, `kind`, `effectType`, `effect_type`, and
+  legacy `name` when no stronger operation key exists.
+- target aliases: `targetId` and `target_id` become `target`.
+- summon aliases: `entityName` and `entity_name` become `name`.
+- compact effect ids such as `status_webbed_target_id:soldier_1...` and
+  `message_text:...`.
+- nested `details` fields folded into the effect when they provide names or descriptions.
+- coordinate shorthand such as `{ "target": { "x": [4], "y": [5] } }` and
+  `"target/x/y": [[4,5], ...]`.
+- array-valued traits, so `trait: ["friendly"]` does not become `System.Object[]`.
+- simple cost strings and numbers such as `"10 mana"` or `10`.
+
+Status ids are canonicalized at the engine boundary. Flavor names that contain known
+status aliases, such as `webbed_blue_webbing`, inherit the registered mechanics while
+keeping the model's display phrase for messages.
+
+Malformed provider shapes are technical failures, not in-world spell rejections. For
+example, an unrecognized target object must not be stringified into a .NET type name and
+treated as a missing entity; it should fail visibly, preserve audit evidence, and leave the
+turn clock untouched. By contrast, a well-formed but impossible or overreaching spell may
+still be rejected in-world and consume the cast turn.
+
 ## Engine Pricing
 
 Full spell-budget auto-pricing is deferred.
@@ -159,4 +202,3 @@ Every live resolver call should record:
 - technical failure flag
 
 Audits are not optional polish. They are how the team improves the most important system.
-
