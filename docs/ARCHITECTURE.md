@@ -13,19 +13,17 @@ Godot application
   scenes, windows, input maps, renderer hosts, developer overlays
 
 Sorcerer.Core
-  game state, entities, components, actions, turns, combat, items, props, world rules
+  game state, entities, components, actions, turns, combat, items, props, world rules,
+  pending cast coordination, actor turns
 
 Sorcerer.Magic
-  operation contract, effect validation, effect application, costs, curses, promises
+  operation registry, effect validation/application, costs, transactions, audit records
 
 Sorcerer.Llm
-  live/mock providers, prompt assembly, JSON parsing, audit logs, background jobs
-
-Sorcerer.Presentation
-  read-only views consumed by GUI, CLI, tests, and agent observations
+  live/mock providers, prompt assembly, JSON parsing, audit sinks
 
 Sorcerer.Cli
-  separate headless JSON-first console executable over GameSession
+  separate headless JSON-first console executable over GameSession, spell eval harness
 
 Sorcerer.Tests
   unit, integration, CLI, and resolver-contract tests
@@ -89,15 +87,15 @@ Bad Godot responsibilities:
 
 `GameSession` is the public backend object used by all interfaces.
 
-Suggested shape:
+Current shape:
 
 ```csharp
 public sealed class GameSession
 {
-    public GameSession(GameSessionOptions options);
-    public ActionResult Execute(GameCommand command);
-    public GameView View(GameViewOptions? options = null);
-    public void PumpBackgroundJobs();
+    public GameSession(GameState state, IWildMagicController? magic = null);
+    public Task<ActionResult> ExecuteAsync(GameCommand command, CancellationToken cancellationToken = default);
+    public GameView View();
+    public AgentObservation Observation(bool debug = false);
 }
 ```
 
@@ -106,12 +104,17 @@ Responsibilities:
 - own `GameEngine`
 - own provider stack
 - route commands
-- coordinate foreground and background LLM calls
+- coordinate immediate and pending foreground casts
 - return `ActionResult`
-- expose read-only views
+- expose read-only views and agent observations
 - record audit/replay data where enabled
 
 `GameSession` should not render.
+
+Pending casts currently use a conservative seam: `begin_cast` records the cast text without
+mutating state, `await_cast` resolves it through the same magic controller, and
+`cancel_cast` clears it. This preserves the CLI submit/await contract while avoiding
+state races before the resolver/apply split becomes more granular.
 
 ## Command Layer
 
@@ -123,8 +126,11 @@ Examples:
 public abstract record GameCommand;
 public sealed record MoveCommand(Direction Direction) : GameCommand;
 public sealed record CastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
+public sealed record BeginCastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
+public sealed record AwaitCastCommand() : GameCommand;
+public sealed record CancelCastCommand() : GameCommand;
 public sealed record InspectCommand() : GameCommand;
-public sealed record TargetCommand(Point Position) : GameCommand;
+public sealed record TargetCommand(GridPoint Position) : GameCommand;
 public sealed record UseItemCommand(EntityId ItemOrStack) : GameCommand;
 ```
 
@@ -239,6 +245,12 @@ See [ENTITY_MODEL.md](ENTITY_MODEL.md).
 Engine methods should take actor/entity ids where practical. Avoid hard-coded player-only
 paths.
 
+The first actor scheduler is intentionally simple: after a consumed player turn, hostile AI
+actors either step toward the controlled body or attack if adjacent. Movement and attacks
+use the same engine mutation methods as player actions. Restraint statuses such as
+`bound`, `webbed`, `frozen`, `asleep`, and `petrified` suppress hostile AI turns while
+active.
+
 ## Magic System
 
 Wild magic resolves through:
@@ -271,6 +283,18 @@ Effects should be operations over engine primitives:
 - schedule event
 - create trigger
 - add curse
+
+The current implementation uses `IOperation` classes in `Sorcerer.Magic.Operations`.
+`OperationRegistry` maps canonical names and aliases to operation objects. Each operation
+owns validation and application, while `WildMagicController` owns provider calls,
+normalization, transaction boundaries, cost application, turn semantics, and audit logging.
+
+Important contracts:
+
+- provider/network/JSON technical failures do not consume a turn
+- parseable but invalid or unsupported effects are in-world rejections and consume the turn
+- accepted effects and costs apply transactionally
+- protected item costs fizzle before mutation unless explicitly allowed by the resolution
 
 See [WILD_MAGIC_CONTRACT.md](WILD_MAGIC_CONTRACT.md).
 
@@ -309,6 +333,8 @@ It should support:
 - scripted command mode
 - mock provider
 - live provider
+- pending cast submit/await/cancel
+- spell eval harness with `--eval`
 - compact map output
 - full agent observation output
 - perfect debug state when requested

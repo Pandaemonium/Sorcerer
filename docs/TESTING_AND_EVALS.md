@@ -50,6 +50,16 @@ Important flows:
 
 The resolver needs a growing spell corpus.
 
+Current command:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --eval
+```
+
+The current harness runs 25 prompts from fresh imperial encounters and checks required
+operation families such as `addStatus`, `transformEntity`, `summon`, `createTiles`,
+`scheduleEvent`, `changeFaction`, `areaDamage`, and intentional rejection.
+
 Each eval case should include:
 
 - spell text
@@ -72,6 +82,11 @@ Eval metrics should include:
 - cost types
 - severity
 - rough interestingness notes
+
+The current mock eval is deterministic and contract-focused. Live-provider evals should be
+expected to reveal normalization and prompt issues; when the output is semantically useful
+but shaped wrong, prefer improving parser normalization over adding prompt-specific
+fallbacks.
 
 Interestingness cannot be fully automated, but the harness can surface candidates for
 human review.
@@ -124,4 +139,3 @@ Developer tools should eventually support:
 - selected capability cards
 - prompt/context slices
 - replay or reproduction command, when available
-

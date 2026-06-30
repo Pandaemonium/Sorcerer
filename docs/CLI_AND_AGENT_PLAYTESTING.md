@@ -29,6 +29,16 @@ Agent-friendly commands and results are the primary contract:
 {"type":"cast","text":"bind the nearest enemy in blue glass"}
 ```
 
+Agents can also split casting into submit/resolve steps:
+
+```json
+{"type":"cast","text":"bind the nearest enemy in blue glass","await":false}
+{"type":"await_cast"}
+```
+
+While a cast is pending, turn-consuming commands are blocked until the agent sends
+`await_cast` or `cancel_cast`. The pending cast appears in `observation.pendingCast`.
+
 Every command should return an action result and a fresh observation:
 
 ```json
@@ -140,6 +150,9 @@ Core:
 - `target <x> <y>`
 - `untarget`
 - `cast <spell text>`
+- `begin_cast <spell text>`
+- `await_cast`
+- `cancel_cast`
 - `journal`
 - `help`
 - `quit`
@@ -170,6 +183,7 @@ Recommended CLI flags:
 --json
 --no-render
 --debug-state
+--eval
 --record <path>
 --max-turns <n>
 ```
@@ -177,6 +191,9 @@ Recommended CLI flags:
 `mock` should be fast and deterministic enough for frequent agent checks.
 
 Live providers should exercise the real resolver and write audit logs.
+
+Current implemented flags are `--provider`, `--host`, `--model`, `--json`,
+`--debug-state`, `--command`, and `--eval`.
 
 `auto` can be useful for casual play, but strict LLM evaluation should prefer an explicit
 live provider so provider failures are visible.
@@ -211,6 +228,16 @@ If replay becomes expensive, prefer preserving:
 over building a complicated rewind system early.
 
 ## Agent QA Harness
+
+The first spell eval harness is available:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --eval
+```
+
+It runs a fixed spell corpus from fresh imperial encounters and checks that the resolver
+selects the expected operation families. This is not a substitute for free-play agents,
+but it catches resolver drift quickly.
 
 Eventually, add an unattended playtest harness that:
 
