@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Sorcerer.Cli</RootNamespace>
+    <AssemblyName>Sorcerer.Cli</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Sorcerer.Core\Sorcerer.Core.csproj" />
+    <ProjectReference Include="..\Sorcerer.Magic\Sorcerer.Magic.csproj" />
+    <ProjectReference Include="..\Sorcerer.Llm\Sorcerer.Llm.csproj" />
+  </ItemGroup>
+</Project>
+

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "imperial_encounter",
+  "name": "Imperial Encounter",
+  "summary": "A tiny first fight against containment soldiers, with a few spell anchors.",
+  "width": 16,
+  "height": 10,
+  "entities": [
+    {
+      "id": "player",
+      "name": "You",
+      "position": { "x": 3, "y": 5 },
+      "glyph": "@",
+      "faction": "player"
+    },
+    {
+      "id": "soldier_1",
+      "name": "imperial containment soldier",
+      "position": { "x": 9, "y": 4 },
+      "glyph": "i",
+      "faction": "empire"
+    },
+    {
+      "id": "soldier_2",
+      "name": "imperial ward-captain",
+      "position": { "x": 11, "y": 6 },
+      "glyph": "i",
+      "faction": "empire"
+    },
+    {
+      "id": "brazier_1",
+      "name": "brass containment brazier",
+      "position": { "x": 6, "y": 4 },
+      "glyph": "&",
+      "tags": ["fire", "brass", "law", "imperial", "ritual"]
+    },
+    {
+      "id": "notice_1",
+      "name": "posted containment notice",
+      "position": { "x": 5, "y": 7 },
+      "glyph": "?",
+      "tags": ["paper", "law", "contract", "imperial", "readable"]
+    }
+  ]
+}
+

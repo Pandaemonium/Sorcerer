@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Sorcerer.Llm</RootNamespace>
+    <AssemblyName>Sorcerer.Llm</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Sorcerer.Core\Sorcerer.Core.csproj" />
+    <ProjectReference Include="..\Sorcerer.Magic\Sorcerer.Magic.csproj" />
+  </ItemGroup>
+</Project>
+

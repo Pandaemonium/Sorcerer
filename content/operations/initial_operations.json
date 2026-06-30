@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "operations": [
+    {
+      "name": "damage",
+      "summary": "Damage one target.",
+      "aliases": ["harm", "attack"]
+    },
+    {
+      "name": "heal",
+      "summary": "Restore HP.",
+      "aliases": ["restoreHealth"]
+    },
+    {
+      "name": "push",
+      "summary": "Move a target away.",
+      "aliases": []
+    },
+    {
+      "name": "pull",
+      "summary": "Move a target closer.",
+      "aliases": []
+    },
+    {
+      "name": "teleport",
+      "summary": "Move an entity to a tile.",
+      "aliases": []
+    },
+    {
+      "name": "addStatus",
+      "summary": "Apply a status.",
+      "aliases": ["status", "applyStatus"]
+    },
+    {
+      "name": "createTiles",
+      "summary": "Create or alter terrain.",
+      "aliases": ["createTile", "terrain"]
+    },
+    {
+      "name": "summon",
+      "summary": "Create a bounded entity.",
+      "aliases": ["createEntity"]
+    },
+    {
+      "name": "transformEntity",
+      "summary": "Transform an entity.",
+      "aliases": []
+    },
+    {
+      "name": "transformItem",
+      "summary": "Transform an item or fixture.",
+      "aliases": ["transformFixture"]
+    },
+    {
+      "name": "createPromise",
+      "summary": "Add a promise to the world.",
+      "aliases": ["promise", "prophecy"]
+    },
+    {
+      "name": "message",
+      "summary": "Add a message.",
+      "aliases": []
+    }
+  ]
+}
+
