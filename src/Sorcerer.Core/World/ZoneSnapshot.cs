@@ -11,6 +11,7 @@ public sealed record ZoneSnapshot(
     IReadOnlySet<GridPoint> BlockingTerrain,
     IReadOnlyDictionary<GridPoint, string> Terrain,
     IReadOnlyDictionary<GridPoint, int> TerrainExpirations,
+    IReadOnlyDictionary<GridPoint, TileFlow> TileFlows,
     IReadOnlyDictionary<string, IReadOnlySet<GridPoint>> ExploredBySoulId,
     IReadOnlyList<string> RoomProfiles,
     IReadOnlyList<string> PromiseHooks);

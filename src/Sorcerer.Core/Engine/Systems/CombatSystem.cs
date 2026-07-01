@@ -16,6 +16,33 @@ public sealed class CombatSystem
 
     public StateDelta DamageEntity(Entity target, int amount, string damageType)
     {
+        if (target.TryGet<DelayedDamageComponent>(out var buffer))
+        {
+            return BufferDelayedDamage(target, buffer, ScaleByResistance(target, amount, damageType), damageType);
+        }
+
+        return ApplyImmediateDamage(target, ScaleByResistance(target, amount, damageType), damageType);
+    }
+
+    /// <summary>
+    /// Releases a target's delayed-damage buffer as real, immediate damage (bypassing the buffer
+    /// check in <see cref="DamageEntity"/>, since the target still carries the component at the
+    /// moment of release) and clears the buffer. Called by
+    /// <see cref="Sorcerer.Core.Engine.Systems.TurnSystem"/> when the buffer's release turn is due.
+    /// </summary>
+    public StateDelta? ReleaseDelayedDamage(Entity target)
+    {
+        if (!target.TryGet<DelayedDamageComponent>(out var buffer))
+        {
+            return null;
+        }
+
+        target.Remove<DelayedDamageComponent>();
+        return buffer.Buffered > 0 ? ApplyImmediateDamage(target, buffer.Buffered, "delayed") : null;
+    }
+
+    private StateDelta ApplyImmediateDamage(Entity target, int amount, string damageType)
+    {
         var actor = target.Get<ActorComponent>();
         var actual = Math.Max(1, amount - actor.Defense);
         var updated = actor with { HitPoints = Math.Max(0, actor.HitPoints - actual) };
@@ -41,11 +68,60 @@ public sealed class CombatSystem
             });
     }
 
+    /// <summary>
+    /// Scales incoming damage by the target's <see cref="ResistanceComponent"/> before the flat
+    /// Defense reduction: resistance (0-95) reduces the amount, weakness (0-200) amplifies it.
+    /// </summary>
+    private static int ScaleByResistance(Entity target, int amount, string damageType)
+    {
+        if (!target.TryGet<ResistanceComponent>(out var resistance))
+        {
+            return amount;
+        }
+
+        var resistPercent = resistance.Resistances.TryGetValue(damageType, out var resist)
+            ? Math.Clamp(resist, 0, 95)
+            : 0;
+        var weakPercent = resistance.Weaknesses.TryGetValue(damageType, out var weak)
+            ? Math.Clamp(weak, 0, 200)
+            : 0;
+        var scaled = amount * (100 - resistPercent + weakPercent) / 100.0;
+        return Math.Max(0, (int)Math.Round(scaled, MidpointRounding.AwayFromZero));
+    }
+
+    /// <summary>
+    /// Captures incoming damage into the target's delay buffer instead of applying it; the buffer
+    /// releases as real damage at <see cref="DelayedDamageComponent.ReleaseTurn"/> via
+    /// <see cref="Sorcerer.Core.Engine.Systems.TurnSystem"/>.
+    /// </summary>
+    private StateDelta BufferDelayedDamage(Entity target, DelayedDamageComponent buffer, int amount, string damageType)
+    {
+        target.Set(buffer with { Buffered = buffer.Buffered + Math.Max(0, amount) });
+        var message = $"{Subject(target)} {Verb(target, "feel", "feels")} {damageType} damage gathering, held back for later.";
+        _state.AddMessage(message);
+        return new StateDelta(
+            "delayIncoming",
+            target.Id.Value,
+            message,
+            new Dictionary<string, object?> { ["buffered"] = buffer.Buffered + Math.Max(0, amount), ["damageType"] = damageType });
+    }
+
     public StateDelta AttackEntity(Entity attacker, Entity defender, string damageType = "physical")
     {
         var attackerActor = attacker.Get<ActorComponent>();
+        var scaledAmount = ScaleByResistance(defender, attackerActor.Attack, damageType);
+        if (defender.TryGet<DelayedDamageComponent>(out var buffer))
+        {
+            return BufferDelayedDamage(defender, buffer, scaledAmount, damageType);
+        }
+
+        return ApplyImmediateAttackDamage(attacker, defender, scaledAmount, damageType);
+    }
+
+    private StateDelta ApplyImmediateAttackDamage(Entity attacker, Entity defender, int amount, string damageType)
+    {
         var defenderActor = defender.Get<ActorComponent>();
-        var actual = Math.Max(1, attackerActor.Attack - defenderActor.Defense);
+        var actual = Math.Max(1, amount - defenderActor.Defense);
         var updated = defenderActor with { HitPoints = Math.Max(0, defenderActor.HitPoints - actual) };
         defender.Set(updated);
         if (!updated.Alive)

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "capabilities": [
+    {
+      "id": "divination",
+      "triggers": ["reveal", "sense", "detect", "locate", "find", "show me", "track", "mark the", "see through", "blind", "blinded", "scout", "vision", "glowing", "hidden", "invisible things"],
+      "indexLine": "divination - reveal, detect, or obscure sight and hidden things",
+      "effectTypes": [],
+      "requiredContext": [],
+      "promptBlock": "Reveal/detect/track spells are addStatus on the target with a status such as revealed; blinding or shrouding sight is addStatus on the caster or target with concealed or a display name like sight_shrouded. Prefer these over inventing a new mechanic.",
+      "examples": [],
+      "commonCombos": []
+    },
+    {
+      "id": "barrier_shaping",
+      "triggers": ["wall", "barrier", "line of", "in a line", "between me and", "path", "bridge", "corridor", "channel", "row of", "seal the", "block the", "cave in", "cave-in", "collapse the", "cone", "beam"],
+      "indexLine": "barrier_shaping - directional terrain: walls, lines, cones, and cave-ins",
+      "effectTypes": [],
+      "requiredContext": [],
+      "promptBlock": "Directional terrain (wall, line, barrier, between me and X, path, bridge, cone, beam) should be a single createTiles effect covering the whole shape, never a player-centered radius disc and never a list of individual coordinate effects.",
+      "examples": [],
+      "commonCombos": ["terrain_shape"]
+    }
+  ]
+}

@@ -4,6 +4,7 @@ using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Views;
+using Sorcerer.Core.World;
 using Sorcerer.Llm;
 using Sorcerer.Magic;
 using Sorcerer.Magic.Resolution;
@@ -658,6 +659,33 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
+    public async Task WalkingIntoTheZoneEdgeAutoTravels()
+    {
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(14, 5)));
+
+        var move = await session.ExecuteAsync(new MoveCommand(Direction.East));
+
+        Assert.True(move.Success);
+        Assert.Equal("travel", move.Action);
+        Assert.Equal("1,0", session.Engine.State.CurrentZoneId);
+    }
+
+    [Fact]
+    public async Task WalkingIntoACornerStaysBlockedInstead()
+    {
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(14, 1)));
+
+        var move = await session.ExecuteAsync(new MoveCommand(Direction.NorthEast));
+
+        Assert.False(move.Success);
+        Assert.Equal("0,0", session.Engine.State.CurrentZoneId);
+    }
+
+    [Fact]
     public async Task SeededWorldRollIsDeterministicAndVisible()
     {
         var first = await TravelWorldForSeed(7);
@@ -750,14 +778,19 @@ public sealed class GameSessionCharacterizationTests
         var session = CreateMockSession();
         DisableImperialAi(session);
         session.Engine.SetTerrain(new GridPoint(4, 4), "blue_moss");
+        var flowPoint = new GridPoint(4, 5);
+        session.Engine.State.TileFlows[flowPoint] = new TileFlow(1, 0, 99);
 
         await session.ExecuteAsync(new TravelCommand(Direction.East));
+        Assert.Empty(session.Engine.State.TileFlows);
+
         var generatedEntity = session.Engine.State.Entities.Values.First(entity => entity.Id.Value.StartsWith("zone_prop_", StringComparison.OrdinalIgnoreCase));
         generatedEntity.Name = "renamed reed shrine";
         await session.ExecuteAsync(new TravelCommand(Direction.West));
 
         Assert.Equal("0,0", session.Engine.State.CurrentZoneId);
         Assert.Equal("blue_moss", session.Engine.State.Terrain[new GridPoint(4, 4)]);
+        Assert.True(session.Engine.State.TileFlows.ContainsKey(flowPoint));
         var occupied = session.Engine.State.Entities.Values
             .Where(entity => entity.TryGet<PositionComponent>(out _)
                 && entity.TryGet<PhysicalComponent>(out var physical)

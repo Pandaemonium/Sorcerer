@@ -30,6 +30,262 @@ public sealed class MockSpellProvider : ISpellProvider
             return Rejected("The spell surges toward the marble heart of the empire, then breaks against distance and consequence.");
         }
 
+        if (HasAny(spell, "500 damage", "cost nothing at all"))
+        {
+            return AcceptedWithCosts(
+                "catastrophic",
+                "The wild magic answers with real force, but force this size always leaves a bill.",
+                new[] { new SpellCost("mana", new Dictionary<string, object?> { ["amount"] = 8 }) },
+                Effect("areaDamage", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["radius"] = 2,
+                    ["amount"] = 6 + MagnitudeDelta(lens),
+                    ["affects"] = "enemies",
+                    ["damageType"] = "wild",
+                }));
+        }
+
+        if (HasAny(spell, "make the cost free"))
+        {
+            return AcceptedWithCosts(
+                "moderate",
+                "The magic signs your name in the margin; wild magic never truly comes free.",
+                new[] { new SpellCost("curse", new Dictionary<string, object?> { ["name"] = "Wild Debt", ["description"] = original }) },
+                Effect("addCurse", new Dictionary<string, object?>
+                {
+                    ["name"] = "Wild Debt",
+                    ["description"] = original,
+                }));
+        }
+
+        if (HasAny(spell, "ring of dread", "circle of fear", "wave of dread"))
+        {
+            return Accepted(
+                "moderate",
+                "A ring of dread rolls outward from your feet.",
+                Effect("areaStatus", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["radius"] = 3,
+                    ["status"] = "frightened",
+                    ["duration"] = 3,
+                    ["affects"] = "enemies",
+                }));
+        }
+
+        if (HasAny(spell, "conjure a beast", "conjure a construct", "conjure a spirit", "conjure a servant"))
+        {
+            return Accepted(
+                "moderate",
+                "A shape pours out of the spell like spilled ink.",
+                Effect("conjureCreature", new Dictionary<string, object?>
+                {
+                    ["template"] = "small_beast",
+                    ["name"] = "conjured beast",
+                    ["faction"] = "player",
+                    ["count"] = 1,
+                }));
+        }
+
+        if (HasAny(spell, "conjure a", "manifest a", "materialize a"))
+        {
+            return Accepted(
+                "minor",
+                "Something small condenses out of intention.",
+                Effect("conjureItem", new Dictionary<string, object?>
+                {
+                    ["template"] = "glass_shard",
+                    ["name"] = "shard of frozen breath",
+                    ["count"] = 1,
+                }));
+        }
+
+        if (HasAny(spell, "harden", "resist"))
+        {
+            return Accepted(
+                "moderate",
+                "Scales harden against the coming flame.",
+                Effect("addResistance", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["damageType"] = "fire",
+                    ["amount"] = 40,
+                }));
+        }
+
+        if (HasAny(spell, "become vulnerable", "vulnerable to"))
+        {
+            return Accepted(
+                "moderate",
+                "A weakness opens like an old scar.",
+                Effect("addWeakness", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["damageType"] = "fire",
+                    ["amount"] = 50,
+                }));
+        }
+
+        if (HasAny(spell, "world flag", "flag the world", "mark the world with"))
+        {
+            return Accepted(
+                "moderate",
+                "The wild magic notes an unpaid price against the world itself.",
+                Effect("setFlag", new Dictionary<string, object?>
+                {
+                    ["flag"] = "owed_a_life",
+                    ["description"] = "a life is owed",
+                }));
+        }
+
+        if (HasAny(spell, "delay my wounds", "hold back my wounds", "capture incoming damage"))
+        {
+            return Accepted(
+                "moderate",
+                "Your wounds are held back for later.",
+                Effect("delayIncoming", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["turns"] = 3,
+                }));
+        }
+
+        if (HasAny(spell, "erase memory", "plant a memory", "forget you ever saw"))
+        {
+            return Accepted(
+                "major",
+                "A false memory settles into a stranger's mind.",
+                Effect("editMemory", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["op"] = "remove",
+                    ["subject"] = "the caster",
+                }));
+        }
+
+        if (HasAny(spell, "my blows poison"))
+        {
+            return Accepted(
+                "major",
+                "Your blade drinks venom.",
+                Effect("createPersistentEffect", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["hook"] = "on_strike",
+                    ["effectType"] = "addStatus",
+                    ["status"] = "poisoned",
+                    ["duration"] = 3,
+                }));
+        }
+
+        if (HasAny(spell, "thorns", "retaliate when struck"))
+        {
+            return Accepted(
+                "major",
+                "A ward of thorns settles over you.",
+                Effect("createPersistentEffect", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["hook"] = "on_hit",
+                    ["effectType"] = "damage",
+                    ["amount"] = 3,
+                    ["damageType"] = "thorns",
+                }));
+        }
+
+        if (HasAny(spell, "sympathetic link", "share their wounds", "bind our fates"))
+        {
+            return Accepted(
+                "major",
+                "Their wounds become one.",
+                Effect("createPersistentEffect", new Dictionary<string, object?>
+                {
+                    ["target"] = "soldier_1",
+                    ["hook"] = "on_hit",
+                    ["kind"] = "sympathetic_link",
+                    ["linkTarget"] = "soldier_2",
+                }));
+        }
+
+        if (HasAny(spell, "make them dance", "mimic my every step", "flee from me in terror"))
+        {
+            var tag = HasAny(spell, "dance") ? "dance" : HasAny(spell, "mimic") ? "mimic" : "coward";
+            return Accepted(
+                "moderate",
+                $"A compulsion to {tag.Replace('_', ' ')} takes hold.",
+                Effect("setBehavior", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["tag"] = tag,
+                }));
+        }
+
+        if (HasAny(spell, "conveyor", "gravity well", "current pulls"))
+        {
+            return Accepted(
+                "moderate",
+                "The ground begins to flow like a current.",
+                Effect("createFlow", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["radius"] = 1,
+                    ["dx"] = 1,
+                    ["dy"] = 0,
+                    ["duration"] = 5,
+                }));
+        }
+
+        if (HasAny(spell, "fill my pockets", "coins appear in my pocket"))
+        {
+            return Accepted(
+                "minor",
+                "Coins spill from nowhere into your pockets.",
+                Effect("modifyInventory", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["item"] = "gold",
+                    ["op"] = "add",
+                    ["amount"] = 5,
+                }));
+        }
+
+        if (HasAny(spell, "tag them as your quarry", "brand them with a tag"))
+        {
+            return Accepted(
+                "minor",
+                "A quiet mark settles onto them.",
+                Effect("addTag", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["tags"] = "quarry",
+                }));
+        }
+
+        if (HasAny(spell, "strip the tag", "remove the quarry mark"))
+        {
+            return Accepted(
+                "minor",
+                "The mark lifts away.",
+                Effect("removeTag", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["tags"] = "quarry",
+                }));
+        }
+
+        if (HasAny(spell, "rush the poison", "accelerate the burning", "hurry the venom"))
+        {
+            return Accepted(
+                "moderate",
+                "The poison rushes to its conclusion all at once.",
+                Effect("accelerateStatus", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["status"] = "poisoned",
+                }));
+        }
+
         if (HasAny(spell, "in three turns", "in 3 turns", "debt collector", "arrives", "tomorrow"))
         {
             return Accepted(
@@ -376,6 +632,19 @@ public sealed class MockSpellProvider : ISpellProvider
             OutcomeText: outcome,
             Effects: effects.Where(effect => effect is not null).Cast<SpellEffect>().ToArray(),
             Costs: Array.Empty<SpellCost>(),
+            RejectedReason: null);
+
+    private static SpellResolution AcceptedWithCosts(
+        string severity,
+        string outcome,
+        IReadOnlyList<SpellCost> costs,
+        params SpellEffect?[] effects) =>
+        new(
+            Accepted: true,
+            Severity: severity,
+            OutcomeText: outcome,
+            Effects: effects.Where(effect => effect is not null).Cast<SpellEffect>().ToArray(),
+            Costs: costs,
             RejectedReason: null);
 
     private static SpellResolution Rejected(string reason) =>

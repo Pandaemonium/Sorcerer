@@ -16,19 +16,35 @@ public static class SpellCostApplier
             switch (cost.Type)
             {
                 case "mana":
-                    AddIfPositive(deltas, SpellValidator.ReadInt(cost.Fields, "amount", 1), amount => SpendMana(engine, amount));
+                    if (BitingAmount(cost.Fields, "amount", 1) is { } manaAmount)
+                    {
+                        deltas.Add(SpendMana(engine, manaAmount));
+                    }
+
                     break;
                 case "health":
                 case "hp":
-                    AddIfPositive(deltas, SpellValidator.ReadInt(cost.Fields, "amount", 1), amount => SpendHealth(engine, amount, max: false));
+                    if (BitingAmount(cost.Fields, "amount", 1) is { } healthAmount)
+                    {
+                        deltas.Add(SpendHealth(engine, healthAmount, max: false));
+                    }
+
                     break;
                 case "maxHealth":
                 case "max_health":
-                    AddIfPositive(deltas, SpellValidator.ReadInt(cost.Fields, "amount", 1), amount => SpendHealth(engine, amount, max: true));
+                    if (BitingAmount(cost.Fields, "amount", 1) is { } maxHealthAmount)
+                    {
+                        deltas.Add(SpendHealth(engine, maxHealthAmount, max: true));
+                    }
+
                     break;
                 case "maxMana":
                 case "max_mana":
-                    AddIfPositive(deltas, SpellValidator.ReadInt(cost.Fields, "amount", 1), amount => SpendMaxMana(engine, amount));
+                    if (BitingAmount(cost.Fields, "amount", 1) is { } maxManaAmount)
+                    {
+                        deltas.Add(SpendMaxMana(engine, maxManaAmount));
+                    }
+
                     break;
                 case "item":
                     deltas.Add(SpendItem(engine, cost));
@@ -45,12 +61,18 @@ public static class SpellCostApplier
         return deltas;
     }
 
-    private static void AddIfPositive(List<StateDelta> deltas, int amount, Func<int, StateDelta> apply)
+    /// <summary>
+    /// A specified cost must usually bite: a negative or unparseable amount floors to at least 1
+    /// instead of silently voiding the cost (mirrors Wild Magic's <c>_positive_cost_amount</c>
+    /// discipline). An explicit <c>0</c> is still honored as the model's deliberate signal that
+    /// this cost is free (returns null, meaning "apply nothing") rather than being corrected —
+    /// that reading is the established Sorcerer contract and only negative/missing amounts are a
+    /// clear model mistake worth overriding.
+    /// </summary>
+    private static int? BitingAmount(IReadOnlyDictionary<string, object?> fields, string key, int fallback)
     {
-        if (amount > 0)
-        {
-            deltas.Add(apply(amount));
-        }
+        var value = SpellValidator.ReadInt(fields, key, fallback);
+        return value == 0 ? null : Math.Max(1, Math.Abs(value));
     }
 
     private static StateDelta SpendMana(GameEngine engine, int amount)
@@ -144,9 +166,26 @@ public static class SpellCostApplier
     {
         var name = SpellValidator.ReadString(cost.Fields, "name", SpellValidator.ReadString(cost.Fields, "id", "Wild Debt"));
         var text = SpellValidator.ReadString(cost.Fields, "description", name);
+        var existing = engine.State.PromiseLedger.FindActive("debt", text, boundTargetId: null);
+        if (existing is not null)
+        {
+            var stacked = engine.State.PromiseLedger.Stack(existing.Id);
+            var stackedMessage = $"Cost: {name} deepens ({stacked.Stacks} stacks).";
+            engine.AddMessage(stackedMessage);
+            return new StateDelta(
+                "cost:curse",
+                stacked.Id,
+                stackedMessage,
+                new Dictionary<string, object?> { ["name"] = name, ["promiseId"] = stacked.Id, ["stacks"] = stacked.Stacks });
+        }
+
         var promise = engine.State.PromiseLedger.Add("debt", text, playerVisible: true);
         var message = $"Cost: {name}.";
         engine.AddMessage(message);
-        return new StateDelta("cost:curse", promise.Id, message, new Dictionary<string, object?> { ["name"] = name, ["promiseId"] = promise.Id });
+        return new StateDelta(
+            "cost:curse",
+            promise.Id,
+            message,
+            new Dictionary<string, object?> { ["name"] = name, ["promiseId"] = promise.Id, ["stacks"] = promise.Stacks });
     }
 }

@@ -58,26 +58,10 @@ public sealed class AreaDamageOperation : OperationBase
                 && entity.TryGet<ActorComponent>(out var actor)
                 && actor.Alive
                 && GameEngineDistance(position.Position, origin) <= radius)
-            .Where(entity => Affects(context, entity, affects))
+            .Where(entity => AffectsTarget(context, entity, affects))
             .Take(context.GroupTargetCap)
             .Select(entity => context.Engine.DamageEntity(entity, amount, damageType))
             .ToArray();
-    }
-
-    private static bool Affects(EffectContext context, Entity entity, string affects)
-    {
-        if (entity.Id == context.Caster.Id
-            && affects.Equals("enemies", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return affects.Trim().ToLowerInvariant() switch
-        {
-            "all" or "everyone" => true,
-            "allies" or "friendly" => !context.Engine.IsHostile(context.Caster, entity),
-            _ => context.Engine.IsHostile(context.Caster, entity),
-        };
     }
 }
 
@@ -867,6 +851,18 @@ public sealed class AddCurseOperation : OperationBase
         var text = Text(effect, "description", Text(effect, "name", "Wild Debt"));
         var anchor = ResolveTargets(context, effect, "selected_target").FirstOrDefault();
         var template = CurseTemplate(effect, text);
+        var existing = context.Engine.State.PromiseLedger.FindActive("curse", text, anchor?.Id.Value);
+        if (existing is not null)
+        {
+            var stacked = context.Engine.State.PromiseLedger.Stack(existing.Id);
+            var message = $"{text} deepens ({stacked.Stacks} stacks).";
+            context.Engine.AddMessage(message);
+            return new[]
+            {
+                new StateDelta("addCurse", stacked.Id, message, new Dictionary<string, object?> { ["stacks"] = stacked.Stacks }),
+            };
+        }
+
         return new[] { context.Engine.AddPromise("curse", text, anchor, template) };
     }
 
@@ -1164,6 +1160,36 @@ internal static class OperationHelpers
 
     public static int GameEngineDistance(GridPoint a, GridPoint b) =>
         Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
+
+    /// <summary>Second-person-aware subject for a message, matching the convention already used
+    /// by CombatSystem/EffectSystem: "You" for the controlled entity, its name otherwise.</summary>
+    public static string Subject(EffectContext context, Entity entity) =>
+        entity.Id == context.Engine.State.ControlledEntityId ? "You" : entity.Name;
+
+    /// <summary>Second-person-aware verb conjugation to pair with <see cref="Subject"/>.</summary>
+    public static string Verb(EffectContext context, Entity entity, string secondPerson, string thirdPerson) =>
+        entity.Id == context.Engine.State.ControlledEntityId ? secondPerson : thirdPerson;
+
+    /// <summary>Second-person-aware possessive for sentence-initial use: "Your" for the
+    /// controlled entity, "Name's" otherwise.</summary>
+    public static string Possessive(EffectContext context, Entity entity) =>
+        entity.Id == context.Engine.State.ControlledEntityId ? "Your" : $"{entity.Name}'s";
+
+    public static bool AffectsTarget(EffectContext context, Entity entity, string affects)
+    {
+        if (entity.Id == context.Caster.Id
+            && affects.Equals("enemies", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return affects.Trim().ToLowerInvariant() switch
+        {
+            "all" or "everyone" => true,
+            "allies" or "friendly" => !context.Engine.IsHostile(context.Caster, entity),
+            _ => context.Engine.IsHostile(context.Caster, entity),
+        };
+    }
 
     private static bool TryPoint(SpellEffect effect, out GridPoint point)
     {

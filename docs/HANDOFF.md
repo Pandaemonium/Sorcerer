@@ -1,5 +1,28 @@
 # Handoff
 
+## Latest Sprint: Wild Magic Spell Resolver Port
+
+This section is the most current summary; the rest of this file predates it and covers an
+earlier sprint (see docs/JOURNAL.md for the full chronological record, including later sprints
+this file was never updated for, such as persistence/factions/dialogue/procedural world).
+
+Ported the parent Wild Magic prototype's resolver mechanics into Sorcerer's C# engine:
+
+- The capability-card system (`CapabilityRegistry`) is now actually wired into
+  `WildMagicController`/`OllamaSpellProvider` instead of being dead code, with ranked/combo/capped
+  routing and data-loadable cards under `content/capabilities/`.
+- ~15 new operations across three cost tiers: `areaStatus`, `modifyInventory`, `addTag`/
+  `removeTag`, `accelerateStatus`, `conjureItem`, `conjureCreature`, `addResistance`/
+  `addWeakness`, `setFlag` (+ auto Wild Debt), `delayIncoming`, `editMemory`,
+  `createPersistentEffect` (+ sympathetic links), `setBehavior`, `createFlow`.
+- Cost enforcement ("costs must bite" on negative/missing amounts) and curse stacking.
+- `SpellResolutionJson` gained four more live-model repairs (wrapper unwrap, element-damage
+  aliasing, cost/effect rescue, junk outcome-text stripping).
+- `SpellEvalHarness` grew from 26 to 44 prompts with `common`/`creative`/`exploit` categories and
+  exploit-leak/hallucinated-target detection.
+- Full detail, file list, and design decisions are in the "Wild Magic Spell Resolver Port" section
+  of docs/JOURNAL.md. Test suite: 144 tests (up from 118). Eval: 44/44 (up from 26/26).
+
 ## Current Branch
 
 `overnight-cli-magic-slice`

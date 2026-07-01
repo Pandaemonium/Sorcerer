@@ -13,38 +13,25 @@ namespace Sorcerer.Godot;
 
 public partial class Main : Control
 {
-    private static readonly Color Background = new("101216");
-    private static readonly Color Panel = new("171b22");
-    private static readonly Color PanelAlt = new("1e242d");
-    private static readonly Color Border = new("33404d");
-    private static readonly Color Text = new("dce6ec");
-    private static readonly Color Muted = new("87929d");
-    private static readonly Color Wild = new("85f0c5");
-    private static readonly Color Empire = new("e6d8c5");
-    private static readonly Color Warning = new("ffb86b");
-    private static readonly Color Danger = new("ff6b6b");
-    private static readonly Color Focus = new("8ab4ff");
-
     private readonly List<Control> _busyControls = new();
     private Button[,] _cells = new Button[0, 0];
 
     private GameSession _session = null!;
     private GridContainer _mapGrid = null!;
-    private Label _title = null!;
+    private Control _escMenu = null!;
+    private PanelContainer _providerStatusPanel = null!;
     private Label _providerStatus = null!;
-    private RichTextLabel _status = null!;
-    private RichTextLabel _world = null!;
+    private Label _statusLine = null!;
+    private ProgressBar _hpBar = null!;
+    private Label _hpLabel = null!;
+    private HFlowContainer _statusChips = null!;
     private RichTextLabel _entities = null!;
     private RichTextLabel _inventory = null!;
-    private RichTextLabel _promises = null!;
     private RichTextLabel _log = null!;
     private LineEdit _spellLine = null!;
     private LineEdit _commandLine = null!;
     private LineEdit _model = null!;
     private Button _cast = null!;
-    private Button _beginCast = null!;
-    private Button _awaitCast = null!;
-    private Button _cancelCast = null!;
 
     private ActionResult? _lastResult;
     private string? _lastError;
@@ -52,14 +39,35 @@ public partial class Main : Control
 
     public override void _Ready()
     {
+        Theme = UiTheme.Build();
         BuildUi();
-        StartNewRun();
+        if (SessionHost.Session is not null)
+        {
+            _session = SessionHost.Session;
+        }
+        else
+        {
+            StartNewRun();
+        }
+
         RefreshView();
     }
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (@event is not InputEventKey key || !key.Pressed || key.Echo || _busy)
+        if (@event is not InputEventKey key || !key.Pressed || key.Echo)
+        {
+            return;
+        }
+
+        if (key.Keycode == Key.Escape)
+        {
+            ToggleEscMenu();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        if (_escMenu.Visible || _busy)
         {
             return;
         }
@@ -88,13 +96,18 @@ public partial class Main : Control
 
     private void BuildUi()
     {
-        AddChild(FullRect(new ColorRect { Color = Background }));
+        AddChild(FullRect(new TextureRect
+        {
+            Texture = UiTheme.BackgroundGradient(),
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+        }));
 
         var outer = FullRect(new MarginContainer());
-        outer.AddThemeConstantOverride("margin_left", 14);
-        outer.AddThemeConstantOverride("margin_top", 14);
-        outer.AddThemeConstantOverride("margin_right", 14);
-        outer.AddThemeConstantOverride("margin_bottom", 14);
+        outer.AddThemeConstantOverride("margin_left", UiTheme.SpaceLg);
+        outer.AddThemeConstantOverride("margin_top", UiTheme.SpaceLg);
+        outer.AddThemeConstantOverride("margin_right", UiTheme.SpaceLg);
+        outer.AddThemeConstantOverride("margin_bottom", UiTheme.SpaceLg);
         AddChild(outer);
 
         var root = new VBoxContainer
@@ -102,51 +115,66 @@ public partial class Main : Control
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
         };
-        root.AddThemeConstantOverride("separation", 10);
+        root.AddThemeConstantOverride("separation", UiTheme.SpaceMd);
         outer.AddChild(root);
-
-        root.AddChild(BuildToolbar());
 
         var body = new HBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
         };
-        body.AddThemeConstantOverride("separation", 10);
+        body.AddThemeConstantOverride("separation", UiTheme.SpaceMd);
         root.AddChild(body);
 
         body.AddChild(BuildMapPanel());
         body.AddChild(BuildSidePanel());
         root.AddChild(BuildCommandPanel());
+
+        AddChild(BuildEscMenu());
     }
 
-    private Control BuildToolbar()
+    private Control BuildEscMenu()
     {
-        var bar = PanelBox();
-        var row = new HBoxContainer
+        var overlay = FullRect(new ColorRect
         {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-        };
-        row.AddThemeConstantOverride("separation", 10);
-        bar.AddChild(row);
+            Color = new Color(0f, 0f, 0f, 0.55f),
+            Visible = false,
+        });
+        _escMenu = overlay;
 
-        _title = new Label
+        var center = FullRect(new CenterContainer());
+        overlay.AddChild(center);
+
+        var card = PanelBox();
+        center.AddChild(card);
+
+        var stack = new VBoxContainer { CustomMinimumSize = new Vector2(360, 0) };
+        stack.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        card.AddChild(stack);
+
+        var title = new Label { Text = "Sorcerer" };
+        title.AddThemeFontSizeOverride("font_size", 20);
+        title.AddThemeColorOverride("font_color", UiTheme.Wild);
+        stack.AddChild(title);
+
+        var providerRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        providerRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        stack.AddChild(providerRow);
+
+        _providerStatusPanel = new PanelContainer { ThemeTypeVariation = "Pill" };
+        _providerStatus = new Label
         {
-            Text = "Sorcerer",
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            Text = "",
+            CustomMinimumSize = new Vector2(120, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        _title.AddThemeFontSizeOverride("font_size", 22);
-        _title.AddThemeColorOverride("font_color", Wild);
-        row.AddChild(_title);
-
-        _providerStatus = SmallLabel("");
-        _providerStatus.CustomMinimumSize = new Vector2(170, 0);
-        row.AddChild(_providerStatus);
+        _providerStatusPanel.AddChild(_providerStatus);
+        providerRow.AddChild(_providerStatusPanel);
 
         var providerLabel = SmallLabel("Ollama");
-        providerLabel.CustomMinimumSize = new Vector2(78, 34);
-        row.AddChild(providerLabel);
+        providerLabel.CustomMinimumSize = new Vector2(56, 34);
+        providerRow.AddChild(providerLabel);
 
         _model = new LineEdit
         {
@@ -154,10 +182,15 @@ public partial class Main : Control
                 ?? System.Environment.GetEnvironmentVariable("WILDMAGIC_MODEL")
                 ?? "qwen3.5:9b-cpu",
             PlaceholderText = "model",
-            CustomMinimumSize = new Vector2(180, 34),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 34),
         };
-        row.AddChild(_model);
+        providerRow.AddChild(_model);
         _busyControls.Add(_model);
+
+        var runRow = new HBoxContainer();
+        runRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        stack.AddChild(runRow);
 
         var newRun = SmallButton("New Run");
         newRun.Pressed += () =>
@@ -165,46 +198,69 @@ public partial class Main : Control
             StartNewRun();
             RefreshView();
         };
-        row.AddChild(newRun);
+        runRow.AddChild(newRun);
         _busyControls.Add(newRun);
 
         var save = SmallButton("Save");
         save.Pressed += () => _ = ExecuteAsync(new SaveCommand(Path.Combine("runs", "quicksave.json")));
-        row.AddChild(save);
+        runRow.AddChild(save);
         _busyControls.Add(save);
 
         var load = SmallButton("Load");
         load.Pressed += () => _ = ExecuteAsync(new LoadCommand(Path.Combine("runs", "quicksave.json")));
-        row.AddChild(load);
+        runRow.AddChild(load);
         _busyControls.Add(load);
 
-        return bar;
+        var promises = SmallButton("Promises");
+        promises.Pressed += () =>
+        {
+            SessionHost.Session = _session;
+            GetTree().ChangeSceneToFile("res://Scenes/Promises.tscn");
+        };
+        stack.AddChild(promises);
+
+        var resume = SmallButton("Resume");
+        resume.Pressed += CloseEscMenu;
+        stack.AddChild(resume);
+
+        return overlay;
     }
+
+    private void ToggleEscMenu()
+    {
+        _escMenu.Visible = !_escMenu.Visible;
+        if (_escMenu.Visible)
+        {
+            RenderSidebars(_session.View());
+        }
+    }
+
+    private void CloseEscMenu() => _escMenu.Visible = false;
 
     private Control BuildMapPanel()
     {
         var panel = PanelBox();
         panel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         panel.SizeFlagsVertical = SizeFlags.ExpandFill;
+        panel.SizeFlagsStretchRatio = 2.4f;
 
         var stack = new VBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
         };
-        stack.AddThemeConstantOverride("separation", 8);
+        stack.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         panel.AddChild(stack);
 
         var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
+        header.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         stack.AddChild(header);
         var mapTitle = new Label
         {
             Text = "Encounter",
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            ThemeTypeVariation = "SectionHeader",
         };
-        mapTitle.AddThemeColorOverride("font_color", Text);
-        mapTitle.AddThemeFontSizeOverride("font_size", 17);
         header.AddChild(mapTitle);
 
         var wait = SmallButton("Wait");
@@ -217,6 +273,14 @@ public partial class Main : Control
         header.AddChild(inspect);
         _busyControls.Add(inspect);
 
+        var mapFrame = new PanelContainer
+        {
+            ThemeTypeVariation = "MapFrame",
+            SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
+        stack.AddChild(mapFrame);
+
         _mapGrid = new GridContainer
         {
             SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
@@ -224,13 +288,13 @@ public partial class Main : Control
         };
         _mapGrid.AddThemeConstantOverride("h_separation", 2);
         _mapGrid.AddThemeConstantOverride("v_separation", 2);
-        stack.AddChild(_mapGrid);
+        mapFrame.AddChild(_mapGrid);
 
         var dpad = new HBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
         };
-        dpad.AddThemeConstantOverride("separation", 6);
+        dpad.AddThemeConstantOverride("separation", UiTheme.SpaceXs);
         stack.AddChild(dpad);
 
         AddMoveButton(dpad, "NW", Direction.NorthWest);
@@ -248,34 +312,68 @@ public partial class Main : Control
     private Control BuildSidePanel()
     {
         var panel = PanelBox();
-        panel.CustomMinimumSize = new Vector2(380, 0);
+        panel.CustomMinimumSize = new Vector2(300, 0);
         panel.SizeFlagsVertical = SizeFlags.ExpandFill;
+        panel.SizeFlagsStretchRatio = 1f;
 
         var stack = new VBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
         };
-        stack.AddThemeConstantOverride("separation", 8);
+        stack.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         panel.AddChild(stack);
 
-        _status = Readout(120);
-        _world = Readout(90);
+        stack.AddChild(Section("State", BuildStateHud(), UiTheme.Wild));
+
         _entities = Readout(150);
-        _inventory = Readout(145);
-        _promises = Readout(120);
+        stack.AddChild(Section("Visible", _entities, UiTheme.Danger));
+
+        _inventory = Readout(50);
+        stack.AddChild(Section("Inventory", _inventory, UiTheme.Focus));
+
         _log = Readout(200);
         _log.ScrollFollowing = true;
         _log.SizeFlagsVertical = SizeFlags.ExpandFill;
-
-        stack.AddChild(Section("State", _status));
-        stack.AddChild(Section("World", _world));
-        stack.AddChild(Section("Visible", _entities));
-        stack.AddChild(Section("Inventory", _inventory));
-        stack.AddChild(Section("Promises", _promises));
-        stack.AddChild(Section("Log", _log, expand: true));
+        stack.AddChild(Section("Log", _log, UiTheme.Muted, expand: true));
 
         return panel;
+    }
+
+    private Control BuildStateHud()
+    {
+        var box = new VBoxContainer();
+        box.AddThemeConstantOverride("separation", UiTheme.SpaceXs);
+
+        _statusLine = new Label();
+        _statusLine.AddThemeColorOverride("font_color", UiTheme.Text);
+        box.AddChild(_statusLine);
+
+        var hpRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        hpRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        box.AddChild(hpRow);
+
+        _hpBar = new ProgressBar
+        {
+            MinValue = 0,
+            MaxValue = 1,
+            Step = 0.01,
+            ShowPercentage = false,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 16),
+        };
+        hpRow.AddChild(_hpBar);
+
+        _hpLabel = SmallLabel("");
+        _hpLabel.CustomMinimumSize = new Vector2(60, 0);
+        hpRow.AddChild(_hpLabel);
+
+        _statusChips = new HFlowContainer();
+        _statusChips.AddThemeConstantOverride("h_separation", UiTheme.SpaceXs);
+        _statusChips.AddThemeConstantOverride("v_separation", UiTheme.SpaceXs);
+        box.AddChild(_statusChips);
+
+        return box;
     }
 
     private Control BuildCommandPanel()
@@ -285,21 +383,21 @@ public partial class Main : Control
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };
-        stack.AddThemeConstantOverride("separation", 8);
+        stack.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         panel.AddChild(stack);
 
         var spellRow = new HBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };
-        spellRow.AddThemeConstantOverride("separation", 8);
+        spellRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         stack.AddChild(spellRow);
 
         spellRow.AddChild(SmallLabel("Spell"));
         _spellLine = new LineEdit
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            PlaceholderText = "bind the nearest enemy in sticky blue webbing",
+            PlaceholderText = "speak your spell...",
         };
         _spellLine.TextSubmitted += text => _ = CastSpellAsync(text);
         spellRow.AddChild(_spellLine);
@@ -308,42 +406,13 @@ public partial class Main : Control
         _cast.Pressed += () => _ = CastSpellAsync(_spellLine.Text);
         spellRow.AddChild(_cast);
 
-        _beginCast = SmallButton("Begin");
-        _beginCast.Pressed += () => _ = BeginCastAsync(_spellLine.Text);
-        spellRow.AddChild(_beginCast);
-
-        _awaitCast = SmallButton("Await");
-        _awaitCast.Pressed += () => _ = ExecuteAsync(new AwaitCastCommand());
-        spellRow.AddChild(_awaitCast);
-
-        _cancelCast = SmallButton("Cancel");
-        _cancelCast.Pressed += () => _ = ExecuteAsync(new CancelCastCommand());
-        spellRow.AddChild(_cancelCast);
-
-        _busyControls.AddRange(new Control[] { _spellLine, _cast, _beginCast });
-
-        var quickRow = new HBoxContainer();
-        quickRow.AddThemeConstantOverride("separation", 8);
-        stack.AddChild(quickRow);
-        AddQuickSpell(quickRow, "Web", "bind the nearest enemy in sticky blue webbing");
-        AddQuickSpell(quickRow, "Moth", "summon a friendly brass moth that bites enemies");
-        AddQuickSpell(quickRow, "Ice", "turn the floor between me and the enemy into slick ice");
-        AddQuickSpell(quickRow, "Prophecy", "promise that the room remembers my name");
-
-        var travelRow = new HBoxContainer();
-        travelRow.AddThemeConstantOverride("separation", 8);
-        stack.AddChild(travelRow);
-        travelRow.AddChild(SmallLabel("Travel"));
-        AddTravelButton(travelRow, "N", Direction.North);
-        AddTravelButton(travelRow, "E", Direction.East);
-        AddTravelButton(travelRow, "S", Direction.South);
-        AddTravelButton(travelRow, "W", Direction.West);
+        _busyControls.AddRange(new Control[] { _spellLine, _cast });
 
         var commandRow = new HBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };
-        commandRow.AddThemeConstantOverride("separation", 8);
+        commandRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         stack.AddChild(commandRow);
         commandRow.AddChild(SmallLabel("Command"));
 
@@ -392,17 +461,9 @@ public partial class Main : Control
             return;
         }
 
-        await ExecuteAsync(new CastCommand(text.Trim(), CastPerformance.Neutral));
-    }
-
-    private async Task BeginCastAsync(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return;
-        }
-
-        await ExecuteAsync(new BeginCastCommand(text.Trim(), CastPerformance.Neutral));
+        var trimmed = text.Trim();
+        _spellLine.Text = "";
+        await ExecuteAsync(new CastCommand(trimmed, CastPerformance.Neutral));
     }
 
     private async Task SubmitCommandAsync(string text)
@@ -449,11 +510,11 @@ public partial class Main : Control
     private void RefreshView()
     {
         var view = _session.View();
-        var observation = _session.Observation(debug: false);
         EnsureMapCells(view);
         RenderMap(view);
-        RenderSidebars(view, observation.PendingCast);
+        RenderSidebars(view);
         SetBusy(_busy);
+        SessionHost.Session = _session;
     }
 
     private void RenderMap(GameView view)
@@ -489,43 +550,61 @@ public partial class Main : Control
         }
     }
 
-    private void RenderSidebars(GameView view, PendingCastView? pendingCast)
+    private void RenderSidebars(GameView view)
     {
         var player = view.Entities.FirstOrDefault(entity => entity.Id == view.ControlledEntityId);
-        var hp = player?.HitPoints is null || player.MaxHitPoints is null
-            ? "HP ?"
-            : $"HP {player.HitPoints}/{player.MaxHitPoints}";
-        var statuses = view.Statuses is { Count: > 0 }
-            ? string.Join(", ", view.Statuses.Select(status => status.DisplayName))
-            : "none";
-        var character = view.Character is null
-            ? "Stats ?"
-            : $"{view.Character.OriginName}\nVIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure}";
-        var selected = view.SelectedTarget is null
-            ? "none"
-            : $"{view.SelectedTarget.Value.X},{view.SelectedTarget.Value.Y}";
-        var pending = pendingCast is null
-            ? "none"
-            : $"{pendingCast.Id}: {pendingCast.Text}";
-        _status.Text = $"Turn {view.Turn}\n{character}\n{hp}\nTarget {selected}\nPending {pending}\nStatuses {statuses}";
-        _world.Text = view.World is null
-            ? "unknown"
-            : string.Join(
-                "\n",
-                new[]
-                {
-                    $"{view.World.RegionName} ({view.World.CurrentZoneId})",
-                    $"{view.World.RealmStatus}; {view.World.RealmRuler}",
-                    $"tradition {view.World.TraditionId}",
-                    $"imperial {view.World.ImperialPresence} wild {view.World.Wildness}",
-                }.Concat(view.World.Affordances.Select(affordance => affordance.Id)));
-        _awaitCast.Disabled = _busy || pendingCast is null;
-        _cancelCast.Disabled = _busy || pendingCast is null;
+        Color hpColor;
+        double hpFraction = 0;
+        if (player?.HitPoints is null || player.MaxHitPoints is null || player.MaxHitPoints == 0)
+        {
+            hpColor = UiTheme.Muted;
+        }
+        else
+        {
+            hpFraction = (double)player.HitPoints.Value / player.MaxHitPoints.Value;
+            hpColor = hpFraction switch
+            {
+                >= 0.6 => UiTheme.Wild,
+                >= 0.3 => UiTheme.Warning,
+                _ => UiTheme.Danger,
+            };
+        }
 
-        _providerStatus.Text = _busy
-            ? "resolving..."
-            : "ollama ready";
-        _providerStatus.AddThemeColorOverride("font_color", _busy ? Warning : Muted);
+        _hpBar.Value = hpFraction;
+        _hpBar.AddThemeStyleboxOverride(
+            "fill",
+            UiTheme.Box(hpColor, hpColor, borderWidth: 0, radius: 6, shadow: false, marginX: 0, marginY: 0));
+        _hpLabel.Text = player?.HitPoints is null || player.MaxHitPoints is null
+            ? "HP ?"
+            : $"{player.HitPoints}/{player.MaxHitPoints}";
+        _hpLabel.AddThemeColorOverride("font_color", hpColor);
+
+        var origin = view.Character?.OriginName;
+        _statusLine.Text = view.Character is null
+            ? $"Turn {view.Turn}"
+            : $"Turn {view.Turn} — {origin} (VIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure})";
+
+        foreach (var child in _statusChips.GetChildren().ToArray())
+        {
+            child.QueueFree();
+        }
+
+        foreach (var status in view.Statuses ?? Array.Empty<StatusCard>())
+        {
+            var chip = new PanelContainer();
+            chip.AddThemeStyleboxOverride("panel", UiTheme.PillBox(UiTheme.Focus.Darkened(0.3f)));
+            var label = new Label { Text = status.DisplayName };
+            label.AddThemeFontSizeOverride("font_size", 11);
+            label.AddThemeColorOverride("font_color", UiTheme.Text);
+            chip.AddChild(label);
+            _statusChips.AddChild(chip);
+        }
+
+        var errored = !_busy && _lastError is not null;
+        _providerStatus.Text = _busy ? "resolving..." : errored ? "error" : "ollama ready";
+        var pillColor = _busy ? UiTheme.Warning : errored ? UiTheme.Danger : UiTheme.Muted;
+        _providerStatus.AddThemeColorOverride("font_color", UiTheme.Background);
+        _providerStatusPanel.AddThemeStyleboxOverride("panel", UiTheme.PillBox(pillColor));
 
         _entities.Text = string.Join(
             "\n",
@@ -536,28 +615,25 @@ public partial class Main : Control
                 .Select(FormatEntity));
 
         _inventory.Text = string.Join(
-            "\n",
+            "  ·  ",
             (view.Inventory ?? Array.Empty<ItemCard>())
                 .OrderBy(item => item.Name)
-                .Select(item => $"{item.Name} x{item.Quantity}{(item.Protected ? " protected" : "")}"));
-
-        _promises.Text = view.Promises.Count == 0
-            ? "none"
-            : string.Join("\n", view.Promises.Select(promise => $"{promise.Kind}: {promise.Text}"));
+                .Select(item => $"{UiTheme.Escape(item.Name)} x{item.Quantity}{(item.Protected ? UiTheme.Colorize(" protected", UiTheme.Warning) : "")}"));
 
         var logLines = new List<string>();
         if (_lastError is not null)
         {
-            logLines.Add($"Error: {_lastError}");
+            logLines.Add(UiTheme.Colorize($"Error: {_lastError}", UiTheme.Danger));
         }
 
         if (_lastResult is not null)
         {
-            var result = _lastResult.Success ? "ok" : _lastResult.TechnicalFailure ? "technical failure" : "rejected";
-            logLines.Add($"{_lastResult.Action}: {result}");
+            var resultLabel = _lastResult.Success ? "ok" : _lastResult.TechnicalFailure ? "technical failure" : "rejected";
+            var resultColor = _lastResult.Success ? UiTheme.Wild : _lastResult.TechnicalFailure ? UiTheme.Danger : UiTheme.Warning;
+            logLines.Add($"{UiTheme.Escape(_lastResult.Action)}: {UiTheme.Colorize(resultLabel, resultColor)}");
         }
 
-        logLines.AddRange(view.Messages.TakeLast(14));
+        logLines.AddRange(view.Messages.TakeLast(14).Select(UiTheme.Escape));
         _log.Text = string.Join("\n", logLines);
     }
 
@@ -583,10 +659,10 @@ public partial class Main : Control
                 var cell = new Button
                 {
                     Text = ".",
-                    CustomMinimumSize = new Vector2(34, 34),
+                    CustomMinimumSize = new Vector2(38, 38),
                     FocusMode = FocusModeEnum.None,
+                    ThemeTypeVariation = "MapCell",
                 };
-                cell.AddThemeFontSizeOverride("font_size", 18);
                 cell.Pressed += () => _ = ExecuteAsync(new TargetCommand(point));
                 _mapGrid.AddChild(cell);
                 _cells[y, x] = cell;
@@ -600,36 +676,40 @@ public partial class Main : Control
         return control;
     }
 
-    private static PanelContainer PanelBox()
-    {
-        var panel = new PanelContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-        };
-        panel.AddThemeStyleboxOverride("panel", Box(Panel, Border));
-        return panel;
-    }
+    private static PanelContainer PanelBox() =>
+        new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
 
-    private static VBoxContainer Section(string title, Control content, bool expand = false)
+    private static VBoxContainer Section(string title, Control content, Color accent, bool expand = false)
     {
         var box = new VBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = expand ? SizeFlags.ExpandFill : SizeFlags.ShrinkBegin,
         };
-        box.AddThemeConstantOverride("separation", 4);
-        var label = SmallLabel(title);
-        label.AddThemeColorOverride("font_color", Wild);
-        box.AddChild(label);
+        box.AddThemeConstantOverride("separation", UiTheme.SpaceXs);
+
+        var header = new HBoxContainer();
+        header.AddThemeConstantOverride("separation", UiTheme.SpaceXs);
+        header.AddChild(new ColorRect
+        {
+            Color = accent,
+            CustomMinimumSize = new Vector2(3, 15),
+        });
+        header.AddChild(new Label
+        {
+            Text = title,
+            ThemeTypeVariation = "SectionHeader",
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        box.AddChild(header);
         box.AddChild(content);
         return box;
     }
 
-    private static RichTextLabel Readout(float minHeight)
-    {
-        var readout = new RichTextLabel
+    private static RichTextLabel Readout(float minHeight) =>
+        new()
         {
-            BbcodeEnabled = false,
+            BbcodeEnabled = true,
             ContextMenuEnabled = true,
             FitContent = false,
             ScrollActive = true,
@@ -637,10 +717,6 @@ public partial class Main : Control
             CustomMinimumSize = new Vector2(0, minHeight),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };
-        readout.AddThemeColorOverride("default_color", Text);
-        readout.AddThemeStyleboxOverride("normal", Box(PanelAlt, new Color("26313d")));
-        return readout;
-    }
 
     private static Label SmallLabel(string text)
     {
@@ -649,46 +725,22 @@ public partial class Main : Control
             Text = text,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        label.AddThemeColorOverride("font_color", Muted);
+        label.AddThemeColorOverride("font_color", UiTheme.Muted);
         return label;
     }
 
-    private static Button SmallButton(string text)
-    {
-        var button = new Button
+    private static Button SmallButton(string text) =>
+        new()
         {
             Text = text,
             CustomMinimumSize = new Vector2(74, 34),
         };
-        return button;
-    }
 
     private void AddMoveButton(BoxContainer parent, string label, Direction direction)
     {
         var button = SmallButton(label);
         button.CustomMinimumSize = new Vector2(44, 34);
         button.Pressed += () => _ = ExecuteAsync(new MoveCommand(direction));
-        parent.AddChild(button);
-        _busyControls.Add(button);
-    }
-
-    private void AddTravelButton(BoxContainer parent, string label, Direction direction)
-    {
-        var button = SmallButton(label);
-        button.CustomMinimumSize = new Vector2(44, 34);
-        button.Pressed += () => _ = ExecuteAsync(new TravelCommand(direction));
-        parent.AddChild(button);
-        _busyControls.Add(button);
-    }
-
-    private void AddQuickSpell(BoxContainer parent, string label, string spell)
-    {
-        var button = SmallButton(label);
-        button.Pressed += () =>
-        {
-            _spellLine.Text = spell;
-            _ = CastSpellAsync(spell);
-        };
         parent.AddChild(button);
         _busyControls.Add(button);
     }
@@ -775,14 +827,21 @@ public partial class Main : Control
     {
         var hp = entity.HitPoints is null ? "" : $" {entity.HitPoints}/{entity.MaxHitPoints} HP";
         var faction = string.IsNullOrWhiteSpace(entity.Faction) ? "object" : entity.Faction;
-        return $"{entity.Glyph} {entity.Name} ({entity.X},{entity.Y}) {faction}{hp}";
+        var factionColor = faction switch
+        {
+            "empire" => UiTheme.Danger,
+            "player" => UiTheme.Focus,
+            _ => UiTheme.Empire,
+        };
+        var name = UiTheme.Colorize(entity.Name, factionColor);
+        return $"{UiTheme.Escape(entity.Glyph.ToString())} {name} ({entity.X},{entity.Y}) {UiTheme.Escape(faction)}{UiTheme.Escape(hp)}";
     }
 
     private static Color GlyphColor(EntityCard? entity, MapTileCard? tile, bool selected)
     {
         if (tile is null || !tile.Explored)
         {
-            return selected ? Warning : Muted.Darkened(0.35f);
+            return selected ? UiTheme.Warning : UiTheme.Muted.Darkened(0.35f);
         }
 
         var dim = tile.Visible ? 0f : 0.35f;
@@ -790,23 +849,23 @@ public partial class Main : Control
         {
             if (entity.Id == "player")
             {
-                return Wild.Darkened(dim);
+                return UiTheme.Wild.Darkened(dim);
             }
 
             var color = entity.Faction == "empire"
-                ? Danger
+                ? UiTheme.Danger
                 : entity.Faction == "player"
-                    ? Focus
-                    : Empire;
+                    ? UiTheme.Focus
+                    : UiTheme.Empire;
             return color.Darkened(dim);
         }
 
         if (selected)
         {
-            return Warning;
+            return UiTheme.Warning;
         }
 
-        return (tile.Terrain == "wall" ? Muted : Text).Darkened(dim);
+        return (tile.Terrain == "wall" ? UiTheme.Muted : UiTheme.Text).Darkened(dim);
     }
 
     private static Color TerrainColor(MapTileCard? tile)
@@ -833,25 +892,15 @@ public partial class Main : Control
 
     private static StyleBoxFlat CellStyle(Color background, bool selected)
     {
-        var style = Box(background, selected ? Warning : new Color("222933"));
-        style.SetBorderWidthAll(selected ? 2 : 1);
-        return style;
-    }
-
-    private static StyleBoxFlat Box(Color background, Color border)
-    {
-        var box = new StyleBoxFlat
-        {
-            BgColor = background,
-            BorderColor = border,
-        };
-        box.SetBorderWidthAll(1);
-        box.SetCornerRadiusAll(4);
-        box.ContentMarginLeft = 8;
-        box.ContentMarginRight = 8;
-        box.ContentMarginTop = 6;
-        box.ContentMarginBottom = 6;
-        return box;
+        var fill = selected ? background.Lightened(0.12f) : background;
+        return UiTheme.Box(
+            fill,
+            selected ? UiTheme.Warning : new Color("222933"),
+            borderWidth: selected ? 2 : 1,
+            radius: 3,
+            shadow: false,
+            marginX: 0,
+            marginY: 0);
     }
 
     private static GameCommand? CommandForKey(Key key) =>

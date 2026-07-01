@@ -14,7 +14,8 @@ public sealed record WorldPromise(
     string? BoundTargetId = null,
     string? TriggerHint = null,
     string? RealizationKind = null,
-    string? RealizedIn = null);
+    string? RealizedIn = null,
+    int Stacks = 1);
 
 public sealed class PromiseLedger
 {
@@ -89,6 +90,31 @@ public sealed class PromiseLedger
             Status = status,
             RealizedIn = realizedIn ?? _promises[index].RealizedIn,
         };
+        _promises[index] = updated;
+        return updated;
+    }
+
+    /// <summary>
+    /// Finds an active (not cleared/realized) promise of the given kind whose text and bound
+    /// target already match, so a repeat curse can stack instead of duplicating.
+    /// </summary>
+    public WorldPromise? FindActive(string kind, string text, string? boundTargetId) =>
+        _promises.FirstOrDefault(promise =>
+            promise.Kind.Equals(kind, StringComparison.OrdinalIgnoreCase)
+            && !promise.Status.Equals("cleared", StringComparison.OrdinalIgnoreCase)
+            && !promise.Status.Equals("realized", StringComparison.OrdinalIgnoreCase)
+            && promise.Text.Equals(text, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(promise.BoundTargetId, boundTargetId, StringComparison.OrdinalIgnoreCase));
+
+    public WorldPromise Stack(string id)
+    {
+        var index = _promises.FindIndex(promise => promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            throw new InvalidOperationException($"Promise {id} does not exist.");
+        }
+
+        var updated = _promises[index] with { Stacks = _promises[index].Stacks + 1 };
         _promises[index] = updated;
         return updated;
     }

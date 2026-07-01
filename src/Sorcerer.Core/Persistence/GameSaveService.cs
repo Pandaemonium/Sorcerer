@@ -169,7 +169,11 @@ public sealed record GameStateSave(
     List<CanonRecord> CanonRecords,
     List<BondRecord> Bonds,
     BackgroundJobSettings BackgroundSettings,
-    List<BackgroundJob> BackgroundJobs)
+    List<BackgroundJob> BackgroundJobs,
+    Dictionary<string, object?>? WorldFlags = null,
+    List<PersistentEffectRecord>? PersistentEffects = null,
+    PointSave? LastControlledMoveDelta = null,
+    List<TileFlowSave>? TileFlows = null)
 {
     public static GameStateSave FromState(GameState state) =>
         new(
@@ -246,6 +250,17 @@ public sealed record GameStateSave(
             state.BackgroundJobs.Snapshot()
                 .OrderBy(record => record.CreatedTurn)
                 .ThenBy(record => record.Id, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            GameSaveService.NormalizeMap(state.WorldFlags),
+            state.PersistentEffects.Snapshot()
+                .Select(record => record with { EffectFields = GameSaveService.NormalizeMap(record.EffectFields) })
+                .OrderBy(record => record.Id, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            state.LastControlledMoveDelta is null ? null : PointSave.From(state.LastControlledMoveDelta.Value),
+            state.TileFlows
+                .OrderBy(pair => pair.Key.Y)
+                .ThenBy(pair => pair.Key.X)
+                .Select(pair => new TileFlowSave(PointSave.From(pair.Key), pair.Value.Dx, pair.Value.Dy, pair.Value.ExpiresTurn))
                 .ToList());
 
     public GameState ToState()
@@ -262,6 +277,7 @@ public sealed record GameStateSave(
             NextEntitySerial = Math.Max(1, NextEntitySerial),
             ControlledEntityId = EntityId.Create(ControlledEntityId),
             SelectedTarget = SelectedTarget?.ToGridPoint(),
+            LastControlledMoveDelta = LastControlledMoveDelta?.ToGridPoint(),
             BackgroundSettings = BackgroundSettings ?? new BackgroundJobSettings(),
         };
 
@@ -313,6 +329,18 @@ public sealed record GameStateSave(
         state.Canon.ReplaceAll(CanonRecords ?? new List<CanonRecord>());
         state.Bonds.ReplaceAll(Bonds ?? new List<BondRecord>());
         state.BackgroundJobs.ReplaceAll(BackgroundJobs ?? new List<BackgroundJob>());
+        foreach (var pair in GameSaveService.NormalizeMap(WorldFlags))
+        {
+            state.WorldFlags[pair.Key] = pair.Value;
+        }
+
+        state.PersistentEffects.ReplaceAll((PersistentEffects ?? new List<PersistentEffectRecord>())
+            .Select(record => record with { EffectFields = GameSaveService.NormalizeMap(record.EffectFields) }));
+        foreach (var flow in TileFlows ?? new List<TileFlowSave>())
+        {
+            state.TileFlows[flow.Point.ToGridPoint()] = new TileFlow(flow.Dx, flow.Dy, flow.ExpiresTurn);
+        }
+
         return state;
     }
 }
@@ -327,7 +355,8 @@ public sealed record ZoneSave(
     List<TerrainExpirationSave> TerrainExpirations,
     List<ExploredSave> ExploredBySoulId,
     List<string> RoomProfiles,
-    List<string> PromiseHooks)
+    List<string> PromiseHooks,
+    List<TileFlowSave>? TileFlows = null)
 {
     public static ZoneSave FromZone(ZoneSnapshot zone) =>
         new(
@@ -364,7 +393,12 @@ public sealed record ZoneSave(
                         .ToList()))
                 .ToList(),
             zone.RoomProfiles.ToList(),
-            zone.PromiseHooks.ToList());
+            zone.PromiseHooks.ToList(),
+            zone.TileFlows
+                .OrderBy(pair => pair.Key.Y)
+                .ThenBy(pair => pair.Key.X)
+                .Select(pair => new TileFlowSave(PointSave.From(pair.Key), pair.Value.Dx, pair.Value.Dy, pair.Value.ExpiresTurn))
+                .ToList());
 
     public ZoneSnapshot ToZone() =>
         new(
@@ -377,6 +411,7 @@ public sealed record ZoneSave(
             new HashSet<GridPoint>((BlockingTerrain ?? new List<PointSave>()).Select(point => point.ToGridPoint())),
             (Terrain ?? new List<TerrainSave>()).ToDictionary(entry => entry.Point.ToGridPoint(), entry => entry.Value),
             (TerrainExpirations ?? new List<TerrainExpirationSave>()).ToDictionary(entry => entry.Point.ToGridPoint(), entry => entry.ExpiresTurn),
+            (TileFlows ?? new List<TileFlowSave>()).ToDictionary(entry => entry.Point.ToGridPoint(), entry => new TileFlow(entry.Dx, entry.Dy, entry.ExpiresTurn)),
             (ExploredBySoulId ?? new List<ExploredSave>()).ToDictionary(
                 entry => entry.SoulId,
                 entry => (IReadOnlySet<GridPoint>)new HashSet<GridPoint>((entry.Points ?? new List<PointSave>()).Select(point => point.ToGridPoint())),
@@ -492,6 +527,15 @@ public sealed record EntitySave(
             case PromiseAnchorComponent typed:
                 entity.Set(typed);
                 break;
+            case ResistanceComponent typed:
+                entity.Set(typed);
+                break;
+            case DelayedDamageComponent typed:
+                entity.Set(typed);
+                break;
+            case BehaviorTagsComponent typed:
+                entity.Set(typed);
+                break;
             default:
                 throw new InvalidDataException($"Unsupported component {component.GetType().Name}.");
         }
@@ -569,6 +613,12 @@ public sealed record ComponentSave(
             AiComponent value => New("ai", ("policyId", value.PolicyId), ("parameters", value.Parameters is null ? null : GameSaveService.NormalizeMap(value.Parameters))),
             SummonedComponent value => New("summoned", ("source", value.Source), ("expiresTurn", value.ExpiresTurn)),
             PromiseAnchorComponent value => New("promiseAnchor", ("promiseIds", value.PromiseIds.ToArray())),
+            ResistanceComponent value => New(
+                "resistance",
+                ("resistances", SortIntMap(value.Resistances)),
+                ("weaknesses", SortIntMap(value.Weaknesses))),
+            DelayedDamageComponent value => New("delayedDamage", ("buffered", value.Buffered), ("releaseTurn", value.ReleaseTurn)),
+            BehaviorTagsComponent value => New("behaviorTags", ("tags", SortNullableIntMap(value.Tags))),
             _ => throw new InvalidDataException($"Unsupported component {component.GetType().Name}."),
         };
 
@@ -634,6 +684,11 @@ public sealed record ComponentSave(
             "ai" => new AiComponent(ReadString(fields, "policyId"), ReadObjectMapOrNull(fields, "parameters")),
             "summoned" => new SummonedComponent(ReadString(fields, "source"), ReadNullableInt(fields, "expiresTurn")),
             "promiseanchor" => new PromiseAnchorComponent(ReadStringList(fields, "promiseIds")),
+            "resistance" => new ResistanceComponent(
+                ReadIntMap(fields, "resistances"),
+                ReadIntMap(fields, "weaknesses")),
+            "delayeddamage" => new DelayedDamageComponent(ReadInt(fields, "buffered"), ReadInt(fields, "releaseTurn")),
+            "behaviortags" => new BehaviorTagsComponent(ReadNullableIntMap(fields, "tags")),
             _ => throw new InvalidDataException($"Unsupported saved component type {Type}."),
         };
     }
@@ -650,6 +705,11 @@ public sealed record ComponentSave(
     }
 
     private static Dictionary<string, int> SortIntMap(IReadOnlyDictionary<string, int> source) =>
+        source
+            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
+    private static Dictionary<string, int?> SortNullableIntMap(IReadOnlyDictionary<string, int?> source) =>
         source
             .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
@@ -732,6 +792,18 @@ public sealed record ComponentSave(
             .ToDictionary(pair => pair.Key, pair => ToInt(pair.Value), StringComparer.OrdinalIgnoreCase);
     }
 
+    private static Dictionary<string, int?> ReadNullableIntMap(IReadOnlyDictionary<string, object?> fields, string key)
+    {
+        if (!fields.TryGetValue(key, out var value) || value is not IReadOnlyDictionary<string, object?> map)
+        {
+            return new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return map
+            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(pair => pair.Key, pair => pair.Value is null ? (int?)null : ToInt(pair.Value), StringComparer.OrdinalIgnoreCase);
+    }
+
     private static Dictionary<string, string> ReadStringMap(IReadOnlyDictionary<string, object?> fields, string key)
     {
         if (!fields.TryGetValue(key, out var value) || value is not IReadOnlyDictionary<string, object?> map)
@@ -807,6 +879,8 @@ public sealed record PointSave(int X, int Y)
 
     public GridPoint ToGridPoint() => new(X, Y);
 }
+
+public sealed record TileFlowSave(PointSave Point, int Dx, int Dy, int? ExpiresTurn);
 
 public sealed record TerrainSave(PointSave Point, string Value);
 

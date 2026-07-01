@@ -43,6 +43,11 @@ public sealed class MovementSystem
 
         if (!_engine.InBounds(destination) || _state.BlockingTerrain.Contains(destination))
         {
+            if (IsCardinal(direction) && IsOuterBoundary(destination))
+            {
+                return _engine.Travel(direction);
+            }
+
             return ActionResult.Simple(
                 "move",
                 success: false,
@@ -59,7 +64,7 @@ public sealed class MovementSystem
             {
                 var origin = position.Position;
                 var targetPoint = blocker.Get<PositionComponent>().Position;
-                var delta = _engine.AttackEntity(actor, blocker);
+                var attackDeltas = _engine.AttackEntity(actor, blocker);
                 var kind = blocker.TryGet<ActorComponent>(out var targetActor) && !targetActor.Alive ? "kill" : "attack";
                 _engine.RecordDeed(
                     actor,
@@ -76,8 +81,8 @@ public sealed class MovementSystem
                     ConsumedTurn = true,
                     TurnBefore = turnBefore,
                     TurnAfter = _state.Turn,
-                    Messages = new[] { delta.Summary }.Concat(turnDeltas.Select(item => item.Summary)).ToArray(),
-                    Deltas = new[] { delta }.Concat(turnDeltas).ToArray(),
+                    Messages = attackDeltas.Select(item => item.Summary).Concat(turnDeltas.Select(item => item.Summary)).ToArray(),
+                    Deltas = attackDeltas.Concat(turnDeltas).ToArray(),
                 };
             }
 
@@ -91,6 +96,7 @@ public sealed class MovementSystem
         }
 
         actor.Set(new PositionComponent(destination));
+        _state.LastControlledMoveDelta = new GridPoint(offset.X, offset.Y);
         var movementTurnDeltas = _engine.AdvanceTurn();
         _state.AddMessage("You move.");
         return ActionResult.Simple(
@@ -160,6 +166,12 @@ public sealed class MovementSystem
         _engine.InBounds(point)
         && !_state.BlockingTerrain.Contains(point)
         && _engine.BlockingEntityAt(point) is null;
+
+    private static bool IsCardinal(Direction direction) =>
+        direction is Direction.North or Direction.South or Direction.East or Direction.West;
+
+    private bool IsOuterBoundary(GridPoint point) =>
+        point.X <= 0 || point.Y <= 0 || point.X >= _state.Width - 1 || point.Y >= _state.Height - 1;
 
     private bool IsUnableToMove(Entity entity)
     {

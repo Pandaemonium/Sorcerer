@@ -57,6 +57,24 @@ The resolver should receive:
 Routing should be recall-biased. Loading one extra relevant card is much less harmful than
 missing the card that would make a spell work.
 
+Current implementation:
+
+- `CapabilityRegistry.Select` ranks cards by trigger-hit count (ties broken by registry order),
+  expands one hop via each card's `CommonCombos`, and applies a dynamic cap (5 with any hits else
+  3, +1 for a compositional connective like `" and "`, hard ceiling 7) instead of a flat cap.
+- Cards load from `content/capabilities/*.json` via `CapabilityCardLoader` (same shape/loader
+  pattern as `OperationCardLoader` for `content/operations`), with an in-code fallback set that
+  currently owns 11 cards (terrain_shape, summoning, transformation, prophecy, conjure_item,
+  memory_edit, faction_charm, delayed_effects, triggers_reactions, persistent_effect,
+  behavior_control, environment_flow).
+- `WildMagicController.CastAsync` calls `Select` per cast and builds a narrowed `OperationIndex`
+  (core operations, per `IOperation.IsCore`, plus the effect types the routed cards unlock) instead
+  of always advertising the full registry; `OllamaSpellProvider` assembles the core prompt, the
+  always-on one-line capability index, and only the routed cards' detail blocks/examples.
+- Narrowing only shapes what is advertised. `OperationRegistry.Resolve`/`Supports` still validate
+  against the full registry regardless of what a given cast's prompt/context exposed; Sorcerer does
+  not hard-enforce a per-cast schema enum, matching Wild Magic's own choice to defer that.
+
 ## Resolver Lens
 
 `MagicContextView.ResolverLens` is the current character-to-magic bridge. It is soft
@@ -120,6 +138,16 @@ Current implementation:
   ward-shaped pulses. It writes `TriggerLedger` records with an anchor, radius, target filter,
   cadence, use count, and one embedded small effect. The current embedded effect set is
   `addStatus`, `damage`, `heal`, and `message`; richer predicates are future work.
+- `createPersistentEffect` is a separate combat-hook primitive, not a hidden recursive spell
+  engine. It stores only a deliberately small validated effect-kind set (`damage`, `heal`,
+  `addStatus`, `message`) or a resolved sympathetic link. Unsupported embedded effects reject
+  before mutation; legacy unsupported records surface an explicit failure delta instead of silently
+  consuming a use.
+- HP loss should flow through the shared combat damage path. Ordinary attacks, spell damage,
+  delayed damage releases, terrain/status harm, resistance/weakness, and delay buffers should not
+  grow separate arithmetic rules.
+- `createFlow` writes zone-local tile-flow fields. They travel with zone snapshots like terrain and
+  terrain expirations, so environmental fields do not leak between places or vanish on return.
 
 This means prompt guidance can improve without creating a second source of truth for
 mechanics.

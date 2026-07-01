@@ -10,6 +10,7 @@ namespace Sorcerer.Core.Engine.Systems;
 
 public sealed class TurnSystem
 {
+    private readonly GameEngine _engine;
     private readonly TriggerSystem _triggers;
     private readonly TerrainReactionSystem _terrainReactions;
     private readonly LoreCatalog _loreCatalog;
@@ -19,6 +20,7 @@ public sealed class TurnSystem
 
     public TurnSystem(GameEngine engine, GameState state, StatusRegistry statusRegistry, LoreCatalog loreCatalog)
     {
+        _engine = engine;
         _triggers = new TriggerSystem(engine);
         _terrainReactions = new TerrainReactionSystem(engine);
         _loreCatalog = loreCatalog;
@@ -32,11 +34,56 @@ public sealed class TurnSystem
         ExpireStatuses();
         ApplyTerrainReactions();
         ApplyStatusTicks();
+        ReleaseDueDelayedDamage();
+        ApplyTileFlows();
         ExpireTerrain();
         ResolveScheduledEvents();
         ResolveTriggers();
         ApplyWorldReactions();
         PumpBackgroundJobs();
+    }
+
+    private void ApplyTileFlows()
+    {
+        var expired = _state.TileFlows
+            .Where(pair => pair.Value.ExpiresTurn is { } expiry && expiry <= _state.Turn)
+            .Select(pair => pair.Key)
+            .ToArray();
+        foreach (var point in expired)
+        {
+            _state.TileFlows.Remove(point);
+        }
+
+        foreach (var entity in _state.Entities.Values
+            .Where(entity => entity.TryGet<ActorComponent>(out var actor) && actor.Alive)
+            .Where(entity => entity.TryGet<PositionComponent>(out var position) && _state.TileFlows.ContainsKey(position.Position))
+            .OrderBy(entity => entity.Id.Value)
+            .ToArray())
+        {
+            var position = entity.Get<PositionComponent>().Position;
+            var flow = _state.TileFlows[position];
+            var destination = position.Translate(flow.Dx, flow.Dy);
+            if (!_engine.InBounds(destination)
+                || _state.BlockingTerrain.Contains(destination)
+                || _engine.BlockingEntityAt(destination) is not null)
+            {
+                continue;
+            }
+
+            entity.Set(new PositionComponent(destination));
+            _state.AddMessage($"{Subject(entity)} {Verb(entity, "slide", "slides")} across the flowing ground.");
+        }
+    }
+
+    private void ReleaseDueDelayedDamage()
+    {
+        foreach (var entity in _state.Entities.Values
+            .Where(entity => entity.TryGet<DelayedDamageComponent>(out var buffer) && buffer.ReleaseTurn <= _state.Turn)
+            .OrderBy(entity => entity.Id.Value)
+            .ToArray())
+        {
+            _engine.ReleaseDelayedDamage(entity);
+        }
     }
 
     public void EnqueueBackgroundJob(string purpose, Entity target, int priority)

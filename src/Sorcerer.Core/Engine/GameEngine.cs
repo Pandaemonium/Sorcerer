@@ -27,6 +27,7 @@ public sealed class GameEngine
     private readonly ItemSystem _itemSystem;
     private readonly MovementSystem _movementSystem;
     private readonly PerceptionSystem _perceptionSystem;
+    private readonly PersistentEffectSystem _persistentEffects;
     private readonly StatusRegistry _statusRegistry = StatusRegistry.CreateDefault();
     private readonly TurnSystem _turnSystem;
     private readonly EngineViewBuilder _viewBuilder;
@@ -45,6 +46,7 @@ public sealed class GameEngine
         _itemSystem = new ItemSystem(this, _itemCatalog, _inventoryService);
         _movementSystem = new MovementSystem(this, _statusRegistry);
         _perceptionSystem = new PerceptionSystem(State);
+        _persistentEffects = new PersistentEffectSystem(this);
         _turnSystem = new TurnSystem(this, State, _statusRegistry, _loreCatalog);
         _interactionSystem = new InteractionSystem(this, _itemSystem, _turnSystem);
         _viewBuilder = new EngineViewBuilder(this, _inventoryService, _statusRegistry, _perceptionSystem, _generationSystem, _loreCatalog);
@@ -52,6 +54,8 @@ public sealed class GameEngine
     }
 
     public GameState State { get; }
+
+    public StatusRegistry Statuses => _statusRegistry;
 
     public ActionResult MoveControlled(Direction direction) => _movementSystem.MoveControlled(direction);
 
@@ -361,8 +365,17 @@ public sealed class GameEngine
     public StateDelta DamageEntity(Entity target, int amount, string damageType) =>
         _combatSystem.DamageEntity(target, amount, damageType);
 
-    public StateDelta AttackEntity(Entity attacker, Entity defender, string damageType = "physical") =>
-        _combatSystem.AttackEntity(attacker, defender, damageType);
+    public StateDelta? ReleaseDelayedDamage(Entity target) => _combatSystem.ReleaseDelayedDamage(target);
+
+    public IReadOnlyList<StateDelta> AttackEntity(Entity attacker, Entity defender, string damageType = "physical")
+    {
+        var attackDelta = _combatSystem.AttackEntity(attacker, defender, damageType);
+        var hitAmount = attackDelta.Details.TryGetValue("amount", out var amount) ? Convert.ToInt32(amount) : 0;
+        var deltas = new List<StateDelta> { attackDelta };
+        deltas.AddRange(_persistentEffects.FireHook("on_strike", attacker, defender, hitAmount));
+        deltas.AddRange(_persistentEffects.FireHook("on_hit", defender, attacker, hitAmount));
+        return deltas;
+    }
 
     public StateDelta RestoreMana(Entity target, int amount) => _combatSystem.RestoreMana(target, amount);
 
@@ -435,6 +448,18 @@ public sealed class GameEngine
 
     public Entity SpawnEntity(string prefix, string name, char glyph, GridPoint position, string faction, int hp, int attack, IReadOnlyList<string> tags) =>
         _effectSystem.SpawnEntity(prefix, name, glyph, position, faction, hp, attack, tags);
+
+    public Entity SpawnItem(
+        string prefix,
+        string name,
+        char glyph,
+        GridPoint position,
+        string itemType,
+        string material,
+        IReadOnlyList<string> tags,
+        int quantity,
+        int value = 1) =>
+        _effectSystem.SpawnItem(prefix, name, glyph, position, itemType, material, tags, quantity, value);
 
     public StateDelta AddPromise(string kind, string text, Entity? anchor = null, string triggerHint = "", string source = "wild_magic") =>
         _interactionSystem.AddPromise(kind, text, anchor, triggerHint, source);

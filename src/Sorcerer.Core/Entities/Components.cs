@@ -131,3 +131,26 @@ public sealed record PromiseAnchorComponent(IReadOnlyList<string> PromiseIds) : 
     {
     }
 }
+
+/// <summary>
+/// Damage-type-keyed resistance (0-95, percent reduction) and weakness (0-200, percent
+/// amplification) bands, read by <see cref="Sorcerer.Core.Engine.Systems.CombatSystem"/> before
+/// the flat Defense reduction already applied to every hit.
+/// </summary>
+public sealed record ResistanceComponent(
+    Dictionary<string, int> Resistances,
+    Dictionary<string, int> Weaknesses) : IEntityComponent
+{
+    public static ResistanceComponent Empty() => new(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+}
+
+public sealed record DelayedDamageComponent(int Buffered, int ReleaseTurn) : IEntityComponent;
+
+/// <summary>
+/// Behavior tags that reshape how <see cref="Sorcerer.Core.Engine.Systems.AiSystem"/> decides an
+/// actor's turn, keyed to an optional expiry turn (null means permanent).
+/// </summary>
+public sealed record BehaviorTagsComponent(Dictionary<string, int?> Tags) : IEntityComponent
+{
+    public static BehaviorTagsComponent Empty() => new(new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase));
+}

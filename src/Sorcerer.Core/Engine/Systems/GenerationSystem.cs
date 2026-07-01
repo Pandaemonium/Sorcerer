@@ -117,6 +117,7 @@ public sealed class GenerationSystem
             new HashSet<GridPoint>(_state.BlockingTerrain),
             new Dictionary<GridPoint, string>(_state.Terrain),
             new Dictionary<GridPoint, int>(_state.TerrainExpirations),
+            new Dictionary<GridPoint, TileFlow>(_state.TileFlows),
             _state.ExploredBySoulId.ToDictionary(
                 pair => pair.Key,
                 pair => (IReadOnlySet<GridPoint>)new HashSet<GridPoint>(pair.Value),
@@ -205,6 +206,7 @@ public sealed class GenerationSystem
             blocking,
             terrain,
             new Dictionary<GridPoint, int>(),
+            new Dictionary<GridPoint, TileFlow>(),
             new Dictionary<string, IReadOnlySet<GridPoint>>(StringComparer.OrdinalIgnoreCase),
             new[] { region.Id },
             (region.Affordances ?? Array.Empty<RegionAffordanceCard>())
@@ -399,6 +401,12 @@ public sealed class GenerationSystem
         foreach (var pair in snapshot.TerrainExpirations)
         {
             _state.TerrainExpirations[pair.Key] = pair.Value;
+        }
+
+        _state.TileFlows.Clear();
+        foreach (var pair in snapshot.TileFlows)
+        {
+            _state.TileFlows[pair.Key] = pair.Value;
         }
 
         _state.ExploredBySoulId.Clear();
@@ -665,6 +673,7 @@ public sealed class GenerationSystem
             BlockingTerrain = new HashSet<GridPoint>(zone.BlockingTerrain),
             Terrain = new Dictionary<GridPoint, string>(zone.Terrain),
             TerrainExpirations = new Dictionary<GridPoint, int>(zone.TerrainExpirations),
+            TileFlows = new Dictionary<GridPoint, TileFlow>(zone.TileFlows),
             ExploredBySoulId = zone.ExploredBySoulId.ToDictionary(
                 pair => pair.Key,
                 pair => (IReadOnlySet<GridPoint>)new HashSet<GridPoint>(pair.Value),

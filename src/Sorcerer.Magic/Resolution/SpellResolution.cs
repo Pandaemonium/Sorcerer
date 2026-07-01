@@ -1,3 +1,5 @@
+using Sorcerer.Magic.Capabilities;
+
 namespace Sorcerer.Magic.Resolution;
 
 public sealed record SpellEffect(string Type, IReadOnlyDictionary<string, object?> Fields);
@@ -15,7 +17,9 @@ public sealed record SpellResolution(
 public sealed record SpellRequest(
     string SpellText,
     object Context,
-    IReadOnlyList<string> SupportedOperations);
+    IReadOnlyList<string> SupportedOperations,
+    IReadOnlyList<CapabilityCard>? SelectedCapabilities = null,
+    string? CapabilityIndex = null);
 
 public sealed record SpellProviderResult(
     string Provider,
@@ -32,4 +36,3 @@ public interface ISpellProvider
         SpellRequest request,
         CancellationToken cancellationToken);
 }
-

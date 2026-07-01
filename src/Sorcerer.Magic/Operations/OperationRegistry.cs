@@ -49,6 +49,24 @@ public sealed class OperationRegistry
                 .Select(op => op.Card.ToView())
                 .ToArray());
 
+    /// <summary>
+    /// Advertises core operations plus any non-core operation named in
+    /// <paramref name="selectedEffectTypes"/> (the effect types unlocked by routed capability
+    /// cards). Validation and application still resolve against the full registry regardless of
+    /// what this index advertises; narrowing only shapes what the resolver prompt/context show.
+    /// </summary>
+    public OperationIndex ToNarrowedIndex(IEnumerable<string> selectedEffectTypes)
+    {
+        var allowed = new HashSet<string>(selectedEffectTypes, StringComparer.OrdinalIgnoreCase);
+        var operations = _operations.Values
+            .Where(op => op.IsCore || allowed.Contains(op.Name))
+            .OrderBy(op => op.Name)
+            .ToArray();
+        return new(
+            operations.Select(op => op.Name).ToArray(),
+            operations.Select(op => op.Card.ToView()).ToArray());
+    }
+
     public static OperationRegistry Build(IEnumerable<IOperation> operations, IEnumerable<OperationCard>? cards = null)
     {
         var ops = operations.ToArray();
@@ -93,6 +111,21 @@ public sealed class OperationRegistry
             new AddCurseOperation(),
             new CreatePromiseOperation(),
             new MessageOperation(),
+            new AreaStatusOperation(),
+            new ModifyInventoryOperation(),
+            new AddTagOperation(),
+            new RemoveTagOperation(),
+            new AccelerateStatusOperation(),
+            new ConjureItemOperation(),
+            new ConjureCreatureOperation(),
+            new AddResistanceOperation(),
+            new AddWeaknessOperation(),
+            new SetFlagOperation(),
+            new DelayIncomingOperation(),
+            new EditMemoryOperation(),
+            new CreatePersistentEffectOperation(),
+            new SetBehaviorOperation(),
+            new CreateFlowOperation(),
             };
         return Build(operations, OperationCardLoader.LoadDefaultContentCards());
     }

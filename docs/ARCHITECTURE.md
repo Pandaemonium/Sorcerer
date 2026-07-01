@@ -224,6 +224,11 @@ During lazy generation, bound travel/site promises may realize as promise-site e
 zone. The generation system marks the promise realized, writes canon, adds a `PromiseAnchorComponent`
 to the site, and returns `promiseSite` deltas through the same travel `ActionResult`.
 
+Zone snapshots own zone-local tactical fields as well as entities and terrain. `TileFlows`
+(`createFlow` fields such as currents, conveyors, and gravity wells) are captured, loaded, cloned,
+and saved with the zone so they neither leak into other coordinates in another zone nor disappear
+when the player returns.
+
 The current thin-slice world graph places the Vigovian Capital east of Hollowmere. The capital is a
 normal generated zone with region affordances and ordinary entities, including Emperor Odran as an
 actor tagged `emperor` / `win_condition`. Killing him is not a special spell path: ordinary validated

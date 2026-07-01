@@ -8,6 +8,7 @@ using Sorcerer.Core.References;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Transactions;
 using Sorcerer.Magic.Auditing;
+using Sorcerer.Magic.Capabilities;
 using Sorcerer.Magic.Costs;
 using Sorcerer.Magic.Operations;
 using Sorcerer.Magic.Resolution;
@@ -21,15 +22,18 @@ public sealed class WildMagicController : IWildMagicController
     private readonly ISpellAuditSink _audit;
     private readonly ISpellProvider _provider;
     private readonly OperationRegistry _registry;
+    private readonly CapabilityRegistry _capabilities;
 
     public WildMagicController(
         ISpellProvider provider,
         OperationRegistry? registry = null,
-        ISpellAuditSink? audit = null)
+        ISpellAuditSink? audit = null,
+        CapabilityRegistry? capabilities = null)
     {
         _provider = provider;
         _registry = registry ?? OperationRegistry.CreateDefault();
         _audit = audit ?? NullSpellAuditSink.Instance;
+        _capabilities = capabilities ?? CapabilityRegistry.CreateDefault();
     }
 
     public async Task<ActionResult> CastAsync(
@@ -38,12 +42,16 @@ public sealed class WildMagicController : IWildMagicController
         CancellationToken cancellationToken)
     {
         var turnBefore = engine.State.Turn;
-        var operationIndex = _registry.ToIndex();
+        var selectedCapabilities = _capabilities.Select(command.Text);
+        var operationIndex = _registry.ToNarrowedIndex(
+            selectedCapabilities.SelectMany(card => card.EffectTypes));
         var contextView = engine.MagicContext(operationIndex);
         var request = new SpellRequest(
             command.Text,
             contextView,
-            operationIndex.Names);
+            operationIndex.Names,
+            selectedCapabilities,
+            _capabilities.CapabilityIndex());
 
         var providerResult = await _provider.ResolveAsync(request, cancellationToken);
         if (providerResult.TechnicalFailure || providerResult.Resolution is null)

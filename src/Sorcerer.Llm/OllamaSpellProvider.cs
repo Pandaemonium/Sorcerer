@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Sorcerer.Magic.Capabilities;
 using Sorcerer.Magic.Operations;
 using Sorcerer.Magic.Resolution;
 
@@ -39,7 +40,7 @@ public sealed class OllamaSpellProvider : ISpellProvider
             {
                 WriteIndented = false,
             });
-        var system = BuildSystemPrompt(supported);
+        var system = BuildSystemPrompt(supported, request.CapabilityIndex, request.SelectedCapabilities);
 
         var payload = new
         {
@@ -110,7 +111,37 @@ public sealed class OllamaSpellProvider : ISpellProvider
         }
     }
 
-    private static string BuildSystemPrompt(string supported) =>
+    private static string BuildSystemPrompt(
+        string supported,
+        string? capabilityIndex,
+        IReadOnlyList<CapabilityCard>? selectedCapabilities)
+    {
+        var core = BuildCorePrompt(supported);
+        if (string.IsNullOrWhiteSpace(capabilityIndex))
+        {
+            return core;
+        }
+
+        var parts = new List<string>
+        {
+            core,
+            "Capability index (mechanics that can be loaded when a spell needs them):",
+            capabilityIndex,
+        };
+
+        if (selectedCapabilities is { Count: > 0 })
+        {
+            parts.Add("Mechanics loaded for this spell:");
+            parts.Add(string.Join(
+                "\n",
+                selectedCapabilities.Select(card =>
+                    string.Join("\n", new[] { card.PromptBlock }.Concat(card.Examples)))));
+        }
+
+        return string.Join("\n\n", parts);
+    }
+
+    private static string BuildCorePrompt(string supported) =>
         "You are the wild magic resolver for Sorcerer. Return exactly one JSON object. "
         + "Use this shape: {\"accepted\":true,\"severity\":\"minor|moderate|major|catastrophic\","
         + "\"outcomeText\":\"short vivid result\",\"effects\":[],\"costs\":[],\"rejectedReason\":null}. "
@@ -143,7 +174,7 @@ public sealed class OllamaSpellProvider : ISpellProvider
     {
         var rawResponse = string.Empty;
         var repairContent = string.Empty;
-        var repairSystem = BuildSystemPrompt(supported)
+        var repairSystem = BuildSystemPrompt(supported, request.CapabilityIndex, request.SelectedCapabilities)
             + " This is a repair attempt after invalid output. Return JSON only; no prose before or after the object.";
         var previous = invalidContent.Length > 600
             ? invalidContent[..600]

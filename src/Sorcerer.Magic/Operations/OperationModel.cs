@@ -42,6 +42,15 @@ public interface IOperation
 
     OperationCard Card { get; }
 
+    /// <summary>
+    /// Core operations are always advertised to the resolver. Non-core operations are only
+    /// advertised when a routed capability card unlocks them (see
+    /// <see cref="OperationRegistry.ToNarrowedIndex"/>); they still validate/apply normally
+    /// regardless of what was advertised, matching the upstream design of narrowing the prompt
+    /// without hard-enforcing a per-cast schema.
+    /// </summary>
+    bool IsCore { get; }
+
     ValidationOutcome Validate(EffectContext context, SpellEffect effect);
 
     IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect);
@@ -54,10 +63,12 @@ public abstract class OperationBase : IOperation
         IReadOnlyList<string> aliases,
         string summary,
         string promptGuidance,
-        IReadOnlyDictionary<string, string>? fields = null)
+        IReadOnlyDictionary<string, string>? fields = null,
+        bool isCore = true)
     {
         Name = name;
         Aliases = aliases;
+        IsCore = isCore;
         Card = new OperationCard(
             name,
             aliases,
@@ -70,6 +81,8 @@ public abstract class OperationBase : IOperation
     public string Name { get; }
 
     public IReadOnlyList<string> Aliases { get; }
+
+    public bool IsCore { get; }
 
     public OperationCard Card { get; private set; }
 

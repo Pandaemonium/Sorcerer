@@ -48,16 +48,46 @@ public sealed class AiSystem
                 continue;
             }
 
+            if (HasActiveBehavior(actor, "dance") || HasActiveBehavior(actor, "freeze_dread"))
+            {
+                continue;
+            }
+
             if (!actor.TryGet<PositionComponent>(out var actorPosition)
                 || !player.TryGet<PositionComponent>(out var playerPosition))
             {
                 continue;
             }
 
+            if (HasActiveBehavior(actor, "coward"))
+            {
+                var fleeDestination = StepAway(actorPosition.Position, playerPosition.Position);
+                if (CanEnter(fleeDestination))
+                {
+                    deltas.Add(_engine.MoveEntity(actor, fleeDestination, "aiMove"));
+                }
+
+                continue;
+            }
+
+            if (HasActiveBehavior(actor, "mimic"))
+            {
+                if (_state.LastControlledMoveDelta is { } mimicDelta)
+                {
+                    var mimicDestination = actorPosition.Position.Translate(mimicDelta.X, mimicDelta.Y);
+                    if (CanEnter(mimicDestination))
+                    {
+                        deltas.Add(_engine.MoveEntity(actor, mimicDestination, "aiMove"));
+                    }
+                }
+
+                continue;
+            }
+
             var distance = GameEngine.Distance(actorPosition.Position, playerPosition.Position);
             if (distance <= 1)
             {
-                deltas.Add(_engine.AttackEntity(actor, player));
+                deltas.AddRange(_engine.AttackEntity(actor, player));
                 continue;
             }
 
@@ -73,6 +103,11 @@ public sealed class AiSystem
 
         return deltas;
     }
+
+    private bool HasActiveBehavior(Entity entity, string tag) =>
+        entity.TryGet<BehaviorTagsComponent>(out var behaviors)
+        && behaviors.Tags.TryGetValue(tag, out var expiry)
+        && (expiry is null || expiry > _state.Turn);
 
     public Entity? FindNearestHostile()
     {
@@ -156,4 +191,7 @@ public sealed class AiSystem
 
     private static GridPoint StepToward(GridPoint from, GridPoint to) =>
         from.Translate(Math.Sign(to.X - from.X), Math.Sign(to.Y - from.Y));
+
+    private static GridPoint StepAway(GridPoint from, GridPoint to) =>
+        from.Translate(-Math.Sign(to.X - from.X), -Math.Sign(to.Y - from.Y));
 }

@@ -42,6 +42,52 @@ public sealed class PersistenceTests
     }
 
     [Fact]
+    public async Task SaveLoadRoundTripsNewWildMagicPortComponentsAndLedgers()
+    {
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            seed: 17);
+        await session.ExecuteAsync(new CastCommand("harden my skin against the coming flame"));
+
+        var player = session.Engine.State.ControlledEntity;
+        await session.ExecuteAsync(new CastCommand("delay my wounds so they land later"));
+        Assert.True(player.TryGet<Sorcerer.Core.Entities.DelayedDamageComponent>(out _));
+
+        await session.ExecuteAsync(new CastCommand("mark the world with a debt that must someday be paid"));
+        await session.ExecuteAsync(new CastCommand("wrap me in thorns that answer anyone who strikes me"));
+        await session.ExecuteAsync(new CastCommand("compel the soldier to make them dance helplessly"));
+        await session.ExecuteAsync(new CastCommand("open a gravity well that pulls everything standing on it"));
+
+        // Delayed damage releases 3 turns after it was cast, so by now (several casts later) it
+        // has legitimately expired; this test only needs the still-live lanes for the round trip.
+        Assert.True(player.TryGet<Sorcerer.Core.Entities.ResistanceComponent>(out _));
+        Assert.NotEmpty(session.Engine.State.WorldFlags);
+        Assert.NotEmpty(session.Engine.State.PersistentEffects.Records);
+        Assert.NotEmpty(session.Engine.State.TileFlows);
+
+        var savedAt = new DateTimeOffset(2026, 6, 30, 12, 0, 0, TimeSpan.Zero);
+        var before = GameSaveService.Serialize(session.Engine.State, savedAt: savedAt);
+        var loaded = GameSaveService.Deserialize(before);
+        var after = GameSaveService.Serialize(loaded.State, loaded.PendingCast, loaded.PendingCastSerial, savedAt);
+
+        Assert.Equal(before, after);
+        Assert.True(StateValidator.Validate(loaded.State).IsValid);
+        var reloadedPlayer = loaded.State.ControlledEntity;
+        Assert.True(reloadedPlayer.TryGet<Sorcerer.Core.Entities.ResistanceComponent>(out var reloadedResistance));
+        Assert.Equal(40, reloadedResistance.Resistances["fire"]);
+        Assert.Equal(session.Engine.State.WorldFlags.Count, loaded.State.WorldFlags.Count);
+        Assert.Equal(session.Engine.State.PersistentEffects.Records.Count, loaded.State.PersistentEffects.Records.Count);
+        Assert.Equal(session.Engine.State.TileFlows.Count, loaded.State.TileFlows.Count);
+
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        if (soldier.TryGet<Sorcerer.Core.Entities.BehaviorTagsComponent>(out _))
+        {
+            var reloadedSoldier = loaded.State.Entities[soldier.Id];
+            Assert.True(reloadedSoldier.TryGet<Sorcerer.Core.Entities.BehaviorTagsComponent>(out _));
+        }
+    }
+
+    [Fact]
     public async Task SaveLoadPreservesPendingCast()
     {
         var path = Path.Combine(Path.GetTempPath(), $"sorcerer_pending_{Guid.NewGuid():N}.json");

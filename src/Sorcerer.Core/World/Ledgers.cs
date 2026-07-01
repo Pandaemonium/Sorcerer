@@ -666,6 +666,97 @@ public sealed class TriggerLedger
     }
 }
 
+/// <summary>
+/// An effect anchored to an entity that fires on a combat event (<c>on_hit</c> when the anchor is
+/// struck, <c>on_strike</c> when the anchor lands a hit) rather than on turn cadence, unlike
+/// <see cref="TriggerRecord"/>. A non-null <see cref="LinkPartnerId"/> marks a sympathetic link:
+/// a fraction of damage the anchor takes is mirrored onto the partner.
+/// </summary>
+public sealed record PersistentEffectRecord(
+    string Id,
+    string AnchorEntityId,
+    string Hook,
+    string EffectType,
+    IReadOnlyDictionary<string, object?> EffectFields,
+    int RemainingUses,
+    string? LinkPartnerId,
+    bool PlayerVisible);
+
+public sealed class PersistentEffectLedger
+{
+    private readonly List<PersistentEffectRecord> _records = new();
+
+    public IReadOnlyList<PersistentEffectRecord> Records => _records;
+
+    public PersistentEffectRecord Add(
+        string anchorEntityId,
+        string hook,
+        string effectType,
+        IReadOnlyDictionary<string, object?> effectFields,
+        int uses,
+        string? linkPartnerId,
+        bool playerVisible)
+    {
+        var record = new PersistentEffectRecord(
+            $"persistent_{_records.Count + 1}",
+            anchorEntityId,
+            string.IsNullOrWhiteSpace(hook) ? "on_hit" : hook.Trim(),
+            string.IsNullOrWhiteSpace(effectType) ? "message" : effectType.Trim(),
+            new Dictionary<string, object?>(effectFields, StringComparer.OrdinalIgnoreCase),
+            Math.Max(1, uses),
+            string.IsNullOrWhiteSpace(linkPartnerId) ? null : linkPartnerId.Trim(),
+            playerVisible);
+        _records.Add(record);
+        return record;
+    }
+
+    public IReadOnlyList<PersistentEffectRecord> ForAnchorAndHook(string anchorEntityId, string hook) =>
+        _records
+            .Where(record => record.RemainingUses > 0
+                && record.Hook.Equals(hook, StringComparison.OrdinalIgnoreCase)
+                && record.AnchorEntityId.Equals(anchorEntityId, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+    public void Consume(string id)
+    {
+        var index = _records.FindIndex(record => record.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return;
+        }
+
+        var remaining = _records[index].RemainingUses - 1;
+        if (remaining <= 0)
+        {
+            _records.RemoveAt(index);
+        }
+        else
+        {
+            _records[index] = _records[index] with { RemainingUses = remaining };
+        }
+    }
+
+    public IReadOnlyList<PersistentEffectRecord> Snapshot() =>
+        _records
+            .Select(record => record with
+            {
+                EffectFields = new Dictionary<string, object?>(record.EffectFields, StringComparer.OrdinalIgnoreCase),
+            })
+            .ToArray();
+
+    public void ReplaceAll(IEnumerable<PersistentEffectRecord> records)
+    {
+        _records.Clear();
+        foreach (var record in records)
+        {
+            _records.Add(record with
+            {
+                EffectFields = new Dictionary<string, object?>(record.EffectFields, StringComparer.OrdinalIgnoreCase),
+            });
+        }
+    }
+}
+
 public sealed record SuspicionRecord(
     string Id,
     int Turn,

@@ -97,6 +97,28 @@ public sealed class EffectSystem
         return new StateDelta("removeStatus", target.Id.Value, message, new Dictionary<string, object?> { ["status"] = status });
     }
 
+    public Entity SpawnItem(
+        string prefix,
+        string name,
+        char glyph,
+        GridPoint position,
+        string itemType,
+        string material,
+        IReadOnlyList<string> tags,
+        int quantity,
+        int value = 1)
+    {
+        var entity = new Entity(_state.NextEntityId(prefix), name)
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent(glyph, "item"))
+            .Set(new TagsComponent(tags))
+            .Set(new PhysicalComponent(BlocksMovement: false, Material: material))
+            .Set(new ItemComponent(itemType, value, material, tags))
+            .Set(new StackComponent(Math.Max(1, quantity)));
+        _state.Entities.Add(entity.Id, entity);
+        return entity;
+    }
+
     public Entity SpawnEntity(string prefix, string name, char glyph, GridPoint position, string faction, int hp, int attack, IReadOnlyList<string> tags)
     {
         var entity = new Entity(_state.NextEntityId(prefix), name)

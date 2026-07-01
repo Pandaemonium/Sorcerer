@@ -4,6 +4,8 @@ using Sorcerer.Core.Runtime;
 
 namespace Sorcerer.Core.World;
 
+public sealed record TileFlow(int Dx, int Dy, int? ExpiresTurn);
+
 public sealed class GameState
 {
     public GameState(int width, int height)
@@ -36,6 +38,9 @@ public sealed class GameState
 
     public GridPoint? SelectedTarget { get; set; }
 
+    /// <summary>The controlled entity's last movement offset, read by the "mimic" behavior tag.</summary>
+    public GridPoint? LastControlledMoveDelta { get; set; }
+
     public Dictionary<EntityId, Entity> Entities { get; } = new();
 
     public Dictionary<string, ZoneSnapshot> Zones { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -45,6 +50,13 @@ public sealed class GameState
     public Dictionary<GridPoint, string> Terrain { get; } = new();
 
     public Dictionary<GridPoint, int> TerrainExpirations { get; } = new();
+
+    /// <summary>
+    /// Standing tile fields (conveyors, gravity wells, wind) that translate whoever stands on
+    /// them by <see cref="TileFlow.Dx"/>/<see cref="TileFlow.Dy"/> each turn, applied by
+    /// <see cref="Sorcerer.Core.Engine.Systems.TurnSystem"/>.
+    /// </summary>
+    public Dictionary<GridPoint, TileFlow> TileFlows { get; } = new();
 
     public Dictionary<string, HashSet<GridPoint>> ExploredBySoulId { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -70,11 +82,15 @@ public sealed class GameState
 
     public TriggerLedger Triggers { get; } = new();
 
+    public PersistentEffectLedger PersistentEffects { get; } = new();
+
     public SuspicionLedger Suspicions { get; } = new();
 
     public BackgroundJobSettings BackgroundSettings { get; set; } = new();
 
     public BackgroundJobQueue BackgroundJobs { get; } = new();
+
+    public Dictionary<string, object?> WorldFlags { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public Entity ControlledEntity => Entities[ControlledEntityId];
 

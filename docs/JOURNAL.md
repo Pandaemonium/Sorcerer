@@ -81,3 +81,80 @@
 - Deferred question log: no user decision is needed for this checkpoint. Longer term, the GUI could expose an explicit "copy log" button, but normal text selection is now available.
 - Fixed malformed target-object handling after a live result surfaced `System.Collections.Generic.Dictionary...` as an entity id. Target normalization now recognizes `{x,y}` point objects, labels unrecognized target dictionaries as malformed instead of stringifying them, and maps malformed operation shapes to technical failures that do not consume a turn or run actor AI.
 - Verification after this checkpoint: `dotnet build C:\Games\Sorcerer\Sorcerer.sln`, `dotnet test C:\Games\Sorcerer\Sorcerer.sln` (25 tests), the focused malformed-target regression, and a mock CLI cast smoke all passed.
+
+## Wild Magic Spell Resolver Port
+
+- Ran three parallel deep-dive research passes into the parent Python prototype
+  (`C:\Games\WildMagic`) to plan a full port of its resolver mechanics: prompt/schema/parsing
+  pipeline, the 17-card capability routing system, and effect application plus eval scoring.
+  Cross-referenced against Sorcerer's current C# resolver (22 operations, a 4-card
+  `CapabilityRegistry` that was never wired into the live pipeline, `SpellResolutionJson`'s repair
+  lane, `SpellCostApplier`, `MechanicalCurseValidator`). User chose the full scope, including the
+  two subsystem-heavy items (`setBehavior` AI hooks, `createFlow` tile movement).
+- Phase A: made the capability-card system real. `CapabilityRegistry.Select` now ranks by trigger
+  hit count, expands one hop via `CommonCombos`, and applies a recall-biased dynamic cap
+  (3-7, +1 for a compositional connective) instead of a flat `Take(7)`. Cards load from
+  `content/capabilities/*.json` via a new `CapabilityCardLoader` (mirrors `OperationCardLoader`)
+  with an 11-card in-code fallback. `WildMagicController.CastAsync` now calls `Select` and builds a
+  narrowed `OperationIndex` (core ops plus routed cards' effect types) instead of always exposing
+  every registered operation; `OllamaSpellProvider` assembles core prompt + always-on capability
+  index + only the routed cards' detail blocks. Narrowing only shapes what's advertised;
+  `OperationRegistry.Resolve` still validates against the full registry, matching upstream's own
+  choice not to hard-enforce a per-cast schema.
+- Phase C: `SpellCostApplier` now floors a negative/unparseable cost amount to its absolute value
+  (minimum 1) so a specified cost always bites, while an explicit `0` still stays free per an
+  existing tested Sorcerer contract (`ZeroNumericMagicCostsDoNotEmitPlayerFacingCostLines`) that
+  predates this port. Curses now stack: `PromiseLedger.FindActive`/`Stack` let `AddCurseOperation`
+  and `SpellCostApplier.AddCurseCost` increment an existing matching curse's `Stacks` instead of
+  duplicating a promise.
+- Phase D (parser): `SpellResolutionJson` now unwraps a common resolution envelope key
+  (`resolution`/`result`/`response`/...), aliases bare element names used as an effect `type`
+  (fire/frost/poison/etc.) into `damage` + `damageType`, rescues a cost entry whose type is
+  actually a registered operation name into `effects`, and strips one-word/placeholder outcome
+  text instead of showing it to the player.
+- Phase B: ported ~15 new operations across three cost tiers, all registered in
+  `OperationRegistry.CreateDefault()`:
+  - Group 1 (cheap): `areaStatus`, `modifyInventory`, `addTag`/`removeTag`, `accelerateStatus`.
+  - Group 2 (one new component/ledger each): `conjureItem`/`conjureCreature` (template tables +
+    a new `GameEngine.SpawnItem`), `addResistance`/`addWeakness` (new `ResistanceComponent` read by
+    `CombatSystem.DamageEntity` before the flat Defense reduction), `setFlag` (new
+    `GameState.WorldFlags` plus an auto Wild-Debt mechanic that stacks a curse and schedules a
+    debt-collector event when the flag reads as debt-shaped), `delayIncoming` (new
+    `DelayedDamageComponent`; `CombatSystem` buffers instead of applying damage, released by a new
+    `TurnSystem.ReleaseDueDelayedDamage` tick), `editMemory` (wired into the existing
+    `MemoryLedger`/`MemoryComponent`; removing the caster from a hostile NPC's memory also calms it
+    via a `BondLedger` loyalty bump).
+  - Group 3 (subsystem-level): `createPersistentEffect` including sympathetic links (a new
+    `PersistentEffectLedger`/`PersistentEffectSystem` fires anchored effects on `on_hit`/`on_strike`
+    combat hooks rather than turn cadence; `GameEngine.AttackEntity` now returns
+    `IReadOnlyList<StateDelta>` to carry the fired effects, and a sympathetic link mirrors the real
+    combat damage dealt rather than inventing a fresh effect); `setBehavior` (new
+    `BehaviorTagsComponent`; `AiSystem.RunActorTurns` gained `coward`/`dance`/`freeze_dread`/`mimic`
+    branches — `duel`/`lowest_hp` were dropped from the real implementation since the current AI
+    loop is single-target and has nothing for them to select between); `createFlow` (new
+    `GameState.TileFlows` plus a `TurnSystem.ApplyTileFlows` tick that translates whoever stands on
+    a flow tile each turn).
+  - All new components/ledgers/state fields are wired into `GameSaveService` (component
+    save/load switches, new `GameStateSave` fields appended at the end of the positional record to
+    avoid disrupting existing field order).
+- Phase D (eval): `SpellEvalHarness` now tags every prompt `common`/`creative`/`exploit`
+  (26 -> 44 prompts, with a new prompt per Phase B operation), and adds exploit-leak detection
+  (accepted with zero cost, or an effect amount >= 100) and hallucinated-target detection (an
+  effect names a literal entity id that never existed in a fresh encounter). The exploit-leak
+  check immediately caught a real gap: `MockSpellProvider`'s `Accepted` helper never attached a
+  cost to any of its 44 bucket responses; added a sibling `AcceptedWithCosts` helper and two
+  exploit-probe-specific buckets (placed ahead of the shared "blast"/"curse" buckets they'd
+  otherwise fall into) that price the response instead of giving it away.
+- Live smoke-testing surfaced a real grammar bug in the new operations' messages: `target.Name`
+  used directly with a hardcoded third-person verb produced "You resists"/"You carries" and a
+  "You's wounds" possessive when the target was the player. Added `Subject`/`Verb`/`Possessive`
+  helpers to `OperationHelpers` (matching the existing `CombatSystem`/`EffectSystem` second-person
+  convention) and fixed all 13 call sites across the three new operation files.
+- Verification: `dotnet build Sorcerer.sln`, `dotnet test Sorcerer.sln` (144 tests, up from 118),
+  `--eval` (44/44, up from 26/26), two unattended mock episodes, script/transcript smoke, a
+  dedicated save/load round-trip test exercising every new component/ledger, several direct CLI
+  casts across the new operations, and a headless Godot launch all passed.
+- Deferred question log: no user decision is needed for this checkpoint. `setBehavior`'s
+  `duel`/`lowest_hp` tags and dynamic per-cast schema enum tightening remain explicitly out of
+  scope, matching the plan's stated non-goals; a future sprint could revisit them if multi-target
+  AI selection becomes a priority.

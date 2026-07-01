@@ -6,19 +6,68 @@ namespace Sorcerer.Magic.Resolution;
 
 public static class SpellResolutionJson
 {
+    private static readonly string[] CommonWrapperKeys =
+    {
+        "resolution", "spell_resolution", "result", "response", "output",
+    };
+
+    private static readonly HashSet<string> JunkOutcomeWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "success", "ok", "done", "true", "false", "null", "error", "failed", "none", "n/a", "unknown",
+    };
+
+    private static readonly IReadOnlyDictionary<string, string> ElementDamageAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["lightning"] = "lightning",
+            ["thunder"] = "lightning",
+            ["fire"] = "fire",
+            ["flame"] = "fire",
+            ["inferno"] = "fire",
+            ["ice"] = "frost",
+            ["frost"] = "frost",
+            ["cold"] = "frost",
+            ["poison"] = "poison",
+            ["toxic"] = "poison",
+            ["acid"] = "acid",
+            ["arcane"] = "arcane",
+            ["magic"] = "arcane",
+            ["psychic"] = "arcane",
+            ["force"] = "force",
+            ["wind"] = "force",
+            ["sonic"] = "force",
+            ["radiant"] = "radiant",
+            ["holy"] = "radiant",
+            ["divine"] = "radiant",
+            ["shadow"] = "shadow",
+            ["necrotic"] = "shadow",
+            ["dark"] = "shadow",
+            ["physical"] = "physical",
+            ["blunt"] = "physical",
+            ["slash"] = "physical",
+            ["pierce"] = "physical",
+            ["blood"] = "blood",
+        };
+
     public static SpellResolution Parse(string raw, OperationRegistry registry)
     {
         using var document = JsonDocument.Parse(ExtractFirstJsonObject(raw));
-        var root = document.RootElement;
+        var root = UnwrapCommonWrapper(document.RootElement);
 
         var accepted = ReadBool(root, "accepted", true);
         var severity = ReadString(root, "severity", "minor");
-        var outcome = ReadString(root, "outcomeText", ReadString(root, "outcome_text", string.Empty));
+        var outcome = CleanOutcomeText(ReadString(root, "outcomeText", ReadString(root, "outcome_text", string.Empty)));
         var rejectedReason = ReadNullableString(root, "rejectedReason")
             ?? ReadNullableString(root, "rejected_reason");
 
+        var rawCosts = ReadCosts(root, "costs")
+            .Select(fields => new Dictionary<string, object?>(fields, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        var rescuedEffects = RescueEffectShapedCosts(rawCosts, registry);
+
         var effectFields = ReadObjects(root, "effects")
             .Select(fields => NormalizeFields(fields, registry))
+            .Concat(rescuedEffects)
             .ToList();
         MergeSummonTraitFollowups(effectFields);
 
@@ -26,7 +75,7 @@ public static class SpellResolutionJson
             .Select(fields => new SpellEffect(registry.Canonicalize(ReadType(fields)), fields))
             .ToArray();
 
-        var costs = ReadCosts(root, "costs")
+        var costs = rawCosts
             .Select(NormalizeCostFields)
             .Select(fields =>
             {
@@ -42,6 +91,77 @@ public static class SpellResolutionJson
             effects,
             costs,
             rejectedReason);
+    }
+
+    /// <summary>
+    /// Some live models wrap the resolution object in an envelope key such as
+    /// <c>{"resolution": {...}}</c>. Hoist the inner object when the outer one doesn't already
+    /// look like a resolution itself (so a legitimately-nested field named e.g. "result" inside a
+    /// real resolution is never mistaken for a wrapper).
+    /// </summary>
+    private static JsonElement UnwrapCommonWrapper(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || root.TryGetProperty("accepted", out _)
+            || root.TryGetProperty("effects", out _))
+        {
+            return root;
+        }
+
+        foreach (var key in CommonWrapperKeys)
+        {
+            if (root.TryGetProperty(key, out var wrapped) && wrapped.ValueKind == JsonValueKind.Object)
+            {
+                return wrapped;
+            }
+        }
+
+        return root;
+    }
+
+    /// <summary>
+    /// One-word/placeholder outcome text ("success", "ok", "true"...) or anything under 4
+    /// characters is treated as absent rather than shown to the player; the caller's own
+    /// deterministic fallback message (or the applied effects' own summaries) takes over instead.
+    /// </summary>
+    private static string CleanOutcomeText(string outcome)
+    {
+        var trimmed = outcome.Trim();
+        return trimmed.Length < 4 || JunkOutcomeWords.Contains(trimmed) ? string.Empty : outcome;
+    }
+
+    /// <summary>
+    /// A model sometimes expresses a mechanical consequence (e.g. addWeakness) as an entry in
+    /// "costs" instead of "effects". Rescue any cost object whose declared type is actually a
+    /// registered operation name before cost normalization can mangle its type field.
+    /// </summary>
+    private static List<Dictionary<string, object?>> RescueEffectShapedCosts(
+        List<Dictionary<string, object?>> rawCosts,
+        OperationRegistry registry)
+    {
+        var rescued = new List<Dictionary<string, object?>>();
+        for (var index = rawCosts.Count - 1; index >= 0; index--)
+        {
+            var type = ReadCostType(rawCosts[index]);
+            if (string.IsNullOrWhiteSpace(type)
+                || !string.IsNullOrWhiteSpace(CanonicalCostType(type))
+                || !registry.Supports(type))
+            {
+                // A blank type, a recognized cost keyword (mana/health/item/status/curse, even
+                // when it happens to also be a registered operation alias like restoreMana's
+                // "mana"), or an unregistered type is left as an ordinary cost.
+                continue;
+            }
+
+            var effectFields = new Dictionary<string, object?>(rawCosts[index], StringComparer.OrdinalIgnoreCase)
+            {
+                ["type"] = type,
+            };
+            rescued.Add(NormalizeFields(effectFields, registry));
+            rawCosts.RemoveAt(index);
+        }
+
+        return rescued;
     }
 
     private static string ExtractFirstJsonObject(string raw)
@@ -189,6 +309,7 @@ public static class SpellResolutionJson
         }
 
         InferMissingEffectType(normalized);
+        ApplyElementDamageAlias(normalized);
 
         var explicitType = ReadExplicitType(normalized);
         if ((explicitType.Equals("addStatus", StringComparison.OrdinalIgnoreCase)
@@ -342,6 +463,24 @@ public static class SpellResolutionJson
         {
             fields["type"] = "createTile";
         }
+    }
+
+    /// <summary>
+    /// A live model sometimes names the element directly as the effect type, e.g.
+    /// <c>{"type":"fire","target":"nearest_enemy","amount":5}</c> instead of
+    /// <c>{"type":"damage","damageType":"fire",...}</c>. Rewrite that into a supported damage
+    /// effect instead of failing as an unsupported effect type.
+    /// </summary>
+    private static void ApplyElementDamageAlias(Dictionary<string, object?> fields)
+    {
+        var explicitType = ReadExplicitType(fields).Trim();
+        if (explicitType.Length == 0 || !ElementDamageAliases.TryGetValue(explicitType, out var canonical))
+        {
+            return;
+        }
+
+        fields["type"] = "damage";
+        fields.TryAdd("damageType", canonical);
     }
 
     private static void MergeNestedFields(Dictionary<string, object?> normalized, string key)
