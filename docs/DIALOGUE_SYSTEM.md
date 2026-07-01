@@ -67,14 +67,24 @@ bounded bond shifts, and the first concrete action proposals:
 `step_aside`, `flee`, `call_help`, `give_item`, and `open_door`. Unsupported
 actions are rejected with diagnostic deltas.
 
+The first shared consequence-grammar slice is implemented in
+`WorldConsequence`/`WorldConsequenceApplier`, exposed through
+`GameEngine.ApplyConsequence`. Dialogue memory proposals, dialogue bond
+proposals, claim-extraction bond proposals, and merchant-stock claim payoffs now
+submit `record_memory`, `update_bond`, or `add_merchant_stock` consequences
+instead of mutating those ledgers directly. The old dialogue proposal records
+remain the provider-facing schema for now; internally they are normalized into
+source-agnostic world consequences before mutation.
+
 Live-model robustness is also implemented for the Ollama dialogue provider. The
 provider preserves usable `spokenText` while normalizing common proposal shape
 mistakes such as string actions (`"step_aside"`), alternate bond fields
 (`trustDelta`/`trust`), float bond deltas, listener-targeted bond proposals, and
 over-eager `playerAuthored` flags. The engine then applies another validation
-layer: immediate generated-dialogue bond deltas are dampened to ordinary
-conversation scale, and cooperative actions are rejected when the NPC response
-is a refusal.
+layer: generated-dialogue and claim-extraction bond proposals share one
+engine-side bond-apply helper, conversational deltas are dampened to ordinary
+scale, missing bond targets produce structured skipped-proposal deltas, and
+cooperative actions are rejected when the NPC response is a refusal.
 
 The current keyword dialogue-intent parser is temporary fallback behavior. It
 should not become the normal way to infer threats, confessions, bargains, or
@@ -182,9 +192,11 @@ The exact schema can evolve, but the separation is important:
 - `proposals` are candidate engine operations.
 - The engine can accept, clamp, transform, defer, or reject each proposal.
 
-The current C# shape uses `DialogueClaimProposal` for claim proposals, with
-separate `DialogueMemoryProposal`, `DialogueBondProposal`, and
-`DialogueActionProposal` records.
+The current provider-facing C# shape uses `DialogueClaimProposal` for claim
+proposals, with separate `DialogueMemoryProposal`, `DialogueBondProposal`, and
+`DialogueActionProposal` records. The engine-facing direction is to normalize
+these into `WorldConsequence` records so the same applier can be used by
+dialogue, documents, services, promises, AI plans, and magic.
 
 ## Request Context
 
@@ -216,6 +228,37 @@ assemble prompt context directly.
 
 Dialogue should start with a small set of general proposal types and grow only
 when a new type unlocks many interactions.
+
+## World Consequence Grammar
+
+Dialogue consequences should be part of a broader world-consequence grammar.
+The first implemented envelope is:
+
+- `type`: the consequence kind, such as `record_memory`, `update_bond`, or
+  `add_merchant_stock`
+- `source`: where the proposal came from, such as dialogue, claim extraction,
+  a promise payoff, a service, AI, or magic
+- `sourceEntityId` and `targetEntityId`: provenance and mutation target
+- `salience`, `confidence`, and `visibility`: player/debug surfacing signals
+- `evidence` and `reason`: audit context for why this was proposed
+- `payload`: typed consequence-specific fields
+
+The first applier handles memory recording, bond updates, merchant stock, trade
+offers, service offers, door open/unlock effects, and route creation. It owns
+target validation, clamping, mutation, visible messages, and deltas. This keeps
+the same bond, stock, service, route, or door change from behaving differently
+depending on whether it came from generated dialogue, delayed claim extraction,
+a service, a promise payoff, or some other source.
+
+Planned next consequence types:
+
+- `record_claim`
+- `create_promise`
+- `update_faction_standing`
+- `add_suspicion`
+- `schedule_event`
+- `create_trigger`
+- `canonize_fact`
 
 ### Claims
 
@@ -263,6 +306,9 @@ turn that memory into trust, fear, admiration, resentment, debt, or devotion.
 
 Bond deltas must be bounded and validated. A single ordinary exchange should
 not swing a relationship wildly unless the context is extraordinary.
+Generated-dialogue bond proposals and delayed claim-extraction bond proposals
+should share the same clamp, entity resolution, mutation, visible-message, and
+skipped-proposal behavior.
 
 ### World Actions
 
@@ -303,16 +349,28 @@ Early outcome verbs:
 
 Each action must pass ordinary preconditions. An NPC cannot give an item they do
 not have or open a door they cannot reach. `create_promise` still passes
-through the claim/promise validators; `offer_trade` reveals stock or services
-for later explicit commands rather than completing a trade inside dialogue.
+through the claim/promise validators; `offer_trade` reveals stock or merchant
+affordances for later explicit commands rather than completing a trade inside dialogue.
 `step_aside` and `flee` use ordinary entity movement checks. `call_help`
 currently schedules a modest help response: imperial callers can schedule an
 `empire_patrol`, while non-imperial calls schedule a generic help-call message.
 
-Implementation can migrate one verb at a time. The first shared path is `open`:
-player `open`, dialogue `open_door`, and future magic/AI open requests should
-all flow through one actor-aware engine action, with the source controlling
-turn consumption and audit wording rather than world truth.
+Implementation can migrate one verb at a time. `open` is actor-aware already:
+player `open`, dialogue `open_door`, and future magic/AI open requests flow
+through one engine action, with the source controlling turn consumption and
+audit wording rather than world truth. Promise payoff also has a shared first
+path now: travel, talk, read, open, and examine/inspect all route concrete
+promise realization through `PromiseRealizationSystem`.
+
+The first service/action consequence slice is live:
+
+- `offer_trade` can make an NPC a normal merchant and optionally add stock.
+- `offer_service` attaches a `ServiceComponent` to an NPC.
+- `services [target]` lists revealed services.
+- `request <service> [from <target>]` asks the provider to perform it.
+- `open_or_unlock` can unlock/open a nearby door through an engine-validated
+  consequence.
+- `create_route` creates a discoverable route fixture.
 
 ### Stock And Services
 
@@ -323,9 +381,19 @@ commands possible.
 Examples:
 
 - "Jimmer can sell you a fine blade" can add or reveal a blade in Jimmer's
-  stock.
+  stock. If no valid merchant exists yet, it can bind as a future
+  `merchant_stock` promise and realize through travel as a merchant carrying
+  that ware.
 - "The midwife keeps fever-salt" can create an item claim or service claim.
 - "I can mend that cloak" can reveal a service if the NPC's role supports it.
+
+Folk-magic services are practiced, but they are hush-hush. The dialogue model
+may reveal them through trust, fear, leverage, rumor, or coded speech, but
+characters should understand that Vigovia can execute people for practicing
+them. Mechanically, revealed services use `ServiceComponent` plus explicit
+`services`/`request` commands. Their first effects route through
+`WorldConsequenceApplier`, including door open/unlock, route creation, and
+durable memory, rather than becoming a separate hidden spell engine.
 
 ## Claim And Promise Relationship
 
@@ -339,8 +407,8 @@ The default path:
 3. The engine accepts high-salience claims into the `ClaimLedger`.
 4. Some claims become promise candidates.
 5. The promise system realizes candidates organically when the world has room:
-   a person appears, a town is generated, a landmark is placed, a stock item is
-   added, or a threat enters a region.
+   a person appears, a town is generated, a landmark is placed, a merchant
+   carries promised stock, an item is added, or a threat enters a region.
 6. The original dialogue remains attached as provenance.
 
 The system should err toward "yes, and" for NPC-authored claims, but not to a

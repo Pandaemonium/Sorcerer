@@ -25,7 +25,8 @@ public sealed record DialogueParticipantCard(
     string? Description = null,
     string? BondSummary = null,
     IReadOnlyList<string>? Inventory = null,
-    IReadOnlyList<string>? Wares = null);
+    IReadOnlyList<string>? Wares = null,
+    IReadOnlyList<string>? Services = null);
 
 public sealed record DialogueSceneCard(
     string RegionId,

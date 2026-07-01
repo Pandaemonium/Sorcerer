@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
@@ -11,12 +12,14 @@ public sealed class InteractionSystem
 {
     private readonly GameEngine _engine;
     private readonly ItemSystem _itemSystem;
+    private readonly PromiseRealizationSystem _promiseRealizationSystem;
     private readonly TurnSystem _turnSystem;
 
     public InteractionSystem(GameEngine engine, ItemSystem itemSystem, TurnSystem turnSystem)
     {
         _engine = engine;
         _itemSystem = itemSystem;
+        _promiseRealizationSystem = new PromiseRealizationSystem(engine.State);
         _turnSystem = turnSystem;
     }
 
@@ -164,7 +167,7 @@ public sealed class InteractionSystem
                 ["delivery"] = delivery,
                 ["intent"] = intent,
             }));
-        deltas.AddRange(RealizePromisesForEntity(target, "talk", messages));
+        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(target, "talk", messages));
         foreach (var line in messages)
         {
             State.AddMessage(line);
@@ -348,6 +351,104 @@ public sealed class InteractionSystem
         return ActionResult.Simple("bonds", true, false, turn, turn, actors.Length == 0 ? new[] { "No personal bonds have crystallized yet." } : actors);
     }
 
+    public ActionResult Services(string? targetText)
+    {
+        var turn = State.Turn;
+        var providers = NearbyServiceProviders(targetText).ToArray();
+        if (providers.Length == 0)
+        {
+            return ActionResult.Simple("services", false, false, turn, turn, "No nearby services are being offered.");
+        }
+
+        var lines = providers
+            .SelectMany(provider => VisibleServices(provider)
+                .Select(service => FormatServiceLine(provider, service)))
+            .ToArray();
+        return ActionResult.Simple(
+            "services",
+            true,
+            false,
+            turn,
+            turn,
+            lines.Length == 0 ? new[] { "No nearby services are being offered." } : lines);
+    }
+
+    public ActionResult RequestService(string serviceText, string? targetText)
+    {
+        var turnBefore = State.Turn;
+        if (string.IsNullOrWhiteSpace(serviceText))
+        {
+            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, "Name the service you want.");
+        }
+
+        var provider = ResolveServiceProvider(targetText, serviceText);
+        if (provider is null)
+        {
+            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, "No nearby provider offers that service.");
+        }
+
+        var service = FindService(VisibleServices(provider), serviceText);
+        if (service is null)
+        {
+            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, $"{provider.Name} is not offering {serviceText}.");
+        }
+
+        var inventory = State.ControlledEntity.Get<InventoryComponent>();
+        var costProblem = ServiceCostProblem(inventory, service);
+        if (costProblem is not null)
+        {
+            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, costProblem);
+        }
+
+        var applied = ApplyServiceEffect(provider, service);
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"{provider.Name} cannot complete that service here.";
+            return new ActionResult
+            {
+                Action = "request",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = applied.Deltas,
+            };
+        }
+
+        PayServiceCost(inventory, service);
+        var serviceMessage = $"{provider.Name} provides {service.Name}.";
+        State.AddMessage(serviceMessage);
+        var deltas = new List<StateDelta>
+        {
+            new(
+                "requestService",
+                provider.Id.Value,
+                serviceMessage,
+                new Dictionary<string, object?>
+                {
+                    ["serviceId"] = service.Id,
+                    ["serviceName"] = service.Name,
+                    ["effectKind"] = service.EffectKind,
+                    ["goldCost"] = service.GoldCost,
+                    ["itemCost"] = service.ItemCost,
+                }),
+        };
+        deltas.AddRange(applied.Deltas);
+
+        var turnDeltas = AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "request",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = State.Turn,
+            Messages = new[] { serviceMessage }.Concat(applied.Messages).Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Deltas = deltas.Concat(turnDeltas).ToArray(),
+        };
+    }
+
     public ActionResult Read(string? target)
     {
         var turnBefore = State.Turn;
@@ -371,7 +472,7 @@ public sealed class InteractionSystem
             State.Turn);
         _turnSystem.EnqueueBackgroundJob("canon_detail", entity, priority: 3);
         var messages = new List<string> { body };
-        var deltas = RealizePromisesForEntity(entity, "read", messages);
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(entity, "read", messages);
         foreach (var line in messages)
         {
             State.AddMessage(line);
@@ -398,9 +499,25 @@ public sealed class InteractionSystem
             return ActionResult.Simple("examine", false, false, State.Turn, State.Turn, "There is nothing close enough to examine.");
         }
 
-        var messages = DescribeEntity(entity);
+        var messages = DescribeEntity(entity).ToList();
+        var originalMessageCount = messages.Count;
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(entity, "inspect", messages);
+        foreach (var line in messages.Skip(originalMessageCount))
+        {
+            State.AddMessage(line);
+        }
+
         _turnSystem.EnqueueBackgroundJob("entity_detail", entity, priority: 2);
-        return ActionResult.Simple("examine", true, false, State.Turn, State.Turn, messages.ToArray());
+        return new ActionResult
+        {
+            Action = "examine",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = State.Turn,
+            TurnAfter = State.Turn,
+            Messages = messages.ToArray(),
+            Deltas = deltas,
+        };
     }
 
     public ActionResult Open(string? target)
@@ -694,6 +811,193 @@ public sealed class InteractionSystem
         messages.Add(line);
     }
 
+    private IEnumerable<Entity> NearbyServiceProviders(string? targetText)
+    {
+        if (!string.IsNullOrWhiteSpace(targetText))
+        {
+            var provider = ResolveNearbyEntity(targetText, entity => entity.Has<ServiceComponent>(), range: 2);
+            return provider is null ? Array.Empty<Entity>() : new[] { provider };
+        }
+
+        var origin = State.ControlledEntity.Get<PositionComponent>().Position;
+        return State.Entities.Values
+            .Where(entity => entity.Has<ServiceComponent>())
+            .Where(entity => entity.TryGet<PositionComponent>(out var position)
+                && GameEngine.Distance(origin, position.Position) <= 2)
+            .OrderBy(entity => entity.TryGet<PositionComponent>(out var position)
+                ? GameEngine.Distance(origin, position.Position)
+                : int.MaxValue)
+            .ThenBy(entity => entity.Id.Value)
+            .ToArray();
+    }
+
+    private Entity? ResolveServiceProvider(string? targetText, string serviceText)
+    {
+        var providers = NearbyServiceProviders(targetText);
+        if (!string.IsNullOrWhiteSpace(targetText))
+        {
+            return providers.FirstOrDefault();
+        }
+
+        return providers.FirstOrDefault(provider => FindService(VisibleServices(provider), serviceText) is not null);
+    }
+
+    private static IEnumerable<ServiceOffer> VisibleServices(Entity provider) =>
+        provider.TryGet<ServiceComponent>(out var services)
+            ? services.Offers.Where(service => service.Revealed)
+            : Array.Empty<ServiceOffer>();
+
+    private static ServiceOffer? FindService(IEnumerable<ServiceOffer> services, string serviceText)
+    {
+        var normalized = serviceText.Trim();
+        return services.FirstOrDefault(service =>
+            service.Id.Equals(normalized, StringComparison.OrdinalIgnoreCase)
+            || service.Name.Equals(normalized, StringComparison.OrdinalIgnoreCase)
+            || service.Name.Contains(normalized, StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains(service.Name, StringComparison.OrdinalIgnoreCase)
+            || service.Tags?.Any(tag => tag.Equals(normalized, StringComparison.OrdinalIgnoreCase)) == true);
+    }
+
+    private static string FormatServiceLine(Entity provider, ServiceOffer service)
+    {
+        var costs = new List<string>();
+        if (service.GoldCost > 0)
+        {
+            costs.Add($"{service.GoldCost} gold");
+        }
+
+        if (!string.IsNullOrWhiteSpace(service.ItemCost))
+        {
+            costs.Add(service.ItemCost);
+        }
+
+        var cost = costs.Count == 0 ? "no listed price" : string.Join(" and ", costs);
+        return $"{provider.Name} offers {service.Name}: {service.Description} ({cost}).";
+    }
+
+    private string? ServiceCostProblem(InventoryComponent inventory, ServiceOffer service)
+    {
+        if (service.GoldCost > 0)
+        {
+            inventory.Items.TryGetValue("gold", out var gold);
+            if (gold < service.GoldCost)
+            {
+                return $"You need {service.GoldCost} gold for {service.Name}.";
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(service.ItemCost))
+        {
+            var itemKey = FindInventoryKey(inventory, service.ItemCost);
+            if (itemKey is null)
+            {
+                return $"You need {service.ItemCost} for {service.Name}.";
+            }
+
+            if (inventory.TreasuredItems.Contains(itemKey))
+            {
+                return $"{itemKey} is protected; unprotect it before offering it.";
+            }
+        }
+
+        return null;
+    }
+
+    private void PayServiceCost(InventoryComponent inventory, ServiceOffer service)
+    {
+        if (service.GoldCost > 0)
+        {
+            inventory.Items.TryGetValue("gold", out var gold);
+            var remaining = gold - service.GoldCost;
+            if (remaining <= 0)
+            {
+                inventory.Items.Remove("gold");
+                inventory.TreasuredItems.Remove("gold");
+            }
+            else
+            {
+                inventory.Items["gold"] = remaining;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(service.ItemCost))
+        {
+            var itemKey = FindInventoryKey(inventory, service.ItemCost);
+            if (itemKey is not null)
+            {
+                DecrementInventory(inventory, itemKey);
+            }
+        }
+    }
+
+    private WorldConsequenceApplyResult ApplyServiceEffect(Entity provider, ServiceOffer service)
+    {
+        var effect = NormalizeServiceEffect(service.EffectKind);
+        if (effect is "open_or_unlock" or "unlock_or_open" or "ward_breaking")
+        {
+            var door = ResolveServiceDoor(service);
+            if (door is null)
+            {
+                return WorldConsequenceApplyResult.Empty("There is no nearby door for that service.");
+            }
+
+            return _engine.ApplyConsequence(WorldConsequence.OpenOrUnlock(
+                "service",
+                door.Id.Value,
+                actorId: provider.Id.Value,
+                unlock: true,
+                open: true,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: provider.Id.Value,
+                evidence: service.Description,
+                operation: "serviceOpenOrUnlock"));
+        }
+
+        if (effect is "create_route" or "escape_route" or "reveal_route")
+        {
+            return _engine.ApplyConsequence(WorldConsequence.CreateRoute(
+                "service",
+                provider.Id.Value,
+                string.IsNullOrWhiteSpace(service.TargetHint) ? service.Name : service.TargetHint,
+                service.Description,
+                effect,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: provider.Id.Value,
+                evidence: service.Description,
+                operation: "serviceCreateRoute"));
+        }
+
+        return _engine.ApplyConsequence(WorldConsequence.RecordMemory(
+            "service",
+            provider.Id.Value,
+            $"{provider.Name} provided {service.Name}: {service.Description}",
+            "service",
+            2,
+            shareable: true,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: provider.Id.Value,
+            operation: "serviceMemory"));
+    }
+
+    private Entity? ResolveServiceDoor(ServiceOffer service)
+    {
+        var target = FirstNonBlank(service.TargetHint, service.Name);
+        return ResolveNearbyEntity(target, entity => entity.Has<DoorComponent>(), range: 2)
+            ?? ResolveNearbyEntity(null, entity => entity.Has<DoorComponent>(), range: 2);
+    }
+
+    private static string NormalizeServiceEffect(string effect)
+    {
+        var normalized = string.Join(
+            "_",
+            effect.Trim().ToLowerInvariant()
+                .Split(new[] { ' ', '-', '.', ',', ':', ';', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(normalized) ? "record_memory" : normalized;
+    }
+
+    private static string? FirstNonBlank(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
     private string DialogueLine(Entity target)
     {
         if (_engine.IsHostile(target, State.ControlledEntity))
@@ -911,7 +1215,7 @@ public sealed class InteractionSystem
 
     private void ResolveDoorConsequences(Entity door, List<string> messages, List<StateDelta> deltas)
     {
-        deltas.AddRange(RealizePromisesForEntity(door, "open", messages));
+        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(door, "open", messages));
 
         if (!door.Name.Contains("cell", StringComparison.OrdinalIgnoreCase)
             && !door.Id.Value.Contains("cell", StringComparison.OrdinalIgnoreCase))
@@ -1000,299 +1304,6 @@ public sealed class InteractionSystem
         }
 
         anchor.Set(new PromiseAnchorComponent(ids));
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromisesForEntity(Entity entity, string trigger, List<string> messages)
-    {
-        if (!entity.TryGet<PromiseAnchorComponent>(out var anchor))
-        {
-            return Array.Empty<StateDelta>();
-        }
-
-        var deltas = new List<StateDelta>();
-        foreach (var promiseId in anchor.PromiseIds.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var existing = State.PromiseLedger.Promises.FirstOrDefault(promise =>
-                promise.Id.Equals(promiseId, StringComparison.OrdinalIgnoreCase));
-            if (existing is null
-                || existing.Status.Equals("realized", StringComparison.OrdinalIgnoreCase)
-                || !PromiseTriggerMatches(existing.TriggerHint, trigger))
-            {
-                continue;
-            }
-
-            var realizedIn = $"{trigger}:{entity.Id.Value}";
-            var realized = State.PromiseLedger.SetStatus(existing.Id, "realized", realizedIn);
-            if (realized is null)
-            {
-                continue;
-            }
-
-            var message = $"A promise stirs awake: {realized.Text}";
-            messages.Add(message);
-            deltas.Add(new StateDelta(
-                "realizePromise",
-                realized.Id,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["status"] = realized.Status,
-                    ["trigger"] = trigger,
-                    ["target"] = entity.Id.Value,
-                    ["realizedIn"] = realized.RealizedIn,
-                    ["realizationKind"] = realized.RealizationKind,
-                }));
-            deltas.AddRange(ApplyPromiseRealization(realized, entity, trigger, messages));
-        }
-
-        return deltas;
-    }
-
-    private IReadOnlyList<StateDelta> ApplyPromiseRealization(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages)
-    {
-        var kind = NormalizeId(promise.RealizationKind ?? promise.Kind, "omen");
-        return kind switch
-        {
-            "memory" => RealizePromiseMemory(promise, anchor, trigger, messages),
-            "threat" => RealizePromiseThreat(promise, anchor, trigger, messages),
-            "item" => RealizePromiseItem(promise, anchor, trigger, messages),
-            "quest" => RealizePromiseCanon(promise, anchor, trigger, messages, "quest", "A quest takes shape"),
-            "site" => RealizePromiseCanon(promise, anchor, trigger, messages, "site", "A distant place answers"),
-            _ => RealizePromiseCanon(promise, anchor, trigger, messages, "omen", "The omen settles into the world"),
-        };
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromiseMemory(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages)
-    {
-        var worldMemory = State.Memories.Append(
-            anchor.Id.Value,
-            promise.Text,
-            $"promise:{promise.Id}:{trigger}",
-            Math.Max(2, promise.Salience + 1),
-            shareable: true);
-        var existing = anchor.TryGet<MemoryComponent>(out var memory)
-            ? memory.Records.ToList()
-            : new List<EntityMemoryRecord>();
-        existing.Add(new EntityMemoryRecord(
-            $"memory_{promise.Id}",
-            promise.Text,
-            promise.Id,
-            trigger,
-            Math.Max(2, promise.Salience + 1),
-            Shareable: true));
-        anchor.Set(new MemoryComponent(existing));
-
-        var message = $"{anchor.Name} remembers something that was not there before.";
-        messages.Add(message);
-        return new[]
-        {
-            new StateDelta(
-                "promiseMemory",
-                worldMemory.Id,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = promise.Id,
-                    ["anchor"] = anchor.Id.Value,
-                    ["trigger"] = trigger,
-                }),
-        };
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromiseThreat(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages)
-    {
-        var origin = anchor.TryGet<PositionComponent>(out var anchorPosition)
-            ? anchorPosition.Position
-            : State.ControlledEntity.Get<PositionComponent>().Position;
-        var position = FindOpenAdjacent(origin)
-            ?? FindOpenAdjacent(State.ControlledEntity.Get<PositionComponent>().Position)
-            ?? origin;
-        var threatName = PromiseThreatName(promise);
-        var threat = _engine.SpawnEntity(
-            "promise_threat",
-            threatName,
-            'D',
-            position,
-            "empire",
-            hp: 8,
-            attack: 3,
-            tags: new[] { "promise", "threat", "omen" });
-        var message = $"{threat.Name} arrives to collect on the promise.";
-        messages.Add(message);
-        return new[]
-        {
-            new StateDelta(
-                "promiseThreat",
-                threat.Id.Value,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = promise.Id,
-                    ["x"] = position.X,
-                    ["y"] = position.Y,
-                    ["trigger"] = trigger,
-                }),
-        };
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromiseItem(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages)
-    {
-        var origin = anchor.TryGet<PositionComponent>(out var anchorPosition)
-            ? anchorPosition.Position
-            : State.ControlledEntity.Get<PositionComponent>().Position;
-        var position = FindOpenAdjacent(origin) ?? origin;
-        var itemName = PromiseItemName(promise);
-        var item = _itemSystem.BuildItemEntity(itemName, position, quantity: 1);
-        item.Name = itemName;
-        item.Set(new DescriptionComponent($"This object exists because a promise became concrete: {promise.Text}"));
-        State.Entities[item.Id] = item;
-
-        var message = $"{item.Name} appears where the promise can reach it.";
-        messages.Add(message);
-        return new[]
-        {
-            new StateDelta(
-                "promiseItem",
-                item.Id.Value,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = promise.Id,
-                    ["x"] = position.X,
-                    ["y"] = position.Y,
-                    ["trigger"] = trigger,
-                }),
-        };
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromiseCanon(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages,
-        string canonKind,
-        string messagePrefix)
-    {
-        var canon = State.Canon.Add(
-            canonKind,
-            anchor.Id.Value,
-            promise.Text,
-            promise.Text,
-            new[] { "promise", promise.Kind, canonKind },
-            $"promise:{promise.Id}:{trigger}",
-            State.Turn);
-        var message = $"{messagePrefix}: {promise.Text}";
-        messages.Add(message);
-        return new[]
-        {
-            new StateDelta(
-                "promiseCanon",
-                canon.Id,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = promise.Id,
-                    ["anchor"] = anchor.Id.Value,
-                    ["kind"] = canonKind,
-                    ["trigger"] = trigger,
-                }),
-        };
-    }
-
-    private GridPoint? FindOpenAdjacent(GridPoint origin)
-    {
-        var offsets = new[]
-        {
-            new GridPoint(0, -1),
-            new GridPoint(1, 0),
-            new GridPoint(0, 1),
-            new GridPoint(-1, 0),
-            new GridPoint(1, -1),
-            new GridPoint(1, 1),
-            new GridPoint(-1, 1),
-            new GridPoint(-1, -1),
-        };
-
-        foreach (var offset in offsets)
-        {
-            var candidate = origin.Translate(offset.X, offset.Y);
-            if (CanEnter(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private static string PromiseThreatName(WorldPromise promise)
-    {
-        var lower = promise.Text.ToLowerInvariant();
-        if (lower.Contains("collector"))
-        {
-            return "debt collector";
-        }
-
-        if (lower.Contains("soldier") || lower.Contains("empire") || lower.Contains("imperial"))
-        {
-            return "promised imperial claimant";
-        }
-
-        return "promised threat";
-    }
-
-    private static string PromiseItemName(WorldPromise promise)
-    {
-        var lower = promise.Text.ToLowerInvariant();
-        if (lower.Contains("key"))
-        {
-            return "promised key";
-        }
-
-        if (lower.Contains("blade") || lower.Contains("knife") || lower.Contains("sword"))
-        {
-            return "promised blade";
-        }
-
-        if (lower.Contains("pearl"))
-        {
-            return "promised pearl";
-        }
-
-        return "promise token";
-    }
-
-    private static bool PromiseTriggerMatches(string? triggerHint, string trigger)
-    {
-        if (string.IsNullOrWhiteSpace(triggerHint))
-        {
-            return true;
-        }
-
-        var normalizedTrigger = trigger.Trim().ToLowerInvariant();
-        var hints = triggerHint.ToLowerInvariant()
-            .Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return hints.Any(hint =>
-            hint == normalizedTrigger
-            || (normalizedTrigger == "open" && hint is "door" or "opened" or "unlock")
-            || (normalizedTrigger == "talk" && hint is "speak" or "name" or "dialogue")
-            || (normalizedTrigger == "read" && hint is "notice" or "sign" or "book"));
     }
 
     private Entity? ResolvePromiseAnchorFromSelectionOrText(string text)
@@ -1398,6 +1409,18 @@ public sealed class InteractionSystem
     private static string InferRealizationKind(string kind, string text)
     {
         var lower = $"{kind} {text}".ToLowerInvariant();
+        if (lower.Contains("route")
+            || lower.Contains("passage")
+            || lower.Contains("hidden path")
+            || lower.Contains("escape")
+            || lower.Contains("drain")
+            || lower.Contains("tunnel")
+            || lower.Contains("grate")
+            || lower.Contains("hidden exit"))
+        {
+            return "escape_route";
+        }
+
         if (lower.Contains("item") || lower.Contains("blade") || lower.Contains("key"))
         {
             return "item";

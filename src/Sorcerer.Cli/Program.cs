@@ -311,6 +311,10 @@ public static class Program
                 "wares" or "browse" => new WaresCommand(ReadNullableString(root, "target")),
                 "buy" => new BuyCommand(ReadString(root, "item", ""), ReadNullableString(root, "target")),
                 "sell" => new SellCommand(ReadString(root, "item", ""), ReadNullableString(root, "target")),
+                "services" => new ServicesCommand(ReadNullableString(root, "target")),
+                "request" or "service" => new RequestServiceCommand(
+                    ReadString(root, "service", ReadString(root, "name", "")),
+                    ReadNullableString(root, "target")),
                 "journal" => new JournalCommand(),
                 "character" or "sheet" or "profile" => new CharacterCommand(),
                 "talk" => new TalkCommand(ReadString(root, "text", "")),

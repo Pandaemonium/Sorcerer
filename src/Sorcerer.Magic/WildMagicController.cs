@@ -78,7 +78,7 @@ public sealed class WildMagicController : IWildMagicController
             return result;
         }
 
-        var resolution = Normalize(providerResult.Resolution);
+        var resolution = RepairNarration(command.Text, Normalize(providerResult.Resolution));
         if (!resolution.Accepted)
         {
             var result = WithResolutionJson(Rejected(
@@ -96,7 +96,7 @@ public sealed class WildMagicController : IWildMagicController
             engine,
             engine.State.ControlledEntity,
             new EngineReferenceResolver(engine, engine.State.ControlledEntity));
-        var validationIssues = ValidateResolution(engine, resolution, effectContext);
+        var validationIssues = ValidateResolution(engine, command.Text, resolution, effectContext);
         if (validationIssues.Count > 0)
         {
             var reason = string.Join("; ", validationIssues.Select(issue => issue.Message));
@@ -217,6 +217,64 @@ public sealed class WildMagicController : IWildMagicController
                 .ToArray(),
         };
 
+    private static SpellResolution RepairNarration(string spellText, SpellResolution resolution)
+    {
+        var effectTypes = resolution.Effects
+            .Select(effect => effect.Type)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var canClipSupplementalNarration = HasMechanicalBacking(effectTypes);
+        if (!canClipSupplementalNarration)
+        {
+            return resolution;
+        }
+
+        var effects = resolution.Effects
+            .Where(effect => !IsUnsafeSupplementalMessage(effect, effectTypes))
+            .ToArray();
+        var outcomeText = resolution.OutcomeText;
+        if (NarrationClaimsPlayerCommand(outcomeText))
+        {
+            outcomeText = RepairedOutcomeText(spellText, effectTypes);
+        }
+
+        return resolution with
+        {
+            OutcomeText = outcomeText,
+            Effects = effects,
+        };
+    }
+
+    private static bool IsUnsafeSupplementalMessage(SpellEffect effect, IReadOnlySet<string> effectTypes)
+    {
+        if (!effect.Type.Equals("message", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var text = ReadString(effect.Fields, "text", ReadString(effect.Fields, "message", ""));
+        return NarrationClaimsPlayerCommand(text);
+    }
+
+    private static bool HasMechanicalBacking(IReadOnlySet<string> effectTypes) =>
+        effectTypes.Any(effect => !effect.Equals("message", StringComparison.OrdinalIgnoreCase));
+
+    private static string RepairedOutcomeText(string spellText, IReadOnlySet<string> effectTypes)
+    {
+        if (HasAnyEffect(effectTypes, "createPromise"))
+        {
+            return PromiseIntentNeedsLedger(spellText)
+                ? "The spell binds itself to a future event."
+                : "The spell leaves a promise the world can remember.";
+        }
+
+        if (HasAnyEffect(effectTypes, "scheduleEvent", "createTrigger"))
+        {
+            return "The spell sets a future working in motion.";
+        }
+
+        return "The spell takes a concrete shape.";
+    }
+
     private static ActionResult WithResolutionJson(ActionResult result, SpellResolution resolution) =>
         result.Magic is null
             ? result
@@ -233,6 +291,7 @@ public sealed class WildMagicController : IWildMagicController
 
     private IReadOnlyList<SpellValidationIssue> ValidateResolution(
         GameEngine engine,
+        string spellText,
         SpellResolution resolution,
         EffectContext effectContext)
     {
@@ -266,9 +325,138 @@ public sealed class WildMagicController : IWildMagicController
         }
 
         issues.AddRange(MechanicalCurseValidator.Validate(engine, resolution));
+        ValidateNarrativeMechanics(spellText, resolution, issues);
         issues.AddRange(ValidateCosts(engine, resolution.Costs));
         return issues;
     }
+
+    private static void ValidateNarrativeMechanics(
+        string spellText,
+        SpellResolution resolution,
+        List<SpellValidationIssue> issues)
+    {
+        var effectTypes = resolution.Effects
+            .Select(effect => effect.Type)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (PromiseIntentNeedsLedger(spellText) && !HasAnyEffect(effectTypes, "createPromise", "scheduleEvent", "createTrigger"))
+        {
+            issues.Add(new SpellValidationIssue(
+                "promise_effect_missing",
+                "The resolver treated a promised future as flavor. Promise, prophecy, oath, and omen spells need createPromise, scheduleEvent, or createTrigger.",
+                TechnicalFailure: true));
+        }
+
+        if (NarrationClaimsUnsupportedMechanics(resolution.OutcomeText, effectTypes, out var outcomeReason))
+        {
+            issues.Add(new SpellValidationIssue(
+                "outcome_claims_unsupported_mechanics",
+                outcomeReason,
+                TechnicalFailure: true));
+        }
+
+        foreach (var effect in resolution.Effects.Where(effect => effect.Type.Equals("message", StringComparison.OrdinalIgnoreCase)))
+        {
+            var text = ReadString(effect.Fields, "text", ReadString(effect.Fields, "message", ""));
+            if (NarrationClaimsUnsupportedMechanics(text, effectTypes, out var reason))
+            {
+                issues.Add(new SpellValidationIssue(
+                    "message_claims_unsupported_mechanics",
+                    reason,
+                    TechnicalFailure: true));
+            }
+        }
+    }
+
+    private static bool PromiseIntentNeedsLedger(string text)
+    {
+        var tokens = Tokens(text);
+        return tokens.Contains("promise")
+            || tokens.Contains("promises")
+            || tokens.Contains("promised")
+            || tokens.Contains("prophecy")
+            || tokens.Contains("prophecies")
+            || tokens.Contains("omen")
+            || tokens.Contains("omens")
+            || tokens.Contains("oath")
+            || tokens.Contains("oaths");
+    }
+
+    private static bool NarrationClaimsUnsupportedMechanics(
+        string text,
+        IReadOnlySet<string> effectTypes,
+        out string reason)
+    {
+        reason = "";
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var lower = text.ToLowerInvariant();
+        if (NarrationClaimsPlayerCommand(lower))
+        {
+            reason = "Message and outcome text cannot perform player commands; use the matching engine command or operation instead.";
+            return true;
+        }
+
+        if (ClaimsRouteReveal(lower)
+            && !HasAnyEffect(effectTypes, "createPromise", "scheduleEvent", "createTrigger", "createTiles", "summon", "conjureCreature"))
+        {
+            reason = "A route, passage, or landmark reveal needs a backing promise, trigger, terrain change, or spawned site operation.";
+            return true;
+        }
+
+        if (ClaimsDoorState(lower)
+            && !HasAnyEffect(effectTypes, "transformEntity", "createTiles", "createPromise", "scheduleEvent", "createTrigger"))
+        {
+            reason = "Opening or unlocking a door must be represented by an engine operation, not only by narration.";
+            return true;
+        }
+
+        if (ClaimsInventoryChange(lower)
+            && !HasAnyEffect(effectTypes, "modifyInventory", "conjureItem", "transformItem"))
+        {
+            reason = "Inventory gains, losses, purchases, or sales must be represented by inventory/item operations, not only by narration.";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool ClaimsRouteReveal(string lower) =>
+        ContainsAny(lower, "hidden route", "secret route", "route lies", "reveals the route", "reveals a route", "reveals the hidden route", "reveals a hidden route", "revealing the route", "revealing a route", "revealing the hidden route")
+        || (ContainsAny(lower, "passage", "path", "landmark") && ContainsAny(lower, "reveals", "revealed", "appears", "opens", "lies beneath", "lies beyond"));
+
+    private static bool ClaimsDoorState(string lower) =>
+        ContainsAny(lower, "door opens", "door unlocks", "gate opens", "gate unlocks", "cell opens", "cell unlocks", "lock opens", "lock unlocks")
+        || (ContainsAny(lower, "door", "gate", "cell door", "lock") && ContainsAny(lower, "is open", "is unlocked", "swings open"));
+
+    private static bool ClaimsInventoryChange(string lower) =>
+        ContainsAny(lower, "added to your inventory", "appears in your inventory", "you gain ", "you receive ", "you buy ", "you sell ");
+
+    private static bool NarrationClaimsPlayerCommand(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var lower = text.ToLowerInvariant();
+        return ContainsAny(lower, "you read ", "you read:", "you read the", "you travel ", "you move ", "you buy ", "you sell ", "you pick up ", "you take ");
+    }
+
+    private static bool HasAnyEffect(IReadOnlySet<string> effectTypes, params string[] names) =>
+        names.Any(effectTypes.Contains);
+
+    private static bool ContainsAny(string text, params string[] needles) =>
+        needles.Any(needle => text.Contains(needle, StringComparison.OrdinalIgnoreCase));
+
+    private static HashSet<string> Tokens(string text) =>
+        text.Split(
+                new[] { ' ', '\t', '\r', '\n', '.', ',', ';', ':', '!', '?', '\'', '"', '-', '_', '/', '\\', '(', ')', '[', ']' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(token => token.ToLowerInvariant())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static IReadOnlyList<SpellValidationIssue> ValidateCosts(
         GameEngine engine,

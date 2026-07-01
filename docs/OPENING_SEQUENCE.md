@@ -119,6 +119,13 @@ cluster of people who offer different kinds of future:
 - **The unreliable witness:** saw something but cannot safely say it unless trust, fear, or
   magic changes the situation.
 
+The first implementation can start with personal profiles rather than a larger cast. A profile
+should make an NPC likely to disclose concrete leads under the right pressure without making them
+a scripted quest giver. Lio, for example, can know a refuge, a blade-seller, a named relative, a
+burned-oak landmark, or a drainage route; imperial guards can know confiscation ledgers, patrol
+timing, warrants, and procedural weaknesses. The model should still decide what is actually said
+from the immediate conversation.
+
 NPC information should first become reported claims with provenance. Some claims bind as promises
 when they map to a buildable archetype. Vague color remains dialogue or memory. Concrete, salient
 claims can become obligations the world can honor.
@@ -128,6 +135,16 @@ become context for later dialogue; the bond shift itself should be proposed by t
 extractor when the NPC's response supports it. A prisoner given grave salt, a merchant given back
 their confiscated charm, or a clerk bribed with gold can move from generic dialogue into a more
 specific claim: a person, town, item, debt, or landmark that the promise system may later realize.
+
+Folk-magic services can exist in the opening, but they should be treated as dangerous secrets.
+Someone may know a mender, fever-worker, name-charmer, or road-whisperer, but speaking plainly
+about that practice can plausibly get a person executed by Vigovia.
+
+The first mechanical service lane exists. Dialogue or claim extraction can reveal a service on an
+NPC through `ServiceComponent`; the player can inspect it with `services [target]` and attempt it
+with `request <service> [from <provider>]`. Early service effects should stay practical and
+systemic: open or unlock a nearby door, reveal/create a route fixture, or write durable memory.
+They should feel like risky folk help, not a separate menu of scripted quests.
 
 ### 4. Escape Creates Reputation
 
@@ -157,6 +174,8 @@ Good first-payoff examples:
 - reading an altered notice reveals a newly bound location
 - talking to an NPC after a gift produces a concrete site promise
 - traveling east materializes a small landmark tied to a prior claim
+- a service claim reveals ward-breaking or route-finding, then `request` produces a real door or
+  route consequence
 - a spell-written promise attaches to a door, item, or rumor and appears in the journal
 
 The first payoff should be understandable, local, and fast. Larger hooks can remain pending.

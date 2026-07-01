@@ -454,8 +454,10 @@ The first interactable and social slice also lives here. `pickup`, `drop`, `use`
 `bonds`, `journal`, `standing`, and `followers` are shared engine/session actions, so Godot,
 CLI agents, and tests all exercise the same behavior. Minimal trade is also engine-side:
 `MerchantComponent` plus `wares`, `buy`, and `sell` commands live in `ItemSystem`, with no model call
-for trade intent. Opening the first locked cell demonstrates how a plain door entity can realize a
-promise, update ledgers, and change combat allegiance without scripting a separate renderer path.
+for trade intent. Service offers are explicit engine affordances too: `ServiceComponent` plus
+`services` and `request` commands let dialogue reveal hush-hush help without auto-performing a
+bargain. Opening the first locked cell demonstrates how a plain door entity can realize a promise,
+update ledgers, and change combat allegiance without scripting a separate renderer path.
 
 Personal bonds are separate from combat allegiance and organization membership. `BondLedger`
 stores soul-keyed loyalty/fear/admiration/resentment/posture records; `ActorComponent.Faction`
@@ -464,7 +466,10 @@ for later dialogue, recruitment changes combat allegiance while preserving membe
 `followers` reads bond posture rather than same-faction membership. The first deterministic
 dialogue parser handles a few common organic intents; post-dialogue claim extraction handles
 reported claims, promise proposals, merchant stock, and bond shifts through structured proposals
-that the engine validates.
+that the engine validates. The shared world-consequence applier now owns common side effects such
+as memory recording, bond updates, merchant-stock changes, trade offers, service offers, door
+open/unlock effects, and route creation, so dialogue, claim extraction, services, promise payoffs,
+and future systems can request the same engine-authorized mutations.
 
 Promise binding also lives at this layer. `GameEngine.AddPromise` writes one ledger record
 with source, subject, claimed place, bound place, optional bound target, trigger hint,

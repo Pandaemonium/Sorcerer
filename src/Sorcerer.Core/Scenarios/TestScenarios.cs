@@ -116,7 +116,8 @@ public static class TestScenarios
                 "Lio of Hollowmere",
                 "a prisoner with river reeds braided through torn imperial rope",
                 Origin: "Hollowmere",
-                MagicalSignature: "a name hidden under water"))
+                MagicalSignature: "a name hidden under water",
+                Backstory: "Lio is scared, observant, and not a formal quest giver. If trust, gratitude, a gift, or imminent escape loosens his tongue, he tends to disclose concrete leads: a Hollowmere refuge south of the yard, Jimmer the quiet blade-seller, Old Maren's niece Nannerl, a burned oak that marks a hidden road, or an imperial drainage route. He knows folk-magic services exist but treats them as dangerous secrets because Vigovia can execute people for practicing them."))
             .Set(StatusContainerComponent.Empty()));
 
         AddMemorial(state, memorials);
@@ -157,7 +158,23 @@ public static class TestScenarios
             .Set(new ControllerComponent(ControllerKind.Ai))
             .Set(new AiComponent("hostile_guard"))
             .Set(StatusContainerComponent.Empty())
-            .Set(new SoulComponent($"{id}_soul"));
+            .Set(new SoulComponent($"{id}_soul"))
+            .Set(new ProfileComponent(
+                name,
+                SoldierAppearance(name),
+                Origin: "Vigovia",
+                MagicalSignature: "law spoken as if it were weather",
+                Backstory: SoldierBackstory(name)));
+
+    private static string SoldierAppearance(string name) =>
+        name.Contains("captain", StringComparison.OrdinalIgnoreCase)
+            ? "a ward-captain with a polished key-ring, tired eyes, and a voice trained to make fear sound procedural"
+            : "a containment soldier with chalk dust on the cuffs and a glance that keeps returning to the confiscated-goods crates";
+
+    private static string SoldierBackstory(string name) =>
+        name.Contains("captain", StringComparison.OrdinalIgnoreCase)
+            ? "The ward-captain is loyal to Vigovia but practical under pressure. In dialogue, they may reveal lawful procedures, warrant routes, patrol timing, an office ledger, or a weakness in the containment-yard schedule. They should treat folk magic as contraband and speak of practitioners carefully, because execution for hidden practice is plausible."
+            : "This soldier knows more logistics than doctrine: which clerk counted the confiscated charms, where a blade was sealed, which road leads toward Hollowmere, and which landmark patrols avoid after dusk. They are not friendly, but fear, bargaining, or magical leverage can make them let a concrete lead slip.";
 
     private static Entity Item(
         string id,

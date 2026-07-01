@@ -38,6 +38,8 @@ references inside them to Python modules or the old name.
   event-driven world reaction.
 - [PROMISES_AND_PROPHECY.md](PROMISES_AND_PROPHECY.md): the promise ledger, always-honor, and
   prophecy as foundational systems.
+- [PROMISE_PAYOFF_PLAN.md](PROMISE_PAYOFF_PLAN.md): how bound promises become concrete sites,
+  people, items, stock, services, threats, routes, memories, and other world affordances.
 - [DIALOGUE_SYSTEM.md](DIALOGUE_SYSTEM.md): LLM-generated dialogue, claim/promise extraction,
   NPC memories, bond changes, and engine validation.
 - [OPENING_SEQUENCE.md](OPENING_SEQUENCE.md): the first 20 minutes as a promise-rich,

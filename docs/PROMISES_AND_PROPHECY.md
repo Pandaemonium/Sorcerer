@@ -203,6 +203,7 @@ Promises should feel mysterious to ordinary players.
 
 The player may see:
 
+- a `Lead:` journal line for high-salience actionable promises
 - a journal omen
 - a rumor
 - a partial phrase
@@ -212,6 +213,11 @@ The player may see:
 
 Developer tools and agent debug observations may expose perfect structured promise state.
 This is acceptable because agents are expected to use debug state for playtesting.
+
+Not every visible claim should become a journal lead. A concrete promise such as
+"there is a magical sword in a burned-out oak tree north of here" belongs in
+leads. A small relationship fact such as "Ricky has a brother named Taylor"
+should usually remain memory/claim context unless Taylor becomes actionable.
 
 ## Promise Types
 
@@ -259,17 +265,26 @@ Current apply points include:
 - `open`: realizes matching promises anchored to the opened door, then applies normal
   door consequences such as the first prisoner rescue.
 - `talk`: realizes matching promises anchored to the spoken-to actor.
+- `inspect`/`examine`: realizes matching promises anchored to the examined entity without
+  consuming a turn.
+
+The first shared realization service is `PromiseRealizationSystem`. Travel generation and
+anchored interaction payoffs route through it so promise realization has one authoritative
+engine-side path for trigger matching, status updates, concrete payoff creation, and deltas.
 
 Current concrete realization archetypes are deliberately small but real:
 
 - `memory`: writes a shareable memory to the world memory ledger and to the anchored entity.
 - `threat`: spawns a hostile promised claimant near the anchor when space allows.
 - `item`: creates a tangible promised item near the anchor.
+- `merchant_stock`: adds stock to an existing merchant when possible, or realizes a
+  travel-bound promise as an ordinary merchant entity carrying the promised ware.
 - `quest`, `site`, and other omens: write durable canon records or generated site anchors,
   depending on whether they realize through an entity interaction or travel generation.
 
 Trigger hints are intentionally simple. Empty hints can realize at the first matching
-anchor interaction, while hints such as `read`, `open`, `door`, `talk`, or `name` route
+anchor interaction, while hints such as `read`, `open`, `door`, `talk`, `name`, `inspect`,
+or `examine` route
 the promise to an ordinary verb. This is not a full quest system yet; it is the first
 engine-owned bridge from wild narrative claim to durable world consequence.
 
