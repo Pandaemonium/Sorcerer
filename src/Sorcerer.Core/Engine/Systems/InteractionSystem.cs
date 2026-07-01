@@ -11,12 +11,14 @@ public sealed class InteractionSystem
 {
     private readonly GameEngine _engine;
     private readonly ItemSystem _itemSystem;
+    private readonly PromiseRealizationSystem _promiseRealizationSystem;
     private readonly TurnSystem _turnSystem;
 
     public InteractionSystem(GameEngine engine, ItemSystem itemSystem, TurnSystem turnSystem)
     {
         _engine = engine;
         _itemSystem = itemSystem;
+        _promiseRealizationSystem = new PromiseRealizationSystem(engine.State);
         _turnSystem = turnSystem;
     }
 
@@ -164,7 +166,7 @@ public sealed class InteractionSystem
                 ["delivery"] = delivery,
                 ["intent"] = intent,
             }));
-        deltas.AddRange(RealizePromisesForEntity(target, "talk", messages));
+        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(target, "talk", messages));
         foreach (var line in messages)
         {
             State.AddMessage(line);
@@ -371,7 +373,7 @@ public sealed class InteractionSystem
             State.Turn);
         _turnSystem.EnqueueBackgroundJob("canon_detail", entity, priority: 3);
         var messages = new List<string> { body };
-        var deltas = RealizePromisesForEntity(entity, "read", messages);
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(entity, "read", messages);
         foreach (var line in messages)
         {
             State.AddMessage(line);
@@ -398,9 +400,25 @@ public sealed class InteractionSystem
             return ActionResult.Simple("examine", false, false, State.Turn, State.Turn, "There is nothing close enough to examine.");
         }
 
-        var messages = DescribeEntity(entity);
+        var messages = DescribeEntity(entity).ToList();
+        var originalMessageCount = messages.Count;
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(entity, "inspect", messages);
+        foreach (var line in messages.Skip(originalMessageCount))
+        {
+            State.AddMessage(line);
+        }
+
         _turnSystem.EnqueueBackgroundJob("entity_detail", entity, priority: 2);
-        return ActionResult.Simple("examine", true, false, State.Turn, State.Turn, messages.ToArray());
+        return new ActionResult
+        {
+            Action = "examine",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = State.Turn,
+            TurnAfter = State.Turn,
+            Messages = messages.ToArray(),
+            Deltas = deltas,
+        };
     }
 
     public ActionResult Open(string? target)
@@ -911,7 +929,7 @@ public sealed class InteractionSystem
 
     private void ResolveDoorConsequences(Entity door, List<string> messages, List<StateDelta> deltas)
     {
-        deltas.AddRange(RealizePromisesForEntity(door, "open", messages));
+        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(door, "open", messages));
 
         if (!door.Name.Contains("cell", StringComparison.OrdinalIgnoreCase)
             && !door.Id.Value.Contains("cell", StringComparison.OrdinalIgnoreCase))
@@ -1000,299 +1018,6 @@ public sealed class InteractionSystem
         }
 
         anchor.Set(new PromiseAnchorComponent(ids));
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromisesForEntity(Entity entity, string trigger, List<string> messages)
-    {
-        if (!entity.TryGet<PromiseAnchorComponent>(out var anchor))
-        {
-            return Array.Empty<StateDelta>();
-        }
-
-        var deltas = new List<StateDelta>();
-        foreach (var promiseId in anchor.PromiseIds.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var existing = State.PromiseLedger.Promises.FirstOrDefault(promise =>
-                promise.Id.Equals(promiseId, StringComparison.OrdinalIgnoreCase));
-            if (existing is null
-                || existing.Status.Equals("realized", StringComparison.OrdinalIgnoreCase)
-                || !PromiseTriggerMatches(existing.TriggerHint, trigger))
-            {
-                continue;
-            }
-
-            var realizedIn = $"{trigger}:{entity.Id.Value}";
-            var realized = State.PromiseLedger.SetStatus(existing.Id, "realized", realizedIn);
-            if (realized is null)
-            {
-                continue;
-            }
-
-            var message = $"A promise stirs awake: {realized.Text}";
-            messages.Add(message);
-            deltas.Add(new StateDelta(
-                "realizePromise",
-                realized.Id,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["status"] = realized.Status,
-                    ["trigger"] = trigger,
-                    ["target"] = entity.Id.Value,
-                    ["realizedIn"] = realized.RealizedIn,
-                    ["realizationKind"] = realized.RealizationKind,
-                }));
-            deltas.AddRange(ApplyPromiseRealization(realized, entity, trigger, messages));
-        }
-
-        return deltas;
-    }
-
-    private IReadOnlyList<StateDelta> ApplyPromiseRealization(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages)
-    {
-        var kind = NormalizeId(promise.RealizationKind ?? promise.Kind, "omen");
-        return kind switch
-        {
-            "memory" => RealizePromiseMemory(promise, anchor, trigger, messages),
-            "threat" => RealizePromiseThreat(promise, anchor, trigger, messages),
-            "item" => RealizePromiseItem(promise, anchor, trigger, messages),
-            "quest" => RealizePromiseCanon(promise, anchor, trigger, messages, "quest", "A quest takes shape"),
-            "site" => RealizePromiseCanon(promise, anchor, trigger, messages, "site", "A distant place answers"),
-            _ => RealizePromiseCanon(promise, anchor, trigger, messages, "omen", "The omen settles into the world"),
-        };
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromiseMemory(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages)
-    {
-        var worldMemory = State.Memories.Append(
-            anchor.Id.Value,
-            promise.Text,
-            $"promise:{promise.Id}:{trigger}",
-            Math.Max(2, promise.Salience + 1),
-            shareable: true);
-        var existing = anchor.TryGet<MemoryComponent>(out var memory)
-            ? memory.Records.ToList()
-            : new List<EntityMemoryRecord>();
-        existing.Add(new EntityMemoryRecord(
-            $"memory_{promise.Id}",
-            promise.Text,
-            promise.Id,
-            trigger,
-            Math.Max(2, promise.Salience + 1),
-            Shareable: true));
-        anchor.Set(new MemoryComponent(existing));
-
-        var message = $"{anchor.Name} remembers something that was not there before.";
-        messages.Add(message);
-        return new[]
-        {
-            new StateDelta(
-                "promiseMemory",
-                worldMemory.Id,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = promise.Id,
-                    ["anchor"] = anchor.Id.Value,
-                    ["trigger"] = trigger,
-                }),
-        };
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromiseThreat(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages)
-    {
-        var origin = anchor.TryGet<PositionComponent>(out var anchorPosition)
-            ? anchorPosition.Position
-            : State.ControlledEntity.Get<PositionComponent>().Position;
-        var position = FindOpenAdjacent(origin)
-            ?? FindOpenAdjacent(State.ControlledEntity.Get<PositionComponent>().Position)
-            ?? origin;
-        var threatName = PromiseThreatName(promise);
-        var threat = _engine.SpawnEntity(
-            "promise_threat",
-            threatName,
-            'D',
-            position,
-            "empire",
-            hp: 8,
-            attack: 3,
-            tags: new[] { "promise", "threat", "omen" });
-        var message = $"{threat.Name} arrives to collect on the promise.";
-        messages.Add(message);
-        return new[]
-        {
-            new StateDelta(
-                "promiseThreat",
-                threat.Id.Value,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = promise.Id,
-                    ["x"] = position.X,
-                    ["y"] = position.Y,
-                    ["trigger"] = trigger,
-                }),
-        };
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromiseItem(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages)
-    {
-        var origin = anchor.TryGet<PositionComponent>(out var anchorPosition)
-            ? anchorPosition.Position
-            : State.ControlledEntity.Get<PositionComponent>().Position;
-        var position = FindOpenAdjacent(origin) ?? origin;
-        var itemName = PromiseItemName(promise);
-        var item = _itemSystem.BuildItemEntity(itemName, position, quantity: 1);
-        item.Name = itemName;
-        item.Set(new DescriptionComponent($"This object exists because a promise became concrete: {promise.Text}"));
-        State.Entities[item.Id] = item;
-
-        var message = $"{item.Name} appears where the promise can reach it.";
-        messages.Add(message);
-        return new[]
-        {
-            new StateDelta(
-                "promiseItem",
-                item.Id.Value,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = promise.Id,
-                    ["x"] = position.X,
-                    ["y"] = position.Y,
-                    ["trigger"] = trigger,
-                }),
-        };
-    }
-
-    private IReadOnlyList<StateDelta> RealizePromiseCanon(
-        WorldPromise promise,
-        Entity anchor,
-        string trigger,
-        List<string> messages,
-        string canonKind,
-        string messagePrefix)
-    {
-        var canon = State.Canon.Add(
-            canonKind,
-            anchor.Id.Value,
-            promise.Text,
-            promise.Text,
-            new[] { "promise", promise.Kind, canonKind },
-            $"promise:{promise.Id}:{trigger}",
-            State.Turn);
-        var message = $"{messagePrefix}: {promise.Text}";
-        messages.Add(message);
-        return new[]
-        {
-            new StateDelta(
-                "promiseCanon",
-                canon.Id,
-                message,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = promise.Id,
-                    ["anchor"] = anchor.Id.Value,
-                    ["kind"] = canonKind,
-                    ["trigger"] = trigger,
-                }),
-        };
-    }
-
-    private GridPoint? FindOpenAdjacent(GridPoint origin)
-    {
-        var offsets = new[]
-        {
-            new GridPoint(0, -1),
-            new GridPoint(1, 0),
-            new GridPoint(0, 1),
-            new GridPoint(-1, 0),
-            new GridPoint(1, -1),
-            new GridPoint(1, 1),
-            new GridPoint(-1, 1),
-            new GridPoint(-1, -1),
-        };
-
-        foreach (var offset in offsets)
-        {
-            var candidate = origin.Translate(offset.X, offset.Y);
-            if (CanEnter(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private static string PromiseThreatName(WorldPromise promise)
-    {
-        var lower = promise.Text.ToLowerInvariant();
-        if (lower.Contains("collector"))
-        {
-            return "debt collector";
-        }
-
-        if (lower.Contains("soldier") || lower.Contains("empire") || lower.Contains("imperial"))
-        {
-            return "promised imperial claimant";
-        }
-
-        return "promised threat";
-    }
-
-    private static string PromiseItemName(WorldPromise promise)
-    {
-        var lower = promise.Text.ToLowerInvariant();
-        if (lower.Contains("key"))
-        {
-            return "promised key";
-        }
-
-        if (lower.Contains("blade") || lower.Contains("knife") || lower.Contains("sword"))
-        {
-            return "promised blade";
-        }
-
-        if (lower.Contains("pearl"))
-        {
-            return "promised pearl";
-        }
-
-        return "promise token";
-    }
-
-    private static bool PromiseTriggerMatches(string? triggerHint, string trigger)
-    {
-        if (string.IsNullOrWhiteSpace(triggerHint))
-        {
-            return true;
-        }
-
-        var normalizedTrigger = trigger.Trim().ToLowerInvariant();
-        var hints = triggerHint.ToLowerInvariant()
-            .Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return hints.Any(hint =>
-            hint == normalizedTrigger
-            || (normalizedTrigger == "open" && hint is "door" or "opened" or "unlock")
-            || (normalizedTrigger == "talk" && hint is "speak" or "name" or "dialogue")
-            || (normalizedTrigger == "read" && hint is "notice" or "sign" or "book"));
     }
 
     private Entity? ResolvePromiseAnchorFromSelectionOrText(string text)

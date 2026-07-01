@@ -17,6 +17,7 @@ namespace Sorcerer.Core;
 public sealed class GameSession
 {
     private const int VisibleClaimSalience = 3;
+    private const int DialogueBondDeltaLimit = 2;
 
     private readonly IWildMagicController _magic;
     private readonly IDialogueProvider _dialogueProvider;
@@ -759,46 +760,20 @@ public sealed class GameSession
         List<string> messages,
         List<StateDelta> deltas)
     {
-        var entity = Engine.EntityById(proposal.EntityId);
-        if (entity is null)
-        {
-            deltas.Add(new StateDelta(
-                "dialogueProposalSkipped",
-                proposal.EntityId,
-                "Dialogue bond proposal skipped because the entity no longer exists.",
-                new Dictionary<string, object?>
-                {
-                    ["provider"] = provider,
-                    ["proposalType"] = "bond",
-                }));
-            return;
-        }
-
-        var bond = Engine.State.Bonds.Adjust(
-            SoulIdFor(entity),
-            SoulIdFor(Engine.State.ControlledEntity),
-            ClampImmediateDialogueBondDelta(proposal.LoyaltyDelta),
-            ClampImmediateDialogueBondDelta(proposal.FearDelta),
-            ClampImmediateDialogueBondDelta(proposal.AdmirationDelta),
-            ClampImmediateDialogueBondDelta(proposal.ResentmentDelta),
-            string.IsNullOrWhiteSpace(proposal.Posture) ? null : proposal.Posture.Trim());
-        var message = $"{entity.Name}'s posture shifts: {BondSummary(bond)}.";
-        messages.Add(message);
-        Engine.AddMessage(message);
-        deltas.Add(new StateDelta(
+        ApplyDialogueBondShift(
+            provider,
             "dialogueBondShift",
-            entity.Id.Value,
-            message,
-            new Dictionary<string, object?>
-            {
-                ["provider"] = provider,
-                ["loyalty"] = bond.Loyalty,
-                ["fear"] = bond.Fear,
-                ["admiration"] = bond.Admiration,
-                ["resentment"] = bond.Resentment,
-                ["posture"] = bond.Posture,
-                ["reason"] = proposal.Reason,
-            }));
+            proposal.EntityId,
+            SoulIdFor(Engine.State.ControlledEntity),
+            proposal.LoyaltyDelta,
+            proposal.FearDelta,
+            proposal.AdmirationDelta,
+            proposal.ResentmentDelta,
+            proposal.Posture,
+            proposal.Reason,
+            playerVisible: true,
+            messages,
+            deltas);
     }
 
     private void ApplyDialogueActionProposal(
@@ -843,7 +818,89 @@ public sealed class GameSession
         RejectDialogueAction(provider, proposal, "Dialogue action handlers are not implemented for this action type yet.", deltas);
     }
 
-    private static int ClampImmediateDialogueBondDelta(int delta) => Math.Clamp(delta, -2, 2);
+    private BondRecord? ApplyDialogueBondShift(
+        string provider,
+        string operation,
+        string entityId,
+        string targetSoulId,
+        int loyaltyDelta,
+        int fearDelta,
+        int admirationDelta,
+        int resentmentDelta,
+        string? posture,
+        string? reason,
+        bool playerVisible,
+        List<string> messages,
+        List<StateDelta> deltas,
+        IReadOnlyDictionary<string, object?>? extraDetails = null)
+    {
+        var entity = Engine.EntityById(entityId);
+        if (entity is null)
+        {
+            var skippedDetails = new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "bond",
+                ["operation"] = operation,
+            };
+            if (extraDetails is not null)
+            {
+                foreach (var detail in extraDetails)
+                {
+                    skippedDetails[detail.Key] = detail.Value;
+                }
+            }
+
+            deltas.Add(new StateDelta(
+                "dialogueProposalSkipped",
+                entityId,
+                "Dialogue bond proposal skipped because the entity no longer exists.",
+                skippedDetails));
+            return null;
+        }
+
+        var bond = Engine.State.Bonds.Adjust(
+            SoulIdFor(entity),
+            targetSoulId,
+            ClampDialogueBondDelta(loyaltyDelta),
+            ClampDialogueBondDelta(fearDelta),
+            ClampDialogueBondDelta(admirationDelta),
+            ClampDialogueBondDelta(resentmentDelta),
+            string.IsNullOrWhiteSpace(posture) ? null : posture.Trim());
+        var message = $"{entity.Name}'s posture shifts: {BondSummary(bond)}.";
+        if (playerVisible)
+        {
+            AddVisibleClaimMessage(message, messages);
+        }
+
+        var details = new Dictionary<string, object?>
+        {
+            ["provider"] = provider,
+            ["loyalty"] = bond.Loyalty,
+            ["fear"] = bond.Fear,
+            ["admiration"] = bond.Admiration,
+            ["resentment"] = bond.Resentment,
+            ["posture"] = bond.Posture,
+            ["reason"] = reason,
+        };
+        if (extraDetails is not null)
+        {
+            foreach (var detail in extraDetails)
+            {
+                details[detail.Key] = detail.Value;
+            }
+        }
+
+        deltas.Add(new StateDelta(
+            operation,
+            entity.Id.Value,
+            message,
+            details));
+        return bond;
+    }
+
+    private static int ClampDialogueBondDelta(int delta) =>
+        Math.Clamp(delta, -DialogueBondDeltaLimit, DialogueBondDeltaLimit);
 
     private static bool IsRefusalIntent(string? intent) =>
         NormalizeToken(intent ?? "", "").Equals("refuse", StringComparison.OrdinalIgnoreCase);
@@ -1457,7 +1514,7 @@ public sealed class GameSession
 
         if (proposal.UpdateBond)
         {
-            ApplyBondClaim(request, proposal, record, messages, deltas);
+            ApplyBondClaim(request, provider, proposal, record, messages, deltas);
         }
 
         if (category.Equals("merchant_stock", StringComparison.OrdinalIgnoreCase))
@@ -1477,44 +1534,36 @@ public sealed class GameSession
 
     private void ApplyBondClaim(
         DialogueClaimRequest request,
+        string provider,
         DialogueClaimProposal proposal,
         ClaimRecord record,
         List<string> messages,
         List<StateDelta> deltas)
     {
-        var speaker = Engine.EntityById(request.SpeakerId);
-        if (speaker is null)
+        var bond = ApplyDialogueBondShift(
+            provider,
+            "claimBondShift",
+            request.SpeakerId,
+            request.ListenerSoulId,
+            proposal.LoyaltyDelta,
+            proposal.FearDelta,
+            proposal.AdmirationDelta,
+            proposal.ResentmentDelta,
+            proposal.BondPosture,
+            null,
+            record.PlayerVisible,
+            messages,
+            deltas,
+            new Dictionary<string, object?>
+            {
+                ["claimId"] = record.Id,
+            });
+        if (bond is null)
         {
             return;
         }
 
-        var bond = Engine.State.Bonds.Adjust(
-            SoulIdFor(speaker),
-            request.ListenerSoulId,
-            Math.Clamp(proposal.LoyaltyDelta, -5, 5),
-            Math.Clamp(proposal.FearDelta, -5, 5),
-            Math.Clamp(proposal.AdmirationDelta, -5, 5),
-            Math.Clamp(proposal.ResentmentDelta, -5, 5),
-            string.IsNullOrWhiteSpace(proposal.BondPosture) ? null : proposal.BondPosture.Trim());
-        var updated = Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: speaker.Id.Value) ?? record;
-        var message = $"{speaker.Name}'s posture shifts: {BondSummary(bond)}.";
-        deltas.Add(new StateDelta(
-            "claimBondShift",
-            speaker.Id.Value,
-            message,
-            new Dictionary<string, object?>
-            {
-                ["claimId"] = updated.Id,
-                ["loyalty"] = bond.Loyalty,
-                ["fear"] = bond.Fear,
-                ["admiration"] = bond.Admiration,
-                ["resentment"] = bond.Resentment,
-                ["posture"] = bond.Posture,
-            }));
-        if (updated.PlayerVisible)
-        {
-            AddVisibleClaimMessage(message, messages);
-        }
+        Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: request.SpeakerId);
     }
 
     private void ApplyMerchantStockClaim(
@@ -1694,7 +1743,7 @@ public sealed class GameSession
 
     private static bool ShouldBindToRegion(string? triggerHint, string? realizationKind) =>
         TriggerMatches(triggerHint, "travel")
-        && NormalizeToken(realizationKind ?? "", "site") is "site" or "town" or "landmark" or "item" or "person" or "threat";
+        && NormalizeToken(realizationKind ?? "", "site") is "site" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade";
 
     private static bool TriggerMatches(string? hint, string trigger) =>
         string.IsNullOrWhiteSpace(hint)
@@ -1709,7 +1758,7 @@ public sealed class GameSession
         return normalized switch
         {
             "place" or "site" or "town" or "landmark" => "site",
-            "merchant_stock" or "stock" or "ware" or "wares" => "item",
+            "merchant_stock" or "stock" or "ware" or "wares" or "trade" => "merchant_stock",
             "npc" or "person" or "relative" => "person",
             "enemy" or "danger" or "threat" => "threat",
             "item" or "blade" or "weapon" => "item",

@@ -119,6 +119,13 @@ cluster of people who offer different kinds of future:
 - **The unreliable witness:** saw something but cannot safely say it unless trust, fear, or
   magic changes the situation.
 
+The first implementation can start with personal profiles rather than a larger cast. A profile
+should make an NPC likely to disclose concrete leads under the right pressure without making them
+a scripted quest giver. Lio, for example, can know a refuge, a blade-seller, a named relative, a
+burned-oak landmark, or a drainage route; imperial guards can know confiscation ledgers, patrol
+timing, warrants, and procedural weaknesses. The model should still decide what is actually said
+from the immediate conversation.
+
 NPC information should first become reported claims with provenance. Some claims bind as promises
 when they map to a buildable archetype. Vague color remains dialogue or memory. Concrete, salient
 claims can become obligations the world can honor.
@@ -128,6 +135,10 @@ become context for later dialogue; the bond shift itself should be proposed by t
 extractor when the NPC's response supports it. A prisoner given grave salt, a merchant given back
 their confiscated charm, or a clerk bribed with gold can move from generic dialogue into a more
 specific claim: a person, town, item, debt, or landmark that the promise system may later realize.
+
+Folk-magic services can exist in the opening, but they should be treated as dangerous secrets.
+Someone may know a mender, fever-worker, name-charmer, or road-whisperer, but speaking plainly
+about that practice can plausibly get a person executed by Vigovia.
 
 ### 4. Escape Creates Reputation
 

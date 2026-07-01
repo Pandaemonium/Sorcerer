@@ -620,9 +620,45 @@ public sealed class GameSessionCharacterizationTests
         Assert.DoesNotContain(talk.Deltas, delta => delta.Operation == "claimBondShift");
         Assert.Contains(wait.Deltas, delta => delta.Operation == "claimBondShift");
         Assert.True(session.Engine.State.Bonds.TryGet("maren_soul", "player_soul", out var bond));
-        Assert.Equal(3, bond.Loyalty);
+        Assert.Equal(2, bond.Loyalty);
         Assert.Equal(2, bond.Admiration);
         Assert.Equal("grateful", bond.Posture);
+    }
+
+    [Fact]
+    public async Task DialogueClaimBondShiftUsesSharedMissingEntityFailure()
+    {
+        var extractor = new FixtureDialogueClaimExtractor(new DialogueClaimProposal(
+            "Lio decides the kindness was real.",
+            "bond",
+            "Lio",
+            Salience: 3,
+            Confidence: 90,
+            PlayerVisible: true,
+            UpdateBond: true,
+            LoyaltyDelta: 4,
+            AdmirationDelta: 4,
+            BondPosture: "grateful"));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, I meant the gift kindly."));
+        var bondsBefore = session.Engine.State.Bonds.Bonds.Count;
+        session.Engine.State.Entities.Remove(EntityId.Create("prisoner_1"));
+
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.True(talk.Success);
+        Assert.Equal(bondsBefore, session.Engine.State.Bonds.Bonds.Count);
+        Assert.Contains(wait.Deltas, delta =>
+            delta.Operation == "dialogueProposalSkipped"
+            && delta.Target == "prisoner_1"
+            && Equals(delta.Details["operation"], "claimBondShift")
+            && Equals(delta.Details["claimId"], "claim_1"));
     }
 
     [Fact]
@@ -691,6 +727,86 @@ public sealed class GameSessionCharacterizationTests
         Assert.True(lio.Get<MerchantComponent>().Wares.TryGetValue("fine blade", out var count));
         Assert.Equal(1, count);
         Assert.Contains(session.View().Claims!, claim => claim.Subject == "fine blade" && claim.Status == "applied");
+    }
+
+    [Fact]
+    public async Task DialogueClaimExtractionCanBindFutureMerchantStockForTravel()
+    {
+        var extractor = new FixtureDialogueClaimExtractor(new DialogueClaimProposal(
+            "Jimmer can sell you a fine blade.",
+            "merchant_stock",
+            "fine blade",
+            Salience: 3,
+            Confidence: 80,
+            PlayerVisible: true,
+            BindAsPromise: true,
+            PromiseKind: "rumor",
+            RealizationKind: "merchant_stock",
+            TriggerHint: "travel",
+            ItemName: "fine blade",
+            Tags: new[] { "merchant", "stock", "blade" }));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        await session.ExecuteAsync(new TalkCommand("Lio, who can sell me a blade?"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
+        var travel = await session.ExecuteAsync(new TravelCommand(Direction.East));
+        var merchant = session.Engine.State.Entities.Values.Single(entity =>
+            entity.Name == "Jimmer"
+            && entity.TryGet<MerchantComponent>(out _));
+
+        Assert.Contains(wait.Deltas, delta =>
+            delta.Operation == "claimPromise"
+            && Equals(delta.Details["realizationKind"], "merchant_stock"));
+        Assert.Contains(travel.Deltas, delta => delta.Operation == "promiseMerchantStock");
+        Assert.True(merchant.Get<MerchantComponent>().Wares.TryGetValue("promised blade", out var count));
+        Assert.Equal(1, count);
+        Assert.Contains(merchant.Get<PromiseAnchorComponent>().PromiseIds, promiseId =>
+            session.Engine.State.PromiseLedger.Promises.Any(promise =>
+                promise.Id == promiseId
+                && promise.Status == "realized"
+                && promise.RealizationKind == "merchant_stock"));
+    }
+
+    [Fact]
+    public async Task JournalSeparatesHighSaliencePromisesIntoLeads()
+    {
+        var session = CreateMockSession();
+        session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "There is a magical sword in a burned-out oak tree north of here.",
+            playerVisible: true,
+            salience: 4,
+            subject: "magical sword",
+            triggerHint: "travel",
+            realizationKind: "item");
+        session.Engine.State.Claims.Append(
+            session.Engine.State.Turn,
+            "test",
+            "ricky",
+            "player_soul",
+            "Ricky has a brother named Taylor.",
+            "person",
+            "Taylor",
+            salience: 2,
+            confidence: 80,
+            playerVisible: true,
+            tags: new[] { "family" });
+
+        var journal = await session.ExecuteAsync(new JournalCommand());
+
+        Assert.Contains(journal.Messages, message =>
+            message.StartsWith("Lead:", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("magical sword", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(journal.Messages, message =>
+            message.StartsWith("Lead:", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("Taylor", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(journal.Messages, message =>
+            message.Contains("Taylor", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -1090,6 +1206,10 @@ public sealed class GameSessionCharacterizationTests
 
         Assert.Contains(wait.Deltas, delta => delta.Operation == "claimPromise");
         Assert.True(travel.Success);
+        Assert.Contains(travel.Deltas, delta =>
+            delta.Operation == "realizePromise"
+            && delta.Target == promise.Id
+            && Equals(delta.Details["trigger"], "travel"));
         Assert.Contains(travel.Deltas, delta => delta.Operation == "promiseSite");
         Assert.Equal("realized", promise.Status);
         Assert.Equal("1,0", promise.RealizedIn);
@@ -1100,6 +1220,47 @@ public sealed class GameSessionCharacterizationTests
         Assert.Contains(session.Engine.State.Canon.Records, record =>
             record.Kind == "site"
             && record.Source == $"promise:{promise.Id}:travel");
+    }
+
+    [Fact]
+    public async Task ExamineRealizesInspectAnchoredPromise()
+    {
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+        var notice = session.Engine.EntityById("notice_1")!;
+        var promise = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "The posted notice hides a promised blade for the person who examines it.",
+            playerVisible: true,
+            source: "test",
+            salience: 3,
+            subject: "promised blade",
+            triggerHint: "inspect",
+            realizationKind: "item");
+        session.Engine.State.PromiseLedger.Bind(
+            promise.Id,
+            session.Engine.State.RegionId,
+            notice.Id.Value,
+            triggerHint: "inspect",
+            realizationKind: "item");
+        notice.Set(new PromiseAnchorComponent(promise.Id));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(6, 7)));
+
+        var examine = await session.ExecuteAsync(new ExamineCommand("notice"));
+        var realized = session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == promise.Id);
+
+        Assert.True(examine.Success);
+        Assert.False(examine.ConsumedTurn);
+        Assert.Equal("realized", realized.Status);
+        Assert.Equal("inspect:notice_1", realized.RealizedIn);
+        Assert.Contains(examine.Deltas, delta =>
+            delta.Operation == "realizePromise"
+            && Equals(delta.Details["trigger"], "inspect"));
+        Assert.Contains(examine.Deltas, delta => delta.Operation == "promiseItem");
+        Assert.Contains(session.Engine.State.Entities.Values, entity =>
+            entity.Name == "promised blade"
+            && entity.TryGet<PromiseAnchorComponent>(out var anchor)
+            && anchor.PromiseIds.Contains(promise.Id));
     }
 
     [Fact]

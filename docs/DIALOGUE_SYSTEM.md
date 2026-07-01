@@ -72,9 +72,10 @@ provider preserves usable `spokenText` while normalizing common proposal shape
 mistakes such as string actions (`"step_aside"`), alternate bond fields
 (`trustDelta`/`trust`), float bond deltas, listener-targeted bond proposals, and
 over-eager `playerAuthored` flags. The engine then applies another validation
-layer: immediate generated-dialogue bond deltas are dampened to ordinary
-conversation scale, and cooperative actions are rejected when the NPC response
-is a refusal.
+layer: generated-dialogue and claim-extraction bond proposals share one
+engine-side bond-apply helper, conversational deltas are dampened to ordinary
+scale, missing bond targets produce structured skipped-proposal deltas, and
+cooperative actions are rejected when the NPC response is a refusal.
 
 The current keyword dialogue-intent parser is temporary fallback behavior. It
 should not become the normal way to infer threats, confessions, bargains, or
@@ -263,6 +264,9 @@ turn that memory into trust, fear, admiration, resentment, debt, or devotion.
 
 Bond deltas must be bounded and validated. A single ordinary exchange should
 not swing a relationship wildly unless the context is extraordinary.
+Generated-dialogue bond proposals and delayed claim-extraction bond proposals
+should share the same clamp, entity resolution, mutation, visible-message, and
+skipped-proposal behavior.
 
 ### World Actions
 
@@ -309,10 +313,12 @@ for later explicit commands rather than completing a trade inside dialogue.
 currently schedules a modest help response: imperial callers can schedule an
 `empire_patrol`, while non-imperial calls schedule a generic help-call message.
 
-Implementation can migrate one verb at a time. The first shared path is `open`:
-player `open`, dialogue `open_door`, and future magic/AI open requests should
-all flow through one actor-aware engine action, with the source controlling
-turn consumption and audit wording rather than world truth.
+Implementation can migrate one verb at a time. `open` is actor-aware already:
+player `open`, dialogue `open_door`, and future magic/AI open requests flow
+through one engine action, with the source controlling turn consumption and
+audit wording rather than world truth. Promise payoff also has a shared first
+path now: travel, talk, read, open, and examine/inspect all route concrete
+promise realization through `PromiseRealizationSystem`.
 
 ### Stock And Services
 
@@ -323,9 +329,18 @@ commands possible.
 Examples:
 
 - "Jimmer can sell you a fine blade" can add or reveal a blade in Jimmer's
-  stock.
+  stock. If no valid merchant exists yet, it can bind as a future
+  `merchant_stock` promise and realize through travel as a merchant carrying
+  that ware.
 - "The midwife keeps fever-salt" can create an item claim or service claim.
 - "I can mend that cloak" can reveal a service if the NPC's role supports it.
+
+Folk-magic services are practiced, but they are hush-hush. The dialogue model
+may reveal them through trust, fear, leverage, rumor, or coded speech, but
+characters should understand that Vigovia can execute people for practicing
+them. Once implemented mechanically, services should use the same validated
+effect/action machinery as wild magic rather than becoming a separate hidden
+spell engine.
 
 ## Claim And Promise Relationship
 
@@ -339,8 +354,8 @@ The default path:
 3. The engine accepts high-salience claims into the `ClaimLedger`.
 4. Some claims become promise candidates.
 5. The promise system realizes candidates organically when the world has room:
-   a person appears, a town is generated, a landmark is placed, a stock item is
-   added, or a threat enters a region.
+   a person appears, a town is generated, a landmark is placed, a merchant
+   carries promised stock, an item is added, or a threat enters a region.
 6. The original dialogue remains attached as provenance.
 
 The system should err toward "yes, and" for NPC-authored claims, but not to a

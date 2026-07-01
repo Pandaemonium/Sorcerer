@@ -157,13 +157,30 @@ public sealed class GameEngine
     public ActionResult Journal()
     {
         var messages = new List<string>();
-        var promises = State.PromiseLedger.Promises
+        var visiblePromises = State.PromiseLedger.Promises
             .Where(promise => promise.PlayerVisible)
-            .Select(promise => $"{promise.Id} [{promise.Status}] {promise.Text}")
             .ToArray();
-        messages.AddRange(promises.Length == 0 ? new[] { "No promises are visible yet." } : promises);
+        var leads = visiblePromises
+            .Where(IsLeadPromise)
+            .Select(promise => $"Lead: {promise.Id} [{promise.Status}] {promise.Text}")
+            .ToArray();
+        var otherPromises = visiblePromises
+            .Where(promise => !IsLeadPromise(promise))
+            .Select(promise => $"Promise: {promise.Id} [{promise.Status}] {promise.Text}")
+            .ToArray();
+        if (leads.Length == 0 && otherPromises.Length == 0)
+        {
+            messages.Add("No promises are visible yet.");
+        }
+        else
+        {
+            messages.AddRange(leads);
+            messages.AddRange(otherPromises);
+        }
+
         var claims = State.Claims.Records
             .Where(claim => claim.PlayerVisible)
+            .Where(claim => claim.Salience >= 3)
             .OrderBy(claim => claim.Id, StringComparer.OrdinalIgnoreCase)
             .Select(claim => $"{claim.Id} [{claim.Status}] {claim.Text}")
             .ToArray();
@@ -203,6 +220,19 @@ public sealed class GameEngine
             State.Turn,
             State.Turn,
             messages.ToArray());
+    }
+
+    private static bool IsLeadPromise(WorldPromise promise) =>
+        promise.Salience >= 3
+        && NormalizeJournalToken(promise.RealizationKind ?? promise.Kind) is
+            "site" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade" or "quest" or "door_rule" or "escape_route" or "prophecy";
+
+    private static string NormalizeJournalToken(string text)
+    {
+        var chars = text.Trim().ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : '_')
+            .ToArray();
+        return string.Join("_", new string(chars).Split('_', StringSplitOptions.RemoveEmptyEntries));
     }
 
     public ActionResult Talk(string text) => _interactionSystem.Talk(text);
