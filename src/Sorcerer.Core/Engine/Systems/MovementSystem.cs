@@ -41,13 +41,24 @@ public sealed class MovementSystem
         var offset = direction.Offset();
         var destination = position.Position.Translate(offset.X, offset.Y);
 
-        if (!_engine.InBounds(destination) || _state.BlockingTerrain.Contains(destination))
+        if (!_engine.InBounds(destination))
         {
-            if (IsCardinal(direction) && IsOuterBoundary(destination))
+            if (IsCardinal(direction) && IsPastMapEdge(destination))
             {
                 return _engine.Travel(direction);
             }
 
+            return ActionResult.Simple(
+                "move",
+                success: false,
+                consumedTurn: false,
+                turnBefore,
+                _state.Turn,
+                "Something solid refuses you.");
+        }
+
+        if (_state.BlockingTerrain.Contains(destination))
+        {
             return ActionResult.Simple(
                 "move",
                 success: false,
@@ -170,8 +181,8 @@ public sealed class MovementSystem
     private static bool IsCardinal(Direction direction) =>
         direction is Direction.North or Direction.South or Direction.East or Direction.West;
 
-    private bool IsOuterBoundary(GridPoint point) =>
-        point.X <= 0 || point.Y <= 0 || point.X >= _state.Width - 1 || point.Y >= _state.Height - 1;
+    private bool IsPastMapEdge(GridPoint point) =>
+        point.X < 0 || point.Y < 0 || point.X >= _state.Width || point.Y >= _state.Height;
 
     private bool IsUnableToMove(Entity entity)
     {

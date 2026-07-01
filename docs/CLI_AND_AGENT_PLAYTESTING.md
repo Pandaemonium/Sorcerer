@@ -386,6 +386,10 @@ Core shared commands currently route through `GameSession`:
 - `help`
 - `quit`
 
+Cardinal movement across a tactical map edge also travels to the neighboring zone. The edge tiles
+themselves are playable floor, not wall terrain; travel happens when the controlled body steps past
+the boundary.
+
 Inventory protection and reagent inspection are also implemented:
 
 - `protect <item>`

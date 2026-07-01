@@ -13,10 +13,18 @@ namespace Sorcerer.Godot;
 
 public partial class Main : Control
 {
+    private const int MapCellSeparation = 0;
+    private const int MinMapCellSize = 14;
+    private const int MaxMapCellSize = 46;
+    private const int MinMapFontSize = 11;
+    private const int MaxMapFontSize = 34;
+    private const float MapFontSizeRatio = 0.72f;
+
     private readonly List<Control> _busyControls = new();
     private Button[,] _cells = new Button[0, 0];
 
     private GameSession _session = null!;
+    private PanelContainer _mapFrame = null!;
     private GridContainer _mapGrid = null!;
     private Control _escMenu = null!;
     private PanelContainer _providerStatusPanel = null!;
@@ -69,6 +77,14 @@ public partial class Main : Control
 
         if (_escMenu.Visible || _busy)
         {
+            return;
+        }
+
+        var numpadCommand = NumpadCommandForKey(key.Keycode);
+        if (numpadCommand is not null)
+        {
+            _ = ExecuteAsync(numpadCommand);
+            GetViewport().SetInputAsHandled();
             return;
         }
 
@@ -276,19 +292,28 @@ public partial class Main : Control
         var mapFrame = new PanelContainer
         {
             ThemeTypeVariation = "MapFrame",
-            SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
-            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
         };
+        _mapFrame = mapFrame;
+        _mapFrame.Resized += UpdateMapCellSizing;
         stack.AddChild(mapFrame);
+
+        var mapCenter = new CenterContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+        };
+        mapFrame.AddChild(mapCenter);
 
         _mapGrid = new GridContainer
         {
             SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
         };
-        _mapGrid.AddThemeConstantOverride("h_separation", 2);
-        _mapGrid.AddThemeConstantOverride("v_separation", 2);
-        mapFrame.AddChild(_mapGrid);
+        _mapGrid.AddThemeConstantOverride("h_separation", MapCellSeparation);
+        _mapGrid.AddThemeConstantOverride("v_separation", MapCellSeparation);
+        mapCenter.AddChild(_mapGrid);
 
         var dpad = new HBoxContainer
         {
@@ -511,6 +536,7 @@ public partial class Main : Control
     {
         var view = _session.View();
         EnsureMapCells(view);
+        UpdateMapCellSizing();
         RenderMap(view);
         RenderSidebars(view);
         SetBusy(_busy);
@@ -659,13 +685,60 @@ public partial class Main : Control
                 var cell = new Button
                 {
                     Text = ".",
-                    CustomMinimumSize = new Vector2(38, 38),
                     FocusMode = FocusModeEnum.None,
                     ThemeTypeVariation = "MapCell",
                 };
                 cell.Pressed += () => _ = ExecuteAsync(new TargetCommand(point));
                 _mapGrid.AddChild(cell);
                 _cells[y, x] = cell;
+            }
+        }
+
+        UpdateMapCellSizing();
+        CallDeferred(nameof(UpdateMapCellSizing));
+    }
+
+    private void UpdateMapCellSizing()
+    {
+        if (_mapFrame is null || _cells.Length == 0)
+        {
+            return;
+        }
+
+        var rows = _cells.GetLength(0);
+        var columns = _cells.GetLength(1);
+        if (rows == 0 || columns == 0)
+        {
+            return;
+        }
+
+        var availableWidth = _mapFrame.Size.X
+            - (UiTheme.SpaceMd * 2)
+            - (MapCellSeparation * Math.Max(0, columns - 1));
+        var availableHeight = _mapFrame.Size.Y
+            - (UiTheme.SpaceSm * 2)
+            - (MapCellSeparation * Math.Max(0, rows - 1));
+        if (availableWidth <= 0 || availableHeight <= 0)
+        {
+            return;
+        }
+
+        var cellSize = Math.Clamp(
+            (int)MathF.Floor(MathF.Min(availableWidth / columns, availableHeight / rows)),
+            MinMapCellSize,
+            MaxMapCellSize);
+        var fontSize = Math.Clamp(
+            (int)MathF.Round(cellSize * MapFontSizeRatio),
+            MinMapFontSize,
+            MaxMapFontSize);
+        var size = new Vector2(cellSize, cellSize);
+        for (var y = 0; y < rows; y++)
+        {
+            for (var x = 0; x < columns; x++)
+            {
+                var cell = _cells[y, x];
+                cell.CustomMinimumSize = size;
+                cell.AddThemeFontSizeOverride("font_size", fontSize);
             }
         }
     }
@@ -870,9 +943,14 @@ public partial class Main : Control
 
     private static Color TerrainColor(MapTileCard? tile)
     {
-        if (tile is null || !tile.Explored)
+        if (tile is null)
         {
-            return new Color("0c0e12");
+            return UiTheme.OffMap;
+        }
+
+        if (!tile.Explored)
+        {
+            return UiTheme.UnknownTile;
         }
 
         var color = tile.Terrain switch
@@ -895,9 +973,9 @@ public partial class Main : Control
         var fill = selected ? background.Lightened(0.12f) : background;
         return UiTheme.Box(
             fill,
-            selected ? UiTheme.Warning : new Color("222933"),
-            borderWidth: selected ? 2 : 1,
-            radius: 3,
+            fill,
+            borderWidth: 0,
+            radius: 0,
             shadow: false,
             marginX: 0,
             marginY: 0);
@@ -916,6 +994,21 @@ public partial class Main : Control
             Key.N => new MoveCommand(Direction.SouthEast),
             Key.Period => new WaitCommand(),
             Key.I => new InspectCommand(),
+            _ => null,
+        };
+
+    private static GameCommand? NumpadCommandForKey(Key key) =>
+        key switch
+        {
+            Key.Kp8 => new MoveCommand(Direction.North),
+            Key.Kp2 => new MoveCommand(Direction.South),
+            Key.Kp4 => new MoveCommand(Direction.West),
+            Key.Kp6 => new MoveCommand(Direction.East),
+            Key.Kp7 => new MoveCommand(Direction.NorthWest),
+            Key.Kp9 => new MoveCommand(Direction.NorthEast),
+            Key.Kp1 => new MoveCommand(Direction.SouthWest),
+            Key.Kp3 => new MoveCommand(Direction.SouthEast),
+            Key.Kp5 => new WaitCommand(),
             _ => null,
         };
 }

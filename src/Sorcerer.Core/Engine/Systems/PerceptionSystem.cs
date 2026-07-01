@@ -51,7 +51,7 @@ public sealed class PerceptionSystem
             .Where(entity => exclude is null || entity.Id != exclude.Value)
             .Where(IsLivingActor)
             .Where(entity => entity.TryGet<PositionComponent>(out var position)
-                && Distance(position.Position, point) <= DefaultSightRadius
+                && IsWithinSightRadius(position.Position, point, DefaultSightRadius)
                 && HasLineOfSight(position.Position, point))
             .OrderBy(entity => entity.Id.Value)
             .ToArray();
@@ -71,7 +71,7 @@ public sealed class PerceptionSystem
         {
             var seesActor = actorPosition is not null
                 && witness.TryGet<PositionComponent>(out var witnessPosition)
-                && Distance(witnessPosition.Position, actorPosition.Value) <= DefaultSightRadius
+                && IsWithinSightRadius(witnessPosition.Position, actorPosition.Value, DefaultSightRadius)
                 && HasLineOfSight(witnessPosition.Position, actorPosition.Value);
             created.Add(_state.Suspicions.Append(
                 _state.Turn,
@@ -157,7 +157,7 @@ public sealed class PerceptionSystem
             for (var x = origin.X - radius; x <= origin.X + radius; x++)
             {
                 var point = new GridPoint(x, y);
-                if (!InBounds(point) || Distance(origin, point) > radius)
+                if (!InBounds(point) || !IsWithinSightRadius(origin, point, radius))
                 {
                     continue;
                 }
@@ -205,7 +205,7 @@ public sealed class PerceptionSystem
                 SoulIdFor(entity).Equals(suspicion.WitnessSoulId, StringComparison.OrdinalIgnoreCase));
             if (witness is null
                 || !witness.TryGet<PositionComponent>(out var witnessPosition)
-                || Distance(witnessPosition.Position, playerPosition.Position) > DefaultSightRadius
+                || !IsWithinSightRadius(witnessPosition.Position, playerPosition.Position, DefaultSightRadius)
                 || !HasLineOfSight(witnessPosition.Position, playerPosition.Position))
             {
                 continue;
@@ -240,8 +240,12 @@ public sealed class PerceptionSystem
     private static string SoulIdFor(Entity entity) =>
         entity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : entity.Id.Value;
 
-    private static int Distance(GridPoint a, GridPoint b) =>
-        Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+    private static bool IsWithinSightRadius(GridPoint a, GridPoint b, int radius)
+    {
+        var dx = a.X - b.X;
+        var dy = a.Y - b.Y;
+        return (dx * dx) + (dy * dy) <= (radius * radius) + radius;
+    }
 
     private static IEnumerable<GridPoint> Line(GridPoint from, GridPoint to)
     {

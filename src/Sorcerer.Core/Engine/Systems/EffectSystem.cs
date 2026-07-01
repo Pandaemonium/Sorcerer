@@ -33,7 +33,7 @@ public sealed class EffectSystem
         {
             _state.BlockingTerrain.Add(point);
         }
-        else if (!IsBoundaryWall(point))
+        else
         {
             _state.BlockingTerrain.Remove(point);
         }
@@ -134,9 +134,6 @@ public sealed class EffectSystem
         _state.Entities.Add(entity.Id, entity);
         return entity;
     }
-
-    private bool IsBoundaryWall(GridPoint point) =>
-        point.X == 0 || point.Y == 0 || point.X == _state.Width - 1 || point.Y == _state.Height - 1;
 
     private static bool TerrainBlocksMovement(string terrain) =>
         terrain is "wall" or "ice_wall" or "rubble" or "vines";

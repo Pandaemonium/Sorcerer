@@ -215,6 +215,11 @@ Travel snapshots the current zone, loads or lazily generates the destination, cl
 targets, places the controlled body and bond-followers at an entry edge, and advances the same turn
 pump used by ordinary commands.
 
+Tactical zones are 40 by 30 tiles. The perimeter is not a ring of wall terrain: edge tiles are
+ordinary map cells, and a cardinal move that steps past the map boundary routes through the same
+shared travel path as an explicit `travel <direction>` command. Diagonal off-map moves stay blocked
+so corner clipping does not create ambiguous zone transitions.
+
 After the destination loads, `NarrationSystem.ZoneEntryRumors` may add deterministic zone-entry
 rumor deltas based on current legend tags and faction standing. These lines are a legibility layer:
 they read existing ledgers and write messages/action deltas, but they do not change mechanics,
@@ -372,7 +377,7 @@ traits also prevent the controlled body from walking and consume the attempted m
 turn.
 
 Perception is player-facing but not resolver-limiting. `PerceptionSystem` computes current
-visibility from the controlled body with Bresenham line-of-sight and a default sight radius.
+visibility from the controlled body with Bresenham line-of-sight and a circular default sight radius.
 Terrain in `BlockingTerrain` and entities with `PhysicalComponent.BlocksSight` block LOS;
 closed doors can block sight and opening a door clears that flag. `GameState.ExploredBySoulId`
 stores explored map memory by soul id, so body swap changes the eyes and location but not

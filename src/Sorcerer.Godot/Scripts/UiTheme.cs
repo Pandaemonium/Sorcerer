@@ -20,6 +20,8 @@ public static class UiTheme
     public static readonly Color Warning = new("ffb86b");
     public static readonly Color Danger = new("ff6b6b");
     public static readonly Color Focus = new("8ab4ff");
+    public static readonly Color OffMap = new("0b0e12");
+    public static readonly Color UnknownTile = new("0f1318");
 
     public const int SpaceXs = 4;
     public const int SpaceSm = 8;
@@ -69,7 +71,7 @@ public static class UiTheme
 
         theme.SetTypeVariation("MapCell", "Button");
         theme.SetFont("font", "MapCell", MonoFont);
-        theme.SetFontSize("font_size", "MapCell", 19);
+        theme.SetFontSize("font_size", "MapCell", 14);
 
         theme.SetFont("font", "LineEdit", UiFont);
         theme.SetFontSize("font_size", "LineEdit", 13);
@@ -82,7 +84,7 @@ public static class UiTheme
         theme.SetStylebox("panel", "PanelContainer", CardBox(Panel, Border));
 
         theme.SetTypeVariation("MapFrame", "PanelContainer");
-        theme.SetStylebox("panel", "MapFrame", WellBox(new Color("0d1014"), new Color("222933")));
+        theme.SetStylebox("panel", "MapFrame", WellBox(OffMap, new Color("222933")));
 
         theme.SetTypeVariation("Pill", "PanelContainer");
         theme.SetStylebox("panel", "Pill", PillBox(Muted));

@@ -8,6 +8,9 @@ namespace Sorcerer.Core.Scenarios;
 
 public static class TestScenarios
 {
+    public const int TacticalWidth = 40;
+    public const int TacticalHeight = 30;
+
     public static GameState ImperialEncounter(
         string? playerOriginId = null,
         IReadOnlyList<RunChronicleRecord>? memorials = null)
@@ -15,7 +18,7 @@ public static class TestScenarios
         var origin = OriginCatalog.LoadDefault().Resolve(playerOriginId);
         var playerBody = new BodyStatsComponent(origin.BodyVigor);
         var playerSoul = CharacterMath.SoulFromOrigin("player_soul", origin);
-        var state = new GameState(width: 16, height: 10)
+        var state = new GameState(width: TacticalWidth, height: TacticalHeight)
         {
             ControlledEntityId = EntityId.Create("player"),
             Seed = 7,
@@ -24,18 +27,6 @@ public static class TestScenarios
 
         FactionCatalog.LoadDefault().ApplyTo(state.Factions);
         state.Souls.Set(playerSoul);
-
-        for (var x = 0; x < state.Width; x++)
-        {
-            state.BlockingTerrain.Add(new GridPoint(x, 0));
-            state.BlockingTerrain.Add(new GridPoint(x, state.Height - 1));
-        }
-
-        for (var y = 0; y < state.Height; y++)
-        {
-            state.BlockingTerrain.Add(new GridPoint(0, y));
-            state.BlockingTerrain.Add(new GridPoint(state.Width - 1, y));
-        }
 
         foreach (var point in new[]
         {

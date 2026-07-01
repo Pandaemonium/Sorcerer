@@ -17,3 +17,8 @@ config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 [dotnet]
 
 project/assembly_name="Sorcerer.Godot"
+
+[display]
+
+window/size/viewport_width=1440
+window/size/viewport_height=900

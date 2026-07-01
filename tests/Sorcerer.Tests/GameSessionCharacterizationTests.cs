@@ -3,6 +3,7 @@ using Sorcerer.Core;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Scenarios;
 using Sorcerer.Core.Views;
 using Sorcerer.Core.World;
 using Sorcerer.Llm;
@@ -24,8 +25,8 @@ public sealed class GameSessionCharacterizationTests
             .Select(entity => $"{entity.Id}|{entity.Name}|{entity.X},{entity.Y}|{entity.Glyph}|{entity.BlocksMovement}|{entity.Faction ?? "-"}|{entity.HitPoints?.ToString() ?? "-"}")
             .ToArray();
 
-        Assert.Equal(16, observation.View.Width);
-        Assert.Equal(10, observation.View.Height);
+        Assert.Equal(TestScenarios.TacticalWidth, observation.View.Width);
+        Assert.Equal(TestScenarios.TacticalHeight, observation.View.Height);
         Assert.Equal(0, observation.View.Turn);
         Assert.Equal("player", observation.View.ControlledEntityId);
         Assert.Equal(new[]
@@ -112,6 +113,29 @@ public sealed class GameSessionCharacterizationTests
             && tile.Y == 5
             && !tile.Visible
             && tile.Explored);
+    }
+
+    [Fact]
+    public void PerceptionRadiusIsRoundedRatherThanSquare()
+    {
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(20, 15)));
+
+        var view = session.View();
+
+        Assert.Contains(view.Tiles!, tile =>
+            tile.X == 28
+            && tile.Y == 15
+            && tile.Visible);
+        Assert.Contains(view.Tiles!, tile =>
+            tile.X == 25
+            && tile.Y == 20
+            && tile.Visible);
+        Assert.Contains(view.Tiles!, tile =>
+            tile.X == 28
+            && tile.Y == 23
+            && !tile.Visible);
     }
 
     [Fact]
@@ -659,16 +683,28 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
-    public async Task WalkingIntoTheZoneEdgeAutoTravels()
+    public async Task WalkingAcrossTheZoneEdgeAutoTravels()
     {
         var session = CreateMockSession();
         DisableImperialAi(session);
-        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(14, 5)));
+        var edgeX = session.Engine.State.Width - 1;
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(edgeX - 1, 5)));
 
-        var move = await session.ExecuteAsync(new MoveCommand(Direction.East));
+        var edgeView = session.View();
+        var edgeTile = Assert.Single(edgeView.Tiles!, tile => tile.X == edgeX && tile.Y == 5);
+        Assert.False(edgeTile.BlocksMovement);
+        Assert.Equal("floor", edgeTile.Terrain);
 
-        Assert.True(move.Success);
-        Assert.Equal("travel", move.Action);
+        var stepOntoEdge = await session.ExecuteAsync(new MoveCommand(Direction.East));
+
+        Assert.True(stepOntoEdge.Success);
+        Assert.Equal("move", stepOntoEdge.Action);
+        Assert.Equal(new GridPoint(edgeX, 5), session.Engine.State.ControlledEntity.Get<PositionComponent>().Position);
+
+        var movePastEdge = await session.ExecuteAsync(new MoveCommand(Direction.East));
+
+        Assert.True(movePastEdge.Success);
+        Assert.Equal("travel", movePastEdge.Action);
         Assert.Equal("1,0", session.Engine.State.CurrentZoneId);
     }
 
@@ -677,7 +713,7 @@ public sealed class GameSessionCharacterizationTests
     {
         var session = CreateMockSession();
         DisableImperialAi(session);
-        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(14, 1)));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(session.Engine.State.Width - 1, 1)));
 
         var move = await session.ExecuteAsync(new MoveCommand(Direction.NorthEast));
 

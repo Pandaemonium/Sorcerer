@@ -131,25 +131,9 @@ public sealed class GenerationSystem
         var region = RegionFor(zoneId);
         var terrain = new Dictionary<GridPoint, string>();
         var blocking = new HashSet<GridPoint>();
-        for (var x = 0; x < _state.Width; x++)
-        {
-            blocking.Add(new GridPoint(x, 0));
-            blocking.Add(new GridPoint(x, _state.Height - 1));
-            terrain[new GridPoint(x, 0)] = "wall";
-            terrain[new GridPoint(x, _state.Height - 1)] = "wall";
-        }
-
         for (var y = 0; y < _state.Height; y++)
         {
-            blocking.Add(new GridPoint(0, y));
-            blocking.Add(new GridPoint(_state.Width - 1, y));
-            terrain[new GridPoint(0, y)] = "wall";
-            terrain[new GridPoint(_state.Width - 1, y)] = "wall";
-        }
-
-        for (var y = 1; y < _state.Height - 1; y++)
-        {
-            for (var x = 1; x < _state.Width - 1; x++)
+            for (var x = 0; x < _state.Width; x++)
             {
                 terrain[new GridPoint(x, y)] = region.FloorTerrain;
             }

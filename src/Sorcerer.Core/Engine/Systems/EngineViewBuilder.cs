@@ -70,8 +70,9 @@ public sealed class EngineViewBuilder
             })
             .ToArray();
 
+        var ordinaryFloor = _generationSystem.CurrentRegion.FloorTerrain;
         var terrain = BuildAllTiles(perception)
-            .Where(tile => tile.BlocksMovement || !tile.Terrain.Equals("floor", StringComparison.OrdinalIgnoreCase))
+            .Where(tile => tile.BlocksMovement || IsInterestingTerrain(tile.Terrain, ordinaryFloor))
             .Select(tile => new TileNote(
                 tile.X,
                 tile.Y,
@@ -111,6 +112,10 @@ public sealed class EngineViewBuilder
             _inventoryService.BuildReagentCards(caster),
             BuildLoreContext(visible));
     }
+
+    private static bool IsInterestingTerrain(string terrain, string ordinaryFloor) =>
+        !terrain.Equals("floor", StringComparison.OrdinalIgnoreCase)
+        && !terrain.Equals(ordinaryFloor, StringComparison.OrdinalIgnoreCase);
 
     public GameView View()
     {
