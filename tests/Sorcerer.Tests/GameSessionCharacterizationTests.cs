@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Scenarios;
@@ -557,7 +558,7 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
-    public async Task GiftsShiftBondDeterministicallyAndWriteMemory()
+    public async Task GiftsWriteMemoryWithoutImmediateBondShift()
     {
         var session = CreateMockSession();
         DisableImperialAi(session);
@@ -569,14 +570,127 @@ public sealed class GameSessionCharacterizationTests
 
         Assert.True(give.Success);
         Assert.Equal(1, session.Engine.State.ControlledEntity.Get<InventoryComponent>().Items["grave salt"]);
-        Assert.Contains(debug.Debug!.Bonds!, bond =>
+        Assert.DoesNotContain(debug.Debug!.Bonds!, bond =>
             bond.SubjectSoulId == "lio_soul"
-            && bond.TargetSoulId == "player_soul"
-            && bond.Loyalty == 3
-            && bond.Admiration == 2
-            && bond.Posture == "grateful");
+            && bond.TargetSoulId == "player_soul");
         Assert.Contains(session.Engine.EntityById("prisoner_1")!.Get<MemoryComponent>().Records, memory =>
             memory.Text.Contains("grave salt", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DialogueClaimExtractionCanUseRecentGiftToShiftBondBetweenTurns()
+    {
+        var extractor = new FixtureDialogueClaimExtractor(new DialogueClaimProposal(
+            "Old Maren decides the gift was a real kindness.",
+            "bond",
+            "Old Maren",
+            Salience: 3,
+            Confidence: 90,
+            PlayerVisible: true,
+            UpdateBond: true,
+            LoyaltyDelta: 3,
+            AdmirationDelta: 2,
+            BondPosture: "grateful",
+            Tags: new[] { "gift", "bond" }));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        var maren = new Entity(EntityId.Create("old_maren"), "Old Maren")
+            .Set(new PositionComponent(new GridPoint(12, 5)))
+            .Set(new RenderableComponent('p', "neutral"))
+            .Set(new TagsComponent(new[] { "resident" }))
+            .Set(new PhysicalComponent(BlocksMovement: true, Material: "flesh"))
+            .Set(new ActorComponent(6, 6, 0, 0, 1, 0, "neutral"))
+            .Set(new ControllerComponent(ControllerKind.None))
+            .Set(new SoulComponent("maren_soul"))
+            .Set(new BodyStatsComponent(3))
+            .Set(StatusContainerComponent.Empty())
+            .Set(MemoryComponent.Empty())
+            .Set(new InteractableComponent(new[] { "talk", "give" }))
+            .Set(new ProfileComponent("Old Maren", "a careful witness with river mud on her cuffs"));
+        session.Engine.State.Entities[maren.Id] = maren;
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        await session.ExecuteAsync(new GiveCommand("grave salt", "Maren"));
+        var talk = await session.ExecuteAsync(new TalkCommand("Maren, this was meant kindly"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.True(talk.Success);
+        Assert.DoesNotContain(talk.Deltas, delta => delta.Operation == "claimBondShift");
+        Assert.Contains(wait.Deltas, delta => delta.Operation == "claimBondShift");
+        Assert.True(session.Engine.State.Bonds.TryGet("maren_soul", "player_soul", out var bond));
+        Assert.Equal(3, bond.Loyalty);
+        Assert.Equal(2, bond.Admiration);
+        Assert.Equal("grateful", bond.Posture);
+    }
+
+    [Fact]
+    public async Task DialogueClaimExtractionBindsVisiblePromiseForLaterTravelRealization()
+    {
+        var extractor = new FixtureDialogueClaimExtractor(new DialogueClaimProposal(
+            "Jimmer hid a fine blade beyond the next road.",
+            "item",
+            "fine blade",
+            Salience: 3,
+            Confidence: 75,
+            PlayerVisible: true,
+            BindAsPromise: true,
+            PromiseKind: "rumor",
+            RealizationKind: "item",
+            TriggerHint: "travel",
+            ItemName: "fine blade",
+            Tags: new[] { "item", "blade" }));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, what waits outside?"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
+        var travel = await session.ExecuteAsync(new TravelCommand(Direction.East));
+
+        Assert.True(talk.Success);
+        Assert.DoesNotContain(talk.Deltas, delta => delta.Operation == "claimPromise");
+        Assert.Contains(wait.Deltas, delta => delta.Operation == "claimPromise");
+        Assert.Contains(session.View().Claims!, claim => claim.Subject == "fine blade" && claim.Status == "promised");
+        Assert.Contains(travel.Deltas, delta => delta.Operation == "promiseItem");
+        Assert.Contains(session.Engine.State.Entities.Values, entity =>
+            entity.Name == "promised blade"
+            && entity.TryGet<PromiseAnchorComponent>(out _));
+    }
+
+    [Fact]
+    public async Task DialogueClaimExtractionCanInstantlyAddExistingMerchantStock()
+    {
+        var extractor = new FixtureDialogueClaimExtractor(new DialogueClaimProposal(
+            "Lio can sell you a fine blade.",
+            "merchant_stock",
+            "fine blade",
+            Salience: 3,
+            Confidence: 80,
+            PlayerVisible: true,
+            MerchantId: "prisoner_1",
+            ItemName: "fine blade",
+            Tags: new[] { "merchant", "blade" }));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        var lio = session.Engine.EntityById("prisoner_1")!;
+        lio.Set(new MerchantComponent(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase), Gold: 10));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        await session.ExecuteAsync(new TalkCommand("Lio, what can you sell me?"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Contains(wait.Deltas, delta => delta.Operation == "claimMerchantStock");
+        Assert.True(lio.Get<MerchantComponent>().Wares.TryGetValue("fine blade", out var count));
+        Assert.Equal(1, count);
+        Assert.Contains(session.View().Claims!, claim => claim.Subject == "fine blade" && claim.Status == "applied");
     }
 
     [Fact]
@@ -587,6 +701,7 @@ public sealed class GameSessionCharacterizationTests
         OpenCellDoorWithoutCommand(session);
         session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
         await session.ExecuteAsync(new GiveCommand("grave salt", "Lio"));
+        session.Engine.State.Bonds.Adjust("lio_soul", "player_soul", loyalty: 5, posture: "grateful");
 
         var recruit = await session.ExecuteAsync(new RecruitCommand("Lio"));
         var followers = await session.ExecuteAsync(new FollowersCommand());
@@ -600,40 +715,380 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
-    public async Task TrustedDialogueSecretBindsPromise()
+    public async Task SecretPhraseDoesNotBindPromiseWithoutExtractor()
     {
         var session = CreateMockSession();
         DisableImperialAi(session);
         OpenCellDoorWithoutCommand(session);
         session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
-        await session.ExecuteAsync(new GiveCommand("grave salt", "Lio"));
 
         var talk = await session.ExecuteAsync(new TalkCommand("Lio, trust me with a secret"));
 
         Assert.True(talk.Success);
-        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialoguePromise");
-        Assert.Contains(session.Engine.State.PromiseLedger.Promises, promise =>
+        Assert.DoesNotContain(talk.Deltas, delta => delta.Operation == "dialoguePromise");
+        Assert.DoesNotContain(session.Engine.State.PromiseLedger.Promises, promise =>
             promise.Source == "dialogue"
-            && promise.Subject == "prisoner_1"
-            && promise.Status == "bound"
-            && promise.RealizationKind == "site");
+            || promise.Source.StartsWith("dialogue_claim:", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task TravelRealizesBoundSitePromiseAsGeneratedPlace()
+    public async Task GeneratedDialogueAppliesProviderClaimsImmediately()
     {
-        var session = CreateMockSession();
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Lio whispers, \"Past the wet road, Hollowmere keeps a red bridge for people in trouble.\"",
+            Delivery: "hushed",
+            Intent: "inform",
+            Proposals: new DialogueProposalSet(
+                Claims: new[]
+                {
+                    new DialogueClaimProposal(
+                        "Past the wet road, Hollowmere keeps a red bridge for people in trouble.",
+                        "landmark",
+                        "red bridge",
+                        Salience: 3,
+                        Confidence: 78,
+                        PlayerVisible: true,
+                        BindAsPromise: true,
+                        PromiseKind: "rumor",
+                        RealizationKind: "site",
+                        TriggerHint: "travel",
+                        ClaimedPlace: "Hollowmere",
+                        Tags: new[] { "hollowmere", "bridge", "landmark" }),
+                })));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
         DisableImperialAi(session);
         OpenCellDoorWithoutCommand(session);
         session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
-        await session.ExecuteAsync(new GiveCommand("grave salt", "Lio"));
-        await session.ExecuteAsync(new TalkCommand("Lio, trust me with a secret"));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, what waits outside?"));
+
+        Assert.True(talk.Success);
+        Assert.True(talk.ConsumedTurn);
+        Assert.Contains(talk.Messages, message => message.Contains("red bridge", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogue" && (bool)delta.Details["generated"]!);
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "claimPromise");
+        Assert.Contains(session.View().Claims!, claim => claim.Subject == "red bridge" && claim.Status == "promised");
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueTechnicalFailureDoesNotConsumeTurn()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueProviderResult(
+            "fixture-dialogue",
+            "",
+            TechnicalFailure: true,
+            Error: "fixture failure",
+            Response: null));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+        var turnBefore = session.Engine.State.Turn;
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, answer me"));
+
+        Assert.False(talk.Success);
+        Assert.True(talk.TechnicalFailure);
+        Assert.False(talk.ConsumedTurn);
+        Assert.Equal(turnBefore, session.Engine.State.Turn);
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogueProviderFailed");
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueIgnoresPlayerAuthoredClaims()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Lio says, \"You can say there is a palace under the floor, but I have not seen one.\"",
+            Delivery: "wary",
+            Intent: "refuse",
+            Proposals: new DialogueProposalSet(
+                Claims: new[]
+                {
+                    new DialogueClaimProposal(
+                        "There is a palace under the floor.",
+                        "site",
+                        "palace under the floor",
+                        Salience: 5,
+                        Confidence: 100,
+                        PlayerVisible: true,
+                        BindAsPromise: true,
+                        PromiseKind: "rumor",
+                        RealizationKind: "site",
+                        TriggerHint: "travel",
+                        PlayerAuthored: true,
+                        Tags: new[] { "player_claim" }),
+                })));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, there is a palace under this floor."));
+
+        Assert.True(talk.Success);
+        Assert.DoesNotContain(talk.Deltas, delta => delta.Operation == "claimRecorded");
+        Assert.DoesNotContain(session.Engine.State.Claims.Records, claim =>
+            claim.Subject.Contains("palace", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(session.Engine.State.PromiseLedger.Promises, promise =>
+            promise.Subject.Contains("palace", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueDampensImmediateBondDeltas()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Lio says, \"I trust you enough to move, but not enough to be foolish.\"",
+            Proposals: new DialogueProposalSet(
+                Bond: new DialogueBondProposal(
+                    "prisoner_1",
+                    LoyaltyDelta: 5,
+                    FearDelta: -5,
+                    AdmirationDelta: 3,
+                    ResentmentDelta: -4,
+                    Posture: "cautious ally"))));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, do you trust me?"));
+
+        Assert.True(talk.Success);
+        Assert.True(session.Engine.State.Bonds.TryGet("lio_soul", "player_soul", out var bond));
+        Assert.Equal(2, bond.Loyalty);
+        Assert.Equal(-2, bond.Fear);
+        Assert.Equal(2, bond.Admiration);
+        Assert.Equal(-2, bond.Resentment);
+        Assert.Equal("cautious ally", bond.Posture);
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueWritesAuditEntry()
+    {
+        var audit = new FixtureDialogueAuditSink();
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Lio says, \"I heard you.\"",
+            Delivery: "plain",
+            Intent: "answer"));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider,
+            dialogueAudit: audit);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, can you hear me?"));
+
+        var entry = Assert.Single(audit.Entries);
+        Assert.True(talk.Success);
+        Assert.Equal("fixture-dialogue", entry.Provider);
+        Assert.Equal("prisoner_1", entry.SpeakerId);
+        Assert.Equal("talk", entry.ResultAction);
+        Assert.True(entry.ResultSuccess);
+        Assert.Contains("dialogue", entry.DeltaOperations);
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueCanMoveSpeakerAside()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Test witness says, \"I will get out of your way.\"",
+            Proposals: new DialogueProposalSet(
+                Actions: new[] { new DialogueActionProposal("step_aside") })));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        var witness = AddTestNpc(session, "test_witness", "Test witness", new GridPoint(5, 5));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(6, 5)));
+        var before = witness.Get<PositionComponent>().Position;
+
+        var talk = await session.ExecuteAsync(new TalkCommand("witness, please move aside"));
+
+        Assert.True(talk.Success);
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogueStepAside");
+        Assert.NotEqual(before, witness.Get<PositionComponent>().Position);
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueRefusalDoesNotApplyCooperativeAction()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Test witness says, \"I will not move for you.\"",
+            Intent: "refuse",
+            Proposals: new DialogueProposalSet(
+                Actions: new[] { new DialogueActionProposal("step_aside") })));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        var witness = AddTestNpc(session, "test_witness", "Test witness", new GridPoint(5, 5));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(6, 5)));
+        var before = witness.Get<PositionComponent>().Position;
+
+        var talk = await session.ExecuteAsync(new TalkCommand("witness, please move aside"));
+
+        Assert.True(talk.Success);
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogueActionRejected");
+        Assert.DoesNotContain(talk.Deltas, delta => delta.Operation == "dialogueStepAside");
+        Assert.Equal(before, witness.Get<PositionComponent>().Position);
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueCanOpenReachableDoor()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Door keeper says, \"Fine. Open, then.\"",
+            Proposals: new DialogueProposalSet(
+                Actions: new[] { new DialogueActionProposal("open_door", TargetEntityId: "test_door") })));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        AddTestNpc(session, "door_keeper", "Door keeper", new GridPoint(5, 5));
+        var door = new Entity(EntityId.Create("test_door"), "test door")
+            .Set(new PositionComponent(new GridPoint(6, 5)))
+            .Set(new RenderableComponent('+', "door"))
+            .Set(new TagsComponent(new[] { "door" }))
+            .Set(new PhysicalComponent(BlocksMovement: true, BlocksSight: true, Material: "wood"))
+            .Set(new DoorComponent(IsOpen: false));
+        session.Engine.State.Entities[door.Id] = door;
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(4, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("keeper, open the door"));
+
+        Assert.True(talk.Success);
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogueOpenDoor");
+        Assert.True(door.Get<DoorComponent>().IsOpen);
+        Assert.False(door.Get<PhysicalComponent>().BlocksMovement);
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueOpenDoorUsesSharedDoorConsequences()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Cell keeper says, \"I will open it.\"",
+            Proposals: new DialogueProposalSet(
+                Actions: new[] { new DialogueActionProposal("open_door", TargetEntityId: "cell_door_1") })));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        var keeper = AddTestNpc(session, "cell_keeper", "Cell keeper", new GridPoint(12, 5));
+        keeper.Set(new InventoryComponent(
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["imperial cell key"] = 1,
+            },
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(11, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("keeper, open the cell"));
+
+        Assert.True(talk.Success);
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogueOpenDoor");
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "realizePromise");
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "freePrisoner");
+        Assert.Equal("player", session.Engine.EntityById("prisoner_1")!.Get<ActorComponent>().Faction);
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueCanGiveSpeakerItem()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Quartermaster says, \"Take the brass key.\"",
+            Proposals: new DialogueProposalSet(
+                Actions: new[] { new DialogueActionProposal("give_item", ItemName: "brass key") })));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        var giver = AddTestNpc(session, "quartermaster", "Quartermaster", new GridPoint(5, 5));
+        giver.Set(new InventoryComponent(
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["brass key"] = 1,
+            },
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(6, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("quartermaster, may I have the key?"));
+
+        Assert.True(talk.Success);
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogueGiveItem");
+        Assert.False(giver.Get<InventoryComponent>().Items.ContainsKey("brass key"));
+        Assert.Equal(1, session.Engine.State.ControlledEntity.Get<InventoryComponent>().Items["brass key"]);
+    }
+
+    [Fact]
+    public async Task GeneratedDialogueCanCallHelp()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Imperial caller says, \"Clerk! To me!\"",
+            Proposals: new DialogueProposalSet(
+                Actions: new[] { new DialogueActionProposal("call_help") })));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider);
+        DisableImperialAi(session);
+        AddTestNpc(
+            session,
+            "imperial_caller",
+            "Imperial caller",
+            new GridPoint(5, 5),
+            faction: "empire",
+            tags: new[] { "imperial", "caller" });
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(6, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("caller, call help"));
+
+        Assert.True(talk.Success);
+        Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogueCallHelp");
+        Assert.Contains(session.Engine.State.ScheduledEvents.Events, item =>
+            item.Kind == "empire_patrol"
+            && item.SourceEntityId == EntityId.Create("imperial_caller"));
+    }
+
+    [Fact]
+    public async Task TravelRealizesExtractorBoundSitePromiseAsGeneratedPlace()
+    {
+        var extractor = new FixtureDialogueClaimExtractor(new DialogueClaimProposal(
+            "Lio knows of a checkpoint beyond this room.",
+            "site",
+            "checkpoint beyond this room",
+            Salience: 3,
+            Confidence: 80,
+            PlayerVisible: true,
+            BindAsPromise: true,
+            PromiseKind: "quest",
+            RealizationKind: "site",
+            TriggerHint: "travel",
+            ClaimedPlace: "checkpoint beyond this room",
+            Tags: new[] { "checkpoint", "site" }));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+        await session.ExecuteAsync(new TalkCommand("Lio, what do you know beyond this room?"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
 
         var travel = await session.ExecuteAsync(new TravelCommand(Direction.East));
         var promise = Assert.Single(
             session.Engine.State.PromiseLedger.Promises,
-            item => item.Source == "dialogue");
+            item => item.Source.StartsWith("dialogue_claim:", StringComparison.OrdinalIgnoreCase));
 
+        Assert.Contains(wait.Deltas, delta => delta.Operation == "claimPromise");
         Assert.True(travel.Success);
         Assert.Contains(travel.Deltas, delta => delta.Operation == "promiseSite");
         Assert.Equal("realized", promise.Status);
@@ -848,6 +1303,7 @@ public sealed class GameSessionCharacterizationTests
         OpenCellDoorWithoutCommand(session);
         session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
         await session.ExecuteAsync(new GiveCommand("grave salt", "Lio"));
+        session.Engine.State.Bonds.Adjust("lio_soul", "player_soul", loyalty: 5, posture: "grateful");
         await session.ExecuteAsync(new RecruitCommand("Lio"));
 
         await session.ExecuteAsync(new TravelCommand(Direction.East));
@@ -1148,6 +1604,89 @@ public sealed class GameSessionCharacterizationTests
         var door = session.Engine.EntityById("cell_door_1")!;
         door.Set(door.Get<DoorComponent>() with { IsOpen = false });
         door.Set(door.Get<PhysicalComponent>() with { BlocksMovement = true, BlocksSight = true });
+    }
+
+    private static Entity AddTestNpc(
+        GameSession session,
+        string id,
+        string name,
+        GridPoint position,
+        string faction = "neutral",
+        IReadOnlyList<string>? tags = null)
+    {
+        var npc = new Entity(EntityId.Create(id), name)
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('p', "neutral"))
+            .Set(new TagsComponent(tags ?? new[] { "resident" }))
+            .Set(new PhysicalComponent(BlocksMovement: true, Material: "flesh"))
+            .Set(new ActorComponent(6, 6, 0, 0, 1, 0, faction))
+            .Set(new ControllerComponent(ControllerKind.None))
+            .Set(new SoulComponent($"{id}_soul"))
+            .Set(new BodyStatsComponent(3))
+            .Set(StatusContainerComponent.Empty())
+            .Set(MemoryComponent.Empty())
+            .Set(new InteractableComponent(new[] { "talk", "give" }))
+            .Set(new ProfileComponent(name, "a test dialogue participant"));
+        session.Engine.State.Entities[npc.Id] = npc;
+        return npc;
+    }
+
+    private sealed class FixtureDialogueClaimExtractor : IDialogueClaimExtractor
+    {
+        private readonly IReadOnlyList<DialogueClaimProposal> _claims;
+
+        public FixtureDialogueClaimExtractor(params DialogueClaimProposal[] claims)
+        {
+            _claims = claims;
+        }
+
+        public string Name => "fixture-dialogue-claims";
+
+        public Task<DialogueClaimExtractionResult> ExtractAsync(
+            DialogueClaimRequest request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new DialogueClaimExtractionResult(
+                Name,
+                RawText: "",
+                TechnicalFailure: false,
+                Error: null,
+                Claims: _claims));
+    }
+
+    private sealed class FixtureDialogueProvider : IDialogueProvider
+    {
+        private readonly DialogueProviderResult _result;
+
+        public FixtureDialogueProvider(DialogueResponse response)
+            : this(new DialogueProviderResult(
+                "fixture-dialogue",
+                RawText: "",
+                TechnicalFailure: false,
+                Error: null,
+                Response: response))
+        {
+        }
+
+        public FixtureDialogueProvider(DialogueProviderResult result)
+        {
+            _result = result;
+        }
+
+        public string Name => "fixture-dialogue";
+
+        public Task<DialogueProviderResult> ResolveAsync(
+            DialogueRequest request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(_result);
+    }
+
+    private sealed class FixtureDialogueAuditSink : IDialogueAuditSink
+    {
+        private readonly List<DialogueAuditEntry> _entries = new();
+
+        public IReadOnlyList<DialogueAuditEntry> Entries => _entries;
+
+        public void Record(DialogueAuditEntry entry) => _entries.Add(entry);
     }
 
     private sealed class FixtureSpellProvider : ISpellProvider

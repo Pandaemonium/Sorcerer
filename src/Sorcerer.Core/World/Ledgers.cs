@@ -365,6 +365,98 @@ public sealed class MemoryLedger
     }
 }
 
+public sealed record ClaimRecord(
+    string Id,
+    int Turn,
+    string Source,
+    string SpeakerId,
+    string ListenerSoulId,
+    string Text,
+    string Category,
+    string Subject,
+    int Salience,
+    int Confidence,
+    string Status,
+    bool PlayerVisible,
+    IReadOnlyList<string> Tags,
+    string? BoundPromiseId = null,
+    string? AppliedTo = null);
+
+public sealed class ClaimLedger
+{
+    private readonly List<ClaimRecord> _records = new();
+
+    public IReadOnlyList<ClaimRecord> Records => _records;
+
+    public ClaimRecord Append(
+        int turn,
+        string source,
+        string speakerId,
+        string listenerSoulId,
+        string text,
+        string category,
+        string subject,
+        int salience,
+        int confidence,
+        bool playerVisible,
+        IEnumerable<string>? tags = null,
+        string status = "reported",
+        string? boundPromiseId = null,
+        string? appliedTo = null)
+    {
+        var record = new ClaimRecord(
+            $"claim_{_records.Count + 1}",
+            turn,
+            string.IsNullOrWhiteSpace(source) ? "unknown" : source.Trim(),
+            string.IsNullOrWhiteSpace(speakerId) ? "unknown" : speakerId.Trim(),
+            string.IsNullOrWhiteSpace(listenerSoulId) ? "unknown" : listenerSoulId.Trim(),
+            text.Trim(),
+            string.IsNullOrWhiteSpace(category) ? "memory" : category.Trim(),
+            string.IsNullOrWhiteSpace(subject) ? text.Trim() : subject.Trim(),
+            Math.Clamp(salience, 1, 5),
+            Math.Clamp(confidence, 0, 100),
+            string.IsNullOrWhiteSpace(status) ? "reported" : status.Trim(),
+            playerVisible,
+            (tags ?? Array.Empty<string>())
+                .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                .Select(tag => tag.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            string.IsNullOrWhiteSpace(boundPromiseId) ? null : boundPromiseId.Trim(),
+            string.IsNullOrWhiteSpace(appliedTo) ? null : appliedTo.Trim());
+        _records.Add(record);
+        return record;
+    }
+
+    public ClaimRecord? Update(string id, string? status = null, string? boundPromiseId = null, string? appliedTo = null)
+    {
+        var index = _records.FindIndex(record => record.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var existing = _records[index];
+        var updated = existing with
+        {
+            Status = string.IsNullOrWhiteSpace(status) ? existing.Status : status.Trim(),
+            BoundPromiseId = string.IsNullOrWhiteSpace(boundPromiseId) ? existing.BoundPromiseId : boundPromiseId.Trim(),
+            AppliedTo = string.IsNullOrWhiteSpace(appliedTo) ? existing.AppliedTo : appliedTo.Trim(),
+        };
+        _records[index] = updated;
+        return updated;
+    }
+
+    public IReadOnlyList<ClaimRecord> Snapshot() => _records.ToArray();
+
+    public void ReplaceAll(IEnumerable<ClaimRecord> records)
+    {
+        _records.Clear();
+        _records.AddRange(records);
+    }
+}
+
 public sealed record CanonRecord(
     string Id,
     string Kind,

@@ -162,6 +162,7 @@ public sealed record GameStateSave(
     List<FactionRecord> Factions,
     List<LegendTag> LegendTags,
     List<WorldMemoryRecord> Memories,
+    List<ClaimRecord> Claims,
     List<WorldPromise> Promises,
     List<ScheduledEventRecord> ScheduledEvents,
     List<TriggerRecord> Triggers,
@@ -229,6 +230,7 @@ public sealed record GameStateSave(
             state.Factions.Snapshot().OrderBy(faction => faction.Id, StringComparer.OrdinalIgnoreCase).ToList(),
             state.Legend.Snapshot().ToList(),
             state.Memories.Snapshot().ToList(),
+            state.Claims.Snapshot().ToList(),
             state.PromiseLedger.Snapshot().ToList(),
             state.ScheduledEvents.Snapshot()
                 .OrderBy(record => record.DueTurn)
@@ -320,6 +322,7 @@ public sealed record GameStateSave(
         state.Factions.ReplaceAll(Factions ?? new List<FactionRecord>());
         state.Legend.ReplaceAll(LegendTags ?? new List<LegendTag>());
         state.Memories.ReplaceAll(Memories ?? new List<WorldMemoryRecord>());
+        state.Claims.ReplaceAll(Claims ?? new List<ClaimRecord>());
         state.PromiseLedger.ReplaceAll(Promises ?? new List<WorldPromise>());
         state.ScheduledEvents.ReplaceAll((ScheduledEvents ?? new List<ScheduledEventRecord>())
             .Select(record => record with { Payload = GameSaveService.NormalizeMap(record.Payload) }));

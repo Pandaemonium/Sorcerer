@@ -1,3 +1,5 @@
+using Sorcerer.Core.Dialogue;
+using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
@@ -22,10 +24,33 @@ public sealed class InteractionSystem
 
     public ActionResult Talk(string text)
     {
+        var preparation = PrepareDialogue(text);
+        if (preparation.ImmediateResult is not null)
+        {
+            return preparation.ImmediateResult;
+        }
+
+        var turn = preparation.Turn!;
+        var target = State.Entities.TryGetValue(EntityId.Create(turn.SpeakerId), out var entity)
+            ? entity
+            : null;
+        if (target is null)
+        {
+            return ActionResult.Simple("talk", false, false, turn.TurnBefore, State.Turn, "No one nearby is ready to talk.");
+        }
+
+        var messages = new List<string>();
+        var deltas = new List<StateDelta>();
+        ResolveDialogueIntent(target, text, messages, deltas);
+        return CompleteDialogue(turn, messages, deltas, generated: false, provider: "deterministic", rawText: null, delivery: null, intent: null);
+    }
+
+    public DialoguePreparation PrepareDialogue(string text)
+    {
         var turnBefore = State.Turn;
         if (TryRouteDialogueShortcut(text, out var shortcut))
         {
-            return shortcut;
+            return new DialoguePreparation(null, shortcut);
         }
 
         var target = ResolveNearbyEntity(
@@ -35,12 +60,110 @@ public sealed class InteractionSystem
         target ??= ResolveNearbyActorMention(text);
         if (target is null)
         {
-            return ActionResult.Simple("talk", false, false, turnBefore, State.Turn, "No one nearby is ready to talk.");
+            return new DialoguePreparation(
+                null,
+                ActionResult.Simple("talk", false, false, turnBefore, State.Turn, "No one nearby is ready to talk."));
         }
 
-        var messages = new List<string>();
-        var deltas = new List<StateDelta>();
-        ResolveDialogueIntent(target, text, messages, deltas);
+        var actor = target.TryGet<ActorComponent>(out var actorComponent) ? actorComponent : null;
+        var profile = target.TryGet<ProfileComponent>(out var profileComponent)
+            ? $"{profileComponent.PublicName}: {profileComponent.Appearance}"
+            : null;
+        var bond = State.Bonds.TryGet(SoulIdFor(target), PlayerSoulId(), out var bondRecord)
+            ? BondSummary(bondRecord)
+            : null;
+        return new DialoguePreparation(
+            new PreparedDialogueTurn(
+                turnBefore,
+                text,
+                target.Id.Value,
+                target.Name,
+                TagsFor(target).ToArray(),
+                PlayerSoulId(),
+                _engine.IsHostile(target, State.ControlledEntity),
+                profile,
+                actor?.Faction,
+                bond),
+            null);
+    }
+
+    public ActionResult ApplyGeneratedDialogue(
+        PreparedDialogueTurn turn,
+        string spokenText,
+        string provider,
+        string? rawText,
+        string? delivery,
+        string? intent)
+    {
+        var target = State.Entities.TryGetValue(EntityId.Create(turn.SpeakerId), out var entity)
+            ? entity
+            : null;
+        if (target is null)
+        {
+            return new ActionResult
+            {
+                Action = "talk",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turn.TurnBefore,
+                TurnAfter = State.Turn,
+                TechnicalFailure = true,
+                Messages = new[] { "Dialogue target disappeared before the reply could resolve." },
+                Deltas = new[]
+                {
+                    new StateDelta(
+                        "dialogueProviderFailed",
+                        turn.SpeakerId,
+                        "Dialogue target disappeared before the reply could resolve.",
+                        new Dictionary<string, object?>
+                        {
+                            ["provider"] = provider,
+                        }),
+                },
+            };
+        }
+
+        return CompleteDialogue(
+            turn,
+            new List<string> { spokenText },
+            new List<StateDelta>(),
+            generated: true,
+            provider,
+            rawText,
+            delivery,
+            intent);
+    }
+
+    private ActionResult CompleteDialogue(
+        PreparedDialogueTurn turn,
+        List<string> messages,
+        List<StateDelta> deltas,
+        bool generated,
+        string provider,
+        string? rawText,
+        string? delivery,
+        string? intent)
+    {
+        var target = State.Entities[EntityId.Create(turn.SpeakerId)];
+        var dialogueLines = messages.ToArray();
+        deltas.Add(new StateDelta(
+            "dialogue",
+            turn.SpeakerId,
+            dialogueLines.FirstOrDefault() ?? $"{target.Name} answers.",
+            new Dictionary<string, object?>
+            {
+                ["speakerId"] = turn.SpeakerId,
+                ["speakerName"] = turn.SpeakerName,
+                ["speakerTags"] = turn.SpeakerTags.ToArray(),
+                ["listenerSoulId"] = turn.ListenerSoulId,
+                ["playerText"] = turn.PlayerText,
+                ["lines"] = dialogueLines,
+                ["generated"] = generated,
+                ["provider"] = provider,
+                ["rawText"] = rawText,
+                ["delivery"] = delivery,
+                ["intent"] = intent,
+            }));
         deltas.AddRange(RealizePromisesForEntity(target, "talk", messages));
         foreach (var line in messages)
         {
@@ -53,7 +176,7 @@ public sealed class InteractionSystem
             Action = "talk",
             Success = true,
             ConsumedTurn = true,
-            TurnBefore = turnBefore,
+            TurnBefore = turn.TurnBefore,
             TurnAfter = State.Turn,
             Messages = messages.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
             Deltas = deltas.Concat(turnDeltas).ToArray(),
@@ -91,8 +214,6 @@ public sealed class InteractionSystem
         }
 
         DecrementInventory(inventory, key);
-        var value = GiftValue(key, target);
-        var bond = AdjustBond(target, loyalty: value, admiration: Math.Max(1, value - 1), posture: "grateful");
         AddEntityMemory(target, $"{target.Name} accepted {key} from the sorcerer.", "gift", 2);
         State.Memories.Append(
             target.Id.Value,
@@ -102,8 +223,7 @@ public sealed class InteractionSystem
             shareable: true);
         var messages = new List<string>
         {
-            $"{target.Name} accepts {key}. Something personal begins to keep score.",
-            BondMoodLine(target, bond),
+            $"{target.Name} accepts {key}. The gift becomes part of what they know about you.",
         };
         var deltas = new List<StateDelta>
         {
@@ -114,8 +234,7 @@ public sealed class InteractionSystem
                 new Dictionary<string, object?>
                 {
                     ["item"] = key,
-                    ["loyalty"] = bond.Loyalty,
-                    ["admiration"] = bond.Admiration,
+                    ["memorySource"] = "gift",
                 }),
         };
         foreach (var line in messages)
@@ -293,16 +412,55 @@ public sealed class InteractionSystem
             return ActionResult.Simple("open", false, false, turnBefore, State.Turn, "There is nothing here you can open.");
         }
 
-        var doorComponent = door.Get<DoorComponent>();
+        return OpenDoor(State.ControlledEntity, door, WorldActionContext.PlayerCommand("open"));
+    }
+
+    public ActionResult OpenDoor(Entity actor, Entity door, WorldActionContext context)
+    {
+        var turnBefore = State.Turn;
+        if (!CanReach(actor, door, range: 1))
+        {
+            return ActionResult.Simple(
+                context.ResultAction,
+                false,
+                false,
+                turnBefore,
+                State.Turn,
+                $"{actor.Name} cannot reach {door.Name}.");
+        }
+
+        if (!door.TryGet<DoorComponent>(out var doorComponent))
+        {
+            return ActionResult.Simple(
+                context.ResultAction,
+                false,
+                false,
+                turnBefore,
+                State.Turn,
+                $"{door.Name} is not something that opens like a door.");
+        }
+
         if (doorComponent.IsOpen)
         {
-            return ActionResult.Simple("open", false, false, turnBefore, State.Turn, $"{door.Name} is already open.");
+            return ActionResult.Simple(
+                context.ResultAction,
+                false,
+                false,
+                turnBefore,
+                State.Turn,
+                $"{door.Name} is already open.");
         }
 
         if (!string.IsNullOrWhiteSpace(doorComponent.KeyId)
-            && !_itemSystem.IsCarrying(doorComponent.KeyId))
+            && !_itemSystem.IsCarrying(actor, doorComponent.KeyId))
         {
-            return ActionResult.Simple("open", false, false, turnBefore, State.Turn, $"{door.Name} is locked.");
+            return ActionResult.Simple(
+                context.ResultAction,
+                false,
+                false,
+                turnBefore,
+                State.Turn,
+                $"{door.Name} is locked.");
         }
 
         door.Set(doorComponent with { IsOpen = true });
@@ -316,14 +474,28 @@ public sealed class InteractionSystem
             door.Set(renderable with { Glyph = '/', Palette = "open" });
         }
 
-        var messages = new List<string> { $"You open {door.Name}." };
+        var summary = actor.Id == State.ControlledEntityId
+            ? $"You open {door.Name}."
+            : $"{actor.Name} opens {door.Name}.";
+        var details = new Dictionary<string, object?>
+        {
+            ["open"] = true,
+            ["source"] = context.Source,
+            ["actorId"] = actor.Id.Value,
+        };
+        if (!string.IsNullOrWhiteSpace(context.Provider))
+        {
+            details["provider"] = context.Provider;
+        }
+
+        var messages = new List<string> { summary };
         var deltas = new List<StateDelta>
         {
             new(
-                "open",
+                context.DeltaOperation,
                 door.Id.Value,
                 messages[0],
-                new Dictionary<string, object?> { ["open"] = true }),
+                details),
         };
 
         ResolveDoorConsequences(door, messages, deltas);
@@ -332,12 +504,12 @@ public sealed class InteractionSystem
             State.AddMessage(message);
         }
 
-        var turnDeltas = AdvanceTurn();
+        var turnDeltas = context.ConsumeTurn ? AdvanceTurn() : Array.Empty<StateDelta>();
         return new ActionResult
         {
-            Action = "open",
+            Action = context.ResultAction,
             Success = true,
-            ConsumedTurn = true,
+            ConsumedTurn = context.ConsumeTurn,
             TurnBefore = turnBefore,
             TurnAfter = State.Turn,
             Messages = messages.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
@@ -428,6 +600,11 @@ public sealed class InteractionSystem
             .ToArray();
     }
 
+    private static bool CanReach(Entity actor, Entity target, int range) =>
+        actor.TryGet<PositionComponent>(out var actorPosition)
+        && target.TryGet<PositionComponent>(out var targetPosition)
+        && InteractionDistance(actorPosition.Position, targetPosition.Position) <= range;
+
     private bool TryRouteDialogueShortcut(string text, out ActionResult result)
     {
         var lower = text.ToLowerInvariant();
@@ -513,56 +690,8 @@ public sealed class InteractionSystem
             return;
         }
 
-        if (lower.Contains("secret", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("confide", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("trust me", StringComparison.OrdinalIgnoreCase))
-        {
-            ResolveSecretDialogue(target, messages, deltas);
-            return;
-        }
-
         var line = DialogueLine(target);
         messages.Add(line);
-    }
-
-    private void ResolveSecretDialogue(Entity target, List<string> messages, List<StateDelta> deltas)
-    {
-        var playerSoulId = PlayerSoulId();
-        var subjectSoulId = SoulIdFor(target);
-        var bond = State.Bonds.GetOrCreate(subjectSoulId, playerSoulId);
-        var trust = bond.Loyalty + bond.Admiration - bond.Fear - bond.Resentment;
-        if (trust < 3)
-        {
-            var refusal = $"{target.Name} almost says something true, then keeps it.";
-            messages.Add(refusal);
-            deltas.Add(new StateDelta("dialogueRefusal", target.Id.Value, refusal, new Dictionary<string, object?>()));
-            return;
-        }
-
-        var text = $"{target.Name} confides a checkpoint secret that wants to become a place beyond this room.";
-        var promise = State.PromiseLedger.Add(
-            "quest",
-            text,
-            playerVisible: true,
-            source: "dialogue",
-            salience: 3,
-            subject: target.Id.Value,
-            claimedPlace: "checkpoint beyond this room",
-            triggerHint: "travel",
-            realizationKind: "site");
-        var bound = BindPromiseIfPossible(promise, null, "travel") ?? promise;
-        var message = $"{target.Name} gives you a secret with a road still folded inside it.";
-        messages.Add(message);
-        deltas.Add(new StateDelta(
-            "dialoguePromise",
-            bound.Id,
-            message,
-            new Dictionary<string, object?>
-            {
-                ["promiseId"] = bound.Id,
-                ["subject"] = target.Id.Value,
-            }));
-        AddEntityMemory(target, text, bound.Id, 3);
     }
 
     private string DialogueLine(Entity target)

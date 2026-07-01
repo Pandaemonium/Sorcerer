@@ -1,4 +1,5 @@
 using Sorcerer.Core.Characters;
+using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Engine.Systems;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Items;
@@ -161,6 +162,16 @@ public sealed class GameEngine
             .Select(promise => $"{promise.Id} [{promise.Status}] {promise.Text}")
             .ToArray();
         messages.AddRange(promises.Length == 0 ? new[] { "No promises are visible yet." } : promises);
+        var claims = State.Claims.Records
+            .Where(claim => claim.PlayerVisible)
+            .OrderBy(claim => claim.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(claim => $"{claim.Id} [{claim.Status}] {claim.Text}")
+            .ToArray();
+        if (claims.Length > 0)
+        {
+            messages.AddRange(claims.Select(claim => $"Claim: {claim}"));
+        }
+
         var soulId = State.ControlledEntity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : State.ControlledEntityId.Value;
         var legend = State.Legend.Tags
             .Where(tag => tag.ActorSoulId.Equals(soulId, StringComparison.OrdinalIgnoreCase))
@@ -196,6 +207,17 @@ public sealed class GameEngine
 
     public ActionResult Talk(string text) => _interactionSystem.Talk(text);
 
+    public DialoguePreparation PrepareDialogue(string text) => _interactionSystem.PrepareDialogue(text);
+
+    public ActionResult ApplyGeneratedDialogue(
+        PreparedDialogueTurn turn,
+        string spokenText,
+        string provider,
+        string? rawText = null,
+        string? delivery = null,
+        string? intent = null) =>
+        _interactionSystem.ApplyGeneratedDialogue(turn, spokenText, provider, rawText, delivery, intent);
+
     public ActionResult Give(string item, string? target) => _interactionSystem.Give(item, target);
 
     public ActionResult Recruit(string? target) => _interactionSystem.Recruit(target);
@@ -207,6 +229,9 @@ public sealed class GameEngine
     public ActionResult Examine(string? target) => _interactionSystem.Examine(target);
 
     public ActionResult Open(string? target) => _interactionSystem.Open(target);
+
+    public ActionResult OpenDoor(Entity actor, Entity door, WorldActionContext context) =>
+        _interactionSystem.OpenDoor(actor, door, context);
 
     public ActionResult Possess(string? target) => _bodySwapSystem.Possess(target);
 

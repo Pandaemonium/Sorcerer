@@ -92,7 +92,12 @@ Current shape:
 ```csharp
 public sealed class GameSession
 {
-    public GameSession(GameState state, IWildMagicController? magic = null);
+    public GameSession(
+        GameState state,
+        IWildMagicController? magic = null,
+        IDialogueClaimExtractor? claimExtractor = null,
+        IDialogueProvider? dialogueProvider = null,
+        IDialogueAuditSink? dialogueAudit = null);
     public Task<ActionResult> ExecuteAsync(GameCommand command, CancellationToken cancellationToken = default);
     public GameView View();
     public AgentObservation Observation(bool debug = false);
@@ -105,6 +110,11 @@ Responsibilities:
 - own provider stack
 - route commands
 - coordinate immediate and pending foreground casts
+- resolve provider-backed dialogue responses and apply validated dialogue proposals
+- record generated dialogue provider audits where configured
+- queue post-dialogue claim extraction and apply completed proposals at explicit session
+  boundaries
+- flush pending dialogue extraction before saving so live provider tasks are never silently lost
 - save/load authoritative state through the persistence layer
 - return `ActionResult`
 - expose read-only views and agent observations
@@ -116,6 +126,21 @@ Pending casts currently use a conservative seam: `begin_cast` records the cast t
 mutating state, `await_cast` resolves it through the same magic controller, and
 `cancel_cast` clears it. This preserves the CLI submit/await contract while avoiding
 state races before the resolver/apply split becomes more granular.
+
+Dialogue uses the same seam. With an `IDialogueProvider`, `talk` asks the engine to prepare a
+speaker-bound dialogue turn, sends compact state context to the provider, validates the generated
+`spokenText`, applies accepted proposals, and returns a normal `ActionResult`. Without a provider,
+the deterministic fallback path still returns player-facing text; `GameSession` then queues an
+`IDialogueClaimExtractor` request from the structured dialogue delta. Completed extractor results
+are proposals only; the session validates and applies them later as claim records, memories,
+merchant stock, bond shifts, or promises.
+
+Generated dialogue audits flow through `IDialogueAuditSink`. The CLI and Godot frontend currently
+write JSONL records to `logs/dialogue_audit.jsonl`.
+
+Saving is one of those explicit session boundaries. If dialogue extraction is pending, `save`
+should wait for completion, apply accepted proposals or record technical failures, and then write
+the snapshot. Pending provider tasks themselves are not serialized.
 
 ## Command Layer
 
@@ -435,10 +460,11 @@ promise, update ledgers, and change combat allegiance without scripting a separa
 Personal bonds are separate from combat allegiance and organization membership. `BondLedger`
 stores soul-keyed loyalty/fear/admiration/resentment/posture records; `ActorComponent.Faction`
 controls combat allegiance; `FactionComponent` preserves membership/roles. Gifts write memories
-and shift bonds, recruitment changes combat allegiance while preserving membership, and
+for later dialogue, recruitment changes combat allegiance while preserving membership, and
 `followers` reads bond posture rather than same-faction membership. The first deterministic
-dialogue parser handles common organic intents and trusted secrets; future model-driven dialogue
-must still propose structured outcomes that the engine validates.
+dialogue parser handles a few common organic intents; post-dialogue claim extraction handles
+reported claims, promise proposals, merchant stock, and bond shifts through structured proposals
+that the engine validates.
 
 Promise binding also lives at this layer. `GameEngine.AddPromise` writes one ledger record
 with source, subject, claimed place, bound place, optional bound target, trigger hint,

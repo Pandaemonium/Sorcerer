@@ -12,7 +12,8 @@ Each model call should have a purpose:
 
 - `wild`: resolve typed wild-magic spells
 - `dialogue`: parse organic player speech into structured dialogue intent/proposals and voice NPC
-  responses
+  responses; also run post-dialogue claim routing/structuring by default so local-model users do
+  not pay model-load thrash for a separate promise router
 - `item`: identify/adapt item abilities
 - `canon`: on-demand examine/read materialization
 - `background`: non-urgent world enrichment
@@ -47,6 +48,7 @@ Background calls enrich the world:
 - far-look object details
 - lore extraction
 - promise fleshing
+- post-dialogue claim extraction, when it is not part of the foreground dialogue call
 - town/site details
 
 Background calls must be resource-aware.
@@ -65,6 +67,43 @@ Required controls:
 
 If a background job completes, its output should become durable only at an explicit apply
 point controlled by `GameSession`, not from an arbitrary worker thread mutating state.
+
+## Post-Dialogue Claim Extraction
+
+Dialogue should return to the player before expensive promise work runs. A conversation may queue
+a low-latency claim extraction flow:
+
+1. The player-facing dialogue result is shown immediately.
+2. A small router call, using the already-loaded `dialogue` model, receives the recent exchange,
+   speaker ids/cards, and a compact definition of claim/promise.
+3. If the router finds a plausible claim, a larger structuring call uses selected claim capability
+   cards and strict JSON to propose memories, canon notes, merchant-stock hints, or promises.
+4. The engine validates and applies the structured proposal between turns or at another explicit
+   session pump point.
+5. A save command is an explicit synchronization point: the session waits for pending dialogue
+   extraction to complete, applies accepted proposals or records technical failures, and only then
+   writes the save.
+
+This is intentionally a model interpretation lane, not a simulation lane. The model may say
+"this dialogue probably claimed that Jimmer sells a blade"; the engine decides whether that becomes
+a reported claim, an NPC memory, merchant stock, a future item promise, or nothing.
+
+Do not bind player-spoken claims as world truth. Ordinary player dialogue can ask, lie, speculate,
+or manipulate, but only validated engine actions, wild magic, NPC/document claims, or authored
+world sources create durable commitments.
+
+Current implementation uses both `IDialogueProvider` and `IDialogueClaimExtractor` in
+`Sorcerer.Core`, with mock and Ollama implementations in `Sorcerer.Llm`. Provider-generated
+dialogue returns `spokenText` plus structured proposals and applies accepted claims immediately.
+Fallback deterministic dialogue can still queue extraction after successful `talk` results and pump
+completed results on a later command. Proposals can create `ClaimLedger` entries, write memories,
+add existing merchant stock, bind promises, or request bounded bond deltas. Gift commands only
+create gift memories; if that gift changes a relationship, generated dialogue or claim extraction
+must propose the bond change during a later conversation.
+
+Current generated dialogue supports the first validated action proposals:
+`step_aside`, `flee`, `call_help`, `give_item`, and `open_door`. Unsupported actions are rejected
+with a diagnostic delta.
 
 ## Ollama Concerns
 

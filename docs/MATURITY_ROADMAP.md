@@ -191,9 +191,9 @@ heat; bounty spawn determinism.
 
 Status: first deterministic slice complete. The engine now supports organic-ish `talk` intent
 parsing, `give`, `recruit`, qualitative `bonds`, bond-driven followers, personal-bond hostility
-overrides, gift memories, and trusted dialogue secrets that bind promises. A live dialogue LLM
-resolver is still deferred; the current layer is the deterministic skeleton it will have to
-validate through.
+overrides, gift memories, and post-dialogue claim extraction that can bind promises. Deeper
+model-voiced dialogue remains later; the current layer is the deterministic skeleton it will have
+to validate through.
 
 - **Talk-to-anyone:** organic free-form dialogue through the same session. A dialogue resolver parses
   player speech into structured intent/proposed outcomes; the engine validates relationship,

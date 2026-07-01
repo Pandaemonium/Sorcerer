@@ -38,6 +38,10 @@ references inside them to Python modules or the old name.
   event-driven world reaction.
 - [PROMISES_AND_PROPHECY.md](PROMISES_AND_PROPHECY.md): the promise ledger, always-honor, and
   prophecy as foundational systems.
+- [DIALOGUE_SYSTEM.md](DIALOGUE_SYSTEM.md): LLM-generated dialogue, claim/promise extraction,
+  NPC memories, bond changes, and engine validation.
+- [OPENING_SEQUENCE.md](OPENING_SEQUENCE.md): the first 20 minutes as a promise-rich,
+  system-driven vertical slice rather than a scripted tutorial.
 - [SEMANTIC_EFFECTS.md](SEMANTIC_EFFECTS.md): entity descriptions/traits as dormant mechanics
   the resolver surfaces (semantic by default, mechanical on demand).
 - [COSTS_REAGENTS_AND_TREASURED_ITEMS.md](COSTS_REAGENTS_AND_TREASURED_ITEMS.md): post-cast

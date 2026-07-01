@@ -96,9 +96,10 @@ The first deterministic bond/follower slice exists. Build general primitives, no
   moment; consequences are written back as durable traits/notes that color all future
   behavior. Keep the math invisible - this must read as relationships, not stat bars.
 
-Current implementation covers gifts, bond posture, bond-driven followers, personal-bond hostility
-overrides, and trusted dialogue secrets binding promises. Founding organizations, deep drift,
-departure, betrayal scenes, and model-voiced dialogue remain later layers.
+Current implementation covers gift memories, bond posture, bond-driven followers,
+personal-bond hostility overrides, dialogue-extractor bond proposals, and trusted dialogue
+secrets binding promises. Founding organizations, deep drift, departure, betrayal scenes, and
+model-voiced dialogue remain later layers.
 
 ## A fresh world each run
 

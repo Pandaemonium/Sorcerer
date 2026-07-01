@@ -54,6 +54,9 @@ dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cp
   --transcript logs\cli_ollama_playtest.jsonl `
   --command "inspect" `
   --command "character" `
+  --command "talk Lio" `
+  --command "wait" `
+  --command "journal" `
   --command "cast bind the nearest soldier in sticky blue glass" `
   --command "cast promise that the notice will remember my name when read" `
   --command "read notice" `
@@ -66,6 +69,8 @@ Useful live-provider outputs to inspect after a run:
 - `logs\cli_ollama_playtest.jsonl` for step-by-step diagnostic transcript
 - `logs\wild_magic_audit.jsonl` for prompt, raw model output, repaired resolution, and
   validation errors
+- `logs\dialogue_audit.jsonl` for generated dialogue requests, raw replies, parsed proposals,
+  validation issues, and resulting delta operation names
 
 Report the provider, model, command sequence, transcript path, and audit symptoms when a
 playtest finds a problem.
@@ -76,15 +81,17 @@ For a focused social-system smoke, use the named quickstart:
 dotnet run --project src/Sorcerer.Cli -- --provider mock --quickstart social `
   --command "talk Lio" `
   --command "give grave salt to Lio" `
-  --command "talk Lio, trust me with a secret" `
+  --command "talk Lio, what waits outside?" `
+  --command "wait" `
   --command "travel east" `
   --command "inspect" `
   --command "recruit Lio" `
   --command "followers"
 ```
 
-The travel step should realize the confided site promise as a generated place when the destination
-zone is new.
+The `wait` step gives queued dialogue claim extraction a turn boundary to apply. The travel step
+should realize the confided site promise as a generated place when the destination zone is new.
+Debug observations also expose visible claim cards and claim ids/counts for agent diagnostics.
 
 For a focused travel/world-feel smoke, use:
 
