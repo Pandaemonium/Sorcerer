@@ -62,6 +62,23 @@
       "aliases": ["promise", "prophecy"]
     },
     {
+      "name": "createTrigger",
+      "summary": "Create a turn-pump trigger for delayed effects, wards, and auras.",
+      "aliases": ["trigger", "ward", "aura", "delayedEffect"],
+      "promptGuidance": "Use one createTrigger shape for delayed tactical effects, auras, and ward-like pulses. Fields: kind, delay, interval, uses, anchor, radius, targetFilter, effectType, effect/status/amount/text.",
+      "fields": {
+        "kind": "delay, aura, or ward",
+        "delay": "turns before first firing",
+        "interval": "turns between repeated firings",
+        "uses": "maximum number of firings",
+        "anchor": "entity or point the trigger is attached to",
+        "radius": "radius for aura/ward targeting",
+        "targetFilter": "all, enemies, allies, self",
+        "effectType": "addStatus, damage, heal, or message",
+        "effect": "optional nested effect object with type and fields"
+      }
+    },
+    {
       "name": "message",
       "summary": "Add a message.",
       "aliases": []

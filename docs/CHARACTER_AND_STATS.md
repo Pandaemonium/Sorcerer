@@ -1,8 +1,9 @@
 # Character And Stats
 
-Status: vision-for-later. The first playable can ship a single default profile; what matters
-now is reserving the profile slot on the controlled entity and knowing that stats feed the
-resolver. Adapted from the Wild Magic prototype. Companion to
+Status: first implementation in place. Origins, body/soul stat ownership, the shared
+`character`/`sheet` command, soul-bound mana, and resolver anchor shaping exist. Character
+creation is still minimal quick-start plus CLI `--origin`; richer GUI customization and point
+spend are later work. Adapted from the Wild Magic prototype. Companion to
 [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md) and [ENTITY_MODEL.md](ENTITY_MODEL.md).
 
 ## The three stats
@@ -41,8 +42,20 @@ resolver sends the model** - numbers and tone both:
   sparingly so it tints rather than dominates.
 
 A middling caster changes nothing - the anchors are unchanged. The mechanism is
-prompt-shaping, so it works through the normal resolver; a deterministic fallback can read the
-same profile so stats still bite offline.
+prompt-shaping, so it works through the normal resolver; the mock provider reads the same
+`ResolverLensView` so stats still bite offline.
+
+Implemented thresholds:
+
+- Attunement `<= 2`: effect magnitude delta `-1`.
+- Attunement `3-4`: unchanged.
+- Attunement `>= 5`: effect magnitude delta `+1`.
+- Composure `<= 2`: volatile/wilder framing.
+- Composure `3-4`: unchanged.
+- Composure `>= 5`: cleaner controlled framing.
+- Vigor `<= 2`: steer away from raw HP costs.
+- Vigor `3-4`: unchanged.
+- Vigor `>= 5`: physical costs are more plausible.
 
 ## Origins
 
@@ -52,6 +65,16 @@ Origins should tie to the world's traditions and realms (see WORLDBUILDING.md) -
 bone-singer's apprentice, a deserter charter mage, a desert Parn, a merfolk exile. Phase 1
 should ship a small real roster rather than placeholder origins, because first-reaction data
 feeds the faction spine.
+
+Implemented origins live in `content/origins/initial_origins.json`:
+
+- `fugitive_wild_sorcerer`
+- `bone_singers_apprentice`
+- `deserter_charter_mage`
+- `desert_parn`
+- `merfolk_exile`
+
+The CLI quick-start uses `fugitive_wild_sorcerer` unless `--origin <id>` is provided.
 
 ## Free-form identity fields
 
@@ -72,14 +95,18 @@ origin, spend a small point pool, fill the free-form fields). Sorcerer is death-
 many-runs, so creation must never block the flow; the CLI uses a default profile so agents
 never stall.
 
+Current implementation is deliberately small: CLI supports `--origin <id>` and the shared
+`character`/`sheet` command; Godot starts from quick-start and can read `SORCERER_ORIGIN`
+for development runs while showing stats in the side panel.
+
 ## Soul and body ownership
 
-Implementation should represent soul-owned state explicitly, for example with a `SoulLedger` /
-`SoulRecord` keyed by `SoulComponent.SoulId`, rather than scattering soul facts across whichever
-body is currently controlled. Soul-owned state includes Attunement, Composure, current/max mana,
-personal memory, exploration memory, reputation/legend keys, magical signature, and personal
-backstory. Body-owned state includes Vigor, HP, inventory, equipment, public name, appearance, and
-physical condition.
+Implementation represents soul-owned state with `SoulLedger` / `SoulRecord` keyed by
+`SoulComponent.SoulId`, rather than scattering soul facts across whichever body is currently
+controlled. Soul-owned state includes Attunement, Composure, current/max mana, magical
+signature, personal backstory, origin/tradition, and faction first-reaction seeds. Exploration
+memory is also soul-bound in `ExploredBySoulId`. Body-owned state includes Vigor, HP,
+inventory, equipment, public name, appearance, and physical condition.
 
 ## Body swap
 
@@ -90,6 +117,6 @@ active body profile; soul-facing profile fields move with the soul.
 
 ## Reserved lane (what to keep ready now)
 
-Reserve body-facing and soul-facing character slots and route both into the resolver context.
-The first playable can run with one default profile; the triad and origins flesh out when
-character creation is built.
+Done for the first implementation: body-facing and soul-facing slots route into
+`MagicContextView.ResolverLens`. Remaining work is richer character creation UX, point spend,
+more origins, and deeper use of faction first-reaction seeds once Phase 3 factions mature.

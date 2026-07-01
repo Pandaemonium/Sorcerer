@@ -29,11 +29,11 @@ The architecture already gives us a head start the prototype never had:
 
 > Every world-reaction state lane is already reserved in `GameState`: `PromiseLedger`,
 > `DeedLedger`, `FactionLedger`, `LegendLedger`, `MemoryLedger`, `CanonLedger`, `BondLedger`,
-> `ScheduledEventLedger`, `BackgroundJobs`.
+> `ScheduledEventLedger`, `TriggerLedger`, `BackgroundJobs`.
 
-These are records-only today. The systems that read and write them at pump points are stubs. So
-most of this roadmap is **filling in deterministic rule-systems over an existing spine**, not
-inventing new state shapes. That is why it can stay elegant.
+Many began as records-only lanes; the sprint is progressively giving them deterministic readers and
+writers at pump points. Most of this roadmap is **filling in rule-systems over an existing spine**,
+not inventing new state shapes. That is why it can stay elegant.
 
 ## Where We Are
 
@@ -48,11 +48,13 @@ Solid and shipping:
   statuses and terrain with expiry, possession/body-swap seam, hostile actor turns.
 - Promises with target/trigger binding and read/open/talk realization.
 - Background-job lane (deterministic placeholder generation), CLI eval (26/26 mock), episode
-  runner, transcript logs, mock + Ollama providers.
+  runner, transcript logs, transcript replay, mock + Ollama providers.
+- Save/load with a schema-v1 persistence envelope, materialized spell replay, a reachable
+  killable emperor, run victory/defeat transitions, chronicles, and inert cross-run memorials.
 
-Reserved but inert (records exist, rules do not): deeds, factions, legend, memory, bonds, canon
-beyond background detail. Absent entirely: character/stats, dialogue depth, procedural worldgen,
-regions/towns, trade, quests, save/load, the narrator, lore-as-data.
+Still thin or future work: live LLM dialogue, full geopolitics and towns, deeper quests, richer
+background generation, item identification, late-game capital access, court infiltration, and
+death-to-new-run UX polish.
 
 ## Build Discipline (applies to every phase)
 
@@ -79,7 +81,7 @@ Ordered by dependency, not by size. Each phase ends with a playable, more-emerge
 
 ### Phase 0 - Engine Refactor And Perception Prerequisite
 
-*Current next step. Tactical detail lives in BUILD_PLAN.md.*
+Status: first implementation complete. Tactical detail lives in BUILD_PLAN.md.
 
 - Refactor the current large `GameEngine` into composed systems before adding more world-reaction
   features. The project is still early enough for a broad behavior-preserving extraction, but the
@@ -101,7 +103,8 @@ memory, suspicious-but-unattributed witnessing, CLI playtest transcript after ex
 
 ### Phase 1 - Character & the Resolver Lens
 
-*Small, high-leverage, deterministic, unblocks faction first-reactions.*
+Status: first implementation complete. Small, high-leverage, deterministic, and feeds faction
+first-reactions.
 
 - Character state splits cleanly across body and soul:
   - **Vigor** belongs to the body and drives HP, physical resilience, melee pressure, and carry
@@ -129,6 +132,12 @@ HP, and external name while preserving soul mana, Attunement/Composure; name ren
 
 *The deterministic backbone everything social reads. No model required.*
 
+Status: first implementation complete. `WorldReactionSystem` captures accepted wild magic,
+player attacks/kills, prisoner rescue, and body swap; classifies visibility through the shared
+perception model; applies pending deeds at the turn pump; and writes soul-bound legend tags plus
+multidimensional faction standing. Broader deed families, richer rumor display, and model-assisted
+ambiguity remain future layers.
+
 - **Witness model:** at action time, compute who-saw-it from FOV/proximity; classify visibility as
   secret / suspicious / witnessed / public / mythic. (`DeedRecord` already carries `Witnesses` and
   `Visibility`.) Suspicious means an NPC saw the effect or target but not the caster; it becomes
@@ -143,7 +152,8 @@ HP, and external name while preserving soul mana, Attunement/Composure; name ren
   merciful, uncanny). Body swap does not launder reputation.
 - **Multidimensional reputation** derived from deeds + legend: notoriety, fear, gratitude,
   legitimacy, uncanniness, imperial threat. One deed lands on several axes at once.
-- **Legibility:** a standing readout in `GameView` (CLI + GUI); a message when reputation shifts.
+- **Legibility:** `standing` and `journal` expose legend/reputation; debug views summarize ledger
+  counts; reputation-shift messages enter the shared action result stream.
 
 **Unlocks:** act -> witnessed deed -> rumor seed -> legend -> reputation. Combat gains social
 weight (who saw it, which faction was harmed, and whether the actor was identified). **Tests:**
@@ -151,6 +161,11 @@ witness gating; secret vs. suspicious vs. public divergence; soul-bound legend a
 deterministic axis math.
 
 ### Phase 3 - Factions & the Empire (finite-resource pressure)
+
+Status: first implementation complete. Faction definitions load from `content/factions`, empire-bloc
+rules are role-keyed, witnessed deeds raise heat, heat spends finite resources into scheduled
+patrol/warrant pressure, quiet pumps regenerate resources and cool heat, AI hostility reads the
+faction ledger, and the first emperor-reachability seam reads the imperial defenses pool.
 
 - Faction definitions (Empire of Vigovia + regional / rebel / tradition factions) holding
   multidimensional standing and **finite resources** (`FactionRecord` already has `Standing` and
@@ -173,6 +188,12 @@ deterministic axis math.
 heat; bounty spawn determinism.
 
 ### Phase 4 - NPC Interiority: Dialogue, Bonds, Followers (the social game)
+
+Status: first deterministic slice complete. The engine now supports organic-ish `talk` intent
+parsing, `give`, `recruit`, qualitative `bonds`, bond-driven followers, personal-bond hostility
+overrides, gift memories, and trusted dialogue secrets that bind promises. A live dialogue LLM
+resolver is still deferred; the current layer is the deterministic skeleton it will have to
+validate through.
 
 - **Talk-to-anyone:** organic free-form dialogue through the same session. A dialogue resolver parses
   player speech into structured intent/proposed outcomes; the engine validates relationship,
@@ -199,6 +220,14 @@ promise binding.
 
 *The big one; split a minimal multi-zone version first if needed.*
 
+Current status: the minimal multi-zone slice exists. The engine can snapshot zones, travel between
+coordinate zones, lazily generate region-flavored interiors, carry recruited followers, expose an
+atlas/world card, feed region affordances into the magic resolver, and realize a bound travel/site
+promise as a generated place. A minimal seeded `WorldRoll` also varies realm status, ruler, and
+effective imperial grip by run seed, and generated zones seed one resident NPC from region/realm
+profile. Full geopolitical ownership graphs, town layouts, population rosters, and rich
+promise-site archetypes are still future Phase 5 work.
+
 - **Zone graph** beyond the single chamber: regions with identity, a wild-magic saturation gradient
   (imperial -> dreamlike), and a tradition lean. Zone transition is a reaction pump point.
   Start with the smallest useful bounded grid; no exact size is fixed by the roadmap.
@@ -221,15 +250,33 @@ feature exposes an affordance; promise -> realized place; tradition emphasis use
 
 ### Phase 6 - Magic & Item Depth (auras, conditions, curses, reagents, identification)
 
+Current status: the first status-trait mechanics exist. Concealment aliases such as
+`river_concealed` canonicalize to a `concealed` status, use registry default duration when omitted,
+and suppress hostile AI notice beyond close range. Registry-driven turn ticks now make `burning` and
+`poisoned` deal ongoing harm and `regenerating` / `mending` restore HP through the shared turn pump.
+The minimal `createTrigger` slice is also live: delayed effects and radius/filter auras store
+records in `TriggerLedger` and fire `addStatus`, `damage`, `heal`, or `message` effects through
+`TriggerSystem` on the turn pump. The first terrain reaction slice is live too: water extinguishes
+burning into temporary mist, fire ignites actors, and vines apply rooted status through the same
+status registry. The minimal item-depth slice is live as well: item definitions carry spell-bias
+hints, unprotected reagents enter resolver context, and generated zones create deterministic curios
+whose metadata survives pickup through the shared item catalog. Mechanical curse templates now
+reject violating accepted resolutions before mutation. Richer predicates, entry/death wards,
+curse-clearing deeds, slick-ice movement, frost reactions, identification, and trade remain future
+depth remain future work. Minimal explicit trade is live through `wares`, `buy`, and `sell` against
+generated resident merchants.
+
 - **Condition/effect depth on the existing registries:** persistent effects, auras, delayed effects,
-  condition triggers, and status traits beyond block/restrain (damage-over-time, visibility, fear,
-  charm). Extends `StatusRegistry`. Distinguish tactical turn-tick systems from world-reaction pump
-  systems so auras, DoTs, and terrain reactions can be immediate without becoming background world
-  simulation.
-- **Curses** as durable, narratively loaded conditions (deepen `addCurse`).
-- **Item depth:** catalog + generation, palettes, **identification** (mysterious until learned),
-  ability cards, equipment depth, reagents/fuel, enforced treasured inventory.
-- **Trade / barter** through engine rules + explicit commands - **no LLM for trade intent**.
+  condition triggers, and status traits beyond block/restrain (visibility, fear, charm,
+  vulnerability/resistance). Extends `StatusRegistry`. Distinguish tactical turn-tick systems from
+  world-reaction pump systems so aura pulses, delayed effects, and terrain reactions can be
+  immediate without becoming background world simulation.
+- **Curses** as durable, narratively loaded conditions: deepen clearing, escalation, and more
+  expressive template coverage.
+- **Item depth:** deepen palettes, **identification** (mysterious until learned), ability cards,
+  equipment depth, and broader generated loot/merchant inventories.
+- **Trade / barter** through engine rules + explicit commands - **no LLM for trade intent**. The
+  first merchant/wares/buy/sell slice exists; deepen inventory, pricing, and merchant variety later.
 - **Semantic effects matured:** traits as dormant mechanics the resolver surfaces on demand, never
   on the critical path.
 
@@ -243,11 +290,17 @@ promotion is resolver-authored only.
 
 - **Lore as data:** port Wild Magic's `content/lore/*.md` canon as content cards; add a lore router
   so the right canon reaches the resolver and narrator. Texture/flesh systems enrich room, book, and
-  prop description through the **existing background-job lane**.
+  prop description through the **existing background-job lane**. First slice is live: Markdown lore
+  cards, pure routing, resolver context injection, atlas lore, deterministic fixture texture, and
+  routed-lore background detail fallbacks.
 - **Narrator voice:** rumors that greet you by reputation, clerk memos, situation reports, the
-  run-closing chronicle, consequence-bearing detail (a shrine raised to what you did).
+  run-closing chronicle, consequence-bearing detail (a shrine raised to what you did). First slice:
+  deterministic zone-entry rumors reflect current legend and standing after travel without changing
+  mechanics.
 - **Provider-backed background generation:** replace deterministic placeholders behind the same
-  queue/apply boundary; resource-aware, cancellable, inspectable.
+  queue/apply boundary; resource-aware, cancellable, inspectable. First harness slice: CLI wild
+  magic uses purpose-based `LlmConfiguration`, with separate background settings and background
+  queue throttle/disable flags.
 - **Legibility layer:** rumor lines on zone entry, NPCs greeting by legend, named voices, standing
   readouts.
 
@@ -257,14 +310,25 @@ at pump points; skeleton intact with generation disabled.
 
 ### Phase 8 - Persistence, Replay, Chronicle, and the Long Run
 
-- **Save/load:** serialize all lanes; settle the save format and schema versioning (see
-  [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)). Replay records beside audit logs.
-- **Cross-run traces** that commemorate, not empower: grave markers, chronicles, memorial records.
-- **Win condition wired:** the emperor exists as a killable character; killing him through ordinary
-  engine rules ends the run in victory. Complicated systems for reaching him can remain thin or
-  deferred; death rolls a fresh world.
-- **Long-run validation:** autoplay episodes that run long, deterministic, and inspectable, with
-  invariant checks across the new lanes.
+Status: first implementation complete. `GameSaveService` serializes authoritative state through a
+schema-v1 envelope, CLI/Godot share `save`/`load`, transcripts carry materialized spell JSON, and
+`--replay` can re-feed recorded commands through a fresh session without model calls. The thin
+world graph now reaches the Vigovian Capital, Emperor Odran is a normal killable actor, victory and
+controlled-body defeat both close the run, completed runs write chronicles, and later runs can
+surface those records as inert memorial props. Episode runs now check save/load byte stability and
+cross-lane invariants.
+
+- **Save/load:** deepen migration/version tooling, compress/organize run folders, and keep every new
+  state lane serializable.
+- **Replay:** expand materialized apply points beyond spell JSON as narrator/dialogue/background
+  generation become provider-backed.
+- **Cross-run traces** that commemorate, not empower: grave markers, chronicles, memorial records,
+  and other inert echoes.
+- **Win condition wired:** the emperor exists as a killable character; deepen the late-game access
+  systems later through imperial defenses, court infiltration, and capital texture rather than a
+  bespoke finale.
+- **Long-run validation:** keep growing deterministic, inspectable autoplay episodes with invariant
+  checks across new lanes.
 
 **Unlocks:** the full long arc and many-runs loop. **Tests:** round-trip save/load equality;
 replay determinism; win/death transitions; long-episode invariants.

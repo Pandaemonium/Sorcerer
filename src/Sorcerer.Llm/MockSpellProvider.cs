@@ -1,3 +1,4 @@
+using Sorcerer.Core.Views;
 using Sorcerer.Magic.Resolution;
 
 namespace Sorcerer.Llm;
@@ -11,7 +12,8 @@ public sealed class MockSpellProvider : ISpellProvider
         CancellationToken cancellationToken)
     {
         var spell = request.SpellText.ToLowerInvariant();
-        var resolution = Resolve(spell, request.SpellText);
+        var lens = request.Context is MagicContextView context ? context.ResolverLens : null;
+        var resolution = Resolve(spell, request.SpellText, lens);
 
         return Task.FromResult(new SpellProviderResult(
             Name,
@@ -21,7 +23,7 @@ public sealed class MockSpellProvider : ISpellProvider
             Error: null));
     }
 
-    private static SpellResolution Resolve(string spell, string original)
+    private static SpellResolution Resolve(string spell, string original, ResolverLensView? lens)
     {
         if (HasAny(spell, "kill the emperor", "destroy the empire instantly", "erase the empire"))
         {
@@ -80,6 +82,79 @@ public sealed class MockSpellProvider : ISpellProvider
                 }));
         }
 
+        var auraSpell = HasToken(spell, "aura");
+        var wardSpell = HasToken(spell, "ward");
+        if (auraSpell
+            || wardSpell
+            || HasAny(spell, "delayed", "after two turns", "after 2 turns", "in two turns", "in 2 turns"))
+        {
+            var status = HasAny(spell, "burn", "burning") ? "burning"
+                : HasAny(spell, "web", "bind", "root") ? "bound"
+                : "poisoned";
+            return Accepted(
+                auraSpell || wardSpell ? "moderate" : "minor",
+                auraSpell
+                    ? "The spell leaves a repeating pressure in the air."
+                    : wardSpell
+                        ? "A warning knot waits for the next hostile step."
+                        : "The spell folds itself into a later minute.",
+                Effect("createTrigger", new Dictionary<string, object?>
+                {
+                    ["name"] = auraSpell
+                        ? "poisonous green aura"
+                        : wardSpell
+                            ? "warning ward"
+                            : status switch
+                            {
+                                "burning" => "waiting blue coal",
+                                "bound" => "waiting binding",
+                                _ => "waiting venom",
+                            },
+                    ["kind"] = auraSpell ? "aura" : wardSpell ? "ward" : "delay",
+                    ["delay"] = auraSpell || wardSpell ? 1 : 2,
+                    ["interval"] = 1,
+                    ["uses"] = auraSpell || wardSpell ? 3 : 1,
+                    ["anchor"] = auraSpell || wardSpell ? "player" : "self",
+                    ["target"] = auraSpell || wardSpell ? "nearest_enemy" : HarmfulTarget(original),
+                    ["radius"] = auraSpell || wardSpell ? 6 : 0,
+                    ["targetFilter"] = auraSpell || wardSpell ? "enemies" : "all",
+                    ["effectType"] = "addStatus",
+                    ["status"] = status,
+                    ["duration"] = 3,
+                    ["description"] = auraSpell
+                        ? "The aura presses its color outward."
+                        : wardSpell
+                            ? "The ward remembers what it was waiting for."
+                            : "The delayed magic opens its hand.",
+                }));
+        }
+
+        if (HasAny(spell, "burn", "burning", "poison", "venom", "mending", "regenerat", "conceal", "hide me", "camouflage"))
+        {
+            var status = HasAny(spell, "burn", "burning") ? "burning"
+                : HasAny(spell, "poison", "venom") ? "poisoned"
+                : HasAny(spell, "mending", "regenerat") ? "mending"
+                : "river_concealed";
+            var helpful = HasAny(status, "mending", "river_concealed");
+            var target = helpful ? "player" : HarmfulTarget(original);
+            return Accepted(
+                helpful ? "minor" : "moderate",
+                status switch
+                {
+                    "burning" => "A blue coal catches where the spell points.",
+                    "poisoned" => "A green-black rumor enters the blood.",
+                    "mending" => "Green repair keeps happening after the spell lets go.",
+                    _ => "River-color closes over the outline of the body.",
+                },
+                Effect("addStatus", new Dictionary<string, object?>
+                {
+                    ["target"] = target,
+                    ["status"] = status,
+                    ["displayName"] = status.Replace('_', ' '),
+                    ["duration"] = status is "burning" ? 3 : status is "poisoned" ? 5 : 4,
+                }));
+        }
+
         if (HasAny(spell, "heal", "mend", "close wound", "stitch"))
         {
             return Accepted(
@@ -88,7 +163,7 @@ public sealed class MockSpellProvider : ISpellProvider
                 Effect("heal", new Dictionary<string, object?>
                 {
                     ["target"] = "player",
-                    ["amount"] = 5,
+                    ["amount"] = 5 + MagnitudeDelta(lens),
                 }));
         }
 
@@ -100,7 +175,7 @@ public sealed class MockSpellProvider : ISpellProvider
                 Effect("restoreMana", new Dictionary<string, object?>
                 {
                     ["target"] = "player",
-                    ["amount"] = 4,
+                    ["amount"] = 4 + MagnitudeDelta(lens),
                 }));
         }
 
@@ -247,13 +322,20 @@ public sealed class MockSpellProvider : ISpellProvider
 
         if (HasAny(spell, "curse", "debt", "cost me"))
         {
+            var template = HasToken(spell, "close") ? "close"
+                : HasToken(spell, "far") ? "far"
+                : HasToken(spell, "narrow") ? "narrow"
+                : HasAny(spell, "straight path", "straight-path") ? "straight-path"
+                : HasToken(spell, "anchored") ? "anchored"
+                : "";
             return Accepted(
                 "moderate",
                 "The magic signs your name in the margin.",
                 Effect("addCurse", new Dictionary<string, object?>
                 {
-                    ["name"] = "Wild Debt",
+                    ["name"] = string.IsNullOrWhiteSpace(template) ? "Wild Debt" : $"{template} curse",
                     ["description"] = original,
+                    ["template"] = template,
                 }));
         }
 
@@ -266,7 +348,7 @@ public sealed class MockSpellProvider : ISpellProvider
                 {
                     ["target"] = "nearest_enemy",
                     ["radius"] = 2,
-                    ["amount"] = 4,
+                    ["amount"] = 4 + MagnitudeDelta(lens),
                     ["affects"] = "enemies",
                     ["damageType"] = "wild",
                 }));
@@ -278,20 +360,21 @@ public sealed class MockSpellProvider : ISpellProvider
             Effect("damage", new Dictionary<string, object?>
             {
                 ["target"] = "nearest_enemy",
-                ["amount"] = 6,
+                ["amount"] = 6 + MagnitudeDelta(lens),
                 ["damageType"] = "arcane",
-            }));
+            }),
+            LowComposureMessage(lens, spell));
     }
 
     private static SpellResolution Accepted(
         string severity,
         string outcome,
-        params SpellEffect[] effects) =>
+        params SpellEffect?[] effects) =>
         new(
             Accepted: true,
             Severity: severity,
             OutcomeText: outcome,
-            Effects: effects,
+            Effects: effects.Where(effect => effect is not null).Cast<SpellEffect>().ToArray(),
             Costs: Array.Empty<SpellCost>(),
             RejectedReason: null);
 
@@ -307,8 +390,49 @@ public sealed class MockSpellProvider : ISpellProvider
     private static bool HasAny(string text, params string[] needles) =>
         needles.Any(needle => text.Contains(needle, StringComparison.Ordinal));
 
+    private static bool HasToken(string text, string token) =>
+        text.Split(new[] { ' ', '\t', '\r', '\n', '.', ',', ';', ':', '!', '?', '\'', '"', '-', '_' }, StringSplitOptions.RemoveEmptyEntries)
+            .Any(part => part.Equals(token, StringComparison.OrdinalIgnoreCase));
+
+    private static string HarmfulTarget(string text)
+    {
+        var spell = text.ToLowerInvariant();
+        if (HasAny(spell, "ward-captain", "ward captain", "captain"))
+        {
+            return "soldier_2";
+        }
+
+        if (HasAny(spell, "soldier", "imperial", "guard"))
+        {
+            return "soldier_1";
+        }
+
+        if (HasAny(spell, "lio", "prisoner"))
+        {
+            return "prisoner_1";
+        }
+
+        return "nearest_enemy";
+    }
+
     private static SpellEffect Effect(
         string type,
         IReadOnlyDictionary<string, object?> fields) =>
         new(type, fields);
+
+    private static int MagnitudeDelta(ResolverLensView? lens) =>
+        lens?.EffectMagnitudeDelta ?? 0;
+
+    private static SpellEffect? LowComposureMessage(ResolverLensView? lens, string spell)
+    {
+        if (lens?.Composure > 2 || spell.Contains("kill the emperor", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return Effect("message", new Dictionary<string, object?>
+        {
+            ["text"] = "Your low composure makes the magic shed a gorgeous, troublesome spark.",
+        });
+    }
 }

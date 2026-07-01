@@ -2,6 +2,8 @@ using Sorcerer.Core;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Views;
+using Sorcerer.Llm;
 using Sorcerer.Magic;
 using Sorcerer.Magic.Operations;
 using Sorcerer.Magic.Resolution;
@@ -74,6 +76,51 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public async Task MockProviderConditionWordsApplyTickingStatus()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()));
+        DisableImperialAi(session);
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        soldier.Set(soldier.Get<ActorComponent>() with { HitPoints = 10 });
+
+        var result = await session.ExecuteAsync(new CastCommand("set the nearest soldier's boots burning with a blue coal"));
+
+        Assert.True(result.Success);
+        Assert.Contains(soldier.Get<StatusContainerComponent>().Statuses, status => status.Id == "burning");
+        Assert.Equal(8, soldier.Get<ActorComponent>().HitPoints);
+        Assert.Contains(result.Messages, message => message.Contains("ongoing harm", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ZeroNumericMagicCostsDoNotEmitPlayerFacingCostLines()
+    {
+        var provider = new ZeroManaCostSpellProvider();
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider));
+
+        var result = await session.ExecuteAsync(new CastCommand("make the nearest soldier's armor bloom"));
+
+        Assert.True(result.Success);
+        Assert.True(result.ConsumedTurn);
+        Assert.DoesNotContain(result.Deltas, delta => delta.Operation == "cost:mana");
+        Assert.DoesNotContain(result.Messages, message => message.Contains("Cost: 0", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task TransformItemNoOpIsRejectedBeforeSelfChangeMessage()
+    {
+        var provider = new NoOpTransformItemSpellProvider();
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider));
+
+        var result = await session.ExecuteAsync(new CastCommand("change the tincture without changing anything"));
+
+        Assert.False(result.Success);
+        Assert.False(result.TechnicalFailure);
+        Assert.True(result.ConsumedTurn);
+        Assert.DoesNotContain(result.Messages, message => message.Contains("changes into red tincture", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Messages, message => message.Contains("transformItem needs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task PendingCastDoesNotMutateUntilAwaited()
     {
         var provider = new FixtureSpellProvider();
@@ -131,6 +178,24 @@ public sealed class GameSessionTests
         Assert.DoesNotContain(result.Deltas, delta => delta.Target == "soldier_1" && delta.Operation == "aiMove");
     }
 
+    [Theory]
+    [InlineData("shadow_pinned")]
+    [InlineData("kneeling")]
+    [InlineData("boneless_knees")]
+    public async Task BindingStatusVariantsCanonicalizeToRootedAndSuppressAiActions(string status)
+    {
+        var session = GameSession.CreateImperialEncounter();
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var before = soldier.Get<PositionComponent>().Position;
+        session.Engine.ApplyStatus(soldier, status, duration: 3);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Equal("rooted", soldier.Get<StatusContainerComponent>().Statuses.Single().Id);
+        Assert.Equal(before, soldier.Get<PositionComponent>().Position);
+        Assert.DoesNotContain(result.Deltas, delta => delta.Target == "soldier_1" && delta.Operation == "aiMove");
+    }
+
     [Fact]
     public async Task AddStatusAcceptsTraitAliasFromLiveProviderShape()
     {
@@ -163,6 +228,273 @@ public sealed class GameSessionTests
         Assert.True(result.ConsumedTurn);
         Assert.Equal(before, session.Engine.State.ControlledEntity.Get<PositionComponent>().Position);
         Assert.Contains("binding", result.Messages.Single(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ApplyStatusUsesSecondPersonForControlledEntity()
+    {
+        var session = GameSession.CreateImperialEncounter();
+
+        var delta = session.Engine.ApplyStatus(
+            session.Engine.State.ControlledEntity,
+            "river_concealed",
+            duration: 4);
+
+        Assert.Equal("You are river concealed.", delta.Summary);
+        Assert.Contains(session.Engine.State.ControlledEntity.Get<StatusContainerComponent>().Statuses, status =>
+            status.Id == "concealed"
+            && status.DisplayName == "river_concealed");
+    }
+
+    [Fact]
+    public void OmittedStatusDurationUsesRegistryDefault()
+    {
+        var session = GameSession.CreateImperialEncounter();
+
+        var delta = session.Engine.ApplyStatus(
+            session.Engine.State.ControlledEntity,
+            "river_concealed",
+            duration: 0);
+
+        Assert.Equal(4, delta.Details["duration"]);
+        Assert.Contains(session.Engine.State.ControlledEntity.Get<StatusContainerComponent>().Statuses, status =>
+            status.Id == "concealed"
+            && status.ExpiresTurn == 4);
+    }
+
+    [Fact]
+    public async Task ConcealedControlledEntityAvoidsDistantHostileNotice()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var before = soldier.Get<PositionComponent>().Position;
+        session.Engine.ApplyStatus(session.Engine.State.ControlledEntity, "river_concealed", duration: 4);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.True(result.Success);
+        Assert.DoesNotContain(result.Deltas, delta => delta.Target == "soldier_1" && delta.Operation == "aiMove");
+        Assert.Equal(before, soldier.Get<PositionComponent>().Position);
+    }
+
+    [Fact]
+    public async Task ConcealedControlledEntityCanStillBeNoticedUpClose()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(8, 4)));
+        session.Engine.ApplyStatus(session.Engine.State.ControlledEntity, "river_concealed", duration: 4);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Contains(result.Deltas, delta => delta.Operation == "attack" && delta.Target == "player");
+    }
+
+    [Fact]
+    public async Task BurningStatusDamagesOnTurnPump()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        soldier.Set(soldier.Get<ActorComponent>() with { HitPoints = 5, MaxHitPoints = 10 });
+        session.Engine.ApplyStatus(soldier, "burning", duration: 3);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Equal(3, soldier.Get<ActorComponent>().HitPoints);
+        Assert.Contains(result.Messages, message => message.Contains("ongoing harm", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task RegeneratingStatusHealsOnTurnPump()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        var player = session.Engine.State.ControlledEntity;
+        player.Set(player.Get<ActorComponent>() with { HitPoints = 10, MaxHitPoints = 24 });
+        session.Engine.ApplyStatus(player, "mending", duration: 3);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Equal(12, player.Get<ActorComponent>().HitPoints);
+        Assert.Contains(result.Messages, message => message.Contains("regenerate", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task OngoingHarmCanDefeatActorsAndClearBlocking()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        soldier.Set(soldier.Get<ActorComponent>() with { HitPoints = 1, MaxHitPoints = 10 });
+        session.Engine.ApplyStatus(soldier, "burning", duration: 3);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.False(soldier.Get<ActorComponent>().Alive);
+        Assert.False(soldier.Get<PhysicalComponent>().BlocksMovement);
+        Assert.Contains(result.Messages, message => message.Contains("ongoing harm", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task CreateTriggerDelaysStatusUntilDueTurn()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(AcceptedSpell(
+            "The spell hides a coal in tomorrow.",
+            new SpellEffect(
+                "createTrigger",
+                new Dictionary<string, object?>
+                {
+                    ["name"] = "boot coal",
+                    ["kind"] = "delay",
+                    ["delay"] = 2,
+                    ["target"] = "soldier_1",
+                    ["effectType"] = "addStatus",
+                    ["status"] = "burning",
+                    ["duration"] = 3,
+                    ["description"] = "The delayed magic opens its hand.",
+                })))));
+        DisableImperialAi(session);
+        var soldier = session.Engine.EntityById("soldier_1")!;
+
+        var cast = await session.ExecuteAsync(new CastCommand("make the soldier burn two turns from now"));
+
+        Assert.True(cast.Success);
+        Assert.Single(session.Engine.State.Triggers.Records);
+        Assert.DoesNotContain(soldier.Get<StatusContainerComponent>().Statuses, status => status.Id == "burning");
+
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Empty(session.Engine.State.Triggers.Records);
+        Assert.Contains(soldier.Get<StatusContainerComponent>().Statuses, status => status.Id == "burning");
+        Assert.Contains(wait.Messages, message => message.Contains("delayed magic", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task CreateTriggerAuraAppliesStatusByRadiusAndFilter()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(AcceptedSpell(
+            "A sour green ring begins to breathe.",
+            new SpellEffect(
+                "createTrigger",
+                new Dictionary<string, object?>
+                {
+                    ["name"] = "green ring",
+                    ["kind"] = "aura",
+                    ["delay"] = 1,
+                    ["uses"] = 1,
+                    ["anchor"] = "player",
+                    ["radius"] = 4,
+                    ["targetFilter"] = "enemies",
+                    ["effectType"] = "addStatus",
+                    ["status"] = "poisoned",
+                    ["duration"] = 3,
+                    ["description"] = "The green ring breathes outward.",
+                })))));
+        DisableImperialAi(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(11, 5)));
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var captain = session.Engine.EntityById("soldier_2")!;
+        var lio = session.Engine.EntityById("prisoner_1")!;
+
+        var result = await session.ExecuteAsync(new CastCommand("make an enemy-poisoning aura around me"));
+
+        Assert.True(result.Success);
+        Assert.Contains(soldier.Get<StatusContainerComponent>().Statuses, status => status.Id == "poisoned");
+        Assert.Contains(captain.Get<StatusContainerComponent>().Statuses, status => status.Id == "poisoned");
+        Assert.DoesNotContain(lio.Get<StatusContainerComponent>().Statuses, status => status.Id == "poisoned");
+        Assert.Empty(session.Engine.State.Triggers.Records);
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task InvalidTriggerShapeRejectsWithoutArmingTrigger()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(AcceptedSpell(
+            "The spell tries to invent an impossible machine.",
+            new SpellEffect(
+                "createTrigger",
+                new Dictionary<string, object?>
+                {
+                    ["kind"] = "delay",
+                    ["delay"] = 2,
+                    ["effectType"] = "rewritePhysics",
+                    ["description"] = "This should never settle.",
+                })))));
+        DisableImperialAi(session);
+
+        var result = await session.ExecuteAsync(new CastCommand("make an impossible trigger"));
+
+        Assert.False(result.Success);
+        Assert.True(result.ConsumedTurn);
+        Assert.Empty(session.Engine.State.Triggers.Records);
+        Assert.Contains(result.Messages, message => message.Contains("Unsupported trigger effect", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task AddCurseCreatesVisibleMechanicalCursePromise()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()));
+        DisableImperialAi(session);
+
+        var result = await session.ExecuteAsync(new CastCommand("curse me with a close curse"));
+
+        Assert.True(result.Success);
+        var curse = Assert.Single(session.Engine.State.PromiseLedger.Promises, promise => promise.Kind == "curse");
+        Assert.True(curse.PlayerVisible);
+        Assert.Equal("close", curse.TriggerHint);
+        Assert.Contains("close curse", curse.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CloseCurseRejectsDistantTargetBeforeMutation()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider()));
+        DisableImperialAi(session);
+        session.Engine.State.PromiseLedger.Add("curse", "Close curse: magic must stay near.", playerVisible: true, triggerHint: "close");
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var hpBefore = soldier.Get<ActorComponent>().HitPoints;
+
+        var result = await session.ExecuteAsync(new CastCommand("strike the distant soldier"));
+
+        Assert.False(result.Success);
+        Assert.True(result.ConsumedTurn);
+        Assert.Equal(hpBefore, soldier.Get<ActorComponent>().HitPoints);
+        Assert.Contains(result.Messages, message => message.Contains("Close curse", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task NarrowCurseRejectsAreaEffectsBeforeMutation()
+    {
+        var provider = new FixtureSpellProvider(AcceptedSpell(
+            "The room tries to bloom outward.",
+            new SpellEffect(
+                "areaDamage",
+                new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["radius"] = 2,
+                    ["amount"] = 4,
+                    ["affects"] = "enemies",
+                })));
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider));
+        DisableImperialAi(session);
+        session.Engine.State.PromiseLedger.Add("curse", "Narrow curse: magic must not spread.", playerVisible: true, triggerHint: "narrow");
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var hpBefore = soldier.Get<ActorComponent>().HitPoints;
+
+        var result = await session.ExecuteAsync(new CastCommand("blast all enemies"));
+
+        Assert.False(result.Success);
+        Assert.True(result.ConsumedTurn);
+        Assert.Equal(hpBefore, soldier.Get<ActorComponent>().HitPoints);
+        Assert.Contains(result.Messages, message => message.Contains("Narrow curse", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
     }
 
     [Fact]
@@ -202,6 +534,66 @@ public sealed class GameSessionTests
         Assert.DoesNotContain(point, session.Engine.State.BlockingTerrain);
         Assert.Contains(session.Engine.State.Messages, message => message.Contains("ice wall", StringComparison.OrdinalIgnoreCase)
             && message.Contains("fades", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task WaterTerrainExtinguishesBurningBeforeOngoingDamage()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        soldier.Set(soldier.Get<ActorComponent>() with { HitPoints = 10 });
+        var point = new GridPoint(4, 4);
+        soldier.Set(new PositionComponent(point));
+        session.Engine.ApplyStatus(soldier, "burning", duration: 3);
+        session.Engine.SetTerrain(point, "shallow_water", duration: 4);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Equal(10, soldier.Get<ActorComponent>().HitPoints);
+        Assert.DoesNotContain(soldier.Get<StatusContainerComponent>().Statuses, status => status.Id == "burning");
+        Assert.Equal("steam_mist", session.Engine.State.Terrain[point]);
+        Assert.Contains(result.Messages, message => message.Contains("mist", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task FireTerrainIgnitesActorsThroughTurnPump()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        soldier.Set(soldier.Get<ActorComponent>() with { HitPoints = 10 });
+        var point = new GridPoint(4, 4);
+        soldier.Set(new PositionComponent(point));
+        session.Engine.SetTerrain(point, "wild_fire", duration: 4);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Equal(8, soldier.Get<ActorComponent>().HitPoints);
+        Assert.Contains(soldier.Get<StatusContainerComponent>().Statuses, status => status.Id == "burning");
+        Assert.Contains(result.Messages, message => message.Contains("burning", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Messages, message => message.Contains("ongoing harm", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task VineTerrainSnaresActorsThroughStatusRegistry()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var point = new GridPoint(4, 4);
+        soldier.Set(new PositionComponent(point));
+        session.Engine.SetTerrain(point, "vines", duration: 4);
+
+        var result = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Contains(soldier.Get<StatusContainerComponent>().Statuses, status =>
+            status.Id == "rooted"
+            && status.DisplayName == "vine-snared");
+        Assert.Contains(result.Messages, message => message.Contains("vine-snared", StringComparison.OrdinalIgnoreCase));
+        Assert.True(session.Engine.ValidateState().IsValid);
     }
 
     [Fact]
@@ -338,6 +730,156 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public void SpellJsonInfersCostTypesFromLiveStyleNamedCostObjects()
+    {
+        const string raw = """
+            {
+              "accepted": true,
+              "severity": "moderate",
+              "outcomeText": "The flame remembers its handle.",
+              "effects": [
+                {"type":"damage","targetId":"soldier_1","amount":8}
+              ],
+              "costs": [
+                {"name":"charcoal wand","quantity":0.5,"unitValue":9},
+                {"name":"mana","amount":4}
+              ],
+              "rejectedReason": null
+            }
+            """;
+
+        var parsed = SpellResolutionJson.Parse(raw, OperationRegistry.CreateDefault());
+
+        Assert.Equal(new[] { "item", "mana" }, parsed.Costs.Select(cost => cost.Type).ToArray());
+        Assert.Equal("charcoal wand", parsed.Costs[0].Fields["item"]);
+        Assert.Equal(4, parsed.Costs[1].Fields["amount"]);
+    }
+
+    [Fact]
+    public void SpellJsonRepairsNestedDataStatusShape()
+    {
+        const string raw = """
+            {
+              "accepted": true,
+              "severity": "minor",
+              "outcomeText": "The shadow pins him.",
+              "effects": [
+                {
+                  "effectId": "status_1",
+                  "target": { "id": "soldier_1" },
+                  "type": "addStatus",
+                  "data": {
+                    "name": "shadow_pinned",
+                    "description": "Unable to move or act."
+                  }
+                }
+              ],
+              "costs": [],
+              "rejectedReason": null
+            }
+            """;
+
+        var parsed = SpellResolutionJson.Parse(raw, OperationRegistry.CreateDefault());
+
+        Assert.Equal("addStatus", parsed.Effects.Single().Type);
+        Assert.Equal("soldier_1", ((Dictionary<string, object?>)parsed.Effects.Single().Fields["target"]!)["id"]);
+        Assert.Equal("shadow_pinned", parsed.Effects.Single().Fields["status"]);
+    }
+
+    [Fact]
+    public void SpellJsonRepairsStatusNameAndTransformToStateShape()
+    {
+        const string raw = """
+            {
+              "accepted": true,
+              "severity": "moderate",
+              "outcomeText": "The bones remember dust.",
+              "effects": [
+                {
+                  "type": "transformEntity",
+                  "targetId": "soldier_1",
+                  "toState": { "material": "bone_dust" }
+                },
+                {
+                  "type": "addStatus",
+                  "targetId": "soldier_1",
+                  "statusName": "kneeling"
+                }
+              ],
+              "costs": [],
+              "rejectedReason": null
+            }
+            """;
+
+        var parsed = SpellResolutionJson.Parse(raw, OperationRegistry.CreateDefault());
+
+        Assert.Equal("bone_dust", parsed.Effects[0].Fields["material"]);
+        Assert.Equal("soldier_1", parsed.Effects[0].Fields["target"]);
+        Assert.Equal("kneeling", parsed.Effects[1].Fields["status"]);
+    }
+
+    [Fact]
+    public void SpellJsonInfersTraitOperationWhenLiveProviderOmitsType()
+    {
+        const string raw = """
+            {
+              "accepted": true,
+              "severity": "minor",
+              "outcomeText": "A reed crown settles on Lio.",
+              "effects": [
+                {
+                  "targetId": "prisoner_1",
+                  "trait": "crown_of_river_reeds"
+                }
+              ],
+              "costs": [],
+              "rejectedReason": null
+            }
+            """;
+
+        var parsed = SpellResolutionJson.Parse(raw, OperationRegistry.CreateDefault());
+
+        Assert.Equal("addTrait", parsed.Effects.Single().Type);
+        Assert.Equal("prisoner_1", parsed.Effects.Single().Fields["target"]);
+        Assert.Equal("crown_of_river_reeds", parsed.Effects.Single().Fields["trait"]);
+    }
+
+    [Fact]
+    public void SpellJsonRepairsKeyedOperationEffectObjects()
+    {
+        const string raw = """
+            {
+              "accepted": true,
+              "severity": "minor",
+              "outcomeText": "The reeds agree to hide you.",
+              "effects": [
+                {
+                  "addStatus": {
+                    "targetId": "player",
+                    "statusName": "river_concealed",
+                    "duration": 4
+                  }
+                },
+                {
+                  "message": {
+                    "text": "The river-color closes over your outline."
+                  }
+                }
+              ],
+              "costs": [],
+              "rejectedReason": null
+            }
+            """;
+
+        var parsed = SpellResolutionJson.Parse(raw, OperationRegistry.CreateDefault());
+
+        Assert.Equal(new[] { "addStatus", "message" }, parsed.Effects.Select(effect => effect.Type).ToArray());
+        Assert.Equal("player", parsed.Effects[0].Fields["target"]);
+        Assert.Equal("river_concealed", parsed.Effects[0].Fields["status"]);
+        Assert.Equal("The river-color closes over your outline.", parsed.Effects[1].Fields["text"]);
+    }
+
+    [Fact]
     public void SpellJsonParsesFirstObjectWhenModelAddsTrailingText()
     {
         const string raw = """
@@ -404,6 +946,21 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public void MagicContextIncludesOnlyUnprotectedReagentsWithSpellBias()
+    {
+        var session = GameSession.CreateImperialEncounter();
+
+        var context = session.Engine.MagicContext(new OperationIndex(
+            Array.Empty<string>(),
+            Array.Empty<OperationCardView>()));
+
+        Assert.Contains(context.Reagents!, reagent =>
+            reagent.Name == "grave salt"
+            && reagent.SpellBias.Contains("ward", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(context.Reagents!, reagent => reagent.Name == "moon pearl");
+    }
+
+    [Fact]
     public async Task PickupUseEquipAndFocusUseSharedInventoryModel()
     {
         var session = GameSession.CreateImperialEncounter();
@@ -441,7 +998,7 @@ public sealed class GameSessionTests
         var followers = await session.ExecuteAsync(new FollowersCommand());
 
         Assert.True(read.Success);
-        Assert.Contains("marble authority", read.Messages.Single());
+        Assert.Contains(read.Messages, message => message.Contains("marble authority", StringComparison.OrdinalIgnoreCase));
         Assert.True(pickupKey.Success);
         Assert.True(examine.Success);
         Assert.True(open.Success);
@@ -546,15 +1103,31 @@ public sealed class GameSessionTests
         Assert.True(session.Engine.ValidateState().IsValid);
     }
 
+    private static SpellResolution AcceptedSpell(string outcome, params SpellEffect[] effects) =>
+        new(
+            Accepted: true,
+            Severity: "minor",
+            OutcomeText: outcome,
+            Effects: effects,
+            Costs: Array.Empty<SpellCost>(),
+            RejectedReason: null);
+
     private sealed class FixtureSpellProvider : ISpellProvider
     {
+        private readonly SpellResolution? _resolution;
+
+        public FixtureSpellProvider(SpellResolution? resolution = null)
+        {
+            _resolution = resolution;
+        }
+
         public string Name => "fixture";
 
         public Task<SpellProviderResult> ResolveAsync(
             SpellRequest request,
             CancellationToken cancellationToken)
         {
-            var resolution = new SpellResolution(
+            var resolution = _resolution ?? new SpellResolution(
                 Accepted: true,
                 Severity: "minor",
                 OutcomeText: "A test spell snaps into place.",
@@ -578,6 +1151,88 @@ public sealed class GameSessionTests
                 resolution,
                 TechnicalFailure: false,
                 Error: null));
+        }
+    }
+
+    private sealed class ZeroManaCostSpellProvider : ISpellProvider
+    {
+        public string Name => "fixture";
+
+        public Task<SpellProviderResult> ResolveAsync(
+            SpellRequest request,
+            CancellationToken cancellationToken)
+        {
+            var resolution = new SpellResolution(
+                Accepted: true,
+                Severity: "minor",
+                OutcomeText: "A test spell flowers without debt.",
+                Effects: new[]
+                {
+                    new SpellEffect(
+                        "message",
+                        new Dictionary<string, object?>
+                        {
+                            ["text"] = "Blue blossoms open on polished armor.",
+                        }),
+                },
+                Costs: new[]
+                {
+                    new SpellCost(
+                        "mana",
+                        new Dictionary<string, object?>
+                        {
+                            ["amount"] = 0,
+                        }),
+                },
+                RejectedReason: null);
+
+            return Task.FromResult(new SpellProviderResult(
+                Name,
+                "",
+                resolution,
+                TechnicalFailure: false,
+                Error: null));
+        }
+    }
+
+    private sealed class NoOpTransformItemSpellProvider : ISpellProvider
+    {
+        public string Name => "fixture";
+
+        public Task<SpellProviderResult> ResolveAsync(
+            SpellRequest request,
+            CancellationToken cancellationToken)
+        {
+            var resolution = new SpellResolution(
+                Accepted: true,
+                Severity: "minor",
+                OutcomeText: "The tincture pretends to become itself.",
+                Effects: new[]
+                {
+                    new SpellEffect(
+                        "transformItem",
+                        new Dictionary<string, object?>
+                        {
+                            ["target"] = "loose_tincture_1",
+                        }),
+                },
+                Costs: Array.Empty<SpellCost>(),
+                RejectedReason: null);
+
+            return Task.FromResult(new SpellProviderResult(
+                Name,
+                "",
+                resolution,
+                TechnicalFailure: false,
+                Error: null));
+        }
+    }
+
+    private static void DisableImperialAi(GameSession session)
+    {
+        foreach (var id in new[] { "soldier_1", "soldier_2" })
+        {
+            session.Engine.EntityById(id)!.Set(new ControllerComponent(ControllerKind.None));
         }
     }
 

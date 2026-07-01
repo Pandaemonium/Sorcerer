@@ -63,6 +63,27 @@ These lanes should answer:
 - what might answer later?
 - how does the world show the consequence?
 
+First implemented slice:
+
+- accepted wild magic, attacks/kills, prisoner rescue, and body swap emit `DeedRecord`s
+- deeds are classified as secret, suspicious, witnessed, public, or mythic through
+  shared line-of-sight witness checks
+- secret deeds do not enter public legend or standing
+- suspicious deeds can raise imperial suspicion without magically attributing the caster
+- witnessed/public/mythic deeds can become soul-bound legend tags and faction standing
+  changes at the turn pump
+- faction definitions carry roles, hostile roles, standing, and finite debug-only resources
+- empire-bloc heat spends patrol/warrant/defense resources into scheduled pressure; a patrol can
+  enter as a real hostile entity
+- patrol pressure is bounded by active/pending patrol checks and response cooldown so escalation
+  does not become a constant spawn ratchet
+- quiet turn pumps regenerate pressure resources and let heat ebb
+- `standing`, `journal`, and debug ledger/faction summaries expose the result to the CLI and tests
+
+This is deliberately not the full empire simulation yet. Richer regional faction rosters,
+wanted-poster artifacts, memos, rumors, and model-narrated reactions should spend and display
+this lane rather than replacing it.
+
 ## Combat And Attention
 
 Combat should be meaningful, not constant.

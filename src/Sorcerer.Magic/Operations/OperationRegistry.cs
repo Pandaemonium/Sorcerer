@@ -88,6 +88,7 @@ public sealed class OperationRegistry
             new PossessOperation(),
             new ChangeFactionOperation(),
             new AddTraitOperation(),
+            new CreateTriggerOperation(),
             new ScheduleEventOperation(),
             new AddCurseOperation(),
             new CreatePromiseOperation(),

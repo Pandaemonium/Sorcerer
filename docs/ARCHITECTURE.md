@@ -14,7 +14,7 @@ Godot application
 
 Sorcerer.Core
   game state, entities, components, actions, turns, combat, items, props, world rules,
-  interactables, pending cast coordination, actor turns
+  interactables, persistence, pending cast coordination, actor turns
 
 Sorcerer.Magic
   operation registry, effect validation/application, costs, transactions, audit records
@@ -23,7 +23,7 @@ Sorcerer.Llm
   live/mock providers, prompt assembly, JSON parsing, audit sinks
 
 Sorcerer.Cli
-  separate headless JSON-first console executable over GameSession, spell eval harness
+  separate headless JSON-first console executable over GameSession, spell eval/replay harness
 
 Sorcerer.Tests
   unit, integration, CLI, and resolver-contract tests
@@ -105,6 +105,7 @@ Responsibilities:
 - own provider stack
 - route commands
 - coordinate immediate and pending foreground casts
+- save/load authoritative state through the persistence layer
 - return `ActionResult`
 - expose read-only views and agent observations
 - record audit/replay data where enabled
@@ -125,6 +126,8 @@ Examples:
 ```csharp
 public abstract record GameCommand;
 public sealed record MoveCommand(Direction Direction) : GameCommand;
+public sealed record TravelCommand(Direction Direction) : GameCommand;
+public sealed record AtlasCommand() : GameCommand;
 public sealed record CastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
 public sealed record BeginCastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
 public sealed record AwaitCastCommand() : GameCommand;
@@ -132,6 +135,8 @@ public sealed record CancelCastCommand() : GameCommand;
 public sealed record InspectCommand() : GameCommand;
 public sealed record TargetCommand(GridPoint Position) : GameCommand;
 public sealed record UseItemCommand(EntityId ItemOrStack) : GameCommand;
+public sealed record SaveCommand(string Path) : GameCommand;
+public sealed record LoadCommand(string Path) : GameCommand;
 ```
 
 The CLI can accept both:
@@ -184,6 +189,7 @@ renderer state.
 It should contain:
 
 - map and terrain
+- current zone id, region id, and saved zone snapshots
 - entities and components
 - controlled entity id
 - turn/time
@@ -192,8 +198,85 @@ It should contain:
 - RNG state or seed
 - world facts, promises, and delayed events
 - active background-generated canon, if any
+- run status and conclusion
+- all durable ledgers, saved zone snapshots, background queue/settings, and serial/RNG state
 
 Do not split durable truth across UI-only objects.
+
+The live lore catalog is data loaded by core services, not mutable run state. Routed lore enters
+views and prompts as read-only context; if generated or discovered prose becomes durable, it is
+written as `CanonRecord`s attached to an entity, place, promise, or other state subject.
+
+## World Generation And Zones
+
+The first procedural-world seam is `GenerationSystem`. The active tactical map still lives directly
+on `GameState`, while non-active places are stored as `ZoneSnapshot`s keyed by `CurrentZoneId`.
+Travel snapshots the current zone, loads or lazily generates the destination, clears coordinate
+targets, places the controlled body and bond-followers at an entry edge, and advances the same turn
+pump used by ordinary commands.
+
+After the destination loads, `NarrationSystem.ZoneEntryRumors` may add deterministic zone-entry
+rumor deltas based on current legend tags and faction standing. These lines are a legibility layer:
+they read existing ledgers and write messages/action deltas, but they do not change mechanics,
+standing, promises, or canon.
+
+During lazy generation, bound travel/site promises may realize as promise-site entities in the new
+zone. The generation system marks the promise realized, writes canon, adds a `PromiseAnchorComponent`
+to the site, and returns `promiseSite` deltas through the same travel `ActionResult`.
+
+The current thin-slice world graph places the Vigovian Capital east of Hollowmere. The capital is a
+normal generated zone with region affordances and ordinary entities, including Emperor Odran as an
+actor tagged `emperor` / `win_condition`. Killing him is not a special spell path: ordinary validated
+damage marks the actor defeated, and `GameSession` observes that state to complete the run.
+
+## Persistence And Run Completion
+
+Persistence is separate from both renderers and lossy view models. `GameSaveService` writes a
+schema-v1 `System.Text.Json` envelope:
+
+```json
+{
+  "schemaVersion": 1,
+  "savedAt": "2026-06-30T00:00:00Z",
+  "state": {},
+  "pendingCast": null,
+  "pendingCastSerial": 0
+}
+```
+
+The save DTOs map authoritative state lanes explicitly and sort map-like data so save -> load ->
+save can be byte-stable in tests. Saves include active and saved zones, entities/components,
+body/soul state, all current ledgers, background settings/jobs, RNG/serial state, run status, run
+conclusion, and pending cast information. `save` and `load` are normal `GameCommand`s, so CLI and
+Godot use the same backend path.
+
+Run completion also belongs in `GameSession`, not in renderer code. A completed run sets
+`RunStatus` (`victory` or `defeat` in the current slice), writes `RunConclusion`, emits a
+`runComplete` delta, creates a chronicle `CanonRecord`, and returns `ShouldQuit = true`. The
+chronicle can be appended to the cross-run memorial JSONL store; later runs may surface it as inert
+readable content, never as inherited power.
+
+`RegionDefinition` supplies deterministic region identity: realm, tradition, imperial presence,
+wildness, floor terrain, and `RegionAffordanceCard`s. Views expose this through `WorldCard`, and
+the magic context includes the same region and affordance notes in `resolverLens` as soft guidance.
+This makes regions readable to the CLI, GUI, and resolver without making renderer code own world
+rules.
+
+Generated zones also use a deterministic `TextureGrammar` for immediate fixture names,
+descriptions, and subject tags. These are not bespoke story handlers: the subjects are ordinary
+lore-router keys that can feed atlas text, background detail, and magic context. The current
+`LoreCatalog` loads Markdown cards from `content/lore/*.md` with built-in fallbacks, and
+`LoreRouter` selects access-gated cards by subjects and triggers without provider calls.
+
+`WorldRoll` is the current seeded geopolitical layer. It derives realm status, ruler, tradition,
+tags, and imperial-grip deltas from `GameState.Seed` using stable hashing rather than process hash
+codes. `WorldCard`, `atlas`, and `resolverLens` expose the rolled realm profile; tactical maps still
+derive lazily from regions.
+
+The first population layer is intentionally small: generated zones create a resident entity from
+the region and rolled realm profile. Residents use normal `ActorComponent`, `FactionComponent`,
+`ProfileComponent`, `MemoryComponent`, `AiComponent`, and `InteractableComponent` data, so dialogue,
+gifts, recruitment, hostility, and future memories use the same systems as hand-authored NPCs.
 
 ## Entities And Components
 
@@ -225,7 +308,8 @@ See [ENTITY_MODEL.md](ENTITY_MODEL.md).
 
 ## Engine
 
-`GameEngine` owns deterministic rules:
+`GameEngine` owns deterministic rules and delegates to focused engine systems under
+`src/Sorcerer.Core/Engine/Systems/`:
 
 - movement
 - occupancy
@@ -245,20 +329,106 @@ See [ENTITY_MODEL.md](ENTITY_MODEL.md).
 Engine methods should take actor/entity ids where practical. Avoid hard-coded player-only
 paths.
 
+The current system split is:
+
+- `MovementSystem`: controlled movement, bump combat entry points, forced movement.
+- `CombatSystem`: attacks, damage, healing, mana restoration, defeated actor state.
+- `AiSystem`: simple hostile actor turns and faction-ledger hostility checks.
+- `PerceptionSystem`: line-of-sight, visible entities, soul-bound exploration memory,
+  witnesses, and pending suspicion attribution.
+- `ItemSystem`: pickup/drop/use/equip/focus and reagent views.
+- `InteractionSystem`: read, examine, open, talk, promise realization.
+- `TurnSystem`: turn advancement, expiry, scheduled events, background job pump, world
+  reaction pump.
+- `EngineViewBuilder`: player-facing views, debug observations, resolver context.
+- `BodySwapSystem`: possession/body-control changes.
+- `EffectSystem`: terrain, statuses, and spawned entities.
+- `WorldReactionSystem`: deed capture, witness/visibility classification, and deterministic
+  deed-to-legend/reputation application.
+
+Renderers still call `GameSession`/`GameEngine`; they do not call these systems directly.
+
+Character state is split across body and soul. `BodyStatsComponent(Vigor)` lives on the
+entity body and drives max HP, attack, defense, and physical cost framing. `SoulLedger`
+stores `SoulRecord`s keyed by `SoulComponent.SoulId`; the record owns Attunement,
+Composure, current/max mana, origin/tradition, magical signature, backstory, and
+first-reaction seeds. `ActorComponent` remains the runtime combat container, but it is
+synced from the active body Vigor and soul mana. Possession keeps HP/Vigor/inventory/public
+name with the body while moving soul stats, mana, signature, exploration memory, and
+resolver potency to the new controlled body.
+
 The first actor scheduler is intentionally simple: after a consumed player turn, hostile AI
 actors either step toward the controlled body or attack if adjacent. Movement and attacks
 use the same engine mutation methods as player actions. Restraint statuses such as
-`bound`, `webbed`, `frozen`, `asleep`, and `petrified` suppress hostile AI turns while
-active through `StatusRegistry` traits rather than hard-coded engine string checks. Timed
-statuses expire during turn advancement. Movement-blocking status traits also prevent the
-controlled body from walking and consume the attempted movement turn.
+`bound`, `webbed`, `pinned`, `anchored`, `frozen`, `asleep`, and `petrified` suppress
+hostile AI turns while active through `StatusRegistry` traits rather than hard-coded engine
+string checks. Timed statuses expire during turn advancement. Movement-blocking status
+traits also prevent the controlled body from walking and consume the attempted movement
+turn.
 
-The first interactable slice also lives here. `pickup`, `drop`, `use`, `equip`,
-`unequip`, `focus`, `unfocus`, `read`, `examine`, `open`, `talk`, `journal`,
-`standing`, and `followers` are shared engine/session actions, so Godot, CLI agents, and
-tests all exercise the same behavior. Opening the first locked cell demonstrates how a
-plain door entity can realize a promise, update ledgers, and change an NPC's faction
-without scripting a separate renderer path.
+Perception is player-facing but not resolver-limiting. `PerceptionSystem` computes current
+visibility from the controlled body with Bresenham line-of-sight and a default sight radius.
+Terrain in `BlockingTerrain` and entities with `PhysicalComponent.BlocksSight` block LOS;
+closed doors can block sight and opening a door clears that flag. `GameState.ExploredBySoulId`
+stores explored map memory by soul id, so body swap changes the eyes and location but not
+the player's remembered map. `GameView` hides unexplored tiles as `unknown`, dims explored
+but non-visible tiles, and includes only visible entities plus the controlled entity.
+`MagicContext` may still include hidden facts for coherent wild-magic resolution, but each
+entity/tile carries a relation such as `visible`, `explored`, or `hidden_from_player`.
+
+The witness seam is also in place. `WitnessesOf(point)` returns living actors with LOS to a
+point, and a minimal suspicion ledger can record witnesses who see an effect without seeing
+the caster. If they gain LOS to the player within the 20-turn attribution window, the
+record can become attributed to the player soul; otherwise it remains unattributed or
+expires. The deed/reputation pipeline now uses this same visibility model for public,
+witnessed, suspicious, mythic, and secret deed classification.
+
+The first world-reaction pipeline is deterministic and soul-bound. Engine events record
+`DeedRecord`s through `GameEngine.RecordDeed`; `TurnSystem.AdvanceTurn` applies pending
+deeds through `WorldReactionSystem`; and resulting legend tags live on the actor's soul
+rather than the body. Accepted wild magic, player attacks/kills, prisoner rescue, and
+body swap currently feed this lane. Secret deeds do not alter public legend or standing,
+suspicious effect-only deeds can raise suspicion without attribution, and witnessed/public
+deeds update bounded legend tags plus multidimensional faction standing.
+
+Faction pressure now has a first finite-resource loop. `FactionCatalog` loads starter faction
+definitions from `content/factions` with fallback data: each faction has an id, display name,
+role, hostile roles, standing axes, and debug-only resource pool. Deed rules target roles such
+as `empire_bloc` instead of literal faction ids. Empire-bloc heat can spend patrol, warrant, and
+defense resources through the turn pump; patrol responses enter `ScheduledEventLedger` and then
+spawn ordinary hostile entities. Patrol responses are capped by active/pending patrol checks and
+a response cooldown; quiet pump turns regenerate small pressure resources and cool heat.
+`AiSystem.IsHostile` reads the faction ledger, so explicit standing such as
+`player-alliance` can override default role hostility. `GameEngine.EmperorReachable()` is the
+first long-arc seam and currently checks whether empire-bloc defense pools have been exhausted.
+
+Tactical trigger state is separate from the world-reaction pump. `createTrigger` writes records to
+`TriggerLedger`; `TriggerSystem` evaluates due records during `TurnSystem.AdvanceTurn`. The first
+slice supports delayed and radius/filter aura-style triggers that apply one small embedded effect
+(`addStatus`, `damage`, `heal`, or `message`) through existing engine methods. This keeps a ward,
+an aura, and a delayed curse as templates over one mechanic rather than separate spell handlers.
+
+Terrain reactions are also turn-pump rules, not renderer behavior. `TerrainReactionSystem` reads
+actor positions plus map terrain during `TurnSystem.AdvanceTurn`: water extinguishes `burning` into
+temporary `steam_mist`, `wild_fire` applies `burning`, and `vines` apply rooted `vine-snared`
+status. More terrain physics should extend this deterministic lane instead of becoming spell
+phrase fallbacks.
+
+The first interactable and social slice also lives here. `pickup`, `drop`, `use`, `equip`,
+`unequip`, `focus`, `unfocus`, `read`, `examine`, `open`, `talk`, `give`, `recruit`,
+`bonds`, `journal`, `standing`, and `followers` are shared engine/session actions, so Godot,
+CLI agents, and tests all exercise the same behavior. Minimal trade is also engine-side:
+`MerchantComponent` plus `wares`, `buy`, and `sell` commands live in `ItemSystem`, with no model call
+for trade intent. Opening the first locked cell demonstrates how a plain door entity can realize a
+promise, update ledgers, and change combat allegiance without scripting a separate renderer path.
+
+Personal bonds are separate from combat allegiance and organization membership. `BondLedger`
+stores soul-keyed loyalty/fear/admiration/resentment/posture records; `ActorComponent.Faction`
+controls combat allegiance; `FactionComponent` preserves membership/roles. Gifts write memories
+and shift bonds, recruitment changes combat allegiance while preserving membership, and
+`followers` reads bond posture rather than same-faction membership. The first deterministic
+dialogue parser handles common organic intents and trusted secrets; future model-driven dialogue
+must still propose structured outcomes that the engine validates.
 
 Promise binding also lives at this layer. `GameEngine.AddPromise` writes one ledger record
 with source, subject, claimed place, bound place, optional bound target, trigger hint,
@@ -274,17 +444,22 @@ The first body-control seam is also implemented as shared engine behavior and as
 wild-magic operation. `possess` targets a nearby living actor: alert hostile bodies resist
 and consume the turn, while an incapacitated body can be taken over. On success,
 `ControlledEntityId` follows the new body, soul components swap, controllers/factions
-update, and inventory stays with the body that carried it. This is intentionally narrow,
-but it proves actions, views, and resolver operations follow the control pointer instead
-of a hard-coded player object.
+update, inventory stays with the body that carried it, body Vigor/HP come from the
+inhabited body, and soul Attunement/Composure/mana come from the player soul. This is
+intentionally narrow, but it proves actions, views, and resolver operations follow the
+control pointer instead of a hard-coded player object.
 
 Temporary terrain is tracked with expiry turns. When terrain expires, the tile returns to
 ordinary floor and temporary blocking is removed unless the tile is a boundary wall. This
 keeps terrain spells useful without committing yet to a deep terrain simulation.
 
 The current delayed-event implementation is deliberately small: due scheduled events are
-popped during turn advancement and surfaced as log messages. This gives spell-created
-future consequences an engine-owned place to land before richer event handlers exist.
+popped during turn advancement and surfaced as log messages, with a first concrete handler for
+imperial patrol pressure that spawns an ordinary hostile entity. `AdvanceTurn` also returns
+turn-boundary deltas for messages created by expiry, scheduled events, or background jobs,
+so player-facing `ActionResult.Messages` can announce that delayed magic, faction pressure, or
+background detail actually landed. This gives spell-created future consequences an engine-owned
+place to land before richer event handlers exist.
 
 ## Magic System
 
@@ -360,7 +535,10 @@ importing rule modules.
 
 Agents may request `DebugStateView` or debug fields inside `AgentObservationView`. This is
 allowed because the agent CLI is a playtesting interface, not a simulation of human
-perception.
+perception. Debug observations include raw faction resources, hostile roles, bond values, and
+ledger counts including triggers;
+player-facing `standing`/`bonds` use pressure, mood, rank, and posture language instead of exact
+resource or relationship counts.
 
 ## CLI
 
@@ -401,6 +579,10 @@ Current lightweight replay/debug path:
   comments.
 - `--transcript <path>` writes diagnostic JSONL records for normal CLI runs:
   `transcript_start`, `transcript_step`, and `transcript_final`.
+- `MagicResolutionRecord.resolvedMagicJson` stores the normalized materialized spell resolution
+  where practical, so a replay does not need to call the model again.
+- `--replay <path>` re-feeds transcript commands into a fresh session using `ReplaySpellProvider`;
+  `--replay-assert-final` compares a compact final summary when present.
 - Transcript step records include command text, `ActionResult`, and full debug
   observations. They are troubleshooting artifacts first and replay-like material where
   practical, not a full save/rewind system.
@@ -427,8 +609,9 @@ They must be:
 Current implementation is a deterministic, low-resource lane rather than a live LLM
 worker. `GameState` owns `BackgroundJobSettings` and `BackgroundJobQueue`; `read` and
 `examine` can enqueue target-detail jobs; `AdvanceTurn` starts and applies at most one job
-by default; durable output enters `CanonLedger`; and `jobs` plus debug observations expose
-the queue. This proves the state and apply boundary before provider-backed background
-generation is added.
+by default; durable output enters `CanonLedger`; routed lore can enrich the deterministic
+fallback text; later `examine` calls show attached canon as known detail; and `jobs` plus
+debug observations expose the queue. This proves the state, visibility, and apply boundary
+before provider-backed background generation is added.
 
 See [LLM_AND_BACKGROUND_JOBS.md](LLM_AND_BACKGROUND_JOBS.md).

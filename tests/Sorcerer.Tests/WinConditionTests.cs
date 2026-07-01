@@ -1,0 +1,157 @@
+using Sorcerer.Core;
+using Sorcerer.Core.Commands;
+using Sorcerer.Core.Entities;
+using Sorcerer.Core.Persistence;
+using Sorcerer.Core.Primitives;
+using Sorcerer.Llm;
+using Sorcerer.Magic;
+using Sorcerer.Magic.Replay;
+using Xunit;
+
+namespace Sorcerer.Tests;
+
+public sealed class WinConditionTests
+{
+    [Fact]
+    public async Task EmperorExistsAsNormalActorInReachableCapital()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()));
+
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+
+        var emperor = session.Engine.EntityById("emperor_odran");
+        Assert.NotNull(emperor);
+        Assert.Equal("vigovian_capital", session.View().World!.RegionId);
+        Assert.Equal("Vigovian Capital", session.View().World!.RegionName);
+        Assert.True(emperor!.TryGet<ActorComponent>(out var actor));
+        Assert.True(actor.Alive);
+        Assert.True(emperor.TryGet<TagsComponent>(out var tags));
+        Assert.Contains("emperor", tags.Tags);
+        Assert.Equal("running", session.Engine.State.RunStatus);
+    }
+
+    [Fact]
+    public async Task KillingEmperorThroughOrdinaryDamageWinsRun()
+    {
+        var damageEmperor = """
+            {
+              "accepted": true,
+              "severity": "major",
+              "outcomeText": "The spell finds the man inside the office.",
+              "effects": [
+                {
+                  "type": "damage",
+                  "target": "emperor_odran",
+                  "amount": 50,
+                  "damageType": "wild"
+                }
+              ],
+              "costs": []
+            }
+            """;
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new ReplaySpellProvider(new[] { damageEmperor })));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+
+        var result = await session.ExecuteAsync(new CastCommand("strike the emperor with a mortal blue verdict"));
+
+        Assert.True(result.Success);
+        Assert.True(result.ShouldQuit);
+        Assert.Equal("victory", session.Engine.State.RunStatus);
+        Assert.Contains(result.Messages, message => message.Contains("Emperor Odran falls", StringComparison.OrdinalIgnoreCase));
+        Assert.False(session.Engine.EntityById("emperor_odran")!.Get<ActorComponent>().Alive);
+        Assert.Contains(result.Deltas, delta => delta.Operation == "runComplete" && delta.Target == "emperor_odran");
+        Assert.Equal("victory", session.Observation(debug: true).Debug!.RunStatus);
+        Assert.Contains(session.Engine.State.Canon.Records, record =>
+            record.Kind == "chronicle"
+            && record.Text.Contains("Emperor Odran", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task KillingControlledBodyCompletesRunAsDefeat()
+    {
+        var damagePlayer = """
+            {
+              "accepted": true,
+              "severity": "major",
+              "outcomeText": "The room takes your borrowed breath back.",
+              "effects": [
+                {
+                  "type": "damage",
+                  "target": "player",
+                  "amount": 50,
+                  "damageType": "wild"
+                }
+              ],
+              "costs": []
+            }
+            """;
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new ReplaySpellProvider(new[] { damagePlayer })));
+
+        var result = await session.ExecuteAsync(new CastCommand("let the room swallow my current body whole"));
+
+        Assert.True(result.Success);
+        Assert.True(result.ShouldQuit);
+        Assert.Equal("defeat", session.Engine.State.RunStatus);
+        Assert.Contains(result.Deltas, delta => delta.Operation == "runComplete" && delta.Target == "player");
+        Assert.Contains(result.Messages, message => message.Contains("Your body falls", StringComparison.OrdinalIgnoreCase));
+        Assert.False(session.Engine.State.ControlledEntity.Get<ActorComponent>().Alive);
+        Assert.Contains(session.Engine.State.Canon.Records, record =>
+            record.Kind == "chronicle"
+            && record.Tags.Contains("defeat"));
+    }
+
+    [Fact]
+    public async Task RunChronicleCanPersistAsInertMemorialInLaterWorld()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sorcerer_memorials_{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            var damageEmperor = """
+                {
+                  "accepted": true,
+                  "severity": "major",
+                  "outcomeText": "The spell finds the man inside the office.",
+                  "effects": [
+                    {
+                      "type": "damage",
+                      "target": "emperor_odran",
+                      "amount": 50,
+                      "damageType": "wild"
+                    }
+                  ],
+                  "costs": []
+                }
+                """;
+            var session = GameSession.CreateImperialEncounter(
+                new WildMagicController(new ReplaySpellProvider(new[] { damageEmperor })));
+            await session.ExecuteAsync(new TravelCommand(Direction.East));
+            await session.ExecuteAsync(new TravelCommand(Direction.East));
+            await session.ExecuteAsync(new CastCommand("strike the emperor with a mortal blue verdict"));
+
+            CrossRunMemorialStore.AppendLatestChronicle(session.Engine.State, path);
+            var memorials = CrossRunMemorialStore.Load(path);
+            var nextRun = GameSession.CreateImperialEncounter(
+                new WildMagicController(new MockSpellProvider()),
+                seed: 31,
+                memorials: memorials);
+
+            var memorial = nextRun.Engine.EntityById("memorial_1");
+            Assert.NotNull(memorial);
+            Assert.True(memorial!.TryGet<TagsComponent>(out var tags));
+            Assert.Contains("memorial", tags.Tags);
+            Assert.False(memorial.Has<ActorComponent>());
+            Assert.Contains("Emperor Odran", memorial.Get<DescriptionComponent>().Text);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+}

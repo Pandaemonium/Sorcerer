@@ -24,6 +24,10 @@ public sealed record ClearTargetCommand() : GameCommand;
 
 public sealed record MapCommand(int Radius = 8) : GameCommand;
 
+public sealed record TravelCommand(Direction Direction) : GameCommand;
+
+public sealed record AtlasCommand() : GameCommand;
+
 public sealed record PickupCommand(string? Target = null) : GameCommand;
 
 public sealed record DropCommand(string Item) : GameCommand;
@@ -44,9 +48,23 @@ public sealed record UnprotectItemCommand(string Item) : GameCommand;
 
 public sealed record ReagentsCommand() : GameCommand;
 
+public sealed record WaresCommand(string? Target = null) : GameCommand;
+
+public sealed record BuyCommand(string Item, string? Target = null) : GameCommand;
+
+public sealed record SellCommand(string Item, string? Target = null) : GameCommand;
+
 public sealed record JournalCommand() : GameCommand;
 
+public sealed record CharacterCommand() : GameCommand;
+
 public sealed record TalkCommand(string Text) : GameCommand;
+
+public sealed record GiveCommand(string Item, string? Target = null) : GameCommand;
+
+public sealed record RecruitCommand(string? Target = null) : GameCommand;
+
+public sealed record BondsCommand(string? Target = null) : GameCommand;
 
 public sealed record ReadCommand(string? Target = null) : GameCommand;
 
@@ -61,6 +79,10 @@ public sealed record StandingCommand() : GameCommand;
 public sealed record FollowersCommand() : GameCommand;
 
 public sealed record JobsCommand() : GameCommand;
+
+public sealed record SaveCommand(string Path) : GameCommand;
+
+public sealed record LoadCommand(string Path) : GameCommand;
 
 public sealed record HelpCommand() : GameCommand;
 

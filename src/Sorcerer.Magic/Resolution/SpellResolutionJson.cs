@@ -18,7 +18,7 @@ public static class SpellResolutionJson
             ?? ReadNullableString(root, "rejected_reason");
 
         var effectFields = ReadObjects(root, "effects")
-            .Select(fields => NormalizeFields(fields))
+            .Select(fields => NormalizeFields(fields, registry))
             .ToList();
         MergeSummonTraitFollowups(effectFields);
 
@@ -27,9 +27,10 @@ public static class SpellResolutionJson
             .ToArray();
 
         var costs = ReadCosts(root, "costs")
+            .Select(NormalizeCostFields)
             .Select(fields =>
             {
-                var type = ReadType(fields);
+                var type = ReadCostType(fields);
                 return new SpellCost(type, fields);
             })
             .ToArray();
@@ -119,18 +120,29 @@ public static class SpellResolutionJson
         return string.Empty;
     }
 
-    private static Dictionary<string, object?> NormalizeFields(
-        IReadOnlyDictionary<string, object?> fields)
+    private static string ReadCostType(IReadOnlyDictionary<string, object?> fields)
     {
-        var normalized = new Dictionary<string, object?>(fields, StringComparer.OrdinalIgnoreCase);
-        if (normalized.TryGetValue("details", out var details)
-            && details is IReadOnlyDictionary<string, object?> detailFields)
+        foreach (var key in new[] { "type", "costType", "cost_type", "kind", "resource" })
         {
-            foreach (var pair in detailFields)
+            if (fields.TryGetValue(key, out var rawType))
             {
-                normalized.TryAdd(pair.Key, pair.Value);
+                return Convert.ToString(rawType) ?? string.Empty;
             }
         }
+
+        return string.Empty;
+    }
+
+    private static Dictionary<string, object?> NormalizeFields(
+        IReadOnlyDictionary<string, object?> fields,
+        OperationRegistry registry)
+    {
+        var normalized = new Dictionary<string, object?>(fields, StringComparer.OrdinalIgnoreCase);
+        ExpandKeyedOperation(normalized, registry);
+        MergeNestedFields(normalized, "details");
+        MergeNestedFields(normalized, "data");
+        MergeNestedFields(normalized, "toState");
+        MergeNestedFields(normalized, "to_state");
 
         if (normalized.TryGetValue("target/x/y", out var compactPoint)
             && TryReadPointPair(compactPoint, out var pointX, out var pointY))
@@ -147,6 +159,16 @@ public static class SpellResolutionJson
         if (normalized.TryGetValue("target_id", out var targetSnake) && !normalized.ContainsKey("target"))
         {
             normalized["target"] = targetSnake;
+        }
+
+        if (normalized.TryGetValue("statusName", out var statusNameValue) && !normalized.ContainsKey("status"))
+        {
+            normalized["status"] = statusNameValue;
+        }
+
+        if (normalized.TryGetValue("status_name", out var statusSnake) && !normalized.ContainsKey("status"))
+        {
+            normalized["status"] = statusSnake;
         }
 
         if (normalized.TryGetValue("entityName", out var entityName) && !normalized.ContainsKey("name"))
@@ -166,6 +188,8 @@ public static class SpellResolutionJson
             ApplyCompactEffectId(Convert.ToString(rawEffectId) ?? string.Empty, normalized);
         }
 
+        InferMissingEffectType(normalized);
+
         var explicitType = ReadExplicitType(normalized);
         if ((explicitType.Equals("addStatus", StringComparison.OrdinalIgnoreCase)
                 || explicitType.Equals("status", StringComparison.OrdinalIgnoreCase)
@@ -177,6 +201,161 @@ public static class SpellResolutionJson
         }
 
         return normalized;
+    }
+
+    private static Dictionary<string, object?> NormalizeCostFields(
+        IReadOnlyDictionary<string, object?> fields)
+    {
+        var normalized = new Dictionary<string, object?>(fields, StringComparer.OrdinalIgnoreCase);
+        MergeNestedFields(normalized, "details");
+        MergeNestedFields(normalized, "data");
+
+        var explicitType = ReadCostType(normalized);
+        var canonical = CanonicalCostType(explicitType);
+        var name = TextField(normalized, "name")
+            ?? TextField(normalized, "resource")
+            ?? TextField(normalized, "item");
+
+        if (!string.IsNullOrWhiteSpace(canonical))
+        {
+            normalized["type"] = canonical;
+        }
+        else if (!string.IsNullOrWhiteSpace(explicitType))
+        {
+            normalized["type"] = "item";
+            normalized.TryAdd("item", explicitType);
+        }
+        else if (normalized.ContainsKey("item"))
+        {
+            normalized["type"] = "item";
+        }
+        else if (!string.IsNullOrWhiteSpace(name) && CanonicalCostType(name) is { Length: > 0 } namedCost)
+        {
+            normalized["type"] = namedCost;
+        }
+        else if (!string.IsNullOrWhiteSpace(name)
+            && (normalized.ContainsKey("quantity") || normalized.ContainsKey("unitValue") || normalized.ContainsKey("unit_value")))
+        {
+            normalized["type"] = "item";
+            normalized["item"] = name;
+        }
+        else if (normalized.ContainsKey("status"))
+        {
+            normalized["type"] = "status";
+        }
+        else if (normalized.ContainsKey("description"))
+        {
+            normalized["type"] = "curse";
+        }
+        else if (!string.IsNullOrWhiteSpace(name))
+        {
+            normalized["type"] = "item";
+            normalized["item"] = name;
+        }
+
+        return normalized;
+    }
+
+    private static string CanonicalCostType(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return string.Empty;
+        }
+
+        var normalized = raw.Trim()
+            .Replace("_", "", StringComparison.OrdinalIgnoreCase)
+            .Replace(" ", "", StringComparison.OrdinalIgnoreCase)
+            .ToLowerInvariant();
+        return normalized switch
+        {
+            "mana" or "mp" => "mana",
+            "health" or "hp" => "health",
+            "maxhealth" or "maxhp" => "maxHealth",
+            "maxmana" or "maxmp" => "maxMana",
+            "item" or "reagent" or "material" => "item",
+            "status" or "condition" => "status",
+            "curse" or "debt" => "curse",
+            _ => string.Empty,
+        };
+    }
+
+    private static string? TextField(IReadOnlyDictionary<string, object?> fields, string key) =>
+        fields.TryGetValue(key, out var value) && value is not null
+            ? Convert.ToString(value)
+            : null;
+
+    private static void ExpandKeyedOperation(
+        Dictionary<string, object?> fields,
+        OperationRegistry registry)
+    {
+        if (!string.IsNullOrWhiteSpace(ReadExplicitType(fields)))
+        {
+            return;
+        }
+
+        foreach (var pair in fields.ToArray())
+        {
+            if (!registry.Supports(pair.Key)
+                || pair.Value is not IReadOnlyDictionary<string, object?> nested)
+            {
+                continue;
+            }
+
+            fields.Remove(pair.Key);
+            fields["type"] = pair.Key;
+            foreach (var nestedPair in nested)
+            {
+                fields.TryAdd(nestedPair.Key, nestedPair.Value);
+            }
+
+            return;
+        }
+    }
+
+    private static void InferMissingEffectType(Dictionary<string, object?> fields)
+    {
+        if (!string.IsNullOrWhiteSpace(ReadExplicitType(fields)))
+        {
+            return;
+        }
+
+        if (fields.ContainsKey("trait") || fields.ContainsKey("traits"))
+        {
+            fields["type"] = "addTrait";
+            return;
+        }
+
+        if (fields.ContainsKey("status") || fields.ContainsKey("statusName") || fields.ContainsKey("status_name"))
+        {
+            fields["type"] = "addStatus";
+            return;
+        }
+
+        if (fields.ContainsKey("text") || fields.ContainsKey("message"))
+        {
+            fields["type"] = "message";
+            return;
+        }
+
+        if (fields.ContainsKey("terrain") && (fields.ContainsKey("x") || fields.ContainsKey("target")))
+        {
+            fields["type"] = "createTile";
+        }
+    }
+
+    private static void MergeNestedFields(Dictionary<string, object?> normalized, string key)
+    {
+        if (!normalized.TryGetValue(key, out var nested)
+            || nested is not IReadOnlyDictionary<string, object?> nestedFields)
+        {
+            return;
+        }
+
+        foreach (var pair in nestedFields)
+        {
+            normalized.TryAdd(pair.Key, pair.Value);
+        }
     }
 
     private static string ReadExplicitType(IReadOnlyDictionary<string, object?> fields)

@@ -1,11 +1,15 @@
 using System.Text.Json;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Entities;
+using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Runtime;
 using Sorcerer.Core.Views;
 using Sorcerer.Llm;
 using Sorcerer.Llm.Auditing;
+using Sorcerer.Llm.Configuration;
 using Sorcerer.Magic;
 
 namespace Sorcerer.Cli;
@@ -24,7 +28,8 @@ public static class Program
         {
             Commands = LoadScriptCommands(options.ScriptPath).Concat(options.Commands).ToArray(),
         };
-        var provider = SpellProviderFactory.Create(options.Provider, options.Host, options.Model);
+        var configuration = BuildLlmConfiguration(options);
+        var provider = SpellProviderFactory.Create(configuration, LlmPurpose.Wild);
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
         if (options.Eval)
         {
@@ -44,7 +49,21 @@ public static class Program
                 options.Json);
         }
 
-        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
+        if (!string.IsNullOrWhiteSpace(options.ReplayPath))
+        {
+            return await TranscriptReplayRunner.RunAsync(
+                options.ReplayPath,
+                options.ReplayAssertFinal,
+                options.Json);
+        }
+
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(provider, audit: audit),
+            options.OriginId,
+            options.Seed,
+            CrossRunMemorialStore.LoadDefault());
+        ApplyBackgroundOptions(session, options);
+        ApplyQuickstart(session, options.QuickstartScene);
         await using var transcript = TranscriptWriter.Open(options.TranscriptPath);
         if (transcript is not null)
         {
@@ -100,6 +119,40 @@ public static class Program
         return 0;
     }
 
+    private static LlmConfiguration BuildLlmConfiguration(CliOptions options)
+    {
+        var configuration = LlmConfiguration.FromEnvironment()
+            .WithPurposeOverride(
+                LlmPurpose.Wild,
+                options.Provider,
+                options.Host,
+                options.Model);
+        if (options.BackgroundProvider is not null
+            || options.BackgroundHost is not null
+            || options.BackgroundModel is not null
+            || options.BackgroundEnabled is not null)
+        {
+            configuration = configuration.WithPurposeOverride(
+                LlmPurpose.Background,
+                options.BackgroundProvider,
+                options.BackgroundHost,
+                options.BackgroundModel,
+                maxConcurrentCalls: options.BackgroundConcurrency,
+                enabled: options.BackgroundEnabled);
+        }
+
+        return configuration;
+    }
+
+    private static void ApplyBackgroundOptions(GameSession session, CliOptions options)
+    {
+        var current = session.Engine.State.BackgroundSettings;
+        session.Engine.State.BackgroundSettings = new BackgroundJobSettings(
+            options.BackgroundEnabled ?? current.Enabled,
+            options.MaxBackgroundJobs,
+            options.BackgroundJobsPerTurn);
+    }
+
     private static async Task<bool> ExecuteAndWriteAsync(
         GameSession session,
         string commandText,
@@ -115,7 +168,38 @@ public static class Program
             await transcript.WriteStepAsync(commandText, result, session.Observation(debug: true));
         }
 
+        if (result.Deltas.Any(delta => delta.Operation.Equals("runComplete", StringComparison.OrdinalIgnoreCase)))
+        {
+            CrossRunMemorialStore.AppendLatestChronicle(session.Engine.State);
+        }
+
         return result.ShouldQuit;
+    }
+
+    private static void ApplyQuickstart(GameSession session, string? quickstart)
+    {
+        if (!string.Equals(quickstart, "social", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var state = session.Engine.State;
+        state.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+        if (session.Engine.EntityById("cell_door_1") is { } door)
+        {
+            door.Set(door.Get<DoorComponent>() with { IsOpen = true });
+            door.Set(door.Get<PhysicalComponent>() with { BlocksMovement = false, BlocksSight = false });
+        }
+
+        foreach (var id in new[] { "soldier_1", "soldier_2" })
+        {
+            if (session.Engine.EntityById(id) is { } soldier)
+            {
+                soldier.Set(new ControllerComponent(ControllerKind.None));
+            }
+        }
+
+        state.AddMessage("Social quickstart: the cell is open enough for conversation.");
     }
 
     private static IReadOnlyList<string> LoadScriptCommands(string? scriptPath)
@@ -154,7 +238,7 @@ public static class Program
         return Task.CompletedTask;
     }
 
-    private static GameCommand ParseCommand(string text)
+    internal static GameCommand ParseCommand(string text)
     {
         var trimmed = text.Trim();
         if (trimmed.StartsWith('{'))
@@ -198,6 +282,8 @@ public static class Program
                 "cancel_cast" => new CancelCastCommand(),
                 "target" => new TargetCommand(new GridPoint(ReadInt(root, "x", 0), ReadInt(root, "y", 0))),
                 "untarget" => new ClearTargetCommand(),
+                "travel" or "go" => new TravelCommand(ParseDirection(ReadString(root, "direction", "east"))),
+                "atlas" or "world" => new AtlasCommand(),
                 "pickup" => new PickupCommand(ReadNullableString(root, "target")),
                 "drop" => new DropCommand(ReadString(root, "item", "")),
                 "use" => new UseItemCommand(ReadString(root, "item", "")),
@@ -208,8 +294,15 @@ public static class Program
                 "protect" => new ProtectItemCommand(ReadString(root, "item", "")),
                 "unprotect" => new UnprotectItemCommand(ReadString(root, "item", "")),
                 "reagents" => new ReagentsCommand(),
+                "wares" or "browse" => new WaresCommand(ReadNullableString(root, "target")),
+                "buy" => new BuyCommand(ReadString(root, "item", ""), ReadNullableString(root, "target")),
+                "sell" => new SellCommand(ReadString(root, "item", ""), ReadNullableString(root, "target")),
                 "journal" => new JournalCommand(),
+                "character" or "sheet" or "profile" => new CharacterCommand(),
                 "talk" => new TalkCommand(ReadString(root, "text", "")),
+                "give" or "gift" => new GiveCommand(ReadString(root, "item", ""), ReadNullableString(root, "target")),
+                "recruit" => new RecruitCommand(ReadNullableString(root, "target")),
+                "bonds" or "bond" => new BondsCommand(ReadNullableString(root, "target")),
                 "read" => new ReadCommand(ReadNullableString(root, "target")),
                 "examine" => new ExamineCommand(ReadNullableString(root, "target")),
                 "open" => new OpenCommand(ReadNullableString(root, "target")),
@@ -217,6 +310,8 @@ public static class Program
                 "standing" => new StandingCommand(),
                 "followers" => new FollowersCommand(),
                 "jobs" => new JobsCommand(),
+                "save" => new SaveCommand(DefaultSavePath(ReadString(root, "path", ""))),
+                "load" => new LoadCommand(DefaultSavePath(ReadString(root, "path", ""))),
                 "help" => new HelpCommand(),
                 "quit" => new QuitCommand(),
                 _ => new UnknownCommand(json),
@@ -257,6 +352,9 @@ public static class Program
         root.TryGetProperty(property, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? value.GetBoolean()
             : fallback;
+
+    private static string DefaultSavePath(string value) =>
+        string.IsNullOrWhiteSpace(value) ? Path.Combine("runs", "quicksave.json") : value.Trim();
 }
 
 public sealed record CommandEnvelope(
@@ -277,6 +375,18 @@ public sealed record CliOptions(
     string? EpisodeLogPath,
     string? ScriptPath,
     string? TranscriptPath,
+    string? ReplayPath,
+    bool ReplayAssertFinal,
+    string? OriginId,
+    string? BackgroundProvider,
+    string? BackgroundHost,
+    string? BackgroundModel,
+    bool? BackgroundEnabled,
+    int MaxBackgroundJobs,
+    int BackgroundJobsPerTurn,
+    int BackgroundConcurrency,
+    bool Quickstart,
+    string? QuickstartScene,
     IReadOnlyList<string> Commands)
 {
     public static CliOptions Parse(string[] args)
@@ -294,6 +404,18 @@ public sealed record CliOptions(
         string? episodeLogPath = null;
         string? scriptPath = null;
         string? transcriptPath = null;
+        string? replayPath = null;
+        var replayAssertFinal = false;
+        string? originId = null;
+        string? backgroundProvider = null;
+        string? backgroundHost = null;
+        string? backgroundModel = null;
+        bool? backgroundEnabled = null;
+        var maxBackgroundJobs = 12;
+        var backgroundJobsPerTurn = 1;
+        var backgroundConcurrency = 1;
+        var quickstart = true;
+        string? quickstartScene = null;
         var commands = new List<string>();
 
         for (var index = 0; index < args.Length; index++)
@@ -344,6 +466,47 @@ public sealed record CliOptions(
                 case "--command-log" when index + 1 < args.Length:
                     transcriptPath = args[++index];
                     break;
+                case "--replay" when index + 1 < args.Length:
+                    replayPath = args[++index];
+                    break;
+                case "--replay-assert-final":
+                    replayAssertFinal = true;
+                    break;
+                case "--origin" when index + 1 < args.Length:
+                    originId = args[++index];
+                    break;
+                case "--background-provider" when index + 1 < args.Length:
+                    backgroundProvider = args[++index];
+                    break;
+                case "--background-host" when index + 1 < args.Length:
+                    backgroundHost = args[++index];
+                    break;
+                case "--background-model" when index + 1 < args.Length:
+                    backgroundModel = args[++index];
+                    break;
+                case "--enable-background":
+                    backgroundEnabled = true;
+                    break;
+                case "--disable-background":
+                case "--no-background":
+                    backgroundEnabled = false;
+                    break;
+                case "--max-background-jobs" when index + 1 < args.Length:
+                    maxBackgroundJobs = Math.Max(0, ReadNonNegativeInt(args[++index], maxBackgroundJobs));
+                    break;
+                case "--background-jobs-per-turn" when index + 1 < args.Length:
+                    backgroundJobsPerTurn = Math.Max(0, ReadNonNegativeInt(args[++index], backgroundJobsPerTurn));
+                    break;
+                case "--background-concurrency" when index + 1 < args.Length:
+                    backgroundConcurrency = Math.Max(1, ReadPositiveInt(args[++index], backgroundConcurrency));
+                    break;
+                case "--quickstart":
+                    quickstart = true;
+                    if (index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        quickstartScene = args[++index];
+                    }
+                    break;
                 case "--command" when index + 1 < args.Length:
                     commands.Add(args[++index]);
                     break;
@@ -364,11 +527,26 @@ public sealed record CliOptions(
             episodeLogPath,
             scriptPath,
             transcriptPath,
+            replayPath,
+            replayAssertFinal,
+            originId,
+            backgroundProvider,
+            backgroundHost,
+            backgroundModel,
+            backgroundEnabled,
+            maxBackgroundJobs,
+            backgroundJobsPerTurn,
+            backgroundConcurrency,
+            quickstart,
+            quickstartScene,
             commands);
     }
 
     private static int ReadPositiveInt(string value, int fallback) =>
         int.TryParse(value, out var parsed) && parsed > 0 ? parsed : fallback;
+
+    private static int ReadNonNegativeInt(string value, int fallback) =>
+        int.TryParse(value, out var parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 public sealed class TranscriptWriter : IAsyncDisposable
@@ -408,7 +586,12 @@ public sealed class TranscriptWriter : IAsyncDisposable
             DateTimeOffset.UtcNow,
             options.Provider,
             options.Model,
+            options.Seed,
             options.ScriptPath,
+            options.OriginId,
+            options.BackgroundEnabled,
+            options.MaxBackgroundJobs,
+            options.BackgroundJobsPerTurn,
             options.Commands,
             observation));
 
@@ -444,7 +627,12 @@ public sealed class TranscriptWriter : IAsyncDisposable
         DateTimeOffset Timestamp,
         string Provider,
         string? Model,
+        int Seed,
         string? ScriptPath,
+        string? OriginId,
+        bool? BackgroundEnabled,
+        int MaxBackgroundJobs,
+        int BackgroundJobsPerTurn,
         IReadOnlyList<string> Commands,
         AgentObservation InitialObservation);
 

@@ -193,6 +193,9 @@ Current implementation:
 - On success, the player soul moves into the new body, the displaced soul moves into the
   old body, `ControlledEntityId` follows the new body, factions/controllers are swapped,
   and inventory remains on whichever body carried it.
+- `BodyStatsComponent` stays with the body, while `SoulLedger` records stay keyed to the
+  moving soul. `ActorComponent` is synced from both: HP/attack/defense from body Vigor,
+  mana from soul Attunement/current mana.
 - The old body receives a short `disoriented` status so it does not immediately act during
   the same turn.
 

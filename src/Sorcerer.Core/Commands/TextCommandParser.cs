@@ -30,6 +30,8 @@ public static class TextCommandParser
             "wait" or "." => new WaitCommand(),
             "inspect" or "look" => new InspectCommand(),
             "map" => ParseMap(rest),
+            "travel" or "go" => ParseTravel(rest),
+            "atlas" or "world" => new AtlasCommand(),
             "cast" => new CastCommand(rest, CastPerformance.Neutral),
             "begin_cast" or "submit_cast" or "start_cast" => new BeginCastCommand(rest, CastPerformance.Neutral),
             "await_cast" or "resolve_cast" => new AwaitCastCommand(),
@@ -46,8 +48,15 @@ public static class TextCommandParser
             "protect" => new ProtectItemCommand(rest),
             "unprotect" => new UnprotectItemCommand(rest),
             "reagents" => new ReagentsCommand(),
+            "wares" or "browse" => new WaresCommand(NullIfEmpty(rest)),
+            "buy" => ParseBuy(rest),
+            "sell" => ParseSell(rest),
             "journal" or "promises" or "rumors" => new JournalCommand(),
+            "character" or "sheet" or "profile" => new CharacterCommand(),
             "talk" or "say" or "speak" => new TalkCommand(rest),
+            "give" or "gift" => ParseGive(rest),
+            "recruit" => new RecruitCommand(NullIfEmpty(rest)),
+            "bonds" or "bond" => new BondsCommand(NullIfEmpty(rest)),
             "read" => new ReadCommand(NullIfEmpty(rest)),
             "examine" or "study" => new ExamineCommand(NullIfEmpty(rest)),
             "open" => new OpenCommand(NullIfEmpty(rest)),
@@ -55,6 +64,8 @@ public static class TextCommandParser
             "standing" => new StandingCommand(),
             "followers" => new FollowersCommand(),
             "jobs" => new JobsCommand(),
+            "save" => new SaveCommand(DefaultSavePath(rest)),
+            "load" => new LoadCommand(DefaultSavePath(rest)),
             "help" or "?" => new HelpCommand(),
             "quit" or "exit" => new QuitCommand(),
             _ => new UnknownCommand(text),
@@ -80,6 +91,51 @@ public static class TextCommandParser
     private static GameCommand ParseMap(string text) =>
         int.TryParse(text, out var radius) ? new MapCommand(radius) : new MapCommand();
 
+    private static GameCommand ParseTravel(string text) =>
+        Parse(text) is MoveCommand move ? new TravelCommand(move.Direction) : new UnknownCommand($"travel {text}");
+
+    private static GameCommand ParseGive(string text)
+    {
+        var marker = text.IndexOf(" to ", StringComparison.OrdinalIgnoreCase);
+        if (marker < 0)
+        {
+            return new GiveCommand(text.Trim(), null);
+        }
+
+        return new GiveCommand(
+            text[..marker].Trim(),
+            NullIfEmpty(text[(marker + 4)..]));
+    }
+
+    private static GameCommand ParseBuy(string text)
+    {
+        var marker = text.IndexOf(" from ", StringComparison.OrdinalIgnoreCase);
+        if (marker < 0)
+        {
+            return new BuyCommand(text.Trim());
+        }
+
+        return new BuyCommand(
+            text[..marker].Trim(),
+            NullIfEmpty(text[(marker + 6)..]));
+    }
+
+    private static GameCommand ParseSell(string text)
+    {
+        var marker = text.IndexOf(" to ", StringComparison.OrdinalIgnoreCase);
+        if (marker < 0)
+        {
+            return new SellCommand(text.Trim());
+        }
+
+        return new SellCommand(
+            text[..marker].Trim(),
+            NullIfEmpty(text[(marker + 4)..]));
+    }
+
     private static string? NullIfEmpty(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string DefaultSavePath(string value) =>
+        string.IsNullOrWhiteSpace(value) ? Path.Combine("runs", "quicksave.json") : value.Trim();
 }

@@ -1,13 +1,20 @@
+using Sorcerer.Core.Characters;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Runtime;
 using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Scenarios;
 
 public static class TestScenarios
 {
-    public static GameState ImperialEncounter()
+    public static GameState ImperialEncounter(
+        string? playerOriginId = null,
+        IReadOnlyList<RunChronicleRecord>? memorials = null)
     {
+        var origin = OriginCatalog.LoadDefault().Resolve(playerOriginId);
+        var playerBody = new BodyStatsComponent(origin.BodyVigor);
+        var playerSoul = CharacterMath.SoulFromOrigin("player_soul", origin);
         var state = new GameState(width: 16, height: 10)
         {
             ControlledEntityId = EntityId.Create("player"),
@@ -15,9 +22,8 @@ public static class TestScenarios
             Rng = new DeterministicRng(7),
         };
 
-        state.Factions.AddOrGet("player", "The Sorcerer", "player");
-        state.Factions.AddOrGet("empire", "Grand Empire", "empire");
-        state.Factions.AddOrGet("hollowmere", "Hollowmere", "region");
+        FactionCatalog.LoadDefault().ApplyTo(state.Factions);
+        state.Souls.Set(playerSoul);
 
         for (var x = 0; x < state.Width; x++)
         {
@@ -48,24 +54,20 @@ public static class TestScenarios
             .Set(new RenderableComponent('@', "wild"))
             .Set(new TagsComponent(new[] { "sorcerer", "wild_magic", "wanted" }))
             .Set(new PhysicalComponent(BlocksMovement: true, Material: "body"))
-            .Set(new ActorComponent(24, 24, 14, 14, 4, 1, "player"))
+            .Set(playerBody)
+            .Set(CharacterMath.CreateActor(playerBody, playerSoul, "player"))
             .Set(new ControllerComponent(ControllerKind.Player))
             .Set(new SoulComponent("player_soul"))
             .Set(new ProfileComponent(
-                "the sorcerer",
-                "a fugitive bright with badly behaved magic",
-                Origin: "unknown",
-                MagicalSignature: "color leaking through marble law"))
+                origin.PublicName,
+                origin.Appearance,
+                Origin: origin.Id,
+                MagicalSignature: origin.MagicalSignature,
+                Backstory: origin.Backstory))
             .Set(StatusContainerComponent.Empty())
             .Set(EquipmentComponent.Empty())
             .Set(new InventoryComponent(
-                new Dictionary<string, int>
-                {
-                    ["grave salt"] = 2,
-                    ["moon pearl"] = 1,
-                    ["charcoal wand"] = 1,
-                    ["gold"] = 15,
-                },
+                new Dictionary<string, int>(origin.StartingItems, StringComparer.OrdinalIgnoreCase),
                 new HashSet<string> { "moon pearl" })));
 
         Add(state, Soldier("soldier_1", "imperial containment soldier", new GridPoint(9, 4)));
@@ -103,7 +105,7 @@ public static class TestScenarios
             .Set(new PositionComponent(new GridPoint(13, 5)))
             .Set(new RenderableComponent('+', "imperial"))
             .Set(new TagsComponent(new[] { "door", "cell", "iron", "imperial", "lock" }))
-            .Set(new PhysicalComponent(BlocksMovement: true, Material: "iron"))
+            .Set(new PhysicalComponent(BlocksMovement: true, BlocksSight: true, Material: "iron"))
             .Set(new FixtureComponent("door", new[] { "door", "cell", "iron", "imperial" }))
             .Set(new DoorComponent(IsOpen: false, KeyId: "imperial cell key"))
             .Set(new PromiseAnchorComponent(rescuePromise.Id)));
@@ -113,6 +115,7 @@ public static class TestScenarios
             .Set(new RenderableComponent('p', "hollowmere"))
             .Set(new TagsComponent(new[] { "npc", "prisoner", "hollowmere", "ally_candidate" }))
             .Set(new PhysicalComponent(BlocksMovement: true, Material: "body"))
+            .Set(new BodyStatsComponent(0))
             .Set(new ActorComponent(8, 8, 0, 0, 1, 0, "hollowmere"))
             .Set(new FactionComponent("hollowmere", new[] { "prisoner", "witness" }))
             .Set(new ControllerComponent(ControllerKind.None))
@@ -125,8 +128,30 @@ public static class TestScenarios
                 MagicalSignature: "a name hidden under water"))
             .Set(StatusContainerComponent.Empty()));
 
+        AddMemorial(state, memorials);
         state.AddMessage("Imperial soldiers move to contain you.");
         return state;
+    }
+
+    private static void AddMemorial(GameState state, IReadOnlyList<RunChronicleRecord>? memorials)
+    {
+        var memorial = memorials?
+            .Where(record => !string.IsNullOrWhiteSpace(record.Text))
+            .LastOrDefault();
+        if (memorial is null)
+        {
+            return;
+        }
+
+        var tags = new[] { "memorial", "past_run", "inert", "readable" };
+        Add(state, new Entity(EntityId.Create("memorial_1"), "weathered sorcerer's memorial")
+            .Set(new PositionComponent(new GridPoint(2, 7)))
+            .Set(new RenderableComponent('?', "memory"))
+            .Set(new TagsComponent(tags))
+            .Set(new PhysicalComponent(BlocksMovement: false, Material: "stone"))
+            .Set(new DescriptionComponent(memorial.Text))
+            .Set(new FixtureComponent("memorial", tags, CanAnchorMagic: false))
+            .Set(new ReadableComponent("Weathered Sorcerer's Memorial", memorial.Text)));
     }
 
     private static Entity Soldier(string id, string name, GridPoint position) =>
@@ -135,7 +160,8 @@ public static class TestScenarios
             .Set(new RenderableComponent('i', "imperial"))
             .Set(new TagsComponent(new[] { "imperial", "soldier", "containment" }))
             .Set(new PhysicalComponent(BlocksMovement: true, Material: "body"))
-            .Set(new ActorComponent(10, 10, 0, 0, 3, 1, "empire"))
+            .Set(new BodyStatsComponent(1))
+            .Set(new ActorComponent(10, 10, 0, 0, 3, 0, "empire"))
             .Set(new FactionComponent("empire", new[] { "empire", "military" }))
             .Set(new ControllerComponent(ControllerKind.Ai))
             .Set(new AiComponent("hostile_guard"))

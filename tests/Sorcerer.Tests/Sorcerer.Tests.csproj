@@ -11,7 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sorcerer.Core\Sorcerer.Core.csproj" />
+    <ProjectReference Include="..\..\src\Sorcerer.Llm\Sorcerer.Llm.csproj" />
     <ProjectReference Include="..\..\src\Sorcerer.Magic\Sorcerer.Magic.csproj" />
   </ItemGroup>
 </Project>
-

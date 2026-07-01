@@ -14,7 +14,10 @@ public sealed record RegionDefinition(
     string TraditionId,
     int ImperialPresence,
     IReadOnlyList<string> TerrainTags,
-    IReadOnlyList<string> VoiceTags);
+    IReadOnlyList<string> VoiceTags,
+    int WildnessBase = 0,
+    string FloorTerrain = "floor",
+    IReadOnlyList<RegionAffordanceCard>? Affordances = null);
 
 public sealed class RegionRegistry
 {
@@ -51,7 +54,57 @@ public sealed class RegionRegistry
             "wild_color",
             90,
             new[] { "marble", "law", "containment" },
-            new[] { "cold", "bureaucratic", "threatening" }));
+            new[] { "cold", "bureaucratic", "threatening" },
+            WildnessBase: 0,
+            FloorTerrain: "floor",
+            Affordances: new[]
+            {
+                new RegionAffordanceCard("imperial_cover", "Marble walls create hard lines of sight and official blind spots.", new[] { "stealth", "law" }),
+            }));
+        registry.AddRegion(new RegionDefinition(
+            "vigovian_capital",
+            "Vigovian Capital",
+            "empire",
+            "wild_color",
+            100,
+            new[] { "marble", "capital", "throne", "law" },
+            new[] { "cold", "ceremonial", "reasonable", "afraid" },
+            WildnessBase: 0,
+            FloorTerrain: "polished_marble",
+            Affordances: new[]
+            {
+                new RegionAffordanceCard("imperial_defenses", "Capital defenses still matter, but this sprint exposes a thin reachable emperor encounter.", new[] { "empire", "defenses", "capital" }),
+                new RegionAffordanceCard("emperor_present", "Emperor Odran exists here as a killable ordinary actor, not a cutscene.", new[] { "emperor", "win_condition" }),
+            }));
+        registry.AddRegion(new RegionDefinition(
+            "hollowmere_margin",
+            "Hollowmere Margin",
+            "hollowmere",
+            "wild_color",
+            45,
+            new[] { "reeds", "water", "mud", "memory" },
+            new[] { "wet", "folk", "watchful" },
+            WildnessBase: 2,
+            FloorTerrain: "reed_floor",
+            Affordances: new[]
+            {
+                new RegionAffordanceCard("reed_cover", "Reed beds give fugitives soft cover and water-flavored spell hooks.", new[] { "cover", "water" }),
+                new RegionAffordanceCard("hollowmere_sympathy", "Hollowmere folk are more willing to hear anti-imperial stories.", new[] { "recruitment", "hollowmere" }),
+            }));
+        registry.AddRegion(new RegionDefinition(
+            "wild_border",
+            "Wild Border",
+            "unruled",
+            "wild_color",
+            15,
+            new[] { "flowers", "bone", "rain", "broken-law" },
+            new[] { "lush", "feral", "dreamlike" },
+            WildnessBase: 5,
+            FloorTerrain: "wild_grass",
+            Affordances: new[]
+            {
+                new RegionAffordanceCard("loose_reality", "Wild terrain makes transformations feel easier but attention harder to predict.", new[] { "wild_magic", "risk" }),
+            }));
         return registry;
     }
 }

@@ -1,4 +1,5 @@
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Views;
 
@@ -40,7 +41,16 @@ public sealed record ReagentCard(
     int UnitValue,
     int TotalValue,
     string Material,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    string SpellBias = "");
+
+public sealed record LoreCardView(
+    string Id,
+    string Title,
+    int Level,
+    IReadOnlyList<string> Subjects,
+    IReadOnlyList<string> Triggers,
+    string Body);
 
 public sealed record CasterView(
     string Id,
@@ -54,6 +64,17 @@ public sealed record CasterView(
     string SoulId,
     IReadOnlyList<StatusCard> Statuses);
 
+public sealed record ResolverLensView(
+    int Vigor,
+    int Attunement,
+    int Composure,
+    int EffectMagnitudeDelta,
+    string Magnitude,
+    string Volatility,
+    string CostFraming,
+    string Signature,
+    IReadOnlyList<string> Notes);
+
 public sealed record PerceivedEntity(
     string Id,
     string Name,
@@ -66,13 +87,15 @@ public sealed record PerceivedEntity(
     string Material,
     IReadOnlyList<string> Tags,
     int? HitPoints,
-    int? MaxHitPoints);
+    int? MaxHitPoints,
+    string Visibility = "visible");
 
 public sealed record TileNote(
     int X,
     int Y,
     string Terrain,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    string Visibility = "visible");
 
 public sealed record OperationCardView(
     string Name,
@@ -93,7 +116,10 @@ public sealed record MagicContextView(
     GridPoint? SelectedTarget,
     IReadOnlyList<string> RecentEvents,
     IReadOnlyList<PromiseCard> KnownPromises,
-    OperationIndex Operations);
+    OperationIndex Operations,
+    ResolverLensView? ResolverLens = null,
+    IReadOnlyList<ReagentCard>? Reagents = null,
+    IReadOnlyList<LoreCardView>? Lore = null);
 
 public sealed record StatusCard(
     string Id,
@@ -128,7 +154,40 @@ public sealed record GameView(
     IReadOnlyList<ItemCard>? Inventory = null,
     IReadOnlyList<ReagentCard>? Reagents = null,
     IReadOnlyList<StatusCard>? Statuses = null,
-    GridPoint? SelectedTarget = null);
+    GridPoint? SelectedTarget = null,
+    CharacterSheetCard? Character = null,
+    WorldCard? World = null);
+
+public sealed record WorldCard(
+    string CurrentZoneId,
+    string RegionId,
+    string RegionName,
+    string RealmId,
+    string RealmName,
+    string RealmStatus,
+    string RealmRuler,
+    string TraditionId,
+    int ImperialPresence,
+    int Wildness,
+    IReadOnlyList<RegionAffordanceCard> Affordances);
+
+public sealed record CharacterSheetCard(
+    string BodyEntityId,
+    string SoulId,
+    string PublicName,
+    string Appearance,
+    string OriginId,
+    string OriginName,
+    string Tradition,
+    int Vigor,
+    int Attunement,
+    int Composure,
+    int HitPoints,
+    int MaxHitPoints,
+    int Mana,
+    int MaxMana,
+    string MagicalSignature,
+    string Backstory);
 
 public sealed record LedgerSummary(
     int Deeds,
@@ -137,7 +196,10 @@ public sealed record LedgerSummary(
     int Memories,
     int CanonRecords,
     int Bonds,
-    int ScheduledEvents);
+    int ScheduledEvents,
+    int Suspicions = 0,
+    int Souls = 0,
+    int Triggers = 0);
 
 public sealed record DebugStateView(
     int EntityCount,
@@ -146,7 +208,28 @@ public sealed record DebugStateView(
     GridPoint? SelectedTarget,
     LedgerSummary? Ledgers = null,
     IReadOnlyList<string>? ValidationIssues = null,
-    IReadOnlyList<BackgroundJobCard>? BackgroundJobs = null);
+    IReadOnlyList<BackgroundJobCard>? BackgroundJobs = null,
+    IReadOnlyList<FactionDebugCard>? Factions = null,
+    IReadOnlyList<BondDebugCard>? Bonds = null,
+    string RunStatus = "running",
+    string? RunConclusion = null);
+
+public sealed record FactionDebugCard(
+    string Id,
+    string Name,
+    string Role,
+    IReadOnlyDictionary<string, int> Standing,
+    IReadOnlyDictionary<string, int> Resources,
+    IReadOnlyList<string> HostileRoles);
+
+public sealed record BondDebugCard(
+    string SubjectSoulId,
+    string TargetSoulId,
+    int Loyalty,
+    int Fear,
+    int Admiration,
+    int Resentment,
+    string Posture);
 
 public sealed record BackgroundJobCard(
     string Id,

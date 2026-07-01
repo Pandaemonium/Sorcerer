@@ -2,6 +2,7 @@ using System.Text.Json;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
+using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Views;
@@ -59,9 +60,9 @@ public static class EpisodeRunner
             for (var episode = 1; episode <= Math.Max(1, options.Episodes); episode++)
             {
                 var seed = options.Seed + episode - 1;
-                var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
-                session.Engine.State.Seed = seed;
-                session.Engine.State.Rng = new DeterministicRng(seed);
+                var session = GameSession.CreateImperialEncounter(
+                    new WildMagicController(provider, audit: audit),
+                    seed: seed);
 
                 var summary = await RunEpisodeAsync(
                     episode,
@@ -185,6 +186,8 @@ public static class EpisodeRunner
             issues.Add($"episode reached {maxSteps} steps before turn {maxTurns}; too many free/failed actions");
         }
 
+        issues.AddRange(CheckLongRunInvariants(session));
+
         var summary = new EpisodeSummary(
             Episode: episode,
             Seed: seed,
@@ -284,6 +287,7 @@ public static class EpisodeRunner
         var cellDoor = view.Entities.FirstOrDefault(entity => TagsContain(entity, "door") && TagsContain(entity, "cell"));
         if (cellDoor is not null
             && Distance(player, cellDoor) <= 1
+            && IsClosedDoor(session, cellDoor.Id)
             && FindInventory(view, "imperial cell key") is not null)
         {
             return new OpenCommand(cellDoor.Name);
@@ -344,7 +348,10 @@ public static class EpisodeRunner
 
         if (FindInventory(view, "imperial cell key") is not null)
         {
-            var door = view.Entities.FirstOrDefault(entity => TagsContain(entity, "door") && TagsContain(entity, "cell"));
+            var door = view.Entities.FirstOrDefault(entity =>
+                TagsContain(entity, "door")
+                && TagsContain(entity, "cell")
+                && IsClosedDoor(session, entity.Id));
             if (door is not null)
             {
                 return door;
@@ -389,6 +396,82 @@ public static class EpisodeRunner
         return issues;
     }
 
+    private static IReadOnlyList<string> CheckLongRunInvariants(GameSession session)
+    {
+        var issues = new List<string>();
+        var savedAt = new DateTimeOffset(2026, 6, 30, 0, 0, 0, TimeSpan.Zero);
+        try
+        {
+            var before = GameSaveService.Serialize(session.Engine.State, savedAt: savedAt);
+            var loaded = GameSaveService.Deserialize(before);
+            var after = GameSaveService.Serialize(
+                loaded.State,
+                loaded.PendingCast,
+                loaded.PendingCastSerial,
+                savedAt);
+            if (!string.Equals(before, after, StringComparison.Ordinal))
+            {
+                issues.Add("save/load/save changed serialized state");
+            }
+
+            var loadedValidation = Core.Validation.StateValidator.Validate(loaded.State);
+            if (!loadedValidation.IsValid)
+            {
+                issues.AddRange(loadedValidation.Issues.Select(issue => $"loaded:{issue.Code}:{issue.EntityId ?? "state"}:{issue.Message}"));
+            }
+        }
+        catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or JsonException or IOException)
+        {
+            issues.Add($"save/load invariant failed: {ex.Message}");
+        }
+
+        var duplicatePromises = session.Engine.State.PromiseLedger.Promises
+            .GroupBy(promise => promise.Id, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        foreach (var duplicate in duplicatePromises)
+        {
+            issues.Add($"duplicate promise id {duplicate}");
+        }
+
+        foreach (var faction in session.Engine.State.Factions.Factions)
+        {
+            foreach (var pair in faction.Standing)
+            {
+                if (Math.Abs(pair.Value) > 100)
+                {
+                    issues.Add($"standing out of bounds {faction.Id}:{pair.Key}:{pair.Value}");
+                }
+            }
+
+            foreach (var maxPair in faction.Resources.Where(pair => pair.Key.StartsWith("max_", StringComparison.OrdinalIgnoreCase)))
+            {
+                var resource = maxPair.Key["max_".Length..];
+                if (faction.Resources.TryGetValue(resource, out var current) && current > maxPair.Value)
+                {
+                    issues.Add($"resource exceeds max {faction.Id}:{resource}:{current}>{maxPair.Value}");
+                }
+            }
+        }
+
+        var legendWeights = session.Engine.State.Legend.Tags
+            .GroupBy(tag => (tag.ActorSoulId, tag.Tag))
+            .Select(group => (group.Key.ActorSoulId, group.Key.Tag, Weight: group.Sum(tag => tag.Weight)));
+        foreach (var item in legendWeights.Where(item => Math.Abs(item.Weight) > 100))
+        {
+            issues.Add($"legend out of bounds {item.ActorSoulId}:{item.Tag}:{item.Weight}");
+        }
+
+        if (!session.Engine.State.RunStatus.Equals("running", StringComparison.OrdinalIgnoreCase)
+            && !session.Engine.State.Canon.Records.Any(record => record.Kind.Equals("chronicle", StringComparison.OrdinalIgnoreCase)))
+        {
+            issues.Add("completed run has no chronicle canon");
+        }
+
+        return issues;
+    }
+
     private static bool IsFinished(GameSession session)
     {
         var view = session.View();
@@ -418,6 +501,10 @@ public static class EpisodeRunner
 
     private static EntityCard? PlayerCard(GameView view) =>
         view.Entities.FirstOrDefault(entity => entity.Id == view.ControlledEntityId);
+
+    private static bool IsClosedDoor(GameSession session, string entityId) =>
+        session.Engine.EntityById(entityId)?.TryGet<DoorComponent>(out var door) == true
+        && !door.IsOpen;
 
     private static ItemCard? FindInventory(GameView view, string name) =>
         view.Inventory?.FirstOrDefault(item =>
@@ -461,6 +548,8 @@ public static class EpisodeRunner
             CancelCastCommand => "cancel_cast",
             TargetCommand target => $"target {target.Position.X} {target.Position.Y}",
             ClearTargetCommand => "untarget",
+            TravelCommand travel => $"travel {travel.Direction}",
+            AtlasCommand => "atlas",
             PickupCommand pickup => $"pickup {pickup.Target}",
             DropCommand drop => $"drop {drop.Item}",
             UseItemCommand use => $"use {use.Item}",
@@ -471,6 +560,9 @@ public static class EpisodeRunner
             ReagentsCommand => "reagents",
             JournalCommand => "journal",
             TalkCommand talk => $"talk {talk.Text}",
+            GiveCommand give => $"give {give.Item} to {give.Target}",
+            RecruitCommand recruit => $"recruit {recruit.Target}",
+            BondsCommand bonds => $"bonds {bonds.Target}",
             ReadCommand read => $"read {read.Target}",
             ExamineCommand examine => $"examine {examine.Target}",
             OpenCommand open => $"open {open.Target}",

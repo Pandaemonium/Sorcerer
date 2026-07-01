@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Magic;
+using Sorcerer.Core.Primitives;
 using Sorcerer.Core.References;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Transactions;
@@ -14,6 +16,8 @@ namespace Sorcerer.Magic;
 
 public sealed class WildMagicController : IWildMagicController
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly ISpellAuditSink _audit;
     private readonly ISpellProvider _provider;
     private readonly OperationRegistry _registry;
@@ -69,12 +73,13 @@ public sealed class WildMagicController : IWildMagicController
         var resolution = Normalize(providerResult.Resolution);
         if (!resolution.Accepted)
         {
-            var result = Rejected(
+            var result = WithResolutionJson(Rejected(
                 engine,
                 providerResult.Provider,
                 turnBefore,
                 resolution.RejectedReason ?? "The spell refuses to become real.",
-                Array.Empty<string>());
+                Array.Empty<string>()),
+                resolution);
             Audit(providerResult, command, request.Context, result, Array.Empty<string>());
             return result;
         }
@@ -95,6 +100,7 @@ public sealed class WildMagicController : IWildMagicController
                     turnBefore,
                     reason,
                     resolution.Effects.Select(effect => effect.Type).ToArray());
+            result = WithResolutionJson(result, resolution);
             Audit(providerResult, command, request.Context, result, validationIssues.Select(issue => issue.Code).ToArray());
             return result;
         }
@@ -118,6 +124,13 @@ public sealed class WildMagicController : IWildMagicController
             }
 
             deltas.AddRange(SpellCostApplier.Apply(engine, resolution.Costs));
+            engine.RecordDeed(
+                engine.State.ControlledEntity,
+                "wild_magic",
+                MagnitudeFor(resolution.Severity),
+                engine.State.ControlledEntity.Get<PositionComponent>().Position,
+                FirstEffectPoint(engine, deltas),
+                resolution.Effects.Select(effect => effect.Type).Concat(new[] { resolution.Severity }));
 
             if (messages.Count == 0 && deltas.Count == 0)
             {
@@ -126,7 +139,7 @@ public sealed class WildMagicController : IWildMagicController
                 messages.Add(message);
             }
 
-            engine.AdvanceTurn();
+            var turnDeltas = engine.AdvanceTurn();
             var stateReport = engine.ValidateState();
             if (!stateReport.IsValid)
             {
@@ -145,14 +158,20 @@ public sealed class WildMagicController : IWildMagicController
                 ConsumedTurn = true,
                 TurnBefore = turnBefore,
                 TurnAfter = engine.State.Turn,
-                Messages = messages.Concat(deltas.Select(delta => delta.Summary)).ToArray(),
-                Deltas = deltas,
+                Messages = messages
+                    .Concat(deltas.Select(delta => delta.Summary))
+                    .Concat(turnDeltas.Select(delta => delta.Summary))
+                    .ToArray(),
+                Deltas = deltas.Concat(turnDeltas).ToArray(),
                 Magic = new MagicResolutionRecord(
                     providerResult.Provider,
                     Accepted: true,
                     TechnicalFailure: false,
                     EffectTypes: resolution.Effects.Select(effect => effect.Type).ToArray(),
-                    Error: null),
+                    Error: null)
+                {
+                    ResolvedMagicJson = SerializeResolution(resolution),
+                },
             };
             Audit(providerResult, command, request.Context, result, Array.Empty<string>());
             return result;
@@ -190,6 +209,20 @@ public sealed class WildMagicController : IWildMagicController
                 .ToArray(),
         };
 
+    private static ActionResult WithResolutionJson(ActionResult result, SpellResolution resolution) =>
+        result.Magic is null
+            ? result
+            : result with
+            {
+                Magic = result.Magic with
+                {
+                    ResolvedMagicJson = SerializeResolution(resolution),
+                },
+            };
+
+    private static string SerializeResolution(SpellResolution resolution) =>
+        JsonSerializer.Serialize(resolution, JsonOptions);
+
     private IReadOnlyList<SpellValidationIssue> ValidateResolution(
         GameEngine engine,
         SpellResolution resolution,
@@ -224,6 +257,7 @@ public sealed class WildMagicController : IWildMagicController
             }
         }
 
+        issues.AddRange(MechanicalCurseValidator.Validate(engine, resolution));
         issues.AddRange(ValidateCosts(engine, resolution.Costs));
         return issues;
     }
@@ -324,7 +358,7 @@ public sealed class WildMagicController : IWildMagicController
         IReadOnlyList<string> effectTypes)
     {
         engine.AddMessage(reason);
-        engine.AdvanceTurn();
+        var turnDeltas = engine.AdvanceTurn();
         return new ActionResult
         {
             Action = "cast",
@@ -332,13 +366,14 @@ public sealed class WildMagicController : IWildMagicController
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = engine.State.Turn,
-            Messages = new[] { reason },
+            Messages = new[] { reason }.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
             Magic = new MagicResolutionRecord(
                 provider,
                 Accepted: false,
                 TechnicalFailure: false,
                 EffectTypes: effectTypes,
                 Error: reason),
+            Deltas = turnDeltas,
         };
     }
 
@@ -356,4 +391,40 @@ public sealed class WildMagicController : IWildMagicController
         fields.TryGetValue(key, out var value) && bool.TryParse(Convert.ToString(value), out var parsed)
             ? parsed
             : fallback;
+
+    private static int MagnitudeFor(string severity) =>
+        severity.Trim().ToLowerInvariant() switch
+        {
+            "minor" => 1,
+            "moderate" => 3,
+            "major" => 5,
+            "catastrophic" => 8,
+            _ => 2,
+        };
+
+    private static GridPoint? FirstEffectPoint(GameEngine engine, IReadOnlyList<StateDelta> deltas)
+    {
+        foreach (var delta in deltas)
+        {
+            if (engine.EntityById(delta.Target) is { } entity
+                && entity.TryGet<PositionComponent>(out var position))
+            {
+                return position.Position;
+            }
+
+            if (delta.Target.StartsWith("tile:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = delta.Target["tile:".Length..]
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (parts.Length == 2
+                    && int.TryParse(parts[0], out var x)
+                    && int.TryParse(parts[1], out var y))
+                {
+                    return new GridPoint(x, y);
+                }
+            }
+        }
+
+        return null;
+    }
 }

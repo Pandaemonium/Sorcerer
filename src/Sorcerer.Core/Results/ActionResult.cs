@@ -11,7 +11,10 @@ public sealed record MagicResolutionRecord(
     bool Accepted,
     bool TechnicalFailure,
     IReadOnlyList<string> EffectTypes,
-    string? Error);
+    string? Error)
+{
+    public string? ResolvedMagicJson { get; init; }
+}
 
 public sealed record ActionResult
 {
@@ -52,4 +55,3 @@ public sealed record ActionResult
             Messages = messages,
         };
 }
-

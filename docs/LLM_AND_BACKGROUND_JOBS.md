@@ -135,10 +135,14 @@ Current implementation:
 
 - `GameState` owns `BackgroundJobSettings` and `BackgroundJobQueue`.
 - Background generation defaults on but low: one job per turn, with a small queue cap.
+- CLI playtests can disable or throttle this lane with `--disable-background`,
+  `--max-background-jobs`, and `--background-jobs-per-turn`.
 - `read` and `examine` can enqueue deterministic background detail jobs for the target.
 - `AdvanceTurn` is the explicit apply point: it starts at most the configured number of
-  queued jobs, produces deterministic placeholder text, writes durable canon, and marks
-  the job `Applied`.
+  queued jobs, produces deterministic text enriched by routed lore when relevant, writes
+  durable canon, and marks the job `Applied`.
+- Subsequent `examine` calls show attached canon as known detail, so background enrichment is
+  visible through the shared CLI/Godot command path.
 - `jobs` exposes the queue through the shared CLI/Godot command path.
 - Debug observations include background job cards so diagnostic episode transcripts can
   capture the queue without scraping text.
@@ -146,6 +150,13 @@ Current implementation:
 This is intentionally not a real background LLM worker yet. It proves the state,
 throttling, visibility, and apply-boundary architecture before any provider call can
 consume user resources.
+
+`LlmConfiguration` separates purpose settings (`wild`, `dialogue`, `item`, `canon`,
+`background`, `agent`). The CLI uses the `wild` purpose for foreground spell resolution and keeps
+background provider/model/host settings separate for the future worker. Purpose-specific
+environment variables use names such as `SORCERER_WILD_PROVIDER`, `SORCERER_WILD_MODEL`,
+`SORCERER_BACKGROUND_PROVIDER`, `SORCERER_BACKGROUND_MODEL`, and
+`SORCERER_BACKGROUND_ENABLED`.
 
 Current job record:
 

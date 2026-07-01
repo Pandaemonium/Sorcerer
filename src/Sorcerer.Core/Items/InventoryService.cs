@@ -65,7 +65,8 @@ public sealed class InventoryService
                     unitValue,
                     unitValue * pair.Value,
                     definition?.Material ?? "unknown",
-                    definition?.Tags ?? Array.Empty<string>());
+                    definition?.Tags ?? Array.Empty<string>(),
+                    definition?.SpellBias ?? "");
             })
             .ToArray();
     }

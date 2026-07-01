@@ -1,9 +1,18 @@
+using Sorcerer.Llm.Configuration;
 using Sorcerer.Magic.Resolution;
 
 namespace Sorcerer.Llm;
 
 public static class SpellProviderFactory
 {
+    public static ISpellProvider Create(LlmConfiguration configuration, LlmPurpose purpose) =>
+        Create(configuration.SettingsFor(purpose));
+
+    public static ISpellProvider Create(LlmPurposeSettings settings) =>
+        settings.Enabled
+            ? Create(settings.Provider, settings.Host, settings.Model)
+            : new MockSpellProvider();
+
     public static ISpellProvider Create(
         string provider,
         string? host = null,

@@ -6,6 +6,9 @@ public sealed record StatusDefinition(
     IReadOnlyList<string> Aliases,
     bool BlocksMovement = false,
     bool BlocksAction = false,
+    bool ConcealsBearer = false,
+    int DamagePerTurn = 0,
+    int HealPerTurn = 0,
     int? DefaultDuration = null);
 
 public sealed class StatusRegistry
@@ -57,14 +60,56 @@ public sealed class StatusRegistry
 
     public bool BlocksMovement(string idOrAlias) => Find(idOrAlias)?.BlocksMovement == true;
 
+    public bool ConcealsBearer(string idOrAlias) => Find(idOrAlias)?.ConcealsBearer == true;
+
+    public int DamagePerTurn(string idOrAlias) => Find(idOrAlias)?.DamagePerTurn ?? 0;
+
+    public int HealPerTurn(string idOrAlias) => Find(idOrAlias)?.HealPerTurn ?? 0;
+
     public static StatusRegistry CreateDefault()
     {
         var registry = new StatusRegistry();
-        registry.Add(new StatusDefinition("burning", "burning", Array.Empty<string>(), DefaultDuration: 3));
-        registry.Add(new StatusDefinition("poisoned", "poisoned", Array.Empty<string>(), DefaultDuration: 5));
+        registry.Add(new StatusDefinition("burning", "burning", Array.Empty<string>(), DamagePerTurn: 2, DefaultDuration: 3));
+        registry.Add(new StatusDefinition("poisoned", "poisoned", Array.Empty<string>(), DamagePerTurn: 1, DefaultDuration: 5));
         registry.Add(new StatusDefinition("frozen", "frozen", new[] { "petrified", "crystallized", "ice_locked" }, BlocksMovement: true, BlocksAction: true, DefaultDuration: 2));
-        registry.Add(new StatusDefinition("rooted", "rooted", new[] { "webbed", "bound", "sticky_webbed", "immobilized", "restrained" }, BlocksMovement: true, BlocksAction: true, DefaultDuration: 3));
+        registry.Add(new StatusDefinition(
+            "rooted",
+            "rooted",
+            new[]
+            {
+                "webbed",
+                "bound",
+                "sticky_webbed",
+                "immobilized",
+                "restrained",
+                "pinned",
+                "anchored",
+                "tethered",
+                "snared",
+                "held",
+                "kneeling",
+                "buckled",
+                "joint_locked",
+                "boneless",
+                "crumpled",
+                "collapsed",
+            },
+            BlocksMovement: true,
+            BlocksAction: true,
+            DefaultDuration: 3));
         registry.Add(new StatusDefinition("stunned", "stunned", new[] { "asleep", "dazed", "bewildered", "disoriented", "staggered" }, BlocksAction: true, DefaultDuration: 1));
+        registry.Add(new StatusDefinition(
+            "concealed",
+            "concealed",
+            new[] { "hidden", "camouflaged", "river_concealed", "river_color_cloak", "shadowed", "veiled", "mist_cloaked" },
+            ConcealsBearer: true,
+            DefaultDuration: 4));
+        registry.Add(new StatusDefinition(
+            "regenerating",
+            "regenerating",
+            new[] { "mending", "green_mending", "healing_over_time", "renewing", "verdant" },
+            HealPerTurn: 2,
+            DefaultDuration: 4));
         registry.Add(new StatusDefinition("borrowed_body", "borrowed body", new[] { "soul_swapped", "possessed" }, DefaultDuration: 8));
         registry.Add(new StatusDefinition("revealed", "revealed", Array.Empty<string>(), DefaultDuration: 5));
         return registry;

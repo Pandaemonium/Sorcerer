@@ -279,7 +279,7 @@ public sealed class AddStatusOperation : OperationBase
     {
         var status = NormalizeToken(Text(effect, "status", Text(effect, "trait", Text(effect, "name", "marked"))));
         var displayName = Text(effect, "displayName", Text(effect, "display_name", status));
-        var duration = Int(effect, "duration", 3, min: 1, max: 99);
+        var duration = Int(effect, "duration", 0, min: 0, max: 99);
         return ResolveTargets(context, effect, "nearest_enemy")
             .Select(target => context.Engine.ApplyStatus(target, status, duration, displayName))
             .ToArray();
@@ -412,7 +412,10 @@ public sealed class TransformEntityOperation : OperationBase
                     target.Set(new DescriptionComponent(description));
                 }
 
-                var summary = $"{before} becomes {target.Name}.";
+                var summary = target.Name.Equals(before, StringComparison.OrdinalIgnoreCase)
+                    && target.TryGet<PhysicalComponent>(out var transformedPhysical)
+                    ? $"{before} becomes {transformedPhysical.Material.Replace('_', ' ')}."
+                    : $"{before} becomes {target.Name}.";
                 context.Engine.AddMessage(summary);
                 return new StateDelta(
                     "transformEntity",
@@ -439,8 +442,23 @@ public sealed class TransformItemOperation : OperationBase
     {
     }
 
-    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect) =>
-        RequireTargets(context, effect, "selected_target");
+    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect)
+    {
+        var targets = RequireTargets(context, effect, "selected_target");
+        if (!targets.Ok)
+        {
+            return targets;
+        }
+
+        if (string.IsNullOrWhiteSpace(Text(effect, "name", Text(effect, "newName", "")))
+            && string.IsNullOrWhiteSpace(Text(effect, "material", ""))
+            && Tags(effect, "addTags", Tags(effect, "tags", Array.Empty<string>())).Count == 0)
+        {
+            return ValidationOutcome.Reject("transformItem needs a name, material, or tag change.");
+        }
+
+        return ValidationOutcome.Pass;
+    }
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
         ResolveTargets(context, effect, "selected_target")
@@ -644,6 +662,192 @@ public sealed class ScheduleEventOperation : OperationBase
     }
 }
 
+public sealed class CreateTriggerOperation : OperationBase
+{
+    public CreateTriggerOperation()
+        : base(
+            "createTrigger",
+            new[] { "trigger", "ward", "aura", "delayedEffect", "persistentEffect" },
+            "Create a turn-pump trigger that later applies a small engine effect.",
+            "Use for delayed effects, wards, and auras. Fields: kind, delay, interval, uses, anchor, radius, targetFilter, effectType, effect.")
+    {
+    }
+
+    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect)
+    {
+        var anchor = ResolveAnchor(context, effect);
+        if (anchor.Error is not null)
+        {
+            return anchor.Fatal
+                ? ValidationOutcome.Technical(anchor.Error)
+                : ValidationOutcome.Reject(anchor.Error);
+        }
+
+        var effectType = EffectType(effect);
+        if (string.IsNullOrWhiteSpace(effectType))
+        {
+            return ValidationOutcome.Reject("Triggers need effectType or a nested effect.type.");
+        }
+
+        return effectType.Trim().ToLowerInvariant() switch
+        {
+            "message" => !string.IsNullOrWhiteSpace(EffectText(effect, "text", ""))
+                ? ValidationOutcome.Pass
+                : ValidationOutcome.Reject("Message triggers need text."),
+            "addstatus" or "status" or "applystatus" => !string.IsNullOrWhiteSpace(EffectText(effect, "status", EffectText(effect, "name", "")))
+                ? ValidationOutcome.Pass
+                : ValidationOutcome.Reject("Status triggers need status."),
+            "damage" or "harm" or "heal" or "restorehealth" => ValidationOutcome.Pass,
+            _ => ValidationOutcome.Reject($"Unsupported trigger effect {effectType}."),
+        };
+    }
+
+    public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
+    {
+        var kind = Text(effect, "kind", Text(effect, "trigger", Text(effect, "cadence", "delay")));
+        var delay = Int(effect, "delay", Int(effect, "turns", kind.Equals("aura", StringComparison.OrdinalIgnoreCase) ? 1 : 2, min: 1, max: 99), min: 1, max: 99);
+        var interval = Int(effect, "interval", 1, min: 1, max: 99);
+        var uses = Int(effect, "uses", Int(effect, "maxFires", Int(effect, "max_fires", kind.Equals("aura", StringComparison.OrdinalIgnoreCase) ? 3 : 1, min: 1, max: 20), min: 1, max: 20), min: 1, max: 20);
+        var duration = effect.Fields.ContainsKey("duration")
+            ? Int(effect, "duration", delay + uses, min: 1, max: 99)
+            : kind.Equals("aura", StringComparison.OrdinalIgnoreCase)
+                ? delay + uses
+                : (int?)null;
+        var anchor = ResolveAnchor(context, effect);
+        var effectFields = EffectFields(effect);
+        var effectType = EffectType(effect);
+        var description = Text(
+            effect,
+            "description",
+            Text(effect, "text", kind.Equals("aura", StringComparison.OrdinalIgnoreCase)
+                ? "The aura pulses."
+                : "The delayed magic comes due."));
+
+        return new[]
+        {
+            context.Engine.CreateTrigger(
+                Text(effect, "name", kind),
+                kind,
+                delay,
+                interval,
+                uses,
+                duration,
+                context.Caster.Id,
+                anchor.AnchorEntityId,
+                anchor.AnchorPoint,
+                Int(effect, "radius", kind.Equals("aura", StringComparison.OrdinalIgnoreCase) ? 2 : 0, min: 0, max: 8),
+                Text(effect, "targetFilter", Text(effect, "affects", "all")),
+                effectType,
+                effectFields,
+                description,
+                Bool(effect, "playerVisible", true)),
+        };
+    }
+
+    private static TriggerAnchor ResolveAnchor(EffectContext context, SpellEffect effect)
+    {
+        var raw = effect.Fields.TryGetValue("anchor", out var anchor)
+            ? anchor
+            : effect.Fields.TryGetValue("at", out var at)
+                ? at
+                : "self";
+        var resolved = context.Refs.Resolve(ReferenceBinder.NormalizeEntityRef(raw));
+        if (resolved.Reference.Kind.Equals("malformed", StringComparison.OrdinalIgnoreCase))
+        {
+            return new TriggerAnchor(null, null, resolved.Error ?? "Malformed trigger anchor.", Fatal: true);
+        }
+
+        if (!resolved.Success)
+        {
+            return new TriggerAnchor(null, null, resolved.Error ?? "Trigger anchor could not be resolved.", Fatal: false);
+        }
+
+        var entity = resolved.Entities.FirstOrDefault();
+        return new TriggerAnchor(entity?.Id.Value, resolved.Position, null, Fatal: false);
+    }
+
+    private static string EffectType(SpellEffect effect)
+    {
+        if (TryNestedEffect(effect, out var nested) && nested.TryGetValue("type", out var nestedType))
+        {
+            return Convert.ToString(nestedType) ?? "";
+        }
+
+        var explicitType = Text(effect, "effectType", Text(effect, "operation", Text(effect, "then", "")));
+        if (!string.IsNullOrWhiteSpace(explicitType))
+        {
+            return explicitType;
+        }
+
+        if (!string.IsNullOrWhiteSpace(EffectText(effect, "status", "")))
+        {
+            return "addStatus";
+        }
+
+        if (effect.Fields.ContainsKey("amount"))
+        {
+            return Text(effect, "amountType", "").Equals("heal", StringComparison.OrdinalIgnoreCase) ? "heal" : "damage";
+        }
+
+        return !string.IsNullOrWhiteSpace(EffectText(effect, "text", "")) ? "message" : "";
+    }
+
+    private static Dictionary<string, object?> EffectFields(SpellEffect effect)
+    {
+        var fields = TryNestedEffect(effect, out var nested)
+            ? new Dictionary<string, object?>(nested, StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, object?>(effect.Fields, StringComparer.OrdinalIgnoreCase);
+        fields.Remove("kind");
+        fields.Remove("trigger");
+        fields.Remove("cadence");
+        fields.Remove("delay");
+        fields.Remove("turns");
+        fields.Remove("interval");
+        fields.Remove("uses");
+        fields.Remove("maxFires");
+        fields.Remove("max_fires");
+        fields.Remove("anchor");
+        fields.Remove("at");
+        fields.Remove("radius");
+        fields.Remove("targetFilter");
+        fields.Remove("affects");
+        fields.Remove("effectType");
+        fields.Remove("operation");
+        fields.Remove("then");
+        fields.Remove("effect");
+        fields.Remove("name");
+        fields.Remove("description");
+        fields.Remove("playerVisible");
+
+        if (!fields.ContainsKey("target") && effect.Fields.TryGetValue("target", out var target))
+        {
+            fields["target"] = target;
+        }
+
+        return fields;
+    }
+
+    private static string EffectText(SpellEffect effect, string key, string fallback) =>
+        TryNestedEffect(effect, out var nested) && nested.TryGetValue(key, out var raw)
+            ? Convert.ToString(raw) ?? fallback
+            : Text(effect, key, fallback);
+
+    private static bool TryNestedEffect(SpellEffect effect, out IReadOnlyDictionary<string, object?> nested)
+    {
+        if (effect.Fields.TryGetValue("effect", out var raw)
+            && raw is IReadOnlyDictionary<string, object?> dictionary)
+        {
+            nested = dictionary;
+            return true;
+        }
+
+        nested = new Dictionary<string, object?>();
+        return false;
+    }
+
+    private sealed record TriggerAnchor(string? AnchorEntityId, GridPoint? AnchorPoint, string? Error, bool Fatal);
+}
+
 public sealed class AddCurseOperation : OperationBase
 {
     public AddCurseOperation()
@@ -662,8 +866,30 @@ public sealed class AddCurseOperation : OperationBase
     {
         var text = Text(effect, "description", Text(effect, "name", "Wild Debt"));
         var anchor = ResolveTargets(context, effect, "selected_target").FirstOrDefault();
-        var triggerHint = Text(effect, "trigger", Text(effect, "triggerHint", Text(effect, "trigger_hint", "")));
-        return new[] { context.Engine.AddPromise("debt", text, anchor, triggerHint) };
+        var template = CurseTemplate(effect, text);
+        return new[] { context.Engine.AddPromise("curse", text, anchor, template) };
+    }
+
+    private static string CurseTemplate(SpellEffect effect, string text)
+    {
+        var explicitTemplate = Text(effect, "template", Text(effect, "curseType", Text(effect, "curse_type", "")));
+        var lower = string.IsNullOrWhiteSpace(explicitTemplate)
+            ? text.ToLowerInvariant()
+            : explicitTemplate.ToLowerInvariant();
+        if (lower.Contains("straight", StringComparison.OrdinalIgnoreCase))
+        {
+            return "straight-path";
+        }
+
+        foreach (var template in new[] { "close", "far", "narrow", "anchored" })
+        {
+            if (lower.Contains(template, StringComparison.OrdinalIgnoreCase))
+            {
+                return template;
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(explicitTemplate) ? "" : explicitTemplate;
     }
 }
 

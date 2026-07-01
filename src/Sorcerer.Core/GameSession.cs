@@ -1,8 +1,12 @@
+using System.Text.Json;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Magic;
+using Sorcerer.Core.Persistence;
+using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Runtime;
 using Sorcerer.Core.Scenarios;
 using Sorcerer.Core.Views;
 using Sorcerer.Core.World;
@@ -21,10 +25,19 @@ public sealed class GameSession
         _magic = magic ?? NullWildMagicController.Instance;
     }
 
-    public GameEngine Engine { get; }
+    public GameEngine Engine { get; private set; }
 
-    public static GameSession CreateImperialEncounter(IWildMagicController? magic = null) =>
-        new(TestScenarios.ImperialEncounter(), magic);
+    public static GameSession CreateImperialEncounter(
+        IWildMagicController? magic = null,
+        string? originId = null,
+        int seed = 7,
+        IReadOnlyList<RunChronicleRecord>? memorials = null)
+    {
+        var state = TestScenarios.ImperialEncounter(originId, memorials);
+        state.Seed = Math.Max(1, seed);
+        state.Rng = new DeterministicRng(state.Seed);
+        return new GameSession(state, magic);
+    }
 
     public async Task<ActionResult> ExecuteAsync(
         GameCommand command,
@@ -53,6 +66,8 @@ public sealed class GameSession
             TargetCommand target => SetTarget(target),
             ClearTargetCommand => ClearTarget(),
             MapCommand => Engine.Inspect(),
+            TravelCommand travel => Engine.Travel(travel.Direction),
+            AtlasCommand => Engine.Atlas(),
             PickupCommand pickup => Engine.Pickup(pickup.Target),
             DropCommand drop => Engine.DropItem(drop.Item),
             UseItemCommand use => Engine.UseItem(use.Item),
@@ -63,8 +78,15 @@ public sealed class GameSession
             ProtectItemCommand protect => ProtectItem(protect.Item, protectedState: true),
             UnprotectItemCommand unprotect => ProtectItem(unprotect.Item, protectedState: false),
             ReagentsCommand => Engine.Reagents(),
+            WaresCommand wares => Engine.Wares(wares.Target),
+            BuyCommand buy => Engine.Buy(buy.Item, buy.Target),
+            SellCommand sell => Engine.Sell(sell.Item, sell.Target),
             JournalCommand => Engine.Journal(),
+            CharacterCommand => Engine.CharacterSheet(),
             TalkCommand talk => Engine.Talk(talk.Text),
+            GiveCommand give => Engine.Give(give.Item, give.Target),
+            RecruitCommand recruit => Engine.Recruit(recruit.Target),
+            BondsCommand bonds => Engine.Bonds(bonds.Target),
             ReadCommand read => Engine.Read(read.Target),
             ExamineCommand examine => Engine.Examine(examine.Target),
             OpenCommand open => Engine.Open(open.Target),
@@ -72,6 +94,8 @@ public sealed class GameSession
             StandingCommand => Engine.Standing(),
             FollowersCommand => Engine.Followers(),
             JobsCommand => Engine.Jobs(),
+            SaveCommand save => SaveGame(save.Path),
+            LoadCommand load => LoadGame(load.Path),
             HelpCommand => Help(),
             QuitCommand => Quit(),
             UnknownCommand unknown => ActionResult.Simple(
@@ -90,7 +114,8 @@ public sealed class GameSession
                 "Unknown command."),
         };
 
-        return AddActorTurns(result);
+        var completed = CompleteRunIfNeeded(result);
+        return completed.ShouldQuit ? completed : CompleteRunIfNeeded(AddActorTurns(completed));
     }
 
     public GameView View() => Engine.View();
@@ -266,7 +291,72 @@ public sealed class GameSession
             consumedTurn: false,
             Engine.State.Turn,
             Engine.State.Turn,
-            "Commands: inspect, map, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, possess, cast, begin_cast, await_cast, cancel_cast, protect, unprotect, reagents, journal, standing, followers, jobs, quit.");
+                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, protect, unprotect, reagents, wares, buy, sell, journal, character, standing, followers, jobs, save, load, quit.");
+
+    private ActionResult SaveGame(string path)
+    {
+        var turn = Engine.State.Turn;
+        try
+        {
+            GameSaveService.Save(path, Engine.State, PendingCastToSave(), _pendingCastSerial);
+            return ActionResult.Simple(
+                "save",
+                success: true,
+                consumedTurn: false,
+                turn,
+                turn,
+                $"Saved run to {path}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
+        {
+            return new ActionResult
+            {
+                Action = "save",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turn,
+                TurnAfter = turn,
+                TechnicalFailure = true,
+                Messages = new[] { $"Save failed: {ex.Message}" },
+            };
+        }
+    }
+
+    private ActionResult LoadGame(string path)
+    {
+        var turnBefore = Engine.State.Turn;
+        try
+        {
+            var loaded = GameSaveService.Load(path);
+            Engine = new GameEngine(loaded.State);
+            _pendingCastSerial = loaded.PendingCastSerial;
+            _pendingCast = loaded.PendingCast is null
+                ? null
+                : new PendingCast(
+                    loaded.PendingCast.Id,
+                    new CastCommand(loaded.PendingCast.Text, loaded.PendingCast.Performance ?? CastPerformance.Neutral));
+            return ActionResult.Simple(
+                "load",
+                success: true,
+                consumedTurn: false,
+                turnBefore,
+                Engine.State.Turn,
+                $"Loaded run from {path}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidDataException or JsonException)
+        {
+            return new ActionResult
+            {
+                Action = "load",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = Engine.State.Turn,
+                TechnicalFailure = true,
+                Messages = new[] { $"Load failed: {ex.Message}" },
+            };
+        }
+    }
 
     private ActionResult AddActorTurns(ActionResult result)
     {
@@ -288,13 +378,101 @@ public sealed class GameSession
         };
     }
 
+    private ActionResult CompleteRunIfNeeded(ActionResult result)
+    {
+        if (result.ShouldQuit
+            || !Engine.State.RunStatus.Equals("running", StringComparison.OrdinalIgnoreCase))
+        {
+            return result;
+        }
+
+        if (EmperorDefeated())
+        {
+            return CompleteRun(
+                result,
+                "victory",
+                "Emperor Odran of Vigovia is dead.",
+                "emperor_odran",
+                "Emperor Odran falls. The marble empire discovers it had a throat.");
+        }
+
+        if (ControlledBodyDefeated())
+        {
+            return CompleteRun(
+                result,
+                "defeat",
+                "The sorcerer's current body is dead.",
+                Engine.State.ControlledEntityId.Value,
+                "Your body falls. Somewhere, the world begins arranging a stranger's dawn.");
+        }
+
+        return result;
+    }
+
+    private ActionResult CompleteRun(
+        ActionResult result,
+        string status,
+        string conclusion,
+        string target,
+        string message)
+    {
+        Engine.State.RunStatus = status;
+        Engine.State.RunConclusion = conclusion;
+        Engine.AddMessage(message);
+        var chronicle = RunChronicle.Build(Engine.State);
+        Engine.State.Canon.Add(
+            "chronicle",
+            Engine.State.ControlledEntityId.Value,
+            chronicle.Text,
+            chronicle.Conclusion,
+            new[] { "chronicle", status },
+            "run_end",
+            Engine.State.Turn);
+        var delta = new StateDelta(
+            "runComplete",
+            target,
+            message,
+            new Dictionary<string, object?>
+            {
+                ["status"] = status,
+                ["conclusion"] = conclusion,
+            });
+        return result with
+        {
+            ShouldQuit = true,
+            Messages = result.Messages.Concat(new[] { message }).ToArray(),
+            Deltas = result.Deltas.Concat(new[] { delta }).ToArray(),
+        };
+    }
+
+    private bool EmperorDefeated() =>
+        Engine.State.Entities.Values.Any(entity =>
+            entity.TryGet<TagsComponent>(out var tags)
+            && tags.Tags.Contains("emperor", StringComparer.OrdinalIgnoreCase)
+            && entity.TryGet<ActorComponent>(out var actor)
+            && !actor.Alive);
+
+    private bool ControlledBodyDefeated() =>
+        Engine.State.ControlledEntity.TryGet<ActorComponent>(out var actor)
+        && !actor.Alive;
+
     private static bool CanExecuteDuringPendingCast(GameCommand command) =>
         command is AwaitCastCommand
             or CancelCastCommand
             or InspectCommand
             or MapCommand
+            or SaveCommand
+            or LoadCommand
             or HelpCommand
             or QuitCommand;
+
+    private PendingCastSave? PendingCastToSave() =>
+        _pendingCast is null
+            ? null
+            : new PendingCastSave(
+                _pendingCast.Id,
+                _pendingCast.Command.Text,
+                _pendingCast.Command.Performance);
 
     private ActionResult Quit() =>
         new()

@@ -1,7 +1,9 @@
 # Emergent World - How the World Responds to the Player
 
-Status: vision-for-later. The first playable defers this; what matters now is reserving the
-ledger lanes so it can grow without rework. Companion to
+Status: first deterministic spine implemented. Deeds are captured through the engine,
+classified by witness visibility, and applied by the turn pump into soul-bound legend tags
+and multidimensional standing. Faction resources, richer rumors, and model-assisted
+ambiguous interpretation remain later layers. Companion to
 [WORLD_REACTION_AND_EMPIRE.md](WORLD_REACTION_AND_EMPIRE.md) (arc, tone, moral texture, and
 the state lanes) and [CORE_EXECUTION_MODEL.md](CORE_EXECUTION_MODEL.md) (the pump points this
 hooks into). Adapted from the Wild Magic prototype: the philosophy is kept, the Python phase
@@ -64,6 +66,14 @@ heartbeat; pump points tie reaction to what actually happened.)
   threat. One deed lands on several at once - burning an imperial barracks raises rebel
   gratitude, townsfolk fear, notoriety, and imperial threat together.
 
+The current implementation keeps this intentionally small. `WorldReactionSystem` captures
+deeds for accepted wild magic, attacks/kills, prisoner rescue, and body swap; classifies
+them as secret, suspicious, witnessed, public, or mythic; applies unapplied deeds from
+`TurnSystem.AdvanceTurn`; and writes deterministic faction standing plus bounded legend
+tags. `standing` and `journal` show the resulting reputation and legend instead of raw deed
+rows. Suspicious magic can raise suspicion without attaching legend when only the effect was
+seen.
+
 ## Factions spend finite resources
 
 A reaction is an expenditure, not a threshold trip. A crackdown is "the Empire spends a
@@ -73,10 +83,9 @@ escalation stays bounded and the game stays winnable. Exact resource pools are d
 state; player-facing views should show pressure, mood, warrants, rumors, and visible consequences
 rather than raw numbers.
 
-## Bonds, organizations, followers (reserved lane, built late)
+## Bonds, organizations, followers
 
-The richest part, and the one to build last on a settled spine. Build general primitives,
-not a party system:
+The first deterministic bond/follower slice exists. Build general primitives, not a party system:
 
 - **Individual bonds**, per NPC, separate from any organization.
 - **Organizations** are first-class and plural - the player can found several or climb
@@ -86,6 +95,10 @@ not a party system:
 - Devotion, drift, departure, and betrayal **emerge** from thresholds; the model voices the
   moment; consequences are written back as durable traits/notes that color all future
   behavior. Keep the math invisible - this must read as relationships, not stat bars.
+
+Current implementation covers gifts, bond posture, bond-driven followers, personal-bond hostility
+overrides, and trusted dialogue secrets binding promises. Founding organizations, deep drift,
+departure, betrayal scenes, and model-voiced dialogue remain later layers.
 
 ## A fresh world each run
 
@@ -97,15 +110,28 @@ player can act on - a safer region, a recruitable tradition, a conflict to explo
 lore. The win condition resolves within a single run: kill the emperor. The emperor should exist as
 a killable character even before the elaborate systems for reaching him are fully built.
 
+Current implementation is the first multi-zone spine, not the full world roll: `GenerationSystem`
+stores inactive places as `ZoneSnapshot`s, lets the player travel across coordinate zones, lazily
+generates region-flavored interiors, carries bond-followers, and exposes a world/atlas card with
+region affordances. Those affordances also enter the resolver lens as soft context, so a place can
+color free-form magic without bypassing engine operations. Bound travel/site promises can now
+realize during generation as promise-site fixtures, canon records, journal updates, and action
+deltas. A minimal seeded world roll now gives realms deterministic status, rulers, and imperial
+grip variation. Richer site archetypes, directional reservation, towns, and full geopolitical
+ownership remain later layers. Generated zones also seed a first resident NPC from region/realm
+profile so the world can answer socially before full town generation exists.
+
 ## Legibility is first-class
 
 Emergence the player cannot perceive is indistinguishable from randomness. Budget as much
 design effort on *showing* the reaction (rumor lines on zone entry, NPCs greeting you by
 legend, a standing readout, named voices, the run chronicle) as on computing it.
 
-## Reserved lanes (what to keep ready now)
+## Growth lanes
 
-Per [WORLD_REACTION_AND_EMPIRE.md](WORLD_REACTION_AND_EMPIRE.md), reserve the ledger lanes -
-deed, promise, faction, memory, canon, semantic - so this can grow without a rewrite. None of
-this is built in the first playable; the goal now is only that the architecture leaves clean
-room for it.
+Per [WORLD_REACTION_AND_EMPIRE.md](WORLD_REACTION_AND_EMPIRE.md), keep the ledger lanes -
+deed, promise, faction, memory, canon, semantic - clean and general. Phase 2 has made the
+first deed/legend/reputation lane real, Phase 3 made finite faction pressure real, and Phase 4
+made the first bond/follower lane real. Future work should extend these with richer organizations,
+organic model-voiced dialogue, rumors, and narration without bypassing the engine pump or reading
+prose as authoritative state.

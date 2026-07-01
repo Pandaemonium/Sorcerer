@@ -42,9 +42,33 @@ both the JSON-first CLI and a Godot ASCII GUI with map interaction, spell entry,
 entry, Ollama model controls, pending casts, inventory/status/promise panels, and an imperial
 encounter scenario. The current chamber also includes shared-engine item verbs,
 equipment/focus handling, readable and examinable fixtures, a locked cell, a prisoner
-rescue consequence, and a visible promise that can be realized in play. The CLI includes
-both a spell eval harness and an unattended episode runner with JSONL logs and invariant
-checks for agent playtesting.
+rescue consequence, origins and soul/body stats, deeds/legend/faction pressure, first-pass
+social bonds, and a visible promise that can be realized in play. The first procedural-world
+slice is also live: travel snapshots zones, lazily generates region-flavored places, exposes
+an atlas/world card, feeds region affordances into the magic resolver, and can turn bound site
+promises into generated places. A minimal seeded world roll varies realm status, ruler, and
+effective imperial grip, and generated zones now include a resident NPC seeded from the region and
+realm profile. Early status-trait depth is live too: concealment affects hostile notice, and
+burning, poisoning, and mending tick through the shared turn pump. Minimal trigger depth is live as
+well: delayed effects and aura pulses are stored in a `TriggerLedger` and fire through the same
+engine turn pump. Terrain has begun reacting too: water can extinguish burning into mist, fire can
+ignite actors, and vines can snare bodies. Item depth has a first general slice: unprotected
+reagents enter resolver context with spell-bias hints, and generated zones create deterministic
+curios whose metadata survives pickup. Curses now have a minimal mechanical layer: close, far,
+narrow, straight-path, and anchored templates can constrain later spell resolutions. Generated
+residents can trade through explicit engine-side `wares`, `buy`, and `sell` commands. The first
+lush-content slice is live: Markdown lore cards load from `content/lore`, `LoreRouter` injects
+relevant access-gated canon into magic context and atlas output, generated zone fixtures use
+deterministic texture naming with durable subject tags, and background detail jobs write canon that
+appears on later examine. Zone entry can now echo your current legend through deterministic rumor
+lines, making reputation visible without adding hidden simulation. CLI provider creation now uses
+purpose-based LLM settings for foreground wild magic, and background jobs can be disabled or
+throttled for resource-sensitive playtests. The long-run spine has its first durable slice:
+schema-v1 save/load, transcript replay with materialized spell JSON, a reachable Vigovian Capital
+with Emperor Odran as a normal killable actor, victory/defeat run completion, run-closing
+chronicles, and inert cross-run memorial records. The CLI includes a spell eval harness, transcript
+replay, and an unattended episode runner with JSONL logs plus invariant checks for agent
+playtesting.
 
 Recommended first read:
 
@@ -108,6 +132,8 @@ The CLI should support:
 - perfect debug state when requested
 - visible enemies, NPCs, floor items, props, and terrain
 - inventory, equipment, reagents, curses, promises, journal, standing, and messages
+- current zone/region, atlas/world affordances, and travel commands
+- save/load, transcript replay, run status, and optional debug-perfect state
 - mock LLM mode for fast deterministic CLI/agent testing
 - live provider mode for resolver evaluation
 

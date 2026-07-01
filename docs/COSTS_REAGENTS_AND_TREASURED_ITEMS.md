@@ -127,6 +127,7 @@ Both interfaces should expose:
 - item name
 - quantity or instance identity
 - tags/material/value when known
+- spell-bias hints for resolver guidance
 - protected/treasured state
 - focus state
 - whether it can be used, equipped, read, or examined
@@ -135,3 +136,6 @@ Both interfaces should expose:
 The JSON CLI should expose these fields structurally. Agents should not infer them from
 prose.
 
+Current implementation note: `MagicContextView.Reagents` includes only unprotected carried reagent
+cards. Generated curios register definitions in the shared item catalog so their material, tags,
+value, and spell-bias metadata survive pickup and can appear as resolver-visible fuel.

@@ -1,0 +1,39 @@
+{
+  "factions": [
+    {
+      "id": "player",
+      "name": "The Sorcerer",
+      "role": "player",
+      "hostileRoles": ["empire_bloc"],
+      "resources": {}
+    },
+    {
+      "id": "empire",
+      "name": "Grand Empire",
+      "role": "empire_bloc",
+      "hostileRoles": ["player", "resistance"],
+      "resources": {
+        "heat": 0,
+        "patrols": 2,
+        "max_patrols": 2,
+        "informants": 1,
+        "max_informants": 1,
+        "warrants": 1,
+        "max_warrants": 1,
+        "defenses": 3,
+        "max_defenses": 3,
+        "response_cooldown_until": 0
+      }
+    },
+    {
+      "id": "hollowmere",
+      "name": "Hollowmere",
+      "role": "resistance",
+      "hostileRoles": ["empire_bloc"],
+      "resources": {
+        "support": 1,
+        "max_support": 1
+      }
+    }
+  ]
+}

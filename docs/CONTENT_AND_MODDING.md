@@ -36,6 +36,21 @@ Likely data sets:
 - lore cards
 - dialogue style guides
 
+Current live content:
+
+- `content/lore/*.md` contains Markdown lore cards with a fenced `lore` metadata block.
+  The core loader searches upward from the current/app base directory, then falls back to
+  built-in seed cards if files are absent.
+- Lore cards use `subjects` and `triggers` as router keys. Sections are headed
+  `## Level N`; only sections at or below the current access level enter routed context.
+  Cards or sections marked draft are excluded from the live catalog.
+- Generated zone fixtures use deterministic texture grammar in code for now. Their names,
+  descriptions, and subject tags are engine-visible so later lore routing and background
+  detail can reuse them.
+- Cross-run memorial records are JSONL run chronicles, currently under `runs/memorials.jsonl`.
+  They are commemorative content only: a later run may surface one as an inert readable memorial
+  prop, but it does not grant inherited power, inventory, stats, or faction standing.
+
 ## Modding Goal
 
 Future modding should allow:
@@ -78,4 +93,3 @@ Generated content that becomes durable should be stored as state with provenance
 - turn created
 
 This keeps saves, audits, and future debugging possible.
-

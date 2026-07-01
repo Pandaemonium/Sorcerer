@@ -1,3 +1,4 @@
+using Sorcerer.Core.Characters;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Results;
@@ -15,19 +16,19 @@ public static class SpellCostApplier
             switch (cost.Type)
             {
                 case "mana":
-                    deltas.Add(SpendMana(engine, SpellValidator.ReadInt(cost.Fields, "amount", 1)));
+                    AddIfPositive(deltas, SpellValidator.ReadInt(cost.Fields, "amount", 1), amount => SpendMana(engine, amount));
                     break;
                 case "health":
                 case "hp":
-                    deltas.Add(SpendHealth(engine, SpellValidator.ReadInt(cost.Fields, "amount", 1), max: false));
+                    AddIfPositive(deltas, SpellValidator.ReadInt(cost.Fields, "amount", 1), amount => SpendHealth(engine, amount, max: false));
                     break;
                 case "maxHealth":
                 case "max_health":
-                    deltas.Add(SpendHealth(engine, SpellValidator.ReadInt(cost.Fields, "amount", 1), max: true));
+                    AddIfPositive(deltas, SpellValidator.ReadInt(cost.Fields, "amount", 1), amount => SpendHealth(engine, amount, max: true));
                     break;
                 case "maxMana":
                 case "max_mana":
-                    deltas.Add(SpendMaxMana(engine, SpellValidator.ReadInt(cost.Fields, "amount", 1)));
+                    AddIfPositive(deltas, SpellValidator.ReadInt(cost.Fields, "amount", 1), amount => SpendMaxMana(engine, amount));
                     break;
                 case "item":
                     deltas.Add(SpendItem(engine, cost));
@@ -44,12 +45,23 @@ public static class SpellCostApplier
         return deltas;
     }
 
+    private static void AddIfPositive(List<StateDelta> deltas, int amount, Func<int, StateDelta> apply)
+    {
+        if (amount > 0)
+        {
+            deltas.Add(apply(amount));
+        }
+    }
+
     private static StateDelta SpendMana(GameEngine engine, int amount)
     {
         var entity = engine.State.ControlledEntity;
         var actor = entity.Get<ActorComponent>();
-        var spent = Math.Min(Math.Max(0, amount), actor.Mana);
-        entity.Set(actor with { Mana = actor.Mana - spent });
+        var soul = CharacterMath.EnsureSoulRecord(engine.State, entity);
+        var spent = Math.Min(Math.Max(0, amount), soul.Mana);
+        var updatedSoul = soul with { Mana = soul.Mana - spent };
+        engine.State.Souls.Set(updatedSoul);
+        entity.Set(actor with { Mana = updatedSoul.Mana, MaxMana = updatedSoul.MaxMana });
         var message = $"Cost: {spent} mana.";
         engine.AddMessage(message);
         return new StateDelta("cost:mana", entity.Id.Value, message, new Dictionary<string, object?> { ["amount"] = spent });
@@ -77,11 +89,19 @@ public static class SpellCostApplier
     {
         var entity = engine.State.ControlledEntity;
         var actor = entity.Get<ActorComponent>();
+        var soul = CharacterMath.EnsureSoulRecord(engine.State, entity);
         var spent = Math.Max(0, amount);
+        var maxMana = Math.Max(0, soul.MaxMana - spent);
+        var updatedSoul = soul with
+        {
+            MaxMana = maxMana,
+            Mana = Math.Min(soul.Mana, maxMana),
+        };
+        engine.State.Souls.Set(updatedSoul);
         entity.Set(actor with
         {
-            MaxMana = Math.Max(0, actor.MaxMana - spent),
-            Mana = Math.Min(actor.Mana, Math.Max(0, actor.MaxMana - spent)),
+            MaxMana = updatedSoul.MaxMana,
+            Mana = updatedSoul.Mana,
         });
         var message = $"Cost: {spent} max mana.";
         engine.AddMessage(message);

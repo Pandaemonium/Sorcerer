@@ -83,6 +83,10 @@ public sealed class Entity
                 Slots = new Dictionary<string, string>(equipment.Slots, StringComparer.OrdinalIgnoreCase),
                 FocusSlots = new HashSet<string>(equipment.FocusSlots, StringComparer.OrdinalIgnoreCase),
             },
+            MerchantComponent merchant => merchant with
+            {
+                Wares = new Dictionary<string, int>(merchant.Wares, StringComparer.OrdinalIgnoreCase),
+            },
             _ => component,
         };
 }

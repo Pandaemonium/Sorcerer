@@ -132,7 +132,12 @@ dotnet run --project src/Sorcerer.Cli -- --provider mock --script content\script
 ```
 
 These transcripts are command-oriented rather than autonomous-agent episodes. They preserve
-the command text, action result, and debug observation for each step.
+the command text, action result, debug observation, and materialized spell JSON where available.
+They can be replayed without a model call:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --replay logs\cli_transcript_smoke.jsonl --replay-assert-final --json
+```
 
 Agents may access perfect debug state. Their job is to find bugs and boring outcomes, not
 to imitate a human player's limited perception.
@@ -150,6 +155,8 @@ Check:
 - actors do not overlap illegally
 - entities do not stand in walls unless explicitly allowed
 - action results match state changes
+- save -> load -> save remains byte-stable for deterministic timestamps
+- completed runs write a chronicle
 - GUI and CLI reach the same player-facing capability
 
 ## Audit Review

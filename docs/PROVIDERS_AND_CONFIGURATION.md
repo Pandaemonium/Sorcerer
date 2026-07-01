@@ -46,6 +46,14 @@ Every call should have a purpose:
 Purpose-specific settings allow the game to use different models, timeouts, hosts, or API
 keys for different jobs.
 
+Current implementation has `LlmConfiguration` and `LlmPurposeSettings` for these lanes. The CLI
+creates the foreground spell provider from `LlmPurpose.Wild`, while background settings are kept
+separate and currently drive only deterministic queue/throttle controls until real background
+provider calls are wired in. Purpose-specific environment variables follow
+`SORCERER_<PURPOSE>_PROVIDER`, `SORCERER_<PURPOSE>_HOST`,
+`SORCERER_<PURPOSE>_MODEL`, `SORCERER_<PURPOSE>_TIMEOUT_SECONDS`,
+`SORCERER_<PURPOSE>_MAX_CONCURRENT_CALLS`, and `SORCERER_<PURPOSE>_ENABLED`.
+
 ## Foreground Calls
 
 Anything the player actively triggers can be on the urgent path:
@@ -85,8 +93,25 @@ Provider implementations can include:
 - direct API-key provider
 - mock
 - deterministic fixture provider
+- replay provider fed by materialized transcript JSON
 
 Configuration should make it easy for users to use their preferred model.
+
+`ReplaySpellProvider` is not a live model provider. It replays normalized `SpellResolution` JSON
+captured in transcripts so command sequences that touched wild magic can be reproduced without
+calling the model again.
+
+Useful CLI controls:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cpu `
+  --disable-background `
+  --command "cast bind the nearest soldier in blue glass"
+```
+
+Use `--background-provider`, `--background-host`, and `--background-model` to record separate
+background purpose settings for future workers; use `--max-background-jobs` and
+`--background-jobs-per-turn` to throttle the current deterministic background lane.
 
 ## Secrets
 

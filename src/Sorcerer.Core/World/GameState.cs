@@ -24,6 +24,12 @@ public sealed class GameState
 
     public string RegionId { get; set; } = "imperial_encounter";
 
+    public string CurrentZoneId { get; set; } = "0,0";
+
+    public string RunStatus { get; set; } = "running";
+
+    public string? RunConclusion { get; set; }
+
     public int NextEntitySerial { get; set; } = 1;
 
     public EntityId ControlledEntityId { get; set; } = EntityId.Create("player");
@@ -32,13 +38,19 @@ public sealed class GameState
 
     public Dictionary<EntityId, Entity> Entities { get; } = new();
 
+    public Dictionary<string, ZoneSnapshot> Zones { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public HashSet<GridPoint> BlockingTerrain { get; } = new();
 
     public Dictionary<GridPoint, string> Terrain { get; } = new();
 
     public Dictionary<GridPoint, int> TerrainExpirations { get; } = new();
 
+    public Dictionary<string, HashSet<GridPoint>> ExploredBySoulId { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public List<string> Messages { get; } = new();
+
+    public SoulLedger Souls { get; } = new();
 
     public PromiseLedger PromiseLedger { get; } = new();
 
@@ -55,6 +67,10 @@ public sealed class GameState
     public BondLedger Bonds { get; } = new();
 
     public ScheduledEventLedger ScheduledEvents { get; } = new();
+
+    public TriggerLedger Triggers { get; } = new();
+
+    public SuspicionLedger Suspicions { get; } = new();
 
     public BackgroundJobSettings BackgroundSettings { get; set; } = new();
 

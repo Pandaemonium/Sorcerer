@@ -50,9 +50,10 @@ The CLI currently defaults to `mock` for quick local execution, so agents should
 Start Ollama and make sure the target model is available, then run:
 
 ```powershell
-dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b --json --debug-state `
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cpu --json --debug-state `
   --transcript logs\cli_ollama_playtest.jsonl `
   --command "inspect" `
+  --command "character" `
   --command "cast bind the nearest soldier in sticky blue glass" `
   --command "cast promise that the notice will remember my name when read" `
   --command "read notice" `
@@ -68,6 +69,114 @@ Useful live-provider outputs to inspect after a run:
 
 Report the provider, model, command sequence, transcript path, and audit symptoms when a
 playtest finds a problem.
+
+For a focused social-system smoke, use the named quickstart:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --quickstart social `
+  --command "talk Lio" `
+  --command "give grave salt to Lio" `
+  --command "talk Lio, trust me with a secret" `
+  --command "travel east" `
+  --command "inspect" `
+  --command "recruit Lio" `
+  --command "followers"
+```
+
+The travel step should realize the confided site promise as a generated place when the destination
+zone is new.
+
+For a focused travel/world-feel smoke, use:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cpu `
+  --transcript logs\phase5_travel_feel.jsonl `
+  --command "travel east" `
+  --command "atlas" `
+  --command "cast ask the reed shrine to hide me under river-color" `
+  --command "inspect"
+```
+
+This checks shared travel, region affordances, resolver region context, schema repair, and whether
+the generated place gives free-form magic something lush and mechanically real to bite into.
+
+For a focused lore/texture/background smoke, use mock mode so the deterministic content layer is
+easy to inspect:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --json --debug-state `
+  --transcript logs\phase7_lore_texture_mock.jsonl `
+  --command "travel east" `
+  --command "atlas" `
+  --command "inspect" `
+  --command "examine reed" `
+  --command "wait" `
+  --command "examine reed" `
+  --command "cast ask the Hollowmere reeds to hide my outline in water-memory"
+```
+
+The atlas should surface local lore, generated fixtures should have concrete region-colored names
+and subjects, the second examine should show applied known detail, and the spell context should
+include routed lore without requiring the player-visible view to reveal hidden debug state.
+
+For a focused narrator/legend smoke, create reputation, then travel:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --json --debug-state `
+  --transcript logs\phase7_narrator_mock.jsonl `
+  --command "cast a plain blue fire" `
+  --command "travel east" `
+  --command "standing"
+```
+
+The travel result should include a `zone_entry_rumor` message that reflects the current legend tag
+and faction pressure, without creating new standing by itself.
+
+For a focused persistence/replay/win smoke, record a short run, replay it, and then exercise the
+capital:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --json --debug-state `
+  --transcript logs\phase8_save_replay_mock.jsonl `
+  --command "examine tincture" `
+  --command "save runs\quicksave.json" `
+  --command "load runs\quicksave.json" `
+  --command "cast freeze the floor under the nearest enemy"
+
+dotnet run --project src/Sorcerer.Cli -- --replay logs\phase8_save_replay_mock.jsonl --replay-assert-final --json
+
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cpu --json --debug-state `
+  --disable-background `
+  --transcript logs\phase8_capital_ollama_feel.jsonl `
+  --command "travel east" `
+  --command "travel east" `
+  --command "cast make the emperor's marble shadow kneel and crack" `
+  --command "standing"
+```
+
+The save/load commands should preserve state and pending casts, replay should consume materialized
+spell JSON instead of calling the model, and the capital smoke should show whether the emperor and
+Empire reaction feel like ordinary systems rather than a scripted finale.
+
+Background enrichment can be throttled for resource-sensitive runs:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cpu `
+  --disable-background `
+  --command "inspect" `
+  --command "cast hide me in the marble blind spot"
+```
+
+For deterministic background-lane testing, keep mock spell resolution but alter the queue limits:
+
+```powershell
+dotnet run --project src/Sorcerer.Cli -- --provider mock --json --debug-state `
+  --max-background-jobs 2 `
+  --background-jobs-per-turn 1 `
+  --command "examine brazier" `
+  --command "wait" `
+  --command "jobs"
+```
 
 ## Recommended Modes
 
@@ -122,6 +231,24 @@ Every command should return an action result and a fresh observation:
 
 The exact schema can evolve, but fields must stay stable once agents depend on them.
 
+`ActionResult.Messages` should include both the direct command outcome and turn-boundary
+messages produced by the same consumed turn, such as temporary terrain fading, scheduled
+magic coming due, or background detail settling. These boundary messages also appear as
+`turnEvent` deltas where the engine can surface them.
+
+Player-facing observations are perception-bound. `view.tiles` includes every map
+coordinate, but unexplored tiles use `terrain: "unknown"` with `visible: false` and
+`explored: false`; explored-but-not-currently-visible tiles are marked `explored: true` and
+`visible: false`. `view.entities` includes only visible entities plus the controlled body.
+When `--debug-state` or transcripts are enabled, debug observations may include perfect
+diagnostic state such as all entity ids and ledger counts. Agents should use debug state for
+testing and reproduction, not as a model of what the human player knows.
+Debug observations also include raw faction standing/resources, hostile roles, raw bond values, and
+ledger counts such as scheduled events and triggers. Those exact resource and relationship counts
+are intentionally debug-only; player-facing
+`standing` reports role, axes, pressure, mood, and rank, `bonds` reports qualitative posture, and
+`journal` shows pending patrol/warrant pressure when it is player-legible.
+
 ### Text Mode
 
 Human-friendly commands:
@@ -129,6 +256,8 @@ Human-friendly commands:
 ```text
 inspect
 map
+atlas
+travel east
 move east
 wait
 cast bind the nearest enemy in blue glass
@@ -137,13 +266,16 @@ pickup
 equip iron wand
 focus weapon
 journal
+give grave salt to Lio
+recruit Lio
+bonds
 quit
 ```
 
 Scripted shared-engine smoke:
 
 ```powershell
-dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b `
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cpu `
   --command "inspect" `
   --command "move east" `
   --command "pickup red tincture" `
@@ -191,15 +323,22 @@ Recommended top-level fields:
 Important observation details:
 
 - player position, HP, mana, statuses
+- character sheet fields in `view.character`: body id, soul id, origin, Vigor,
+  Attunement, Composure, public name, appearance, magical signature
+- reagent cards in `view.reagents`: unprotected carried fuel with quantity, value, material, tags,
+  and `spellBias`
 - local coordinate map
 - adjacent tile affordances
 - visible enemies, NPCs, props, and items
+- world card fields in `view.world`: current zone, region, realm, tradition, imperial
+  presence, wildness, and affordances
 - floor items and carried items
 - selected target
 - active curses
 - scheduled events and triggers, if player-visible
 - recent log
 - provider/debug status
+- faction pressure, standing, and pending warrant/patrol state
 - perfect hidden state when debug mode is enabled
 
 Agents should not need to infer coordinates from rendered glyphs alone.
@@ -210,6 +349,8 @@ Core shared commands currently route through `GameSession`:
 
 - `inspect`
 - `map [radius]`
+- `travel <direction>`
+- `atlas`
 - `move <direction>`
 - direction aliases: `north`, `south`, `east`, `west`, etc.
 - `wait`
@@ -228,25 +369,31 @@ Core shared commands currently route through `GameSession`:
 - `await_cast`
 - `cancel_cast`
 - `journal`
+- `character`
+- `sheet`
 - `read [target]`
 - `examine [target]`
 - `talk [target-or-message]`
+- `give <item> to <target>`
+- `recruit [target]`
+- `bonds [target]`
 - `possess [target]`
 - `standing`
 - `followers`
 - `jobs`
+- `save [path]`
+- `load [path]`
 - `help`
 - `quit`
-
-Later:
-
-- `wares`
 
 Inventory protection and reagent inspection are also implemented:
 
 - `protect <item>`
 - `unprotect <item>`
-- `reagents`
+- `reagents` (text output includes material, total value, tags, and spell-bias hints)
+- `wares` / `browse`
+- `buy <item> [from <merchant>]`
+- `sell <item> [to <merchant>]`
 
 ## Provider Flags
 
@@ -257,6 +404,9 @@ Recommended CLI flags:
 --host <url>
 --model <name>
 --seed <int>
+--origin <id>
+--quickstart
+--quickstart social
 --command <text>
 --script <path>
 --json
@@ -266,8 +416,13 @@ Recommended CLI flags:
 --episodes <n>
 --max-turns <n>
 --transcript <path>
+--replay <path>
+--replay-assert-final
 --episode-log <path>
 --record <path>
+--disable-background
+--max-background-jobs <n>
+--background-jobs-per-turn <n>
 ```
 
 `ollama` and `local` currently select the live Ollama provider. `mock` is deterministic and
@@ -278,45 +433,36 @@ Live providers exercise the real resolver and write audit logs. They are the rig
 when judging wild magic quality.
 
 Current implemented flags are `--provider`, `--host`, `--model`, `--json`,
-`--debug-state`, `--command`, `--script`, `--transcript`, `--eval`, `--episode`,
-`--episodes`, `--max-turns`, `--seed`, and `--episode-log`/`--record`.
+`--debug-state`, `--command`, `--script`, `--transcript`, `--replay`,
+`--replay-assert-final`, `--eval`, `--episode`, `--episodes`, `--max-turns`,
+`--seed`, `--origin`, `--quickstart`, `--episode-log`/`--record`,
+`--background-provider`, `--background-host`, `--background-model`, `--enable-background`,
+`--disable-background`/`--no-background`, `--max-background-jobs`,
+`--background-jobs-per-turn`, and `--background-concurrency`.
 
 Unknown provider names fall back to mock today, so strict live evaluation should use an
 explicit known provider name and check the result's `magic.provider` field.
 
+`--seed` now affects ordinary CLI runs as well as episode runs. Use it when comparing atlas/world
+roll output: the same seed should produce the same realm status/ruler/effective imperial grip, while
+different seeds should give coherent variation.
+
 ## Replay
 
-Replay is useful but should stay lightweight.
+Replay stays lightweight and command-oriented. `--transcript` writes JSONL records for
+`transcript_start`, each `transcript_step`, and `transcript_final`. The start record captures seed,
+origin, and background settings. Each step includes command text, `ActionResult`, debug
+observation, and, for model-touched magic where available, `magic.resolvedMagicJson`: the normalized
+materialized spell resolution that actually passed validation.
 
-Recommended replay record:
+`--replay <path>` reads one of those transcripts, creates a fresh `GameSession`, and uses
+`ReplaySpellProvider` to feed the recorded materialized spell JSON back into the resolver pipeline.
+It does not call the model. `--replay-assert-final` compares a compact final observation summary
+when the transcript has one.
 
-```json
-{
-  "version": 1,
-  "seed": 7,
-  "scenario": "test_chamber",
-  "commands": [],
-  "resolvedLlm": [],
-  "finalSummary": {}
-}
-```
-
-For live LLM runs, record the validated resolution JSON at the action where it applied.
-Replay should not call the model again.
-
-If replay becomes expensive, prefer preserving:
-
-- command scripts
-- seeds
-- audit records
-- final summaries
-
-over building a complicated rewind system early.
-
-The current lightweight path is diagnostic transcripts: `--transcript` writes JSONL
-records for `transcript_start`, each `transcript_step`, and `transcript_final`. Each record
-includes command text, action results, and debug observations. These logs are meant for
-troubleshooting first and replay-like reproduction second.
+This is not a historical rewind system. Prefer preserving command scripts, seeds, transcripts,
+audit records, and compact final summaries over building heavier time-travel machinery until a
+specific mechanic needs it.
 
 ## Agent QA Harness
 
@@ -343,10 +489,15 @@ with full debug observations, so they can support troubleshooting first and ligh
 replay material where practical. This is intentionally simple, but it is already useful
 for catching engine regressions.
 
+At episode end, the runner also checks long-run invariants across the newer lanes: state
+validation, save -> load -> save byte stability, loaded-state validation, duplicate promise ids,
+bounded faction standing, resource caps, bounded legend weights, and chronicle presence for
+completed runs.
+
 For a slower but more realistic unattended playtest, use Ollama:
 
 ```powershell
-dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b --episode --episodes 1 --max-turns 20 --episode-log logs\episode_ollama.jsonl --json
+dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cpu --episode --episodes 1 --max-turns 20 --episode-log logs\episode_ollama.jsonl --json
 ```
 
 Eventually, deepen the unattended harness so it:

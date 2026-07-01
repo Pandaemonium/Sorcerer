@@ -1,0 +1,96 @@
+namespace Sorcerer.Core.Lore;
+
+public sealed record LoreQuery(
+    IReadOnlyList<string> Subjects,
+    IReadOnlyList<string> Triggers,
+    int AccessLevel = 1,
+    int Limit = 3);
+
+public sealed record RoutedLoreCard(
+    string Id,
+    string Title,
+    IReadOnlyList<string> Subjects,
+    IReadOnlyList<string> Triggers,
+    int Level,
+    string Body,
+    int Score);
+
+public static class LoreRouter
+{
+    public static IReadOnlyList<RoutedLoreCard> Select(LoreCatalog catalog, LoreQuery query)
+    {
+        var subjects = NormalizeSet(query.Subjects);
+        var triggers = NormalizeSet(query.Triggers);
+        var access = Math.Max(1, query.AccessLevel);
+        var limit = Math.Max(1, query.Limit);
+
+        return catalog.Cards
+            .Select(card => Route(card, subjects, triggers, access))
+            .Where(card => card is not null)
+            .Select(card => card!)
+            .OrderByDescending(card => card.Score)
+            .ThenBy(card => card.Title, StringComparer.OrdinalIgnoreCase)
+            .Take(limit)
+            .ToArray();
+    }
+
+    private static RoutedLoreCard? Route(
+        LoreCard card,
+        IReadOnlySet<string> subjects,
+        IReadOnlySet<string> triggers,
+        int access)
+    {
+        var score = 0;
+        foreach (var subject in card.Subjects)
+        {
+            if (subjects.Contains(subject))
+            {
+                score += 5;
+            }
+        }
+
+        foreach (var trigger in card.Triggers)
+        {
+            if (triggers.Contains(trigger))
+            {
+                score += 4;
+            }
+        }
+
+        if (card.Triggers.Contains("magic_context", StringComparer.OrdinalIgnoreCase)
+            && triggers.Contains("magic_context"))
+        {
+            score += 1;
+        }
+
+        if (score <= 0)
+        {
+            return null;
+        }
+
+        var sections = card.Sections
+            .Where(section => section.Level <= access && !section.Draft)
+            .OrderBy(section => section.Level)
+            .ToArray();
+        if (sections.Length == 0)
+        {
+            return null;
+        }
+
+        return new RoutedLoreCard(
+            card.Id,
+            card.Title,
+            card.Subjects,
+            card.Triggers,
+            sections.Max(section => section.Level),
+            string.Join("\n", sections.Select(section => section.Body)),
+            score);
+    }
+
+    private static IReadOnlySet<string> NormalizeSet(IEnumerable<string> values) =>
+        values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(LoreCatalog.NormalizeToken)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+}

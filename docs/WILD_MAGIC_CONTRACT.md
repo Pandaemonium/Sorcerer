@@ -92,6 +92,23 @@ Recommended first effects:
 - `addCurse`
 - `message`
 
+`scheduleEvent` is for broad future world events. `createTrigger` is for tactical turn-pump effects:
+delays, aura pulses, and ward-shaped records that currently apply `addStatus`, `damage`, `heal`, or
+`message` when their cadence comes due.
+
+`addCurse` may be semantic or mechanical. Mechanical curses should name a template (`close`, `far`,
+`narrow`, `straight-path`, `anchored`) so the engine can reject later accepted resolutions that break
+that limit before mutation.
+
+Resolver context may include `lore`: routed, access-gated canon cards selected by region, subjects,
+and triggers. Lore is voice and canon guidance only. It does not mutate state or create mechanics
+unless the resolver emits supported operations that validate normally.
+
+Cost objects are normalized before validation. Canonical shapes are still preferred, e.g.
+`{"type":"mana","amount":4}` or `{"type":"item","item":"grave salt","quantity":1}`, but the
+parser also repairs common live-model shapes such as `{"name":"mana","amount":4}` and
+`{"name":"charcoal wand","quantity":1}` into supported cost types.
+
 Recommended first costs:
 
 - `mana`

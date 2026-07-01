@@ -38,6 +38,10 @@ public sealed record ActorComponent(
 
 public sealed record ControllerComponent(ControllerKind Kind) : IEntityComponent;
 
+public sealed record BodyStatsComponent(int Vigor) : IEntityComponent;
+
+public sealed record SoulStatsComponent(int Attunement, int Composure) : IEntityComponent;
+
 public sealed record InventoryComponent(
     Dictionary<string, int> Items,
     HashSet<string> TreasuredItems) : IEntityComponent
@@ -62,6 +66,10 @@ public sealed record ItemComponent(
     string? EquipmentSlot = null) : IEntityComponent;
 
 public sealed record StackComponent(int Quantity = 1) : IEntityComponent;
+
+public sealed record MerchantComponent(
+    Dictionary<string, int> Wares,
+    int Gold = 30) : IEntityComponent;
 
 public sealed record FixtureComponent(
     string FixtureType,

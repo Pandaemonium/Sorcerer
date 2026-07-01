@@ -1,0 +1,110 @@
+{
+  "origins": [
+    {
+      "id": "fugitive_wild_sorcerer",
+      "displayName": "Fugitive Wild Sorcerer",
+      "tradition": "unlicensed wild magic",
+      "bodyVigor": 4,
+      "soulAttunement": 4,
+      "soulComposure": 3,
+      "startingItems": {
+        "grave salt": 2,
+        "moon pearl": 1,
+        "charcoal wand": 1,
+        "gold": 15
+      },
+      "factionFirstReactions": {
+        "empire": -2,
+        "hollowmere": 1
+      },
+      "publicName": "the sorcerer",
+      "appearance": "a fugitive bright with badly behaved magic",
+      "magicalSignature": "color leaking through marble law",
+      "backstory": "You were already a problem before the room learned your name."
+    },
+    {
+      "id": "bone_singers_apprentice",
+      "displayName": "Bone-Singer's Apprentice",
+      "tradition": "ossuary songs and ancestor bargains",
+      "bodyVigor": 2,
+      "soulAttunement": 5,
+      "soulComposure": 3,
+      "startingItems": {
+        "grave salt": 3,
+        "charcoal wand": 1,
+        "gold": 8
+      },
+      "factionFirstReactions": {
+        "empire": -1,
+        "hollowmere": 2
+      },
+      "publicName": "the bone-singer's apprentice",
+      "appearance": "thin wrists, black thread, and a jawbone charm worn smooth",
+      "magicalSignature": "bone dust humming in three-part harmony",
+      "backstory": "Your teacher said every skeleton keeps one useful note."
+    },
+    {
+      "id": "deserter_charter_mage",
+      "displayName": "Deserter Charter Mage",
+      "tradition": "imperial contracts turned inside-out",
+      "bodyVigor": 4,
+      "soulAttunement": 3,
+      "soulComposure": 5,
+      "startingItems": {
+        "charcoal wand": 1,
+        "imperial scrip": 2,
+        "gold": 12
+      },
+      "factionFirstReactions": {
+        "empire": -4,
+        "hollowmere": 0
+      },
+      "publicName": "the deserter mage",
+      "appearance": "a clean imperial collar ripped open at the throat",
+      "magicalSignature": "legal script collapsing into birds",
+      "backstory": "You know which imperial clauses scream when cut."
+    },
+    {
+      "id": "desert_parn",
+      "displayName": "Desert Parn",
+      "tradition": "salt roads, mirage debts, and sunwise names",
+      "bodyVigor": 5,
+      "soulAttunement": 3,
+      "soulComposure": 2,
+      "startingItems": {
+        "red tincture": 1,
+        "grave salt": 1,
+        "gold": 18
+      },
+      "factionFirstReactions": {
+        "empire": -1,
+        "hollowmere": 0
+      },
+      "publicName": "the desert Parn",
+      "appearance": "sun-browned, quick-smiling, with dust in every oath",
+      "magicalSignature": "heat shimmer carrying a second, truer outline",
+      "backstory": "The desert taught you that thirst is a kind of listening."
+    },
+    {
+      "id": "merfolk_exile",
+      "displayName": "Merfolk Exile",
+      "tradition": "river-names, exile pearls, and drowned courtesies",
+      "bodyVigor": 3,
+      "soulAttunement": 4,
+      "soulComposure": 4,
+      "startingItems": {
+        "moon pearl": 1,
+        "river shell": 2,
+        "gold": 10
+      },
+      "factionFirstReactions": {
+        "empire": -2,
+        "hollowmere": 3
+      },
+      "publicName": "the merfolk exile",
+      "appearance": "silver scales at the collarbone and wet eyes that refuse apology",
+      "magicalSignature": "water remembering the shape of a forbidden name",
+      "backstory": "You left the tide-courts with one pearl and no permission."
+    }
+  ]
+}

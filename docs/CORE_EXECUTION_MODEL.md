@@ -279,8 +279,9 @@ Determinism boundary: given the seed, the command sequence, and the recorded LLM
 resolutions, a run reproduces. The live model is the only nondeterministic input, so replay
 records each cast's resolved JSON and replays that instead of re-calling the provider.
 
-Replay artifacts stay minimal and are deferred in implementation, but the RNG seam is added
-now because retrofitting it later means touching every call site:
+Replay artifacts stay minimal. The current CLI transcript/replay path records this material and
+re-feeds it through `ReplaySpellProvider`; the RNG seam remains important because retrofitting
+determinism later means touching every call site:
 
 ```text
 seed, scenario id, command log, per-cast resolved JSON, final summary

@@ -1,6 +1,7 @@
 using Godot;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Views;
@@ -32,6 +33,7 @@ public partial class Main : Control
     private Label _title = null!;
     private Label _providerStatus = null!;
     private RichTextLabel _status = null!;
+    private RichTextLabel _world = null!;
     private RichTextLabel _entities = null!;
     private RichTextLabel _inventory = null!;
     private RichTextLabel _promises = null!;
@@ -166,6 +168,16 @@ public partial class Main : Control
         row.AddChild(newRun);
         _busyControls.Add(newRun);
 
+        var save = SmallButton("Save");
+        save.Pressed += () => _ = ExecuteAsync(new SaveCommand(Path.Combine("runs", "quicksave.json")));
+        row.AddChild(save);
+        _busyControls.Add(save);
+
+        var load = SmallButton("Load");
+        load.Pressed += () => _ = ExecuteAsync(new LoadCommand(Path.Combine("runs", "quicksave.json")));
+        row.AddChild(load);
+        _busyControls.Add(load);
+
         return bar;
     }
 
@@ -248,6 +260,7 @@ public partial class Main : Control
         panel.AddChild(stack);
 
         _status = Readout(120);
+        _world = Readout(90);
         _entities = Readout(150);
         _inventory = Readout(145);
         _promises = Readout(120);
@@ -256,6 +269,7 @@ public partial class Main : Control
         _log.SizeFlagsVertical = SizeFlags.ExpandFill;
 
         stack.AddChild(Section("State", _status));
+        stack.AddChild(Section("World", _world));
         stack.AddChild(Section("Visible", _entities));
         stack.AddChild(Section("Inventory", _inventory));
         stack.AddChild(Section("Promises", _promises));
@@ -316,6 +330,15 @@ public partial class Main : Control
         AddQuickSpell(quickRow, "Ice", "turn the floor between me and the enemy into slick ice");
         AddQuickSpell(quickRow, "Prophecy", "promise that the room remembers my name");
 
+        var travelRow = new HBoxContainer();
+        travelRow.AddThemeConstantOverride("separation", 8);
+        stack.AddChild(travelRow);
+        travelRow.AddChild(SmallLabel("Travel"));
+        AddTravelButton(travelRow, "N", Direction.North);
+        AddTravelButton(travelRow, "E", Direction.East);
+        AddTravelButton(travelRow, "S", Direction.South);
+        AddTravelButton(travelRow, "W", Direction.West);
+
         var commandRow = new HBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -348,7 +371,15 @@ public partial class Main : Control
             ?? System.Environment.GetEnvironmentVariable("WILDMAGIC_OLLAMA_HOST");
         var provider = SpellProviderFactory.Create("ollama", host, model);
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
-        _session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
+        var origin = System.Environment.GetEnvironmentVariable("SORCERER_ORIGIN");
+        var seed = int.TryParse(System.Environment.GetEnvironmentVariable("SORCERER_SEED"), out var parsedSeed)
+            ? Math.Max(1, parsedSeed)
+            : 7;
+        _session = GameSession.CreateImperialEncounter(
+            new WildMagicController(provider, audit: audit),
+            origin,
+            seed,
+            CrossRunMemorialStore.LoadDefault());
         _lastResult = null;
         _lastError = null;
         EnsureMapCells(_session.View());
@@ -399,6 +430,10 @@ public partial class Main : Control
         try
         {
             _lastResult = await _session.ExecuteAsync(command);
+            if (_lastResult.Deltas.Any(delta => delta.Operation.Equals("runComplete", StringComparison.OrdinalIgnoreCase)))
+            {
+                CrossRunMemorialStore.AppendLatestChronicle(_session.Engine.State);
+            }
         }
         catch (Exception ex)
         {
@@ -463,13 +498,27 @@ public partial class Main : Control
         var statuses = view.Statuses is { Count: > 0 }
             ? string.Join(", ", view.Statuses.Select(status => status.DisplayName))
             : "none";
+        var character = view.Character is null
+            ? "Stats ?"
+            : $"{view.Character.OriginName}\nVIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure}";
         var selected = view.SelectedTarget is null
             ? "none"
             : $"{view.SelectedTarget.Value.X},{view.SelectedTarget.Value.Y}";
         var pending = pendingCast is null
             ? "none"
             : $"{pendingCast.Id}: {pendingCast.Text}";
-        _status.Text = $"Turn {view.Turn}\n{hp}\nTarget {selected}\nPending {pending}\nStatuses {statuses}";
+        _status.Text = $"Turn {view.Turn}\n{character}\n{hp}\nTarget {selected}\nPending {pending}\nStatuses {statuses}";
+        _world.Text = view.World is null
+            ? "unknown"
+            : string.Join(
+                "\n",
+                new[]
+                {
+                    $"{view.World.RegionName} ({view.World.CurrentZoneId})",
+                    $"{view.World.RealmStatus}; {view.World.RealmRuler}",
+                    $"tradition {view.World.TraditionId}",
+                    $"imperial {view.World.ImperialPresence} wild {view.World.Wildness}",
+                }.Concat(view.World.Affordances.Select(affordance => affordance.Id)));
         _awaitCast.Disabled = _busy || pendingCast is null;
         _cancelCast.Disabled = _busy || pendingCast is null;
 
@@ -623,6 +672,15 @@ public partial class Main : Control
         _busyControls.Add(button);
     }
 
+    private void AddTravelButton(BoxContainer parent, string label, Direction direction)
+    {
+        var button = SmallButton(label);
+        button.CustomMinimumSize = new Vector2(44, 34);
+        button.Pressed += () => _ = ExecuteAsync(new TravelCommand(direction));
+        parent.AddChild(button);
+        _busyControls.Add(button);
+    }
+
     private void AddQuickSpell(BoxContainer parent, string label, string spell)
     {
         var button = SmallButton(label);
@@ -653,6 +711,11 @@ public partial class Main : Control
 
     private static string CellGlyph(MapTileCard? tile, EntityCard? entity, bool selected)
     {
+        if (tile is null || !tile.Explored)
+        {
+            return selected ? "X" : " ";
+        }
+
         if (entity is not null)
         {
             return entity.Glyph.ToString();
@@ -668,6 +731,7 @@ public partial class Main : Control
             "wall" => "#",
             "slick_ice" => "~",
             "shallow_water" => "~",
+            "steam_mist" => "~",
             "vines" => "\"",
             "rubble" => "%",
             "wild_fire" => "^",
@@ -678,9 +742,16 @@ public partial class Main : Control
 
     private static string CellTooltip(GridPoint point, MapTileCard? tile, EntityCard? entity, bool selected)
     {
+        if (tile is null || !tile.Explored)
+        {
+            return selected
+                ? $"{point.X},{point.Y} unknown\ntargeted"
+                : $"{point.X},{point.Y} unknown";
+        }
+
         var lines = new List<string>
         {
-            $"{point.X},{point.Y} {tile?.Terrain ?? "floor"}",
+            $"{point.X},{point.Y} {tile.Terrain}{(tile.Visible ? "" : " (remembered)")}",
         };
         if (entity is not null)
         {
@@ -709,18 +780,25 @@ public partial class Main : Control
 
     private static Color GlyphColor(EntityCard? entity, MapTileCard? tile, bool selected)
     {
+        if (tile is null || !tile.Explored)
+        {
+            return selected ? Warning : Muted.Darkened(0.35f);
+        }
+
+        var dim = tile.Visible ? 0f : 0.35f;
         if (entity is not null)
         {
             if (entity.Id == "player")
             {
-                return Wild;
+                return Wild.Darkened(dim);
             }
 
-            return entity.Faction == "empire"
+            var color = entity.Faction == "empire"
                 ? Danger
                 : entity.Faction == "player"
                     ? Focus
                     : Empire;
+            return color.Darkened(dim);
         }
 
         if (selected)
@@ -728,21 +806,30 @@ public partial class Main : Control
             return Warning;
         }
 
-        return tile?.Terrain == "wall" ? Muted : Text;
+        return (tile.Terrain == "wall" ? Muted : Text).Darkened(dim);
     }
 
-    private static Color TerrainColor(MapTileCard? tile) =>
-        tile?.Terrain switch
+    private static Color TerrainColor(MapTileCard? tile)
+    {
+        if (tile is null || !tile.Explored)
+        {
+            return new Color("0c0e12");
+        }
+
+        var color = tile.Terrain switch
         {
             "wall" => new Color("252b33"),
             "slick_ice" => new Color("173647"),
             "shallow_water" => new Color("14324b"),
+            "steam_mist" => new Color("2f3f44"),
             "vines" => new Color("1d372a"),
             "rubble" => new Color("3a332b"),
             "wild_fire" => new Color("462817"),
             "ice_wall" => new Color("263e50"),
             _ => new Color("15191f"),
         };
+        return tile.Visible ? color : color.Darkened(0.28f);
+    }
 
     private static StyleBoxFlat CellStyle(Color background, bool selected)
     {

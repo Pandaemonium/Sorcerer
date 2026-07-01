@@ -17,6 +17,13 @@ They do not:
 - inspect hidden state
 - call providers directly for gameplay
 
+Normal renderer views are perception-bound. `GameView.Entities` contains visible entities
+plus the controlled body, and `GameView.Tiles` marks each coordinate as visible, explored,
+or unknown. Renderers may display explored-but-not-visible memory dimly, but they should
+not reveal hidden entity facts from debug observations. CLI debug state and transcripts can
+carry perfect diagnostic information for agents and regression tests; that is not a player
+knowledge contract.
+
 ## Renderer Inputs
 
 Renderers should receive views such as:
@@ -28,6 +35,7 @@ Renderers should receive views such as:
 - selected target
 - player stats
 - inventory/equipment summaries
+- current world/region card and affordances
 - message log
 - pending foreground job label
 - developer/debug views
@@ -39,6 +47,7 @@ Views should be stable and serializable where practical.
 Renderer input handling should produce `GameCommand` values:
 
 - move
+- travel
 - wait
 - cast
 - target

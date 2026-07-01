@@ -172,6 +172,11 @@ requirement); each system is independently readable; all 0.0 tests still green; 
 change observed by `GameSession`; after the refactor, run at least one CLI playtest script by hand
 with the mock provider and inspect the resulting observations for obvious drift.
 
+Implementation checkpoint (2026-06-30): 0.0 and 0.1 are implemented. `GameEngine` now
+delegates to focused systems under `src/Sorcerer.Core/Engine/Systems/`, characterization
+coverage exercises the shared `GameSession` surface, and mock CLI playtests were run before
+and after extraction.
+
 ### 0.2 - Perception / FOV subsystem
 
 Today everything is perfect-information: `MagicContext` and `View` enumerate **all** entities, and
@@ -205,6 +210,13 @@ Acceptance: a wall hides what's behind it in both renderers; explored memory per
 can still request perfect debug state; resolver context can include hidden facts marked as hidden;
 `WitnessesOf` returns the right actors across a wall test; suspicious-but-unattributed witnessing is
 covered by a focused test.
+
+Implementation checkpoint (2026-06-30): 0.2 is implemented with Bresenham LOS, default
+8-tile sight, soul-bound `ExploredBySoulId`, closed-door sight blocking, player-facing
+`GameView` filtering, resolver-context visibility relations, `WitnessesOf`, and a minimal
+pending suspicion attribution lane. CLI/Godot renderers consume the same visibility flags.
+Playtesting also promoted two general feel fixes: turn-boundary messages now appear in
+action results, and interaction proximity uses eight-direction-friendly distance.
 
 ---
 
@@ -275,6 +287,16 @@ already exists on entities. This phase makes it real.
 caster vs. a controlled one; origin seeds how the world will first react (feeds Phase 3). CLI never
 stalls on creation.
 
+Implementation checkpoint (2026-06-30): Phase 1's first slice is implemented. Character state
+now has `BodyStatsComponent(Vigor)` and a soul-keyed `SoulLedger`; HP/physical stats derive
+from body Vigor, mana derives from soul Attunement, and body swap preserves soul
+Attunement/Composure/mana while adopting the inhabited body's Vigor, HP, inventory, and
+external name. `content/origins/initial_origins.json` defines a small origin roster, CLI
+supports `--origin` plus `character`/`sheet`, Godot displays stats from `GameView.Character`,
+and `MagicContextView.ResolverLens` feeds body/soul anchors to mock and live providers.
+Live playtesting found useful schema/status-normalization gaps (`statusName`, `toState`,
+pinned/kneeling/boneless restraint language), which are now covered by parser/status tests.
+
 ---
 
 # Phase 2 - Deeds -> Legend -> Reputation
@@ -284,10 +306,11 @@ world reads. Reputation is never one score. This is the deterministic backbone e
 reads — it must work with **zero model calls.** (See [EMERGENT_WORLD.md](EMERGENT_WORLD.md),
 [WORLD_REACTION_AND_EMPIRE.md](WORLD_REACTION_AND_EMPIRE.md).)
 
-The lanes already exist in `GameState`: `DeedLedger` (`DeedRecord` has `ActorSoulId`, `Kind`,
-`Magnitude`, `PlaceKey`, `Visibility`, `Witnesses`, `Tags`), `LegendLedger` (`LegendTag`),
-`MemoryLedger`. Today they are written ad-hoc (e.g. prisoner rescue at `GameEngine.cs:1513`). This
-phase replaces ad-hoc writes with a **general pipeline driven at pump points.**
+The lanes exist in `GameState`: `DeedLedger` (`DeedRecord` has `ActorSoulId`, `Kind`,
+`Magnitude`, `PlaceKey`, `Visibility`, `Witnesses`, `EffectWitnesses`, `AttributedSoulId`,
+`AttributionStatus`, `Tags`, and applied ids), `LegendLedger` (`LegendTag`), `FactionLedger`,
+and `MemoryLedger`. Phase 2 replaces one-off reputation writes with a **general pipeline driven
+at pump points.**
 
 ### The pipeline (new `WorldReactionSystem`, run from `TurnSystem`)
 
@@ -333,11 +356,27 @@ reputation.
   open is `public`.
 - Determinism: identical seed+script → identical legend/reputation with `mock`.
 - Soul-bound: possess another body, commit a deed, confirm legend attaches to the soul.
-- Pipeline replaces the prisoner-rescue ad-hoc write (now flows through the rules table).
+- Pipeline replaces the prisoner-rescue ad-hoc write (now flows through the deed rules).
 
 **Acceptance & payoff:** acting on the world produces a legible, witnessed reputation with no model
 in the loop. Combat now carries social weight — this is the substrate Phase 3 spends and Phase 4
 reads.
+
+### Implementation checkpoint
+
+First implementation is in place:
+
+- `WorldReactionSystem` captures and applies deeds through `GameEngine.RecordDeed` and
+  `TurnSystem.AdvanceTurn`.
+- Accepted wild magic, player attacks/kills, prisoner rescue, and body swap emit deeds.
+- Deeds store actor soul id, effect witnesses, attribution status, visibility, magnitude,
+  tags, and applied ids for transactional snapshot/rollback safety.
+- Secret deeds stay out of public legend/standing; suspicious effect-only deeds raise
+  suspicion without attaching legend; witnessed/public/mythic deeds can create soul-bound
+  legend tags and faction standing deltas.
+- `standing` and `journal` now surface reputation axes and legend tags; debug ledger
+  summaries include deed/legend counts.
+- Regression coverage includes public, secret, suspicious, and post-body-swap deed cases.
 
 ---
 
@@ -393,6 +432,26 @@ reads.
 
 **Acceptance & payoff:** the world now *pushes back* with bounded, legible pressure, and the
 long-arc gate exists. legend → standing → recruitment/hostility/heat is closed.
+
+### Implementation checkpoint
+
+First implementation is in place:
+
+- `content/factions/initial_factions.json` defines the starter factions, roles, hostile roles,
+  and finite resource pools; `FactionCatalog` loads these with deterministic fallbacks.
+- `WorldReactionSystem` applies empire-bloc standing by role, raises heat from witnessed deeds,
+  spends patrol/warrant/defense resources at pump points, and regenerates pressure resources on
+  quiet turns. Patrol response is capped by an active/pending patrol check and a response
+  cooldown so early pressure stays bounded.
+- Imperial pressure uses `ScheduledEventLedger`; patrol pressure resolves into a real hostile
+  entity through the normal entity/component model.
+- `AiSystem.IsHostile` now uses the faction ledger's role/standing lookup, so explicit alliance
+  standing can suppress role hostility.
+- `Standing()` shows role, standing axes, pressure, mood, and rank; `journal` shows pending
+  patrol/warrant pressure; debug observations expose raw faction resources.
+- `GameEngine.EmperorReachable()` wires the first long-arc seam to the imperial defenses pool.
+- Regression coverage includes expenditure, regeneration, role-keyed empire-bloc rules, hostility
+  override, body-swap heat, and the defense reachability seam.
 
 ---
 
@@ -461,6 +520,27 @@ membership.
 **Acceptance & payoff:** items/traits → gifts → bonds → confided secrets → bound promises →
 delivered futures. The recruit-a-stranger and earned-betrayal vignettes are now possible from
 general systems with no script.
+
+### Implementation checkpoint
+
+First deterministic social slice is in place:
+
+- `talk` parses common organic intents through engine-owned rules: greet/ask, threaten, recruit,
+  gift shortcuts, and trusted secret requests.
+- `give <item> to <target>`, `recruit <target>`, and `bonds [target]` are shared CLI/session
+  commands.
+- `BondLedger` supports adjustment, snapshot/rollback, qualitative player-facing summaries, and
+  raw debug bond cards.
+- Gifts remove one carried item, write entity/world memory, and shift personal bond posture.
+- Recruitment crosses a bond threshold, changes combat allegiance to the player, preserves
+  organization membership in `FactionComponent`, and marks the personal bond as follower.
+- `followers` is bond-driven instead of same-faction-driven.
+- Personal bond can override default faction hostility for AI targeting.
+- Trusted secret dialogue binds a `quest`/`site` promise through the existing promise ledger.
+- `--quickstart social` opens the cell and positions the player near Lio for social CLI
+  playtesting without changing the default scenario.
+- Regression coverage includes independent social layers, deterministic gifts, recruitment,
+  secret-to-promise binding, missing-target no-mutation, and bond-driven hostility/followers.
 
 ---
 
@@ -532,6 +612,17 @@ deterministic fallback name always present.
   `WildnessBase` (effective wildness = base + depth). Consumed by generation, ambience, and the
   resolver lens (region voice spliced into the cast prompt addendum).
 
+**Implementation checkpoint:** the first 5.1 slice is now live. `GenerationSystem` manages
+`CurrentZoneId`, `ZoneSnapshot`s, lazy generation, travel, and follower carry-over; the CLI and GUI
+route `travel` through the shared backend, and `atlas`/`WorldCard` expose the current region,
+tradition, imperial grip, wildness, and affordances. The resolver lens now includes region and
+affordance notes, and live playtesting confirmed a Hollowmere shrine can answer a free-form hiding
+spell through ordinary `addStatus`/`message` operations. Minimal promise-site realization is also
+live: a trusted dialogue secret can bind a site promise, and travel into a newly generated zone
+creates the promised place as an entity, canon record, journal update, and `promiseSite` delta. Full
+world-roll geopolitics, towns, process-stable seed helpers, and richer site archetypes remain the
+next Phase 5 layers.
+
 ### 5.2 - World roll + towns + populations
 
 - **WorldRoll:** a fixed core realm roster (Vigovia + the four old kingdoms Stalnaz/Brall/Ryolan/Vint
@@ -552,6 +643,14 @@ deterministic fallback name always present.
   recruitable tradition, an exploitable conflict, terrain that suits a tradition's magic) surfaced
   in the atlas/inspection and the resolver context.
 
+**Implementation checkpoint:** a minimal seeded `WorldRoll` exists. It creates deterministic realm
+profiles (status, ruler, tradition, tags, imperial-grip delta) from `GameState.Seed` using
+process-stable hashing. `--seed` now affects normal CLI runs, `WorldCard` and `atlas` expose realm
+status/ruler/effective grip, and the resolver lens receives that same realm context. Generated zones
+also spawn a seed/profile-informed resident NPC using existing entity, faction, profile, AI, and
+interaction components. Full realm ownership graphs, town layouts, population rosters, and
+model-flavored naming remain future work.
+
 ### 5.3 - Promise realization during generation
 
 Close the **promises → worldgen → delivered futures** hand-off (the gift→secret→place vignette).
@@ -565,6 +664,12 @@ Close the **promises → worldgen → delivered futures** hand-off (the gift→s
   keeper / fleshed detail, and mark the promise realized. Directional/terrain/wildcard hints reserve
   future zones with a default capacity (~2 realizations per zone; directional overflow spills
   outward).
+
+**Implementation checkpoint:** the first travel-triggered site realization exists. Bound travel
+promises with `RealizationKind = site` realize in a newly generated non-start zone, spawn a
+`promise_site` fixture with `PromiseAnchorComponent`, write site canon, mark the promise realized,
+and surface the result in action messages/journal. Rich archetypes, keepers, reservation capacity,
+and directional overflow are still future work.
 
 ### Views (CLI + GUI)
 
@@ -602,6 +707,15 @@ read and play differently. This unlocks Phases 6-8 having somewhere to happen.
   `sight_shrouded` (reduces FOV radius via `PerceptionSystem`), fear (AI flees), charm (AI
   allegiance flip), vulnerability/resistance. Traits are data on the status definition, so flavor
   aliases (e.g. "crystallized", "time-locked") inherit a shared mechanic.
+
+  **Implementation checkpoint:** the first status-trait mechanics are live. `StatusRegistry` now has
+  a `ConcealsBearer` trait with aliases such as `hidden`, `camouflaged`, and `river_concealed`.
+  `addStatus` uses registry default durations when the model omits `duration`, and hostile AI cannot
+  notice concealed targets beyond close range. Registry-driven turn ticks also support
+  damage-over-time and regeneration: `burning` and `poisoned` harm actors through the shared turn
+  pump, while `regenerating` / `mending` heals actors up to normal max HP. Live playtesting
+  confirmed the Hollowmere shrine's river-color hiding spell now creates real tactical breathing
+  room through ordinary `addStatus`.
 - **A general trigger/predicate system:** add a `(when, then)` model — a `TriggerComponent` or
   `TriggerLedger` evaluated by the appropriate deterministic cadence. Distinguish **turn-tick
   systems** (statuses, auras, delayed effects, terrain reactions that need tactical immediacy) from
@@ -610,15 +724,26 @@ read and play differently. This unlocks Phases 6-8 having somewhere to happen.
   `count_visible`, `step_multiple`, `same_spell_streak`, ...). **Auras** are triggers that apply a
   status to entities in radius each tick; **delayed effects** are triggers on a turn count;
   **wards** are triggers on entry/death events. One mechanism, many spells.
+
+  **Implementation checkpoint:** a minimal `TriggerLedger` + `TriggerSystem` is live. The
+  `createTrigger` operation stores delayed, aura, and ward-shaped turn-pump records with an anchor,
+  radius, target filter, cadence, use count, and one small embedded effect (`addStatus`, `damage`,
+  `heal`, or `message`). The first slice supports delayed effects and radius/filter auras through
+  the shared engine turn pump; richer predicates such as entry/death/on-terrain remain future work.
 - **New operation surface** (each ships with an operation card + corpus prompts): prefer the most
   general reusable operation shape, likely a canonical `createTrigger` with aliases/templates such
   as `ward`, `aura`, `delayIncoming`, and `createPersistentEffect` where they are just specialized
-  trigger forms. Add separate canonical operations only when validation/application genuinely
-  differs.
+  trigger forms. **Current status:** `createTrigger` is registered and has a content operation card;
+  add separate canonical operations only when validation/application genuinely differs.
 - **Terrain × status reactions** (deterministic rules in a `TerrainReactionSystem` on the movement /
   turn pump): fire + water → mist, water extinguishes burning, vines snare entrants, slick ice
   slides movement, frost freezes water-soaked entities, fire cauterizes bleeding. These make the
   battlefield itself reactive without new spell handlers.
+
+  **Implementation checkpoint:** the first `TerrainReactionSystem` slice is live on the shared turn
+  pump. Water terrain extinguishes `burning` before ongoing burn damage and leaves temporary
+  `steam_mist`; `wild_fire` applies `burning`; `vines` apply a rooted `vine-snared` status through
+  the normal `StatusRegistry`. `steam_mist` is mapped in the Godot ASCII renderer.
 
 ### 6.2 - Curses as durable, loaded conditions
 
@@ -627,6 +752,13 @@ read and play differently. This unlocks Phases 6-8 having somewhere to happen.
   forbidden effect family) plus **semantic** curses that are prompt context only. Validate accepted
   resolutions against active mechanical curse limits inside the cast pipeline **before** apply
   (a new pre-apply check in `WildMagicController` / a curse service).
+
+  **Implementation checkpoint:** the first mechanical curse validator is live. `addCurse` writes a
+  visible `curse` promise with a template hint (`close`, `far`, `narrow`, `straight-path`, or
+  `anchored`) when provided or inferable. `MechanicalCurseValidator` reads active curse promises in
+  `WildMagicController` before transaction apply: close/far constrain target distance, narrow
+  rejects spreading/area effects, straight-path requires same row/column, and anchored requires a
+  selected point before outward magic. Semantic curses without a known template remain promise text.
 - Curse clearing tied to a deed or objective (e.g. a number of qualifying kills, or a promise),
   not a free dismiss.
 
@@ -639,6 +771,12 @@ read and play differently. This unlocks Phases 6-8 having somewhere to happen.
   WildMagic's `item_generation.py`.
 - **Reagents/fuel:** surface unprotected inventory + value/material/tags as spell fuel in the
   resolver context (treasured items already protected by cost validation).
+
+  **Implementation checkpoint:** the minimal item-depth slice is live. `ItemDefinition` now carries
+  `SpellBias`; `ReagentCard` exposes material, value, tags, and spell bias; `MagicContextView`
+  includes only unprotected reagent cards for resolver guidance. Generated zones now use a
+  deterministic `CurioGenerator` that registers unique curio definitions in the shared
+  `ItemCatalog`, preserving value/material/tags/spell-bias metadata after pickup.
 - `DECISION: item identification.` The roadmap defers identification, palettes, and ability-cards
   until a design need appears. This plan **defers them** — build catalog + curios only. Revisit if
   "unidentified loot" becomes a desired play loop.
@@ -648,6 +786,11 @@ read and play differently. This unlocks Phases 6-8 having somewhere to happen.
 - Per AGENTS.md, **no model in trade intent.** Explicit commands + engine rules: `wares`/`browse`,
   `buy`/`sell` against a merchant entity, value from the catalog, gold as a currency item. CLI + GUI
   parity.
+
+  **Implementation checkpoint:** the minimal trade slice is live. Generated residents carry a
+  `MerchantComponent` with deterministic wares and gold. `wares`/`browse`, `buy`, and `sell` are
+  explicit `GameSession` commands (also parsed by CLI text/JSON and Godot's command line), use
+  `ItemCatalog` values, and mutate only inventory/merchant stock through engine-side rules.
 
 ### Tests
 
@@ -681,6 +824,11 @@ template fallback so the skeleton stands with the provider cold. (See
   Draft sections never enter the live load path.
 - This plus WORLDBUILDING is the canon spine the model's voice draws on.
 
+**Implemented first slice:** `content/lore/*.md` now loads through `LoreCardLoader` with built-in
+fallback cards. `LoreRouter` is pure and selects by subjects/triggers/access; draft cards and
+draft sections stay out of the live catalog. `MagicContextView.Lore` injects routed canon into the
+resolver as soft guidance, and `atlas` surfaces local lore for playtesting.
+
 ### 7.2 - Texture & background enrichment (via the existing job lane)
 
 - **Model-free texture grammars** (port the idea from `texture.py`): instant, deterministic naming
@@ -691,6 +839,11 @@ template fallback so the skeleton stands with the provider cold. (See
   queue/apply boundary** — resource-aware, cancellable, inspectable. Durable output enters state
   only at the apply pump point.
 
+**Implemented first slice:** generated zone fixtures use deterministic `TextureGrammar` names,
+descriptions, and subject tags. Existing `canon_detail`/`entity_detail` jobs remain deterministic
+but now enrich their fallback text with routed lore when available, write `CanonRecord`s only at
+the turn pump, and show attached canon as known detail on later examine.
+
 ### 7.3 - The narrator voice (legibility budget)
 
 - **Rumors that greet you by reputation** on zone entry (reads legend + standing from Phases 2-3);
@@ -699,11 +852,22 @@ template fallback so the skeleton stands with the provider cold. (See
   shrine raised to what you did — each writes a `CanonRecord` and may spawn a prop entity.
 - All narration is read-only on mechanics; the deterministic template is the fallback.
 
+**Implemented first slice:** `NarrationSystem.ZoneEntryRumors` reads existing legend tags and
+faction standing after travel and emits deterministic `zone_entry_rumor` deltas/messages. It does
+not mutate mechanics, standing, promises, or canon; it only reflects already-authoritative state
+back to the player.
+
 ### 7.4 - Provider harness maturity
 
 - Give the single structured-call harness **purpose routing** (urgent/foreground vs background) with
   separate model/host settings in `LlmConfiguration` (port WildMagic's purpose-routing idea, not its
   `.env` mechanism), `MaxConcurrentBackgroundJobs`, disable flags, and per-purpose audit logs.
+
+**Implemented first slice:** CLI wild-magic provider creation now flows through `LlmConfiguration`
+and `LlmPurpose.Wild`; purpose settings can be overridden per purpose by environment variables and
+in code. CLI playtests can disable/throttle background jobs with `--disable-background`,
+`--max-background-jobs`, and `--background-jobs-per-turn`, while background provider/model/host
+settings are captured separately for the later real background worker.
 
 ### Tests
 
@@ -737,6 +901,14 @@ meta-progression; cross-run traces commemorate, never empower. (See
   introduce non-serializable state (open handles, delegates, live tasks) into `GameState`.
 - CLI: `save <path>` / `load <path>`. GUI: save/load menu entries.
 
+**Implemented first slice:** `GameSaveService` now serializes a schema-v1
+`System.Text.Json` envelope with `schemaVersion`, `savedAt`, authoritative `state`,
+pending-cast data, and pending-cast serial. It round-trips active zones, saved zone snapshots,
+entities/components, soul/body lanes, all current ledgers, background settings/jobs, RNG/serial
+state, run status, and run conclusion through the persistence layer rather than the view layer.
+CLI text/JSON support `save` and `load` (defaulting to `runs/quicksave.json`), Godot exposes the
+same shared-session commands, and tests cover byte-stable save -> load -> save plus pending casts.
+
 ### 8.2 - Replay (the regression backbone for model-touching systems)
 
 - Re-feed recorded commands through a fresh `GameSession`; carry **materialized-content apply
@@ -745,6 +917,13 @@ meta-progression; cross-run traces commemorate, never empower. (See
   JSONL — build the re-feed runner and an optional final-state assertion.
 - This is how the world-reaction, worldgen, and narrator systems stay regression-safe despite
   involving the model.
+
+**Implemented first slice:** live and mock magic results now carry `resolvedMagicJson` on
+`MagicResolutionRecord` when a normalized resolution applied or rejected intentionally. Transcripts
+record seed, origin, background settings, command text, results, observations, and materialized
+spell JSON. `ReplaySpellProvider` consumes those materialized resolutions in order, and the CLI
+supports `--replay <transcript>` plus optional `--replay-assert-final` to re-feed commands through a
+fresh session without model calls.
 
 ### 8.3 - Emperor and win condition
 
@@ -756,7 +935,16 @@ meta-progression; cross-run traces commemorate, never empower. (See
 - Keep the Phase 3 gate seam useful but modest: track imperial defenses / capital reachability and
   surface locked/reachable state in standing/atlas/debug views. For this build, the seam may simply
   decide whether the emperor's zone/encounter is reachable; do not build a large bespoke finale.
-- **Player death rolls a fresh world** (Phase 5) and carries no power forward.
+- **Player death ends the current run; the next run rolls a fresh world** (Phase 5) and carries no
+  power forward.
+
+**Implemented first slice:** the `vigovian_capital` region is reachable east of Hollowmere in the
+thin-slice world graph. It contains Emperor Odran as an ordinary actor entity tagged `emperor` and
+`win_condition`; validated damage through the normal engine can kill him. Killing him sets
+`RunStatus = victory`, writes a run conclusion, emits a `runComplete` delta, adds a chronicle, and
+ends the session. The controlled body dying now completes the run as `defeat` through the same
+run-completion path. Atlas, standing, and debug views expose the current capital-reach seam without
+building a bespoke finale.
 
 ### 8.4 - Chronicle + cross-run traces (commemorate, not empower)
 
@@ -764,11 +952,23 @@ meta-progression; cross-run traces commemorate, never empower. (See
   memorial records** persisted across runs as inert content the next world may surface (a grave you
   can find), never as inherited power.
 
+**Implemented first slice:** `RunChronicle` distills run status, conclusion, soul id, legend tags,
+recent deeds, turn, and zone into a durable record. Completed runs write a chronicle `CanonRecord`;
+`CrossRunMemorialStore` can append/load JSONL memorial records under `runs/memorials.jsonl`; new
+runs can surface those records as inert readable memorial props with no actor component or power
+carry-forward. CLI and Godot both append the latest chronicle when a `runComplete` delta occurs.
+
 ### 8.5 - Long-run validation
 
 - Extend `EpisodeRunner`: long deterministic episodes with invariant checks across the new lanes —
   reputation stays bounded, faction pressure ebbs and flows, promises realize or expire, no orphaned
   zones, and save → load → save round-trips to byte-identical state.
+
+**Implemented first slice:** `EpisodeRunner` now performs end-of-episode invariant checks across
+state validation, save/load/save byte stability, loaded-state validation, duplicate promise ids,
+bounded faction standing, resource caps, bounded legend aggregate weights, and completed-run
+chronicle presence. The deterministic policy also avoids repeatedly opening already-open doors,
+keeping longer mock runs useful as regression material.
 
 ### Tests
 
