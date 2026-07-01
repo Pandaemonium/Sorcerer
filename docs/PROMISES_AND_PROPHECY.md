@@ -37,6 +37,93 @@ Promises can come from:
 
 All promise sources should flow into one ledger.
 
+## Claims Before Promises
+
+Dialogue and documents often create **reported claims** before they create promises. A claim is
+something a character, record, rumor, or object says about the world:
+
+```text
+There is a town just south of here.
+Old Maren has a niece named Nannerl.
+Jimmer can sell you a fine blade.
+The stone road refuses patrol boots after sunset.
+```
+
+The system should err toward "yes, and" by preserving plausible claims, but not to a ridiculous
+degree. Most claims should first become memories, canon notes, or rumor records with provenance:
+who said it, who heard it, where, when, and with what confidence. Only some claims become
+engine-owned promises.
+
+The distinction matters:
+
+- A **reported claim** is useful context. It can color dialogue, appear in the journal, guide
+  generation, or become evidence later, but the world has not sworn to make it true yet.
+- A **bound promise** is an obligation. The engine has accepted that the world must deliver
+  something buildable later.
+
+Player-spoken claims are not binding world truth. A player saying "there is a palace under this
+floor" during ordinary dialogue may influence the conversation, but it must not create a palace
+unless backed by wild magic, a bargain, a validated engine action, or another authoritative source.
+
+## Dialogue Claim Extraction
+
+Organic dialogue should feed the promise system through a post-dialogue claim extractor. The player
+should receive the dialogue immediately; claim extraction happens while they are reading and can
+apply between turns. This keeps conversation responsive while still letting the world notice
+important assertions.
+
+The target pipeline:
+
+1. The foreground dialogue command resolves and returns player-facing text.
+2. A low-context **claim router** call runs using the same dialogue model already loaded for the
+   conversation. It receives only the player/NPC exchange, compact speaker cards, and a short
+   definition of claim/promise. It returns whether any mechanically relevant claim was made,
+   claim spans, rough categories, confidence, and which claim capability cards are needed.
+3. If the router says yes, a larger **claim structuring** call runs with the selected capability
+   cards, compact world context, and strict JSON formats. It proposes structured claim records,
+   memory writes, canon notes, merchant-stock hints, person/site/item promises, or rejection/no-op.
+4. The engine validates and applies proposals at an explicit apply point. The model never mutates
+   state directly.
+5. The player may see a light follow-up such as "Lio's words settle into your journal" or "A rumor
+   finds a place to stand." Debug/agent views expose the exact records.
+
+Use the `dialogue` purpose for both router and structuring by default. Loading a separate tiny
+model for the router risks local-model thrash and can cost more latency than it saves. Separate
+purpose settings can be introduced later only if playtesting shows a real benefit.
+
+Claim extraction should be broad but conservative about binding:
+
+- "Old Maren has a niece named Nannerl" usually writes an NPC memory/canon claim and may reserve a
+  future person only if the source is trusted, salient, and the world has a buildable person lane.
+- "Jimmer can sell you a fine blade" should normally become a merchant-stock claim or promise. If
+  Jimmer already exists as a merchant, the engine may add or reserve stock through ordinary item
+  systems. If Jimmer is not present, it should bind a future merchant/stock promise rather than
+  silently create a blade now.
+- "There is a town just south of here" can bind as a site/town promise when it has a plausible
+  spatial hint and capacity in generation.
+- Vague, poetic, joking, contradictory, or low-confidence claims stay as flavor or memories.
+
+The general rule is to choose the narrowest authoritative state that preserves the claim. A memory
+is cheaper than a promise; a stock reservation is cheaper than a generated site; a reported rumor is
+cheaper than a guaranteed truth.
+
+Current implementation:
+
+- `ClaimLedger` records reported dialogue claims with source, speaker, listener, subject,
+  category, salience, confidence, status, visibility, tags, and optional promise/application ids.
+- `GameSession` queues post-dialogue extraction and applies completed results on a later command,
+  so the dialogue turn returns immediately.
+- `save` should flush pending dialogue extraction first: wait for queued extraction to complete,
+  apply accepted proposals or record technical failures, and only then snapshot durable state.
+- `Sorcerer.Llm` provides a deterministic mock extractor and an Ollama extractor with the
+  router-then-detail flow on the `dialogue` purpose.
+- Structured proposals may record memories, bind promises, add stock to an existing merchant, or
+  request an engine-clamped bond shift. Gift actions write memory only; any bond change from a
+  gift must be inferred and proposed during later dialogue.
+- Generated NPC speech now flows through `IDialogueProvider` when configured. Generated dialogue
+  applies structured claim proposals directly; the extractor remains for fallback deterministic
+  dialogue and future authored text.
+
 ## Binding
 
 The engine may refuse to bind a promise that is too vague, too broad, contradictory, or
@@ -94,6 +181,11 @@ the subject and tags, never against free prose (or a temple keeper's stray philo
 phantom shrines). A non-quest claim should bind only if it names a buildable thing or carries a
 real spatial hint; vague or low-confidence chatter stays flavor. Player-asserted claims are
 never silently captured as world truth.
+
+**Reported claims are allowed to be wrong or incomplete.** A character can be mistaken, lying, or
+speaking from old information. A bound promise should still be honored, but a mere reported claim
+can later be contradicted, reinterpreted, or corrected by the world. Preserve provenance so the
+game can say "Lio believed this" rather than silently converting every NPC sentence into fact.
 
 **Cost scales with binding strength.** Vague color promises are cheap; a guaranteed item, ally,
 or threat is major magic. A prophecy spell that writes a concrete future obligation should
@@ -155,8 +247,14 @@ A promise may realize as:
 Realization should happen at explicit engine-controlled apply points, never from arbitrary
 background worker mutation.
 
+Dialogue claim extraction may complete between turns, but its durable output must still apply
+through the same authoritative session/engine boundary as other background results. A completed
+extractor can write memories, canon, merchant-stock reservations, or promises only when the engine
+validates and applies the structured proposal.
+
 Current apply points include:
 
+- `travel`: realizes region-bound promises as generated sites, items, people, or threats.
 - `read`: realizes matching promises anchored to the readable entity.
 - `open`: realizes matching promises anchored to the opened door, then applies normal
   door consequences such as the first prisoner rescue.
@@ -167,7 +265,8 @@ Current concrete realization archetypes are deliberately small but real:
 - `memory`: writes a shareable memory to the world memory ledger and to the anchored entity.
 - `threat`: spawns a hostile promised claimant near the anchor when space allows.
 - `item`: creates a tangible promised item near the anchor.
-- `quest`, `site`, and other omens: write durable canon records until richer handlers exist.
+- `quest`, `site`, and other omens: write durable canon records or generated site anchors,
+  depending on whether they realize through an entity interaction or travel generation.
 
 Trigger hints are intentionally simple. Empty hints can realize at the first matching
 anchor interaction, while hints such as `read`, `open`, `door`, `talk`, or `name` route

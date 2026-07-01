@@ -498,9 +498,10 @@ membership.
 - **Devotion / drift / departure / betrayal:** emerge from thresholds + durable deed marks written
   to the NPC's memory; the model voices the moment, consequences are written back as
   traits/notes that color future behavior. Keep thresholds and math out of the UI.
-- **Secrets & commitments:** a confided secret in dialogue binds as a **promise** (reuse the
-  promise ledger + binding), so "her brother is held at a checkpoint two valleys east" becomes a
-  realized place when Phase 5 generates it.
+- **Secrets & commitments:** a confided or reported NPC claim in dialogue can bind as a
+  **promise** through dialogue claim extraction (reuse the promise ledger + binding), so
+  "her brother is held at a checkpoint two valleys east" becomes a realized place when Phase 5
+  generates it.
 
 ### Commands & UX (CLI + GUI parity)
 
@@ -511,9 +512,10 @@ membership.
 ### Tests
 
 - The three layers move independently (an ally can resent you; an enemy can admire you).
-- Gift and deed effects on bond values are deterministic.
+- Gifts write memory; validated dialogue/deed proposals can change bond values.
 - Threshold crossing recruits / triggers a departure; a betrayal writes a durable mark.
-- A confided secret binds as a promise visible to the engine, mysterious in the journal.
+- A confided or reported NPC claim can bind as a promise visible to the engine, mysterious in
+  the journal.
 - Malformed dialogue resolver output causes no mutation; accepted dialogue proposals apply only
   through validated engine operations.
 
@@ -525,22 +527,24 @@ general systems with no script.
 
 First deterministic social slice is in place:
 
-- `talk` parses common organic intents through engine-owned rules: greet/ask, threaten, recruit,
-  gift shortcuts, and trusted secret requests.
+- `talk` parses common organic intents through engine-owned rules: greet/ask, threaten,
+  recruit, and gift shortcuts.
+- Post-dialogue claim extraction can turn NPC-authored claims into memories, merchant stock,
+  bond proposals, or bound promises at a later session apply point.
 - `give <item> to <target>`, `recruit <target>`, and `bonds [target]` are shared CLI/session
   commands.
 - `BondLedger` supports adjustment, snapshot/rollback, qualitative player-facing summaries, and
   raw debug bond cards.
-- Gifts remove one carried item, write entity/world memory, and shift personal bond posture.
+- Gifts remove one carried item and write entity/world memory; later dialogue can propose bond
+  shifts using that memory as context.
 - Recruitment crosses a bond threshold, changes combat allegiance to the player, preserves
   organization membership in `FactionComponent`, and marks the personal bond as follower.
 - `followers` is bond-driven instead of same-faction-driven.
 - Personal bond can override default faction hostility for AI targeting.
-- Trusted secret dialogue binds a `quest`/`site` promise through the existing promise ledger.
 - `--quickstart social` opens the cell and positions the player near Lio for social CLI
   playtesting without changing the default scenario.
 - Regression coverage includes independent social layers, deterministic gifts, recruitment,
-  secret-to-promise binding, missing-target no-mutation, and bond-driven hostility/followers.
+  claim-to-promise binding, missing-target no-mutation, and bond-driven hostility/followers.
 
 ---
 
@@ -618,10 +622,10 @@ route `travel` through the shared backend, and `atlas`/`WorldCard` expose the cu
 tradition, imperial grip, wildness, and affordances. The resolver lens now includes region and
 affordance notes, and live playtesting confirmed a Hollowmere shrine can answer a free-form hiding
 spell through ordinary `addStatus`/`message` operations. Minimal promise-site realization is also
-live: a trusted dialogue secret can bind a site promise, and travel into a newly generated zone
-creates the promised place as an entity, canon record, journal update, and `promiseSite` delta. Full
-world-roll geopolitics, towns, process-stable seed helpers, and richer site archetypes remain the
-next Phase 5 layers.
+live: a dialogue claim can bind a site promise, and travel into a newly generated zone creates the
+promised place as an entity, canon record, journal update, and `promiseSite` delta. Full world-roll
+geopolitics, towns, process-stable seed helpers, and richer site archetypes remain the next Phase 5
+layers.
 
 ### 5.2 - World roll + towns + populations
 

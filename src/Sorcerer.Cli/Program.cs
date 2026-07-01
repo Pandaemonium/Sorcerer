@@ -30,7 +30,10 @@ public static class Program
         };
         var configuration = BuildLlmConfiguration(options);
         var provider = SpellProviderFactory.Create(configuration, LlmPurpose.Wild);
+        var dialogueProvider = DialogueProviderFactory.Create(configuration, LlmPurpose.Dialogue);
+        var dialogueClaimExtractor = DialogueClaimExtractorFactory.Create(configuration, LlmPurpose.Dialogue);
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
+        var dialogueAudit = new JsonlDialogueAuditSink(Path.Combine("logs", "dialogue_audit.jsonl"));
         if (options.Eval)
         {
             return await SpellEvalHarness.RunAsync(provider, audit, options.Json);
@@ -40,6 +43,9 @@ public static class Program
         {
             return await EpisodeRunner.RunAsync(
                 provider,
+                dialogueProvider,
+                dialogueClaimExtractor,
+                dialogueAudit,
                 audit,
                 new EpisodeRunnerOptions(
                     options.Episodes,
@@ -61,7 +67,10 @@ public static class Program
             new WildMagicController(provider, audit: audit),
             options.OriginId,
             options.Seed,
-            CrossRunMemorialStore.LoadDefault());
+            CrossRunMemorialStore.LoadDefault(),
+            dialogueClaimExtractor,
+            dialogueProvider,
+            dialogueAudit);
         ApplyBackgroundOptions(session, options);
         ApplyQuickstart(session, options.QuickstartScene);
         await using var transcript = TranscriptWriter.Open(options.TranscriptPath);
@@ -124,6 +133,11 @@ public static class Program
         var configuration = LlmConfiguration.FromEnvironment()
             .WithPurposeOverride(
                 LlmPurpose.Wild,
+                options.Provider,
+                options.Host,
+                options.Model)
+            .WithPurposeOverride(
+                LlmPurpose.Dialogue,
                 options.Provider,
                 options.Host,
                 options.Model);

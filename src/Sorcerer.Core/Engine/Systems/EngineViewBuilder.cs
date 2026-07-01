@@ -129,6 +129,10 @@ public sealed class EngineViewBuilder
         var promises = _state.PromiseLedger.Promises
             .Select(ToPromiseCard)
             .ToArray();
+        var claims = _state.Claims.Records
+            .Where(claim => claim.PlayerVisible)
+            .Select(ToClaimCard)
+            .ToArray();
 
         var tiles = BuildPlayerTiles(perception);
         var inventory = _inventoryService.BuildInventoryCards(_state.ControlledEntity);
@@ -150,7 +154,8 @@ public sealed class EngineViewBuilder
             statuses,
             _state.SelectedTarget,
             character,
-            BuildWorldCard());
+            BuildWorldCard(),
+            claims);
     }
 
     public AgentObservation Observation(bool debug)
@@ -172,11 +177,13 @@ public sealed class EngineViewBuilder
                     _state.ScheduledEvents.Events.Count,
                     _state.Suspicions.Records.Count,
                     _state.Souls.Records.Count,
-                    _state.Triggers.Records.Count),
+                    _state.Triggers.Records.Count,
+                    _state.Claims.Records.Count),
                 validation.Issues.Select(issue => $"{issue.Code}: {issue.Message}").ToArray(),
                 BuildBackgroundJobCards(),
                 BuildFactionDebugCards(),
                 BuildBondDebugCards(),
+                _state.Claims.Records.Select(claim => claim.Id).ToArray(),
                 _state.RunStatus,
                 _state.RunConclusion)
             : null;
@@ -541,6 +548,22 @@ public sealed class EngineViewBuilder
             promise.TriggerHint,
             promise.RealizationKind,
             promise.RealizedIn);
+
+    private static ClaimCard ToClaimCard(ClaimRecord claim) =>
+        new(
+            claim.Id,
+            claim.Source,
+            claim.SpeakerId,
+            claim.Text,
+            claim.Category,
+            claim.Subject,
+            claim.Salience,
+            claim.Confidence,
+            claim.Status,
+            claim.PlayerVisible,
+            claim.Tags,
+            claim.BoundPromiseId,
+            claim.AppliedTo);
 
     private bool IsStatusActive(StatusInstance status) =>
         status.ExpiresTurn is null || status.ExpiresTurn > _state.Turn;

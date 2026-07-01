@@ -212,7 +212,7 @@ public sealed class GenerationSystem
 
         var realizedIds = new List<string>();
         foreach (var promise in _state.PromiseLedger.Promises
-            .Where(IsTravelSitePromise)
+            .Where(IsTravelPromise)
             .Take(2)
             .ToArray())
         {
@@ -222,48 +222,170 @@ public sealed class GenerationSystem
                 continue;
             }
 
-            var siteId = _state.NextEntityId("promise_site");
-            var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) - 3, _state.Height / 2));
-            var tags = new[] { "promise", "site", NormalizeToken(realized.Kind), NormalizeToken(realized.RealizationKind ?? "site") }
-                .Concat(region.TerrainTags)
-                .Concat(region.VoiceTags)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            var site = new Entity(siteId, PromiseSiteName(realized, region))
-                .Set(new PositionComponent(position))
-                .Set(new RenderableComponent('?', "promise"))
-                .Set(new TagsComponent(tags))
-                .Set(new DescriptionComponent(realized.Text))
-                .Set(new PhysicalComponent(BlocksMovement: true, Material: region.TerrainTags.FirstOrDefault() ?? "stone"))
-                .Set(new FixtureComponent("promise_site", tags))
-                .Set(new PromiseAnchorComponent(new[] { realized.Id }));
-            entities[siteId] = site;
-            var canon = _state.Canon.Add(
-                "site",
-                siteId.Value,
-                realized.Text,
-                $"{site.Name}: {realized.Text}",
-                tags,
-                $"promise:{realized.Id}:travel",
-                _state.Turn);
-            var summary = $"A promised place takes shape: {site.Name}.";
-            deltas.Add(new StateDelta(
-                "promiseSite",
-                siteId.Value,
-                summary,
-                new Dictionary<string, object?>
-                {
-                    ["promiseId"] = realized.Id,
-                    ["zoneId"] = zoneId,
-                    ["regionId"] = region.Id,
-                    ["canonId"] = canon.Id,
-                    ["x"] = position.X,
-                    ["y"] = position.Y,
-                }));
+            var realization = NormalizeToken(realized.RealizationKind ?? realized.Kind);
+            switch (realization)
+            {
+                case "item":
+                    RealizeTravelItemPromise(realized, zoneId, region, entities, deltas);
+                    break;
+                case "person":
+                    RealizeTravelPersonPromise(realized, zoneId, region, entities, deltas);
+                    break;
+                case "threat":
+                    RealizeTravelThreatPromise(realized, zoneId, region, entities, deltas);
+                    break;
+                default:
+                    RealizeTravelSitePromise(realized, zoneId, region, entities, deltas);
+                    break;
+            }
+
             realizedIds.Add(realized.Id);
         }
 
         return realizedIds;
+    }
+
+    private void RealizeTravelSitePromise(
+        WorldPromise realized,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas)
+    {
+        var siteId = _state.NextEntityId("promise_site");
+        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) - 3, _state.Height / 2));
+        var tags = PromiseTags(realized, "site", region);
+        var site = new Entity(siteId, PromiseSiteName(realized, region))
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('?', "promise"))
+            .Set(new TagsComponent(tags))
+            .Set(new DescriptionComponent(realized.Text))
+            .Set(new PhysicalComponent(BlocksMovement: true, Material: region.TerrainTags.FirstOrDefault() ?? "stone"))
+            .Set(new FixtureComponent("promise_site", tags))
+            .Set(new PromiseAnchorComponent(new[] { realized.Id }));
+        entities[siteId] = site;
+        var canon = _state.Canon.Add(
+            "site",
+            siteId.Value,
+            realized.Text,
+            $"{site.Name}: {realized.Text}",
+            tags,
+            $"promise:{realized.Id}:travel",
+            _state.Turn);
+        var summary = $"A promised place takes shape: {site.Name}.";
+        deltas.Add(PromiseRealizationDelta("promiseSite", siteId.Value, summary, realized.Id, zoneId, region.Id, canon.Id, position));
+    }
+
+    private void RealizeTravelItemPromise(
+        WorldPromise realized,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas)
+    {
+        var itemName = PromiseItemName(realized);
+        var itemId = _state.NextEntityId("promise_item");
+        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) + 3, _state.Height / 2));
+        var tags = PromiseTags(realized, "item", region);
+        var item = new Entity(itemId, itemName)
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('*', "item"))
+            .Set(new TagsComponent(tags.Concat(new[] { "item" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()))
+            .Set(new PhysicalComponent(BlocksMovement: false, Material: "promise"))
+            .Set(new DescriptionComponent($"This object exists because a claim became reachable: {realized.Text}"))
+            .Set(new ItemComponent(NormalizeToken(itemName), 1, "promise", tags, StackPolicy: "unique"))
+            .Set(new StackComponent(1))
+            .Set(new PromiseAnchorComponent(new[] { realized.Id }));
+        entities[itemId] = item;
+        var canon = _state.Canon.Add(
+            "item",
+            itemId.Value,
+            realized.Text,
+            $"{item.Name}: {realized.Text}",
+            tags,
+            $"promise:{realized.Id}:travel",
+            _state.Turn);
+        var summary = $"A promised object is waiting: {item.Name}.";
+        deltas.Add(PromiseRealizationDelta("promiseItem", itemId.Value, summary, realized.Id, zoneId, region.Id, canon.Id, position));
+    }
+
+    private void RealizeTravelPersonPromise(
+        WorldPromise realized,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas)
+    {
+        var personId = _state.NextEntityId("promise_person");
+        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) - 2, (_state.Height / 2) + 2));
+        var tags = PromiseTags(realized, "person", region);
+        var person = new Entity(personId, PromisePersonName(realized))
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('p', "neutral"))
+            .Set(new TagsComponent(tags.Concat(new[] { "npc" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()))
+            .Set(new DescriptionComponent(realized.Text))
+            .Set(new PhysicalComponent(BlocksMovement: true, Material: "flesh"))
+            .Set(new ActorComponent(6, 6, 0, 0, 1, 0, "neutral"))
+            .Set(new ControllerComponent(ControllerKind.Ai))
+            .Set(new AiComponent("resident"))
+            .Set(new SoulComponent($"{personId.Value}_soul"))
+            .Set(new BodyStatsComponent(3))
+            .Set(StatusContainerComponent.Empty())
+            .Set(MemoryComponent.Empty())
+            .Set(new FactionComponent("neutral", new[] { "promise", "resident" }))
+            .Set(new InteractableComponent(new[] { "talk", "give", "recruit" }))
+            .Set(new ProfileComponent(PromisePersonName(realized), realized.Text))
+            .Set(new PromiseAnchorComponent(new[] { realized.Id }));
+        entities[personId] = person;
+        var canon = _state.Canon.Add(
+            "person",
+            personId.Value,
+            realized.Text,
+            $"{person.Name}: {realized.Text}",
+            tags,
+            $"promise:{realized.Id}:travel",
+            _state.Turn);
+        var summary = $"A promised person is here: {person.Name}.";
+        deltas.Add(PromiseRealizationDelta("promisePerson", personId.Value, summary, realized.Id, zoneId, region.Id, canon.Id, position));
+    }
+
+    private void RealizeTravelThreatPromise(
+        WorldPromise realized,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas)
+    {
+        var threatId = _state.NextEntityId("promise_threat");
+        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) + 2, (_state.Height / 2) - 2));
+        var tags = PromiseTags(realized, "threat", region);
+        var threat = new Entity(threatId, PromiseThreatName(realized))
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('D', "empire"))
+            .Set(new TagsComponent(tags))
+            .Set(new DescriptionComponent(realized.Text))
+            .Set(new PhysicalComponent(BlocksMovement: true, Material: "flesh"))
+            .Set(new ActorComponent(8, 8, 0, 0, 3, 0, "empire"))
+            .Set(new ControllerComponent(ControllerKind.Ai))
+            .Set(new AiComponent("hostile"))
+            .Set(new SoulComponent($"{threatId.Value}_soul"))
+            .Set(new BodyStatsComponent(3))
+            .Set(StatusContainerComponent.Empty())
+            .Set(MemoryComponent.Empty())
+            .Set(new FactionComponent("empire", new[] { "promise", "threat" }))
+            .Set(new InteractableComponent(new[] { "talk", "examine" }))
+            .Set(new PromiseAnchorComponent(new[] { realized.Id }));
+        entities[threatId] = threat;
+        var canon = _state.Canon.Add(
+            "threat",
+            threatId.Value,
+            realized.Text,
+            $"{threat.Name}: {realized.Text}",
+            tags,
+            $"promise:{realized.Id}:travel",
+            _state.Turn);
+        var summary = $"A promised threat steps into the road: {threat.Name}.";
+        deltas.Add(PromiseRealizationDelta("promiseThreat", threatId.Value, summary, realized.Id, zoneId, region.Id, canon.Id, position));
     }
 
     private Entity BuildResident(
@@ -336,7 +458,7 @@ public sealed class GenerationSystem
             .Set(new InteractableComponent(new[] { "talk", "examine" }));
     }
 
-    private static bool IsTravelSitePromise(WorldPromise promise)
+    private static bool IsTravelPromise(WorldPromise promise)
     {
         if (!promise.Status.Equals("bound", StringComparison.OrdinalIgnoreCase)
             || !PromiseTriggerMatches(promise.TriggerHint, "travel"))
@@ -345,8 +467,38 @@ public sealed class GenerationSystem
         }
 
         var realization = NormalizeToken(promise.RealizationKind ?? promise.Kind);
-        return realization is "site" or "quest" or "prophecy";
+        return realization is "site" or "quest" or "prophecy" or "town" or "landmark" or "item" or "person" or "threat";
     }
+
+    private static IReadOnlyList<string> PromiseTags(WorldPromise promise, string realization, RegionDefinition region) =>
+        new[] { "promise", realization, NormalizeToken(promise.Kind), NormalizeToken(promise.RealizationKind ?? realization) }
+            .Concat(region.TerrainTags)
+            .Concat(region.VoiceTags)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static StateDelta PromiseRealizationDelta(
+        string operation,
+        string target,
+        string summary,
+        string promiseId,
+        string zoneId,
+        string regionId,
+        string canonId,
+        GridPoint position) =>
+        new(
+            operation,
+            target,
+            summary,
+            new Dictionary<string, object?>
+            {
+                ["promiseId"] = promiseId,
+                ["zoneId"] = zoneId,
+                ["regionId"] = regionId,
+                ["canonId"] = canonId,
+                ["x"] = position.X,
+                ["y"] = position.Y,
+            });
 
     private GridPoint FindGeneratedOpenPoint(IReadOnlyDictionary<EntityId, Entity> entities, GridPoint origin)
     {
@@ -635,6 +787,66 @@ public sealed class GenerationSystem
             "wild_border" => "promise-touched border stone",
             _ => "promised waymark",
         };
+    }
+
+    private static string PromiseItemName(WorldPromise promise)
+    {
+        var lower = $"{promise.Subject} {promise.Text}".ToLowerInvariant();
+        if (lower.Contains("blade") || lower.Contains("knife") || lower.Contains("sword"))
+        {
+            return "promised blade";
+        }
+
+        if (lower.Contains("key"))
+        {
+            return "promised key";
+        }
+
+        if (lower.Contains("pearl"))
+        {
+            return "promised pearl";
+        }
+
+        if (!string.IsNullOrWhiteSpace(promise.Subject)
+            && !promise.Subject.Equals(promise.Kind, StringComparison.OrdinalIgnoreCase))
+        {
+            return promise.Subject;
+        }
+
+        return "promise token";
+    }
+
+    private static string PromisePersonName(WorldPromise promise)
+    {
+        if (!string.IsNullOrWhiteSpace(promise.Subject)
+            && !promise.Subject.Equals(promise.Kind, StringComparison.OrdinalIgnoreCase))
+        {
+            return promise.Subject;
+        }
+
+        var text = promise.Text;
+        if (text.Contains("Nannerl", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Nannerl";
+        }
+
+        return "promised stranger";
+    }
+
+    private static string PromiseThreatName(WorldPromise promise)
+    {
+        var lower = promise.Text.ToLowerInvariant();
+        if (lower.Contains("collector"))
+        {
+            return "debt collector";
+        }
+
+        if (lower.Contains("soldier") || lower.Contains("empire") || lower.Contains("imperial"))
+        {
+            return "promised imperial claimant";
+        }
+
+        return "promised threat";
     }
 
     private static bool PromiseTriggerMatches(string? hint, string trigger) =>

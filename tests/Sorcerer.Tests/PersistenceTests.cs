@@ -1,5 +1,7 @@
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Dialogue;
+using Sorcerer.Core.Entities;
 using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Validation;
@@ -122,6 +124,68 @@ public sealed class PersistenceTests
     }
 
     [Fact]
+    public async Task SaveWaitsForPendingDialogueClaimExtraction()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sorcerer_claim_flush_{Guid.NewGuid():N}.json");
+        var extraction = new TaskCompletionSource<DialogueClaimExtractionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var session = GameSession.CreateImperialEncounter(
+                new WildMagicController(new MockSpellProvider()),
+                claimExtractor: new DelayedDialogueClaimExtractor(extraction.Task));
+            session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+            var talk = await session.ExecuteAsync(new TalkCommand("Lio, what waits on the road?"));
+            Assert.True(talk.Success);
+
+            var saveTask = session.ExecuteAsync(new SaveCommand(path));
+            await Task.Yield();
+            Assert.False(saveTask.IsCompleted);
+
+            extraction.SetResult(new DialogueClaimExtractionResult(
+                "delayed-test",
+                "{}",
+                TechnicalFailure: false,
+                Error: null,
+                new[]
+                {
+                    new DialogueClaimProposal(
+                        "Jimmer hid a fine blade beyond the next road.",
+                        "item",
+                        "fine blade",
+                        Salience: 3,
+                        Confidence: 75,
+                        PlayerVisible: true,
+                        BindAsPromise: true,
+                        PromiseKind: "rumor",
+                        RealizationKind: "item",
+                        TriggerHint: "travel",
+                        ItemName: "fine blade",
+                        Tags: new[] { "item", "blade" }),
+                }));
+
+            var save = await saveTask;
+            Assert.True(save.Success);
+            Assert.Contains(save.Deltas, delta => delta.Operation == "claimPromise");
+
+            var loaded = GameSaveService.Load(path);
+            Assert.Contains(loaded.State.Claims.Records, claim =>
+                claim.Subject == "fine blade"
+                && claim.Status == "promised");
+            Assert.Contains(loaded.State.PromiseLedger.Promises, promise =>
+                promise.Subject == "fine blade"
+                && promise.RealizationKind == "item");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
     public async Task MaterializedSpellJsonReplaysWithoutOriginalProvider()
     {
         var command = new CastCommand("set the nearest soldier's boots burning with a blue coal");
@@ -141,5 +205,22 @@ public sealed class PersistenceTests
         Assert.True(replayResult.Success);
         Assert.Equal(originalResult.Magic!.EffectTypes, replayResult.Magic!.EffectTypes);
         Assert.Equal(original.Engine.State.Turn, replay.Engine.State.Turn);
+    }
+
+    private sealed class DelayedDialogueClaimExtractor : IDialogueClaimExtractor
+    {
+        private readonly Task<DialogueClaimExtractionResult> _result;
+
+        public DelayedDialogueClaimExtractor(Task<DialogueClaimExtractionResult> result)
+        {
+            _result = result;
+        }
+
+        public string Name => "delayed-test";
+
+        public Task<DialogueClaimExtractionResult> ExtractAsync(
+            DialogueClaimRequest request,
+            CancellationToken cancellationToken) =>
+            _result;
     }
 }

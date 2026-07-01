@@ -378,6 +378,10 @@ public sealed class ItemSystem
         return FindInventoryKey(inventory, item) is not null;
     }
 
+    public bool IsCarrying(Entity entity, string item) =>
+        entity.TryGet<InventoryComponent>(out var inventory)
+        && FindInventoryKey(inventory, item) is not null;
+
     public Entity BuildItemEntity(string item, GridPoint position, int quantity)
     {
         var definition = _itemCatalog.Find(item);

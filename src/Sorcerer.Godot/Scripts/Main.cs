@@ -464,7 +464,18 @@ public partial class Main : Control
         var host = System.Environment.GetEnvironmentVariable("SORCERER_OLLAMA_HOST")
             ?? System.Environment.GetEnvironmentVariable("WILDMAGIC_OLLAMA_HOST");
         var provider = SpellProviderFactory.Create("ollama", host, model);
+        var dialogueProvider = DialogueProviderFactory.Create(new Sorcerer.Llm.Configuration.LlmPurposeSettings(
+            "ollama",
+            host,
+            model,
+            TimeoutSeconds: 180));
+        var dialogueClaims = DialogueClaimExtractorFactory.Create(new Sorcerer.Llm.Configuration.LlmPurposeSettings(
+            "ollama",
+            host,
+            model,
+            TimeoutSeconds: 180));
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
+        var dialogueAudit = new JsonlDialogueAuditSink(Path.Combine("logs", "dialogue_audit.jsonl"));
         var origin = System.Environment.GetEnvironmentVariable("SORCERER_ORIGIN");
         var seed = int.TryParse(System.Environment.GetEnvironmentVariable("SORCERER_SEED"), out var parsedSeed)
             ? Math.Max(1, parsedSeed)
@@ -473,7 +484,10 @@ public partial class Main : Control
             new WildMagicController(provider, audit: audit),
             origin,
             seed,
-            CrossRunMemorialStore.LoadDefault());
+            CrossRunMemorialStore.LoadDefault(),
+            dialogueClaims,
+            dialogueProvider,
+            dialogueAudit);
         _lastResult = null;
         _lastError = null;
         EnsureMapCells(_session.View());

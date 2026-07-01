@@ -74,6 +74,8 @@ public sealed class GameState
 
     public MemoryLedger Memories { get; } = new();
 
+    public ClaimLedger Claims { get; } = new();
+
     public CanonLedger Canon { get; } = new();
 
     public BondLedger Bonds { get; } = new();

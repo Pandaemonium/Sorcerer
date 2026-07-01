@@ -142,6 +142,21 @@ public sealed record PromiseCard(
     string? RealizationKind = null,
     string? RealizedIn = null);
 
+public sealed record ClaimCard(
+    string Id,
+    string Source,
+    string SpeakerId,
+    string Text,
+    string Category,
+    string Subject,
+    int Salience,
+    int Confidence,
+    string Status,
+    bool PlayerVisible,
+    IReadOnlyList<string> Tags,
+    string? BoundPromiseId = null,
+    string? AppliedTo = null);
+
 public sealed record GameView(
     int Width,
     int Height,
@@ -156,7 +171,8 @@ public sealed record GameView(
     IReadOnlyList<StatusCard>? Statuses = null,
     GridPoint? SelectedTarget = null,
     CharacterSheetCard? Character = null,
-    WorldCard? World = null);
+    WorldCard? World = null,
+    IReadOnlyList<ClaimCard>? Claims = null);
 
 public sealed record WorldCard(
     string CurrentZoneId,
@@ -199,7 +215,8 @@ public sealed record LedgerSummary(
     int ScheduledEvents,
     int Suspicions = 0,
     int Souls = 0,
-    int Triggers = 0);
+    int Triggers = 0,
+    int Claims = 0);
 
 public sealed record DebugStateView(
     int EntityCount,
@@ -211,6 +228,7 @@ public sealed record DebugStateView(
     IReadOnlyList<BackgroundJobCard>? BackgroundJobs = null,
     IReadOnlyList<FactionDebugCard>? Factions = null,
     IReadOnlyList<BondDebugCard>? Bonds = null,
+    IReadOnlyList<string>? ClaimIds = null,
     string RunStatus = "running",
     string? RunConclusion = null);
 

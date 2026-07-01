@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
@@ -37,6 +38,9 @@ public static class EpisodeRunner
 
     public static async Task<int> RunAsync(
         ISpellProvider provider,
+        IDialogueProvider dialogueProvider,
+        IDialogueClaimExtractor dialogueClaimExtractor,
+        IDialogueAuditSink dialogueAudit,
         ISpellAuditSink audit,
         EpisodeRunnerOptions options,
         bool json,
@@ -62,7 +66,10 @@ public static class EpisodeRunner
                 var seed = options.Seed + episode - 1;
                 var session = GameSession.CreateImperialEncounter(
                     new WildMagicController(provider, audit: audit),
-                    seed: seed);
+                    seed: seed,
+                    claimExtractor: dialogueClaimExtractor,
+                    dialogueProvider: dialogueProvider,
+                    dialogueAudit: dialogueAudit);
 
                 var summary = await RunEpisodeAsync(
                     episode,
