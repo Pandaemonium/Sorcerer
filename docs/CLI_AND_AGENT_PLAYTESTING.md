@@ -405,6 +405,8 @@ Inventory protection and reagent inspection are also implemented:
 - `wares` / `browse`
 - `buy <item> [from <merchant>]`
 - `sell <item> [to <merchant>]`
+- `services [target]`
+- `request <service> [from <provider>]`
 
 ## Provider Flags
 

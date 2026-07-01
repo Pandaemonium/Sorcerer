@@ -200,14 +200,15 @@ Payoff:
 - If the merchant does not exist, a travel-bound `merchant_stock` promise can
   create an ordinary merchant entity with `MerchantComponent`, the promised
   ware, interactable trade verbs, canon provenance, and a promise anchor.
-- Services should become explicit NPC affordances, not automatic free effects.
-  A future `ServiceComponent` can expose service id, cost, prerequisites,
-  provider, and result operation.
+- Services are explicit NPC affordances, not automatic free effects.
+  `ServiceComponent` exposes service id, cost, provider, target hint, and result
+  effect. `services [target]` lists revealed services; `request <service> [from
+  <provider>]` attempts one through validated engine consequences.
 - Dialogue can reveal or offer a trade, but explicit buy/trade commands complete
   the transaction.
 
 Complete when the player can see the stock/service through inspect, talk, buy,
-or trade and can attempt the relevant command.
+trade, services, or request and can attempt the relevant command.
 
 ### Threat, Debt, Or Patrol
 
@@ -257,6 +258,9 @@ Payoff:
   payoff modifies terrain, routes, doors, hazards, or map topology. An escape
   route promise is another engine-authorized terrain/action change, not a
   separate narrative-only shortcut system.
+- The first route payoff creates an ordinary route fixture with tags,
+  description, position, and interaction verbs. The first door/service payoff
+  can unlock/open a nearby door through `open_or_unlock`.
 
 Complete when the player can discover, satisfy, violate, or exploit the route
 or rule.
@@ -435,6 +439,14 @@ promises. `GenerationSystem` asks it to realize travel hooks when a zone is
 generated. `InteractionSystem` asks it to realize anchored hooks for `talk`,
 `read`, `open`, and `examine`/`inspect`.
 
+Adjacent dialogue side effects have started the same consolidation. The
+`WorldConsequence`/`WorldConsequenceApplier` slice now applies `record_memory`,
+`update_bond`, `add_merchant_stock`, `offer_trade`, `offer_service`,
+`open_or_unlock`, and `create_route` consequences through a shared engine path.
+Generated dialogue, claim extraction, services, promise payoffs, books, AI
+plans, and magic should increasingly submit these same source-agnostic
+consequences instead of owning separate mutation helpers.
+
 The next step is to deepen that service:
 
 - Score and select eligible promises within a pacing budget instead of relying
@@ -442,6 +454,8 @@ The next step is to deepen that service:
 - Build explicit realization plans using registered archetype handlers.
 - Validate all entity ids, positions, stock targets, components, and event
   slots before mutation.
+- Route simple payoff side effects through `WorldConsequenceApplier` when they
+  match an existing consequence type.
 - Route buy, trade, wait, magic, and faction-turn payoffs through the same
   service.
 - Deepen merchant-stock selection, then add service, door-rule, route,

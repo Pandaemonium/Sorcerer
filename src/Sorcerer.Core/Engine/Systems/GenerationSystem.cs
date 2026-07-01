@@ -182,7 +182,7 @@ public sealed class GenerationSystem
         }
 
         var promiseHooks = new List<string>();
-        promiseHooks.AddRange(_promiseRealizationSystem.RealizeTravelPromises(zoneId, region, entities, deltas));
+        promiseHooks.AddRange(_promiseRealizationSystem.RealizeTravelPromises(zoneId, region, entities, deltas, EntryPoint(entryDirection)));
 
         return new ZoneSnapshot(
             zoneId,

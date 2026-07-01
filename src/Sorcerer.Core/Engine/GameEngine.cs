@@ -1,4 +1,5 @@
 using Sorcerer.Core.Characters;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Engine.Systems;
 using Sorcerer.Core.Entities;
@@ -32,6 +33,7 @@ public sealed class GameEngine
     private readonly StatusRegistry _statusRegistry = StatusRegistry.CreateDefault();
     private readonly TurnSystem _turnSystem;
     private readonly EngineViewBuilder _viewBuilder;
+    private readonly WorldConsequenceApplier _worldConsequences;
     private readonly WorldReactionSystem _worldReactions = new();
 
     public GameEngine(GameState state)
@@ -48,6 +50,7 @@ public sealed class GameEngine
         _movementSystem = new MovementSystem(this, _statusRegistry);
         _perceptionSystem = new PerceptionSystem(State);
         _persistentEffects = new PersistentEffectSystem(this);
+        _worldConsequences = new WorldConsequenceApplier(State);
         _turnSystem = new TurnSystem(this, State, _statusRegistry, _loreCatalog);
         _interactionSystem = new InteractionSystem(this, _itemSystem, _turnSystem);
         _viewBuilder = new EngineViewBuilder(this, _inventoryService, _statusRegistry, _perceptionSystem, _generationSystem, _loreCatalog);
@@ -57,6 +60,9 @@ public sealed class GameEngine
     public GameState State { get; }
 
     public StatusRegistry Statuses => _statusRegistry;
+
+    public WorldConsequenceApplyResult ApplyConsequence(WorldConsequence consequence) =>
+        _worldConsequences.Apply(consequence);
 
     public ActionResult MoveControlled(Direction direction) => _movementSystem.MoveControlled(direction);
 
@@ -153,6 +159,11 @@ public sealed class GameEngine
     public ActionResult Buy(string item, string? target = null) => _itemSystem.Buy(item, target);
 
     public ActionResult Sell(string item, string? target = null) => _itemSystem.Sell(item, target);
+
+    public ActionResult Services(string? target = null) => _interactionSystem.Services(target);
+
+    public ActionResult RequestService(string service, string? target = null) =>
+        _interactionSystem.RequestService(service, target);
 
     public ActionResult Journal()
     {

@@ -896,7 +896,10 @@ public sealed class CreatePromiseOperation : OperationBase
             "createPromise",
             new[] { "promise", "prophecy", "omen" },
             "Add a prophecy, promise, oath, debt, or omen to the world.",
-            "Use for narrative hooks that the world can remember. Fields: kind, text.")
+            "Use for future-facing narrative hooks the world should remember and later honor. "
+                + "If a spell promises that reading, opening, travel, speech, or time will reveal "
+                + "something, use createPromise instead of only addStatus or message. Fields: kind, "
+                + "text, target, trigger/triggerHint.")
     {
     }
 
@@ -927,7 +930,10 @@ public sealed class MessageOperation : OperationBase
             "message",
             Array.Empty<string>(),
             "Add a visible outcome message.",
-            "Use sparingly as flavor alongside mechanical effects. Fields: text.")
+            "Use sparingly for atmosphere or summaries of effects already represented by other "
+                + "operations. Do not use message to claim reading, travel, inventory changes, "
+                + "route reveals, opening/unlocking, damage, summoning, promises, or other state "
+                + "changes. Fields: text.")
     {
     }
 

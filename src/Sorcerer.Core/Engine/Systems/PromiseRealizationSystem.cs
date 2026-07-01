@@ -18,7 +18,8 @@ public sealed class PromiseRealizationSystem
         string zoneId,
         RegionDefinition region,
         Dictionary<EntityId, Entity> entities,
-        List<StateDelta> deltas)
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
     {
         if (zoneId.Equals("0,0", StringComparison.OrdinalIgnoreCase))
         {
@@ -38,21 +39,29 @@ public sealed class PromiseRealizationSystem
             switch (NormalizeToken(realized.RealizationKind ?? realized.Kind))
             {
                 case "item":
-                    RealizeTravelItemPromise(realized, zoneId, region, entities, deltas);
+                    RealizeTravelItemPromise(realized, zoneId, region, entities, deltas, placementOrigin);
                     break;
                 case "person":
-                    RealizeTravelPersonPromise(realized, zoneId, region, entities, deltas);
+                    RealizeTravelPersonPromise(realized, zoneId, region, entities, deltas, placementOrigin);
                     break;
                 case "threat":
-                    RealizeTravelThreatPromise(realized, zoneId, region, entities, deltas);
+                    RealizeTravelThreatPromise(realized, zoneId, region, entities, deltas, placementOrigin);
                     break;
                 case "merchant_stock":
                 case "stock":
                 case "trade":
-                    RealizeTravelMerchantStockPromise(realized, zoneId, region, entities, deltas);
+                    RealizeTravelMerchantStockPromise(realized, zoneId, region, entities, deltas, placementOrigin);
+                    break;
+                case "service":
+                    RealizeTravelServicePromise(realized, zoneId, region, entities, deltas, placementOrigin);
+                    break;
+                case "escape_route":
+                case "route":
+                case "door_rule":
+                    RealizeTravelRoutePromise(realized, zoneId, region, entities, deltas, placementOrigin);
                     break;
                 default:
-                    RealizeTravelSitePromise(realized, zoneId, region, entities, deltas);
+                    RealizeTravelSitePromise(realized, zoneId, region, entities, deltas, placementOrigin);
                     break;
             }
 
@@ -120,6 +129,7 @@ public sealed class PromiseRealizationSystem
             "memory" => RealizeAnchoredMemory(promise, anchor, trigger, messages),
             "threat" => RealizeAnchoredThreat(promise, anchor, trigger, messages),
             "item" => RealizeAnchoredItem(promise, anchor, trigger, messages),
+            "escape_route" or "route" or "door_rule" => RealizeAnchoredRoute(promise, anchor, trigger, messages),
             "quest" => RealizeAnchoredCanon(promise, anchor, trigger, messages, "quest", "A quest takes shape"),
             "site" or "town" or "landmark" => RealizeAnchoredCanon(promise, anchor, trigger, messages, "site", "A distant place answers"),
             _ => RealizeAnchoredCanon(promise, anchor, trigger, messages, "omen", "The omen settles into the world"),
@@ -131,10 +141,11 @@ public sealed class PromiseRealizationSystem
         string zoneId,
         RegionDefinition region,
         Dictionary<EntityId, Entity> entities,
-        List<StateDelta> deltas)
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
     {
         var siteId = _state.NextEntityId("promise_site");
-        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) - 3, _state.Height / 2));
+        var position = FindGeneratedOpenPointNear(entities, placementOrigin, 1, -1);
         var tags = PromiseTags(promise, "site", region);
         var site = new Entity(siteId, PromiseSiteName(promise, region))
             .Set(new PositionComponent(position))
@@ -155,11 +166,12 @@ public sealed class PromiseRealizationSystem
         string zoneId,
         RegionDefinition region,
         Dictionary<EntityId, Entity> entities,
-        List<StateDelta> deltas)
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
     {
         var itemName = PromiseItemName(promise);
         var itemId = _state.NextEntityId("promise_item");
-        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) + 3, _state.Height / 2));
+        var position = FindGeneratedOpenPointNear(entities, placementOrigin, 1, 0);
         var tags = PromiseTags(promise, "item", region);
         var item = BuildPromiseItem(itemId, itemName, promise, position, tags, "This object exists because a claim became reachable");
         entities[itemId] = item;
@@ -173,10 +185,11 @@ public sealed class PromiseRealizationSystem
         string zoneId,
         RegionDefinition region,
         Dictionary<EntityId, Entity> entities,
-        List<StateDelta> deltas)
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
     {
         var personId = _state.NextEntityId("promise_person");
-        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) - 2, (_state.Height / 2) + 2));
+        var position = FindGeneratedOpenPointNear(entities, placementOrigin, 1, 1);
         var tags = PromiseTags(promise, "person", region);
         var person = new Entity(personId, PromisePersonName(promise))
             .Set(new PositionComponent(position))
@@ -206,10 +219,11 @@ public sealed class PromiseRealizationSystem
         string zoneId,
         RegionDefinition region,
         Dictionary<EntityId, Entity> entities,
-        List<StateDelta> deltas)
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
     {
         var threatId = _state.NextEntityId("promise_threat");
-        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) + 2, (_state.Height / 2) - 2));
+        var position = FindGeneratedOpenPointNear(entities, placementOrigin, 2, -1);
         var tags = PromiseTags(promise, "threat", region);
         var threat = BuildPromiseThreat(threatId, PromiseThreatName(promise), promise, position, tags);
         entities[threatId] = threat;
@@ -223,10 +237,11 @@ public sealed class PromiseRealizationSystem
         string zoneId,
         RegionDefinition region,
         Dictionary<EntityId, Entity> entities,
-        List<StateDelta> deltas)
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
     {
         var merchantId = _state.NextEntityId("promise_merchant");
-        var position = FindGeneratedOpenPoint(entities, new GridPoint((_state.Width / 2) + 2, (_state.Height / 2) + 2));
+        var position = FindGeneratedOpenPointNear(entities, placementOrigin, 1, 0);
         var tags = PromiseTags(promise, "merchant_stock", region)
             .Concat(new[] { "npc", "merchant" })
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -257,6 +272,85 @@ public sealed class PromiseRealizationSystem
         var canon = AddCanon("merchant_stock", merchantId.Value, promise, $"{merchant.Name}: {promise.Text}", tags, "travel");
         var summary = $"A promised merchant is here: {merchant.Name} has {itemName}.";
         deltas.Add(PromiseRealizationDelta("promiseMerchantStock", merchantId.Value, summary, promise.Id, zoneId, region.Id, canon.Id, position));
+    }
+
+    private void RealizeTravelServicePromise(
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
+    {
+        var providerId = _state.NextEntityId("promise_service");
+        var position = FindGeneratedOpenPointNear(entities, placementOrigin, 1, 1);
+        var tags = PromiseTags(promise, "service", region)
+            .Concat(new[] { "npc", "service_provider", "folk_magic" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var serviceName = PromiseServiceName(promise);
+        var provider = new Entity(providerId, PromiseServiceProviderName(promise))
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('p', "neutral"))
+            .Set(new TagsComponent(tags))
+            .Set(new DescriptionComponent(promise.Text))
+            .Set(new PhysicalComponent(BlocksMovement: true, Material: "flesh"))
+            .Set(new ActorComponent(6, 6, 0, 0, 1, 0, "neutral"))
+            .Set(new ControllerComponent(ControllerKind.Ai))
+            .Set(new AiComponent("resident"))
+            .Set(new SoulComponent($"{providerId.Value}_soul"))
+            .Set(new BodyStatsComponent(3))
+            .Set(StatusContainerComponent.Empty())
+            .Set(MemoryComponent.Empty())
+            .Set(new FactionComponent("neutral", new[] { "promise", "service_provider" }))
+            .Set(new ServiceComponent(new[]
+            {
+                new ServiceOffer(
+                    NormalizeToken(serviceName),
+                    serviceName,
+                    promise.Text,
+                    PromiseServiceEffect(promise),
+                    GoldCost: 0,
+                    TargetHint: serviceName,
+                    Revealed: true,
+                    Tags: BasicPromiseTags(promise, "service")),
+            }))
+            .Set(new InteractableComponent(new[] { "talk", "give", "services", "request_service" }))
+            .Set(new ProfileComponent(PromiseServiceProviderName(promise), promise.Text))
+            .Set(new PromiseAnchorComponent(new[] { promise.Id }));
+        entities[providerId] = provider;
+        var canon = AddCanon("service", providerId.Value, promise, $"{provider.Name}: {promise.Text}", tags, "travel");
+        var summary = $"A promised service is reachable: {provider.Name} offers {serviceName}.";
+        deltas.Add(PromiseRealizationDelta("promiseService", providerId.Value, summary, promise.Id, zoneId, region.Id, canon.Id, position));
+    }
+
+    private void RealizeTravelRoutePromise(
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
+    {
+        var routeId = _state.NextEntityId("promise_route");
+        var position = FindGeneratedOpenPointNear(entities, placementOrigin, 0, 1);
+        var tags = PromiseTags(promise, "escape_route", region)
+            .Concat(new[] { "route", "hidden_exit" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var route = new Entity(routeId, PromiseRouteName(promise))
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('>', "route"))
+            .Set(new TagsComponent(tags))
+            .Set(new DescriptionComponent(promise.Text))
+            .Set(new PhysicalComponent(BlocksMovement: false, Material: "passage"))
+            .Set(new FixtureComponent("escape_route", tags))
+            .Set(new InteractableComponent(new[] { "examine", "travel" }))
+            .Set(new PromiseAnchorComponent(new[] { promise.Id }));
+        entities[routeId] = route;
+        var canon = AddCanon("escape_route", routeId.Value, promise, $"{route.Name}: {promise.Text}", tags, "travel");
+        var summary = $"A promised route becomes visible: {route.Name}.";
+        deltas.Add(PromiseRealizationDelta("promiseRoute", routeId.Value, summary, promise.Id, zoneId, region.Id, canon.Id, position));
     }
 
     private IReadOnlyList<StateDelta> RealizeAnchoredMemory(
@@ -368,6 +462,61 @@ public sealed class PromiseRealizationSystem
                     ["x"] = position.X,
                     ["y"] = position.Y,
                     ["trigger"] = trigger,
+                }),
+        };
+    }
+
+    private IReadOnlyList<StateDelta> RealizeAnchoredRoute(
+        WorldPromise promise,
+        Entity anchor,
+        string trigger,
+        List<string> messages)
+    {
+        var origin = anchor.TryGet<PositionComponent>(out var anchorPosition)
+            ? anchorPosition.Position
+            : _state.ControlledEntity.Get<PositionComponent>().Position;
+        var position = FindOpenAdjacent(origin)
+            ?? FindOpenAdjacent(_state.ControlledEntity.Get<PositionComponent>().Position)
+            ?? origin;
+        var routeId = _state.NextEntityId("promise_route");
+        var tags = BasicPromiseTags(promise, "escape_route")
+            .Concat(new[] { "route", "hidden_exit" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var route = new Entity(routeId, PromiseRouteName(promise))
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('>', "route"))
+            .Set(new TagsComponent(tags))
+            .Set(new DescriptionComponent(promise.Text))
+            .Set(new PhysicalComponent(BlocksMovement: false, Material: "passage"))
+            .Set(new FixtureComponent("escape_route", tags))
+            .Set(new InteractableComponent(new[] { "examine", "travel" }))
+            .Set(new PromiseAnchorComponent(new[] { promise.Id }));
+        _state.Entities[routeId] = route;
+
+        var canon = AddCanon(
+            "escape_route",
+            routeId.Value,
+            promise,
+            $"{route.Name}: {promise.Text}",
+            tags,
+            trigger);
+        var message = $"A promised route becomes visible: {route.Name}.";
+        messages.Add(message);
+        return new[]
+        {
+            new StateDelta(
+                "promiseRoute",
+                route.Id.Value,
+                message,
+                new Dictionary<string, object?>
+                {
+                    ["promiseId"] = promise.Id,
+                    ["x"] = position.X,
+                    ["y"] = position.Y,
+                    ["trigger"] = trigger,
+                    ["canonId"] = canon.Id,
+                    ["realizationKind"] = "escape_route",
                 }),
         };
     }
@@ -503,6 +652,8 @@ public sealed class PromiseRealizationSystem
         {
             "person" => 12,
             "merchant_stock" or "stock" or "trade" => 11,
+            "service" => 11,
+            "escape_route" or "route" or "door_rule" => 10,
             "site" or "town" or "landmark" => 10,
             "item" => 8,
             "threat" => 7,
@@ -552,7 +703,7 @@ public sealed class PromiseRealizationSystem
         }
 
         return NormalizeToken(promise.RealizationKind ?? promise.Kind)
-            is "site" or "quest" or "prophecy" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade";
+            is "site" or "quest" or "prophecy" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade" or "service" or "escape_route" or "route" or "door_rule";
     }
 
     private static bool PromiseTriggerMatches(string? triggerHint, string trigger)
@@ -600,6 +751,18 @@ public sealed class PromiseRealizationSystem
         new[] { "promise", realization, NormalizeToken(promise.Kind), NormalizeToken(promise.RealizationKind ?? realization) }
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+    private GridPoint FindGeneratedOpenPointNear(
+        IReadOnlyDictionary<EntityId, Entity> entities,
+        GridPoint origin,
+        int dx,
+        int dy)
+    {
+        var preferred = new GridPoint(
+            Math.Clamp(origin.X + dx, 1, _state.Width - 2),
+            Math.Clamp(origin.Y + dy, 1, _state.Height - 2));
+        return FindGeneratedOpenPoint(entities, preferred);
+    }
 
     private GridPoint FindGeneratedOpenPoint(IReadOnlyDictionary<EntityId, Entity> entities, GridPoint origin) =>
         FindOpenNear(origin, OccupiedPoints(entities.Values)) ?? origin;
@@ -698,6 +861,12 @@ public sealed class PromiseRealizationSystem
             return promise.ClaimedPlace;
         }
 
+        var lower = promise.Text.ToLowerInvariant();
+        if (lower.Contains("refuge"))
+        {
+            return lower.Contains("hollowmere") ? "Hollowmere refuge" : "promised refuge";
+        }
+
         return region.Id switch
         {
             "hollowmere_margin" => "folded-road checkpoint",
@@ -724,10 +893,9 @@ public sealed class PromiseRealizationSystem
             return "promised pearl";
         }
 
-        if (!string.IsNullOrWhiteSpace(promise.Subject)
-            && !promise.Subject.Equals(promise.Kind, StringComparison.OrdinalIgnoreCase))
+        if (UsefulSubject(promise) is { } subject)
         {
-            return promise.Subject;
+            return subject;
         }
 
         return "promise token";
@@ -735,10 +903,9 @@ public sealed class PromiseRealizationSystem
 
     private static string PromisePersonName(WorldPromise promise)
     {
-        if (!string.IsNullOrWhiteSpace(promise.Subject)
-            && !promise.Subject.Equals(promise.Kind, StringComparison.OrdinalIgnoreCase))
+        if (UsefulSubject(promise) is { } subject)
         {
-            return promise.Subject;
+            return subject;
         }
 
         return promise.Text.Contains("Nannerl", StringComparison.OrdinalIgnoreCase)
@@ -749,6 +916,11 @@ public sealed class PromiseRealizationSystem
     private static string PromiseMerchantName(WorldPromise promise)
     {
         var text = promise.Text.Trim();
+        if (text.Contains("Jimmer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Jimmer";
+        }
+
         foreach (var phrase in new[] { " can sell", " sells", " trades", " offers" })
         {
             var index = text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase);
@@ -779,6 +951,134 @@ public sealed class PromiseRealizationSystem
         }
 
         return "promised threat";
+    }
+
+    private static string PromiseServiceName(WorldPromise promise)
+    {
+        var lower = promise.Text.ToLowerInvariant();
+        if (lower.Contains("door") || lower.Contains("lock") || lower.Contains("ward"))
+        {
+            return "ward-breaking";
+        }
+
+        if (lower.Contains("route") || lower.Contains("drain") || lower.Contains("tunnel") || lower.Contains("escape"))
+        {
+            return "hidden-route finding";
+        }
+
+        if (UsefulSubject(promise) is { } subject)
+        {
+            return subject;
+        }
+
+        return "quiet folk-magic service";
+    }
+
+    private static string PromiseServiceProviderName(WorldPromise promise)
+    {
+        var text = promise.Text.Trim();
+        foreach (var phrase in new[] { " can ", " offers ", " knows ", " keeps " })
+        {
+            var index = text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase);
+            if (index > 0)
+            {
+                var name = text[..index].Trim(' ', '.', ',', ';', ':', '"', '\'');
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    return name;
+                }
+            }
+        }
+
+        return "promised service keeper";
+    }
+
+    private static string PromiseServiceEffect(WorldPromise promise)
+    {
+        var lower = promise.Text.ToLowerInvariant();
+        if (lower.Contains("door") || lower.Contains("lock") || lower.Contains("ward") || lower.Contains("key"))
+        {
+            return "open_or_unlock";
+        }
+
+        if (lower.Contains("route") || lower.Contains("drain") || lower.Contains("tunnel") || lower.Contains("escape") || lower.Contains("passage"))
+        {
+            return "create_route";
+        }
+
+        return "record_memory";
+    }
+
+    private static string PromiseRouteName(WorldPromise promise)
+    {
+        var lower = promise.Text.ToLowerInvariant();
+        if (lower.Contains("drain"))
+        {
+            return "imperial drainage route";
+        }
+
+        if (lower.Contains("tunnel"))
+        {
+            return "hidden tunnel";
+        }
+
+        if (lower.Contains("grate"))
+        {
+            return "concealed grate";
+        }
+
+        if (lower.Contains("refuge"))
+        {
+            return lower.Contains("hollowmere") ? "path to Hollowmere refuge" : "refuge path";
+        }
+
+        if (lower.Contains("oak"))
+        {
+            return "burned oak road";
+        }
+
+        if (lower.Contains("road"))
+        {
+            return "hidden road";
+        }
+
+        if (lower.Contains("passage"))
+        {
+            return "secret passage";
+        }
+
+        if (lower.Contains("path"))
+        {
+            return "hidden path";
+        }
+
+        if (UsefulSubject(promise) is { } subject)
+        {
+            return subject;
+        }
+
+        return lower.Contains("route") ? "concealed route" : "promised hidden route";
+    }
+
+    private static string? UsefulSubject(WorldPromise promise)
+    {
+        if (string.IsNullOrWhiteSpace(promise.Subject)
+            || promise.Subject.Equals(promise.Kind, StringComparison.OrdinalIgnoreCase)
+            || LooksTechnicalSubject(promise.Subject))
+        {
+            return null;
+        }
+
+        return promise.Subject;
+    }
+
+    private static bool LooksTechnicalSubject(string subject)
+    {
+        var normalized = subject.Trim().ToLowerInvariant();
+        return normalized.Equals("player", StringComparison.OrdinalIgnoreCase)
+            || normalized.EndsWith("_soul", StringComparison.OrdinalIgnoreCase)
+            || normalized.StartsWith("promise_", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains('_', StringComparison.Ordinal);
     }
 
     private static string NormalizeToken(string text)

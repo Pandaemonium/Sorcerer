@@ -140,6 +140,12 @@ Folk-magic services can exist in the opening, but they should be treated as dang
 Someone may know a mender, fever-worker, name-charmer, or road-whisperer, but speaking plainly
 about that practice can plausibly get a person executed by Vigovia.
 
+The first mechanical service lane exists. Dialogue or claim extraction can reveal a service on an
+NPC through `ServiceComponent`; the player can inspect it with `services [target]` and attempt it
+with `request <service> [from <provider>]`. Early service effects should stay practical and
+systemic: open or unlock a nearby door, reveal/create a route fixture, or write durable memory.
+They should feel like risky folk help, not a separate menu of scripted quests.
+
 ### 4. Escape Creates Reputation
 
 The opening should be a reputation fork, not just a tutorial fight.
@@ -168,6 +174,8 @@ Good first-payoff examples:
 - reading an altered notice reveals a newly bound location
 - talking to an NPC after a gift produces a concrete site promise
 - traveling east materializes a small landmark tied to a prior claim
+- a service claim reveals ward-breaking or route-finding, then `request` produces a real door or
+  route consequence
 - a spell-written promise attaches to a door, item, or rumor and appears in the journal
 
 The first payoff should be understandable, local, and fast. Larger hooks can remain pending.

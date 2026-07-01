@@ -86,7 +86,27 @@ public abstract class OperationBase : IOperation
 
     public OperationCard Card { get; private set; }
 
-    public void AttachCard(OperationCard card) => Card = card;
+    public void AttachCard(OperationCard card)
+    {
+        var aliases = Card.Aliases
+            .Concat(card.Aliases)
+            .Where(alias => !string.IsNullOrWhiteSpace(alias))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var fields = new Dictionary<string, string>(Card.Fields, StringComparer.OrdinalIgnoreCase);
+        foreach (var field in card.Fields)
+        {
+            fields[field.Key] = field.Value;
+        }
+
+        Card = new OperationCard(
+            card.Name,
+            aliases,
+            string.IsNullOrWhiteSpace(card.Summary) ? Card.Summary : card.Summary,
+            string.IsNullOrWhiteSpace(card.PromptGuidance) ? Card.PromptGuidance : card.PromptGuidance,
+            fields,
+            card.Examples.Count == 0 ? Card.Examples : card.Examples);
+    }
 
     public abstract ValidationOutcome Validate(EffectContext context, SpellEffect effect);
 

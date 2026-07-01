@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
@@ -101,6 +102,8 @@ public sealed class GameSession
             WaresCommand wares => Engine.Wares(wares.Target),
             BuyCommand buy => Engine.Buy(buy.Item, buy.Target),
             SellCommand sell => Engine.Sell(sell.Item, sell.Target),
+            ServicesCommand services => Engine.Services(services.Target),
+            RequestServiceCommand service => Engine.RequestService(service.Service, service.Target),
             JournalCommand => Engine.Journal(),
             CharacterCommand => Engine.CharacterSheet(),
             TalkCommand talk => await TalkAsync(talk, cancellationToken),
@@ -317,7 +320,7 @@ public sealed class GameSession
             consumedTurn: false,
             Engine.State.Turn,
             Engine.State.Turn,
-                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, protect, unprotect, reagents, wares, buy, sell, journal, character, standing, followers, jobs, save, load, quit.");
+                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, protect, unprotect, reagents, wares, buy, sell, services, request, journal, character, standing, followers, jobs, save, load, quit.");
 
     private async Task<ActionResult> SaveGameAsync(string path)
     {
@@ -555,6 +558,13 @@ public sealed class GameSession
                 .Select(pair => $"{pair.Key} x{pair.Value}")
                 .ToArray()
             : Array.Empty<string>();
+        var services = entity.TryGet<ServiceComponent>(out var serviceComponent)
+            ? serviceComponent.Offers
+                .Where(service => service.Revealed)
+                .OrderBy(service => service.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(service => $"{service.Name} [{service.EffectKind}]")
+                .ToArray()
+            : Array.Empty<string>();
         return new DialogueParticipantCard(
             entity.Id.Value,
             entity.Name,
@@ -564,7 +574,8 @@ public sealed class GameSession
             description,
             bondSummary,
             inventory,
-            wares);
+            wares,
+            services);
     }
 
     private IEnumerable<string> VisibleEntityLines()
@@ -674,6 +685,22 @@ public sealed class GameSession
 
         foreach (var claim in proposals.Claims ?? Array.Empty<DialogueClaimProposal>())
         {
+            if (!GeneratedClaimIsSupportedBySpokenText(claim, response.SpokenText))
+            {
+                deltas.Add(new StateDelta(
+                    "dialogueProposalSkipped",
+                    turn.SpeakerId,
+                    "Dialogue claim proposal skipped because it was not supported by spoken text.",
+                    new Dictionary<string, object?>
+                    {
+                        ["provider"] = provider,
+                        ["proposalType"] = "claim",
+                        ["claimText"] = claim.Text,
+                        ["reason"] = "unsupported_by_spoken_text",
+                    }));
+                continue;
+            }
+
             ApplyClaimProposal(claimRequest, provider, claim, messages, deltas);
         }
 
@@ -705,6 +732,129 @@ public sealed class GameSession
         };
     }
 
+    private static bool GeneratedClaimIsSupportedBySpokenText(DialogueClaimProposal claim, string spokenText)
+    {
+        if (string.IsNullOrWhiteSpace(claim.Text))
+        {
+            return false;
+        }
+
+        var spokenTokens = ClaimSupportTokens(spokenText);
+        if (spokenTokens.Count == 0)
+        {
+            return false;
+        }
+
+        var namedTokens = ProperNameTokens($"{claim.Text} {claim.Subject} {claim.ItemName}");
+        if (namedTokens.Count > 0 && !namedTokens.Any(spokenTokens.Contains))
+        {
+            return false;
+        }
+
+        var claimTokens = ClaimSupportTokens($"{claim.Text} {claim.Subject} {claim.ItemName}");
+        if (claimTokens.Count == 0)
+        {
+            return false;
+        }
+
+        var overlap = claimTokens.Count(spokenTokens.Contains);
+        var required = Math.Min(3, Math.Max(1, claimTokens.Count / 2));
+        return overlap >= required;
+    }
+
+    private static HashSet<string> ClaimSupportTokens(string text) =>
+        new string(text
+            .ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
+            .ToArray())
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(NormalizeClaimSupportToken)
+            .Where(token => token.Length >= 3)
+            .Where(token => !ClaimSupportStopWords.Contains(token))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string NormalizeClaimSupportToken(string token)
+    {
+        if (token.Length > 5 && token.EndsWith("ies", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{token[..^3]}y";
+        }
+
+        if (token.Length > 5 && token.EndsWith("ing", StringComparison.OrdinalIgnoreCase))
+        {
+            return token[..^3];
+        }
+
+        if (token.Length > 4 && token.EndsWith("ed", StringComparison.OrdinalIgnoreCase))
+        {
+            return token[..^2];
+        }
+
+        if (token.Length > 3
+            && token.EndsWith("s", StringComparison.OrdinalIgnoreCase)
+            && !token.EndsWith("ss", StringComparison.OrdinalIgnoreCase))
+        {
+            return token[..^1];
+        }
+
+        return token;
+    }
+
+    private static HashSet<string> ProperNameTokens(string text) =>
+        text.Split(new[] { ' ', ',', '.', ';', ':', '"', '\'', '(', ')', '[', ']', '{', '}', '/', '|', '-' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(token => token.Trim())
+            .Where(token => token.Length >= 4)
+            .Where(token => char.IsUpper(token[0]))
+            .Select(token => new string(token.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant())
+            .Where(token => token.Length >= 4)
+            .Where(token => !ClaimSupportStopWords.Contains(token))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<string> ClaimSupportStopWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "about",
+        "after",
+        "before",
+        "behind",
+        "break",
+        "bring",
+        "can",
+        "could",
+        "from",
+        "have",
+        "into",
+        "keep",
+        "keeps",
+        "know",
+        "knows",
+        "lead",
+        "leads",
+        "left",
+        "lower",
+        "marks",
+        "named",
+        "near",
+        "need",
+        "offer",
+        "offers",
+        "only",
+        "past",
+        "quietly",
+        "sells",
+        "should",
+        "that",
+        "there",
+        "they",
+        "this",
+        "through",
+        "until",
+        "wards",
+        "where",
+        "with",
+        "would",
+    };
+
     private void ApplyDialogueMemoryProposal(
         string provider,
         DialogueMemoryProposal proposal,
@@ -720,38 +870,20 @@ public sealed class GameSession
             ? Engine.State.ControlledEntityId.Value
             : proposal.OwnerEntityId.Trim();
         var salience = Math.Clamp(proposal.Salience, 1, 5);
-        Engine.State.Memories.Append(
+        var consequence = WorldConsequence.RecordMemory(
+            $"dialogue:{provider}",
             ownerId,
             proposal.Text.Trim(),
-            string.IsNullOrWhiteSpace(proposal.Provenance) ? $"dialogue:{provider}" : proposal.Provenance.Trim(),
+            string.IsNullOrWhiteSpace(proposal.Provenance) ? "conversation" : proposal.Provenance.Trim(),
             salience,
-            proposal.Shareable);
-        var owner = Engine.EntityById(ownerId);
-        if (owner is not null)
-        {
-            var memories = owner.TryGet<MemoryComponent>(out var existing)
-                ? existing.Records.ToList()
-                : new List<EntityMemoryRecord>();
-            memories.Add(new EntityMemoryRecord(
-                $"dialogue_memory_{Engine.State.Turn}_{memories.Count + 1}",
-                proposal.Text.Trim(),
-                $"dialogue:{provider}",
-                string.IsNullOrWhiteSpace(proposal.Provenance) ? "conversation" : proposal.Provenance.Trim(),
-                salience,
-                proposal.Shareable));
-            owner.Set(new MemoryComponent(memories));
-        }
-
-        deltas.Add(new StateDelta(
-            "dialogueMemory",
-            ownerId,
-            $"Dialogue memory recorded: {proposal.Text.Trim()}",
-            new Dictionary<string, object?>
-            {
-                ["provider"] = provider,
-                ["salience"] = salience,
-                ["provenance"] = proposal.Provenance,
-            }));
+            proposal.Shareable,
+            sourceEntityId: ownerId,
+            operation: "dialogueMemory",
+            details: new Dictionary<string, object?> { ["provider"] = provider },
+            reason: "Dialogue response proposed a durable memory.");
+        var applied = Engine.ApplyConsequence(consequence);
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
     }
 
     private void ApplyDialogueBondProposal(
@@ -760,9 +892,8 @@ public sealed class GameSession
         List<string> messages,
         List<StateDelta> deltas)
     {
-        ApplyDialogueBondShift(
-            provider,
-            "dialogueBondShift",
+        var applied = Engine.ApplyConsequence(WorldConsequence.UpdateBond(
+            $"dialogue:{provider}",
             proposal.EntityId,
             SoulIdFor(Engine.State.ControlledEntity),
             proposal.LoyaltyDelta,
@@ -770,10 +901,17 @@ public sealed class GameSession
             proposal.AdmirationDelta,
             proposal.ResentmentDelta,
             proposal.Posture,
-            proposal.Reason,
-            playerVisible: true,
-            messages,
-            deltas);
+            WorldConsequenceVisibility.Message,
+            operation: "dialogueBondShift",
+            maxDelta: DialogueBondDeltaLimit,
+            reason: proposal.Reason,
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "bond",
+            }));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
     }
 
     private void ApplyDialogueActionProposal(
@@ -817,90 +955,6 @@ public sealed class GameSession
 
         RejectDialogueAction(provider, proposal, "Dialogue action handlers are not implemented for this action type yet.", deltas);
     }
-
-    private BondRecord? ApplyDialogueBondShift(
-        string provider,
-        string operation,
-        string entityId,
-        string targetSoulId,
-        int loyaltyDelta,
-        int fearDelta,
-        int admirationDelta,
-        int resentmentDelta,
-        string? posture,
-        string? reason,
-        bool playerVisible,
-        List<string> messages,
-        List<StateDelta> deltas,
-        IReadOnlyDictionary<string, object?>? extraDetails = null)
-    {
-        var entity = Engine.EntityById(entityId);
-        if (entity is null)
-        {
-            var skippedDetails = new Dictionary<string, object?>
-            {
-                ["provider"] = provider,
-                ["proposalType"] = "bond",
-                ["operation"] = operation,
-            };
-            if (extraDetails is not null)
-            {
-                foreach (var detail in extraDetails)
-                {
-                    skippedDetails[detail.Key] = detail.Value;
-                }
-            }
-
-            deltas.Add(new StateDelta(
-                "dialogueProposalSkipped",
-                entityId,
-                "Dialogue bond proposal skipped because the entity no longer exists.",
-                skippedDetails));
-            return null;
-        }
-
-        var bond = Engine.State.Bonds.Adjust(
-            SoulIdFor(entity),
-            targetSoulId,
-            ClampDialogueBondDelta(loyaltyDelta),
-            ClampDialogueBondDelta(fearDelta),
-            ClampDialogueBondDelta(admirationDelta),
-            ClampDialogueBondDelta(resentmentDelta),
-            string.IsNullOrWhiteSpace(posture) ? null : posture.Trim());
-        var message = $"{entity.Name}'s posture shifts: {BondSummary(bond)}.";
-        if (playerVisible)
-        {
-            AddVisibleClaimMessage(message, messages);
-        }
-
-        var details = new Dictionary<string, object?>
-        {
-            ["provider"] = provider,
-            ["loyalty"] = bond.Loyalty,
-            ["fear"] = bond.Fear,
-            ["admiration"] = bond.Admiration,
-            ["resentment"] = bond.Resentment,
-            ["posture"] = bond.Posture,
-            ["reason"] = reason,
-        };
-        if (extraDetails is not null)
-        {
-            foreach (var detail in extraDetails)
-            {
-                details[detail.Key] = detail.Value;
-            }
-        }
-
-        deltas.Add(new StateDelta(
-            operation,
-            entity.Id.Value,
-            message,
-            details));
-        return bond;
-    }
-
-    private static int ClampDialogueBondDelta(int delta) =>
-        Math.Clamp(delta, -DialogueBondDeltaLimit, DialogueBondDeltaLimit);
 
     private static bool IsRefusalIntent(string? intent) =>
         NormalizeToken(intent ?? "", "").Equals("refuse", StringComparison.OrdinalIgnoreCase);
@@ -1517,12 +1571,23 @@ public sealed class GameSession
             ApplyBondClaim(request, provider, proposal, record, messages, deltas);
         }
 
+        var immediateApplied = false;
         if (category.Equals("merchant_stock", StringComparison.OrdinalIgnoreCase))
         {
-            ApplyMerchantStockClaim(request, proposal, record, messages, deltas);
+            immediateApplied |= ApplyMerchantStockClaim(request, proposal, record, messages, deltas);
         }
 
-        if (proposal.BindAsPromise)
+        if (category.Equals("service", StringComparison.OrdinalIgnoreCase))
+        {
+            immediateApplied |= ApplyServiceClaim(request, proposal, record, messages, deltas);
+        }
+
+        if (category.Equals("trade", StringComparison.OrdinalIgnoreCase))
+        {
+            immediateApplied |= ApplyTradeClaim(request, proposal, record, messages, deltas);
+        }
+
+        if (ShouldBindClaimAsPromise(proposal, record, category, immediateApplied))
         {
             BindClaimAsPromise(request, proposal, record, messages, deltas);
         }
@@ -1530,6 +1595,42 @@ public sealed class GameSession
         {
             AddVisibleClaimMessage($"A claim settles into your journal: {record.Text}", messages);
         }
+    }
+
+    private static bool ShouldBindClaimAsPromise(
+        DialogueClaimProposal proposal,
+        ClaimRecord record,
+        string category,
+        bool immediateApplied)
+    {
+        if (proposal.BindAsPromise)
+        {
+            return true;
+        }
+
+        if (record.Salience < 3)
+        {
+            return false;
+        }
+
+        if (immediateApplied && category is "merchant_stock" or "service" or "trade")
+        {
+            return false;
+        }
+
+        return category is "site"
+            or "town"
+            or "landmark"
+            or "person"
+            or "item"
+            or "merchant_stock"
+            or "service"
+            or "trade"
+            or "threat"
+            or "escape_route"
+            or "route"
+            or "prophecy"
+            or "door_rule";
     }
 
     private void ApplyBondClaim(
@@ -1540,9 +1641,8 @@ public sealed class GameSession
         List<string> messages,
         List<StateDelta> deltas)
     {
-        var bond = ApplyDialogueBondShift(
-            provider,
-            "claimBondShift",
+        var applied = Engine.ApplyConsequence(WorldConsequence.UpdateBond(
+            $"dialogue_claim:{provider}",
             request.SpeakerId,
             request.ListenerSoulId,
             proposal.LoyaltyDelta,
@@ -1550,15 +1650,20 @@ public sealed class GameSession
             proposal.AdmirationDelta,
             proposal.ResentmentDelta,
             proposal.BondPosture,
-            null,
-            record.PlayerVisible,
-            messages,
-            deltas,
-            new Dictionary<string, object?>
+            record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+            sourceEntityId: request.SpeakerId,
+            evidence: record.Text,
+            operation: "claimBondShift",
+            maxDelta: DialogueBondDeltaLimit,
+            details: new Dictionary<string, object?>
             {
+                ["provider"] = provider,
+                ["proposalType"] = "bond",
                 ["claimId"] = record.Id,
-            });
-        if (bond is null)
+            }));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+        if (!applied.Applied)
         {
             return;
         }
@@ -1566,7 +1671,7 @@ public sealed class GameSession
         Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: request.SpeakerId);
     }
 
-    private void ApplyMerchantStockClaim(
+    private bool ApplyMerchantStockClaim(
         DialogueClaimRequest request,
         DialogueClaimProposal proposal,
         ClaimRecord record,
@@ -1576,34 +1681,115 @@ public sealed class GameSession
         var merchant = ResolveMerchantForClaim(request, proposal);
         if (merchant is null)
         {
-            return;
+            return false;
         }
 
         var itemName = FirstNonBlank(proposal.ItemName, proposal.Subject, record.Subject);
         if (string.IsNullOrWhiteSpace(itemName))
         {
-            return;
+            return false;
         }
 
-        var wares = merchant.Get<MerchantComponent>().Wares;
-        wares.TryGetValue(itemName, out var current);
-        wares[itemName] = current + 1;
-        var updated = Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: merchant.Id.Value) ?? record;
-        var message = $"{merchant.Name}'s stock now includes {itemName}.";
-        deltas.Add(new StateDelta(
-            "claimMerchantStock",
+        var applied = Engine.ApplyConsequence(WorldConsequence.AddMerchantStock(
+            $"dialogue_claim:{record.Id}",
             merchant.Id.Value,
-            message,
-            new Dictionary<string, object?>
+            itemName,
+            visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+            sourceEntityId: request.SpeakerId,
+            evidence: record.Text,
+            operation: "claimMerchantStock",
+            details: new Dictionary<string, object?>
             {
-                ["claimId"] = updated.Id,
-                ["item"] = itemName,
-                ["quantity"] = wares[itemName],
+                ["claimId"] = record.Id,
+                ["provider"] = "dialogue_claim",
             }));
-        if (updated.PlayerVisible)
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+        if (applied.Applied)
         {
-            AddVisibleClaimMessage(message, messages);
+            Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: merchant.Id.Value);
         }
+
+        return applied.Applied;
+    }
+
+    private bool ApplyServiceClaim(
+        DialogueClaimRequest request,
+        DialogueClaimProposal proposal,
+        ClaimRecord record,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var provider = ResolveServiceProviderForClaim(request, proposal, record);
+        if (provider is null)
+        {
+            return false;
+        }
+
+        var serviceName = FirstNonBlank(proposal.ItemName, proposal.Subject, record.Subject, "quiet service")!;
+        var applied = Engine.ApplyConsequence(WorldConsequence.OfferService(
+            $"dialogue_claim:{record.Id}",
+            provider.Id.Value,
+            NormalizeToken(serviceName, "service"),
+            serviceName,
+            record.Text,
+            InferServiceEffect(record.Text, serviceName),
+            targetHint: proposal.TriggerHint,
+            tags: proposal.Tags,
+            visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+            sourceEntityId: request.SpeakerId,
+            evidence: record.Text,
+            operation: "claimOfferService",
+            details: new Dictionary<string, object?>
+            {
+                ["claimId"] = record.Id,
+                ["provider"] = "dialogue_claim",
+            }));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+        if (applied.Applied)
+        {
+            Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: applied.TargetId);
+        }
+
+        return applied.Applied;
+    }
+
+    private bool ApplyTradeClaim(
+        DialogueClaimRequest request,
+        DialogueClaimProposal proposal,
+        ClaimRecord record,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var traderId = FirstNonBlank(proposal.MerchantId, proposal.TargetEntityId, request.SpeakerId);
+        if (traderId is null)
+        {
+            return false;
+        }
+
+        var itemName = FirstNonBlank(proposal.ItemName, proposal.Subject, record.Subject);
+        var applied = Engine.ApplyConsequence(WorldConsequence.OfferTrade(
+            $"dialogue_claim:{record.Id}",
+            traderId,
+            itemName,
+            visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+            sourceEntityId: request.SpeakerId,
+            evidence: record.Text,
+            operation: "claimOfferTrade",
+            details: new Dictionary<string, object?>
+            {
+                ["claimId"] = record.Id,
+                ["provider"] = "dialogue_claim",
+            }));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+        if (applied.Applied)
+        {
+            Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: applied.TargetId);
+        }
+
+        return applied.Applied;
     }
 
     private void BindClaimAsPromise(
@@ -1613,23 +1799,35 @@ public sealed class GameSession
         List<string> messages,
         List<StateDelta> deltas)
     {
-        var triggerHint = string.IsNullOrWhiteSpace(proposal.TriggerHint) ? "travel" : proposal.TriggerHint.Trim();
-        var realizationKind = NormalizeRealizationKind(proposal.RealizationKind, proposal.Category);
+        var realizationKind = NormalizeRealizationKind(proposal.RealizationKind, proposal.Category, record.Text);
+        var triggerHint = NormalizePromiseTrigger(request, proposal, record, realizationKind);
         var existing = MatchingActivePromise(record, proposal, triggerHint, realizationKind);
         if (existing is not null)
         {
-            var duplicate = Engine.State.Claims.Update(record.Id, status: "promised", boundPromiseId: existing.Id) ?? record;
+            var mergedTriggerHint = MergeTriggerHints(existing.TriggerHint, triggerHint);
+            var mergedRealizationKind = MergeRealizationKind(existing.RealizationKind, realizationKind);
+            var linkedPromise = ShouldRebindExistingPromise(existing, mergedTriggerHint, mergedRealizationKind)
+                ? Engine.State.PromiseLedger.Bind(
+                    existing.Id,
+                    ShouldBindToRegion(mergedTriggerHint, mergedRealizationKind)
+                        ? existing.BoundPlace ?? Engine.State.RegionId
+                        : existing.BoundPlace,
+                    existing.BoundTargetId,
+                    mergedTriggerHint,
+                    mergedRealizationKind) ?? existing
+                : existing;
+            var duplicate = Engine.State.Claims.Update(record.Id, status: "promised", boundPromiseId: linkedPromise.Id) ?? record;
             deltas.Add(new StateDelta(
                 "claimPromiseLinked",
-                existing.Id,
-                $"A repeated claim points back to an existing promise: {existing.Text}",
+                linkedPromise.Id,
+                $"A repeated claim points back to an existing promise: {linkedPromise.Text}",
                 new Dictionary<string, object?>
                 {
                     ["claimId"] = duplicate.Id,
-                    ["promiseId"] = existing.Id,
-                    ["status"] = existing.Status,
-                    ["triggerHint"] = existing.TriggerHint,
-                    ["realizationKind"] = existing.RealizationKind,
+                    ["promiseId"] = linkedPromise.Id,
+                    ["status"] = linkedPromise.Status,
+                    ["triggerHint"] = linkedPromise.TriggerHint,
+                    ["realizationKind"] = linkedPromise.RealizationKind,
                 }));
             return;
         }
@@ -1641,7 +1839,7 @@ public sealed class GameSession
             source: $"dialogue_claim:{record.Id}",
             salience: record.Salience,
             subject: record.Subject,
-            claimedPlace: string.IsNullOrWhiteSpace(proposal.ClaimedPlace) ? Engine.State.RegionId : proposal.ClaimedPlace,
+            claimedPlace: string.IsNullOrWhiteSpace(proposal.ClaimedPlace) ? null : proposal.ClaimedPlace,
             triggerHint: triggerHint,
             realizationKind: realizationKind);
         var bound = ShouldBindToRegion(triggerHint, realizationKind)
@@ -1678,10 +1876,64 @@ public sealed class GameSession
             !promise.Status.Equals("cleared", StringComparison.OrdinalIgnoreCase)
             && !promise.Status.Equals("realized", StringComparison.OrdinalIgnoreCase)
             && promise.Text.Equals(record.Text, StringComparison.OrdinalIgnoreCase)
-            && NormalizeToken(promise.RealizationKind ?? "", realizationKind).Equals(realizationKind, StringComparison.OrdinalIgnoreCase)
-            && TriggerMatches(promise.TriggerHint, triggerHint)
+            && PromiseRealizationKindsCompatible(promise.RealizationKind, realizationKind)
+            && TriggerHintsOverlap(promise.TriggerHint, triggerHint)
             && (string.IsNullOrWhiteSpace(proposal.PromiseKind)
                 || promise.Kind.Equals(proposal.PromiseKind, StringComparison.OrdinalIgnoreCase)));
+
+    private static bool ShouldRebindExistingPromise(
+        WorldPromise promise,
+        string? triggerHint,
+        string? realizationKind) =>
+        !string.Equals(promise.TriggerHint, triggerHint, StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(promise.RealizationKind, realizationKind, StringComparison.OrdinalIgnoreCase)
+        || (ShouldBindToRegion(triggerHint, realizationKind) && string.IsNullOrWhiteSpace(promise.BoundPlace));
+
+    private static bool PromiseRealizationKindsCompatible(string? existing, string requested)
+    {
+        var left = NormalizeToken(existing ?? "", "");
+        var right = NormalizeToken(requested, "");
+        return string.IsNullOrWhiteSpace(left)
+            || string.IsNullOrWhiteSpace(right)
+            || left.Equals(right, StringComparison.OrdinalIgnoreCase)
+            || (IsPlaceLikeRealization(left) && IsPlaceLikeRealization(right))
+            || (IsStockLikeRealization(left) && IsStockLikeRealization(right));
+    }
+
+    private static string? MergeRealizationKind(string? existing, string requested)
+    {
+        var left = NormalizeToken(existing ?? "", "");
+        var right = NormalizeToken(requested, "");
+        if (string.IsNullOrWhiteSpace(left))
+        {
+            return string.IsNullOrWhiteSpace(right) ? null : right;
+        }
+
+        if (string.IsNullOrWhiteSpace(right) || left.Equals(right, StringComparison.OrdinalIgnoreCase))
+        {
+            return left;
+        }
+
+        if ((IsPlaceLikeRealization(left) && right is "escape_route" or "route" or "door_rule")
+            || (IsStockLikeRealization(left) && right is "merchant_stock" or "stock"))
+        {
+            return right;
+        }
+
+        if ((IsPlaceLikeRealization(right) && left is "escape_route" or "route" or "door_rule")
+            || (IsStockLikeRealization(right) && left is "merchant_stock" or "stock"))
+        {
+            return left;
+        }
+
+        return right;
+    }
+
+    private static bool IsPlaceLikeRealization(string kind) =>
+        kind is "site" or "town" or "landmark" or "escape_route" or "route" or "door_rule";
+
+    private static bool IsStockLikeRealization(string kind) =>
+        kind is "merchant_stock" or "stock" or "trade";
 
     private void AddClaimMemory(DialogueClaimRequest request, ClaimRecord record)
     {
@@ -1727,6 +1979,28 @@ public sealed class GameSession
             .FirstOrDefault(entity => entity.Has<MerchantComponent>());
     }
 
+    private Entity? ResolveServiceProviderForClaim(
+        DialogueClaimRequest request,
+        DialogueClaimProposal proposal,
+        ClaimRecord record)
+    {
+        if (!string.IsNullOrWhiteSpace(proposal.TargetEntityId)
+            && Engine.EntityById(proposal.TargetEntityId) is { } target)
+        {
+            if (!target.Id.Value.Equals(request.SpeakerId, StringComparison.OrdinalIgnoreCase)
+                || ClaimNamesSpeakerAsProvider(record.Text, request.SpeakerName))
+            {
+                return target;
+            }
+
+            return null;
+        }
+
+        return ClaimNamesSpeakerAsProvider(record.Text, request.SpeakerName)
+            ? Engine.EntityById(request.SpeakerId)
+            : null;
+    }
+
     private IReadOnlyList<WorldMemoryRecord> RecentMemoriesFor(string speakerId) =>
         Engine.State.Memories.Records
             .Where(record => record.SubjectId.Equals(speakerId, StringComparison.OrdinalIgnoreCase)
@@ -1743,7 +2017,7 @@ public sealed class GameSession
 
     private static bool ShouldBindToRegion(string? triggerHint, string? realizationKind) =>
         TriggerMatches(triggerHint, "travel")
-        && NormalizeToken(realizationKind ?? "", "site") is "site" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade";
+        && NormalizeToken(realizationKind ?? "", "site") is "site" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade" or "service" or "escape_route" or "door_rule" or "route";
 
     private static bool TriggerMatches(string? hint, string trigger) =>
         string.IsNullOrWhiteSpace(hint)
@@ -1752,9 +2026,95 @@ public sealed class GameSession
         || hint.Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Any(part => part.Equals(trigger, StringComparison.OrdinalIgnoreCase));
 
-    private static string NormalizeRealizationKind(string? realizationKind, string category)
+    private static bool TriggerHintsOverlap(string? left, string? right)
     {
-        var normalized = NormalizeToken(realizationKind ?? category, "memory");
+        var leftParts = TriggerHintParts(left);
+        var rightParts = TriggerHintParts(right);
+        return leftParts.Count == 0
+            || rightParts.Count == 0
+            || leftParts.Contains("encounter")
+            || rightParts.Contains("encounter")
+            || leftParts.Overlaps(rightParts);
+    }
+
+    private static HashSet<string> TriggerHintParts(string? hint) =>
+        string.IsNullOrWhiteSpace(hint)
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : hint.Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => part.ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string? MergeTriggerHints(string? existing, string? requested)
+    {
+        var parts = TriggerHintParts(existing);
+        parts.UnionWith(TriggerHintParts(requested));
+        if (parts.Count == 0)
+        {
+            return string.IsNullOrWhiteSpace(existing)
+                ? string.IsNullOrWhiteSpace(requested) ? null : requested.Trim()
+                : existing.Trim();
+        }
+
+        var preferredOrder = new[] { "travel", "talk", "read", "open", "inspect", "buy", "trade", "encounter" };
+        return string.Join(
+            ",",
+            preferredOrder.Where(parts.Contains)
+                .Concat(parts.Except(preferredOrder, StringComparer.OrdinalIgnoreCase).OrderBy(part => part, StringComparer.OrdinalIgnoreCase)));
+    }
+
+    private string NormalizePromiseTrigger(
+        DialogueClaimRequest request,
+        DialogueClaimProposal proposal,
+        ClaimRecord record,
+        string realizationKind)
+    {
+        var triggerHint = string.IsNullOrWhiteSpace(proposal.TriggerHint) ? "travel" : proposal.TriggerHint.Trim();
+        var categoryKind = NormalizeClaimCategoryAsRealization(record.Category);
+        if ((categoryKind.Equals("service", StringComparison.OrdinalIgnoreCase)
+                || realizationKind.Equals("service", StringComparison.OrdinalIgnoreCase))
+            && ResolveServiceProviderForClaim(request, proposal, record) is null)
+        {
+            return "travel";
+        }
+
+        if (LooksLikeRoutePromise(record.Text) && !TriggerMatches(triggerHint, "travel"))
+        {
+            return "travel";
+        }
+
+        return triggerHint;
+    }
+
+    private static string NormalizeRealizationKind(string? realizationKind, string category, string? text = null)
+    {
+        var categoryKind = NormalizeClaimCategoryAsRealization(category);
+        var requestedKind = NormalizeRealizationToken(realizationKind ?? category);
+        if (LooksLikeMerchantStockPromise(text))
+        {
+            return "merchant_stock";
+        }
+
+        if ((categoryKind.Equals("site", StringComparison.OrdinalIgnoreCase)
+                || requestedKind.Equals("site", StringComparison.OrdinalIgnoreCase))
+            && LooksLikeRoutePromise(text))
+        {
+            return "escape_route";
+        }
+
+        if (CategoryControlsRealization(categoryKind) && !requestedKind.Equals(categoryKind, StringComparison.OrdinalIgnoreCase))
+        {
+            return categoryKind;
+        }
+
+        return requestedKind;
+    }
+
+    private static string NormalizeClaimCategoryAsRealization(string category) =>
+        NormalizeRealizationToken(category);
+
+    private static string NormalizeRealizationToken(string? text)
+    {
+        var normalized = NormalizeToken(text ?? "", "memory");
         return normalized switch
         {
             "place" or "site" or "town" or "landmark" => "site",
@@ -1762,8 +2122,107 @@ public sealed class GameSession
             "npc" or "person" or "relative" => "person",
             "enemy" or "danger" or "threat" => "threat",
             "item" or "blade" or "weapon" => "item",
+            "service" or "folk_magic" or "folk_magic_service" => "service",
+            "route" or "escape_route" or "hidden_exit" or "tunnel" => "escape_route",
+            "door" or "door_rule" or "lock" => "door_rule",
             _ => normalized,
         };
+    }
+
+    private static bool CategoryControlsRealization(string categoryKind) =>
+        categoryKind is "merchant_stock" or "service" or "escape_route" or "door_rule" or "threat";
+
+    private static bool LooksLikeRoutePromise(string? text)
+    {
+        var lower = (text ?? "").ToLowerInvariant();
+        return lower.Contains("route", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("road", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("hidden exit", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("escape", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("tunnel", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("drain", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("grate", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("passage", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("way out", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeMerchantStockPromise(string? text)
+    {
+        var lower = (text ?? "").ToLowerInvariant();
+        return lower.Contains("merchant", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("seller", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("sells", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("sell you", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("wares", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("trades", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("for sale", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ClaimNamesSpeakerAsProvider(string text, string speakerName)
+    {
+        var lower = $" {text.Trim().ToLowerInvariant()} ";
+        if (lower.Contains(" i can ", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains(" i know ", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains(" i will ", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains(" i'll ", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        foreach (var name in SpeakerNameTokens(speakerName))
+        {
+            if (lower.Contains($" {name} can ", StringComparison.OrdinalIgnoreCase)
+                || lower.Contains($" {name} knows ", StringComparison.OrdinalIgnoreCase)
+                || lower.Contains($" {name} offers ", StringComparison.OrdinalIgnoreCase)
+                || lower.Contains($" {name} will ", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyList<string> SpeakerNameTokens(string speakerName)
+    {
+        var names = new List<string>();
+        var full = speakerName.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(full))
+        {
+            names.Add(full);
+        }
+
+        var first = full.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(first))
+        {
+            names.Add(first);
+        }
+
+        return names.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static string InferServiceEffect(string text, string serviceName)
+    {
+        var lower = $"{text} {serviceName}".ToLowerInvariant();
+        if (lower.Contains("door", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("lock", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("unlock", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("ward", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("key", StringComparison.OrdinalIgnoreCase))
+        {
+            return "open_or_unlock";
+        }
+
+        if (lower.Contains("route", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("tunnel", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("drain", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("passage", StringComparison.OrdinalIgnoreCase)
+            || lower.Contains("escape", StringComparison.OrdinalIgnoreCase))
+        {
+            return "create_route";
+        }
+
+        return "record_memory";
     }
 
     private static string NormalizeToken(string text, string fallback)
@@ -1806,31 +2265,6 @@ public sealed class GameSession
 
     private static string SoulIdFor(Entity entity) =>
         entity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : entity.Id.Value;
-
-    private static string BondSummary(BondRecord bond)
-    {
-        if (bond.Posture.Equals("follower", StringComparison.OrdinalIgnoreCase))
-        {
-            return "following";
-        }
-
-        if (bond.Loyalty + bond.Admiration >= 5)
-        {
-            return "warm enough to risk something";
-        }
-
-        if (bond.Fear > bond.Loyalty + bond.Admiration)
-        {
-            return "afraid";
-        }
-
-        if (bond.Resentment >= 5)
-        {
-            return "resentful";
-        }
-
-        return bond.Posture;
-    }
 
     private ActionResult CompleteRunIfNeeded(ActionResult result)
     {

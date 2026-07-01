@@ -494,6 +494,9 @@ public sealed record EntitySave(
             case MerchantComponent typed:
                 entity.Set(typed);
                 break;
+            case ServiceComponent typed:
+                entity.Set(typed);
+                break;
             case FixtureComponent typed:
                 entity.Set(typed);
                 break;
@@ -594,6 +597,7 @@ public sealed record ComponentSave(
                 ("equipmentSlot", value.EquipmentSlot)),
             StackComponent value => New("stack", ("quantity", value.Quantity)),
             MerchantComponent value => New("merchant", ("wares", SortIntMap(value.Wares)), ("gold", value.Gold)),
+            ServiceComponent value => New("services", ("offers", value.Offers.OrderBy(offer => offer.Id, StringComparer.OrdinalIgnoreCase).ToArray())),
             FixtureComponent value => New(
                 "fixture",
                 ("fixtureType", value.FixtureType),
@@ -667,6 +671,7 @@ public sealed record ComponentSave(
                 ReadNullableString(fields, "equipmentSlot")),
             "stack" => new StackComponent(ReadInt(fields, "quantity", 1)),
             "merchant" => new MerchantComponent(ReadIntMap(fields, "wares"), ReadInt(fields, "gold", 30)),
+            "services" => new ServiceComponent(ReadServiceOfferList(fields, "offers")),
             "fixture" => new FixtureComponent(
                 ReadString(fields, "fixtureType"),
                 ReadStringList(fields, "tags"),
@@ -756,6 +761,24 @@ public sealed record ComponentSave(
                 ReadString(map, "provenance", "unknown"),
                 ReadInt(map, "salience", 1),
                 ReadBool(map, "shareable")))
+            .ToArray();
+
+    private static IReadOnlyList<ServiceOffer> ReadServiceOfferList(IReadOnlyDictionary<string, object?> fields, string key) =>
+        ReadObjectList(fields, key)
+            .Select(map =>
+            {
+                var id = ReadString(map, "id", "service");
+                return new ServiceOffer(
+                    id,
+                    ReadString(map, "name", id),
+                    ReadString(map, "description"),
+                    ReadString(map, "effectKind", "record_memory"),
+                    ReadInt(map, "goldCost"),
+                    ReadNullableString(map, "itemCost"),
+                    ReadNullableString(map, "targetHint"),
+                    ReadBool(map, "revealed", true),
+                    ReadStringList(map, "tags"));
+            })
             .ToArray();
 
     private static IReadOnlyList<Dictionary<string, object?>> ReadObjectList(IReadOnlyDictionary<string, object?> fields, string key)

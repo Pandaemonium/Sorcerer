@@ -1739,9 +1739,13 @@ public sealed class GameSessionTests
         var index = OperationRegistry.CreateDefault().ToIndex();
 
         var createTiles = index.Cards.Single(card => card.Name == "createTiles");
+        var createPromise = index.Cards.Single(card => card.Name == "createPromise");
+        var message = index.Cards.Single(card => card.Name == "message");
 
         Assert.Equal("Create or alter terrain.", createTiles.Summary);
         Assert.Contains("terrain", createTiles.Aliases);
+        Assert.Contains("future-facing narrative hooks", createPromise.PromptGuidance);
+        Assert.Contains("Do not use message to claim", message.PromptGuidance);
     }
 
     [Fact]
@@ -1871,6 +1875,78 @@ public sealed class GameSessionTests
             card.Id == promise.Id
             && card.BoundTargetId == "notice_1"
             && card.RealizedIn == "read:notice_1");
+    }
+
+    [Fact]
+    public async Task PromiseIntentCannotBeSatisfiedByNarratedRouteReveal()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new NarratedRouteRevealSpellProvider()));
+
+        var result = await session.ExecuteAsync(new CastCommand("promise that the posted notice will reveal a hidden route when read"));
+
+        Assert.False(result.Success);
+        Assert.True(result.TechnicalFailure);
+        Assert.False(result.ConsumedTurn);
+        Assert.Equal(0, result.TurnAfter);
+        Assert.DoesNotContain(session.Engine.State.PromiseLedger.Promises, promise =>
+            promise.Text.Contains("hidden route", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(session.Engine.State.Messages, message =>
+            message.Contains("route lies beneath", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Messages, message =>
+            message.Contains("promised future", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("route", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task PromiseIntentClipsUnsafeSupplementalNarrationWhenPromiseExists()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new PromiseWithUnsafeNarrationSpellProvider()));
+
+        var result = await session.ExecuteAsync(new CastCommand("promise that the posted notice will reveal a hidden route when read"));
+
+        Assert.True(result.Success);
+        Assert.False(result.TechnicalFailure);
+        Assert.True(result.ConsumedTurn);
+        Assert.Contains(session.Engine.State.PromiseLedger.Promises, promise =>
+            promise.BoundTargetId == "notice_1"
+            && promise.TriggerHint == "read"
+            && promise.Text.Contains("hidden route", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Messages, message => message.Contains("future event", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Messages, message => message.Contains("you read", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Messages, message => message.Contains("as you read", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task MagicRoutePromiseRealizesReadableAnchorIntoRoute()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new PromiseWithUnsafeNarrationSpellProvider()));
+        session.Engine.EntityById("soldier_1")!.Set(new ActorComponent(0, 10, 0, 0, 3, 1, "empire"));
+        session.Engine.EntityById("soldier_2")!.Set(new ActorComponent(0, 10, 0, 0, 3, 1, "empire"));
+
+        var cast = await session.ExecuteAsync(new CastCommand("promise that the posted notice will reveal a hidden route when read"));
+        var notice = session.Engine.EntityById("notice_1")!;
+        var promise = session.Engine.State.PromiseLedger.Promises.Single(item =>
+            item.Text.Contains("hidden route", StringComparison.OrdinalIgnoreCase));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(6, 7)));
+
+        var read = await session.ExecuteAsync(new ReadCommand("notice"));
+        var realized = session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == promise.Id);
+
+        Assert.True(cast.Success);
+        Assert.Equal("escape_route", promise.RealizationKind);
+        Assert.Equal("notice_1", promise.BoundTargetId);
+        Assert.Contains(promise.Id, notice.Get<PromiseAnchorComponent>().PromiseIds);
+        Assert.True(read.Success);
+        Assert.Equal("realized", realized.Status);
+        Assert.Equal("read:notice_1", realized.RealizedIn);
+        Assert.Contains(read.Deltas, delta => delta.Operation == "promiseRoute");
+        Assert.Contains(session.Engine.State.Entities.Values, entity =>
+            entity.Has<FixtureComponent>()
+            && entity.Get<FixtureComponent>().FixtureType == "escape_route"
+            && entity.TryGet<PromiseAnchorComponent>(out var anchor)
+            && anchor.PromiseIds.Contains(promise.Id));
+        Assert.DoesNotContain(session.Engine.State.Entities.Values, entity =>
+            entity.Name.Equals("player_soul", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -2249,6 +2325,88 @@ public sealed class GameSessionTests
                             ["text"] = "The posted notice will remember my name when read.",
                             ["target"] = "notice_1",
                             ["trigger"] = "read",
+                        }),
+                },
+                Costs: Array.Empty<SpellCost>(),
+                RejectedReason: null);
+
+            return Task.FromResult(new SpellProviderResult(
+                Name,
+                "",
+                resolution,
+                TechnicalFailure: false,
+                Error: null));
+        }
+    }
+
+    private sealed class NarratedRouteRevealSpellProvider : ISpellProvider
+    {
+        public string Name => "fixture";
+
+        public Task<SpellProviderResult> ResolveAsync(
+            SpellRequest request,
+            CancellationToken cancellationToken)
+        {
+            var resolution = new SpellResolution(
+                Accepted: true,
+                Severity: "minor",
+                OutcomeText: "The notice's ink bleeds into a map of secret passages; reading it reveals the hidden route.",
+                Effects: new[]
+                {
+                    new SpellEffect(
+                        "addStatus",
+                        new Dictionary<string, object?>
+                        {
+                            ["target"] = "notice_1",
+                            ["status"] = "revealed",
+                        }),
+                    new SpellEffect(
+                        "message",
+                        new Dictionary<string, object?>
+                        {
+                            ["text"] = "You read the posted containment notice. The route lies beneath the third archway.",
+                        }),
+                },
+                Costs: Array.Empty<SpellCost>(),
+                RejectedReason: null);
+
+            return Task.FromResult(new SpellProviderResult(
+                Name,
+                "",
+                resolution,
+                TechnicalFailure: false,
+                Error: null));
+        }
+    }
+
+    private sealed class PromiseWithUnsafeNarrationSpellProvider : ISpellProvider
+    {
+        public string Name => "fixture";
+
+        public Task<SpellProviderResult> ResolveAsync(
+            SpellRequest request,
+            CancellationToken cancellationToken)
+        {
+            var resolution = new SpellResolution(
+                Accepted: true,
+                Severity: "minor",
+                OutcomeText: "The notice's ink bleeds into a map of cracks as you read it, revealing the hidden route.",
+                Effects: new[]
+                {
+                    new SpellEffect(
+                        "createPromise",
+                        new Dictionary<string, object?>
+                        {
+                            ["kind"] = "reveal_route",
+                            ["text"] = "Reading this posted containment notice will reveal a hidden route when conditions are met.",
+                            ["target"] = "notice_1",
+                            ["triggerHint"] = "read",
+                        }),
+                    new SpellEffect(
+                        "message",
+                        new Dictionary<string, object?>
+                        {
+                            ["text"] = "You read the posted containment notice. The route lies beneath the third archway.",
                         }),
                 },
                 Costs: Array.Empty<SpellCost>(),

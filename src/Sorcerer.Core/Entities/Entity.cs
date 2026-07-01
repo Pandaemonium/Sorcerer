@@ -87,6 +87,10 @@ public sealed class Entity
             {
                 Wares = new Dictionary<string, int>(merchant.Wares, StringComparer.OrdinalIgnoreCase),
             },
+            ServiceComponent services => services with
+            {
+                Offers = services.Offers.ToArray(),
+            },
             _ => component,
         };
 }

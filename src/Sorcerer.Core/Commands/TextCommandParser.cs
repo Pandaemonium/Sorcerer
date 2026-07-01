@@ -51,6 +51,8 @@ public static class TextCommandParser
             "wares" or "browse" => new WaresCommand(NullIfEmpty(rest)),
             "buy" => ParseBuy(rest),
             "sell" => ParseSell(rest),
+            "services" => new ServicesCommand(NullIfEmpty(rest)),
+            "request" or "service" => ParseRequestService(rest),
             "journal" or "promises" or "rumors" => new JournalCommand(),
             "character" or "sheet" or "profile" => new CharacterCommand(),
             "talk" or "say" or "speak" => new TalkCommand(rest),
@@ -131,6 +133,19 @@ public static class TextCommandParser
         return new SellCommand(
             text[..marker].Trim(),
             NullIfEmpty(text[(marker + 4)..]));
+    }
+
+    private static GameCommand ParseRequestService(string text)
+    {
+        var marker = text.IndexOf(" from ", StringComparison.OrdinalIgnoreCase);
+        if (marker < 0)
+        {
+            return new RequestServiceCommand(text.Trim());
+        }
+
+        return new RequestServiceCommand(
+            text[..marker].Trim(),
+            NullIfEmpty(text[(marker + 6)..]));
     }
 
     private static string? NullIfEmpty(string value) =>

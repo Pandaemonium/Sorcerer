@@ -54,6 +54,10 @@ public sealed record BuyCommand(string Item, string? Target = null) : GameComman
 
 public sealed record SellCommand(string Item, string? Target = null) : GameCommand;
 
+public sealed record ServicesCommand(string? Target = null) : GameCommand;
+
+public sealed record RequestServiceCommand(string Service, string? Target = null) : GameCommand;
+
 public sealed record JournalCommand() : GameCommand;
 
 public sealed record CharacterCommand() : GameCommand;

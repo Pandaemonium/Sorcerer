@@ -71,6 +71,22 @@ public sealed record MerchantComponent(
     Dictionary<string, int> Wares,
     int Gold = 30) : IEntityComponent;
 
+public sealed record ServiceOffer(
+    string Id,
+    string Name,
+    string Description,
+    string EffectKind,
+    int GoldCost = 0,
+    string? ItemCost = null,
+    string? TargetHint = null,
+    bool Revealed = true,
+    IReadOnlyList<string>? Tags = null);
+
+public sealed record ServiceComponent(IReadOnlyList<ServiceOffer> Offers) : IEntityComponent
+{
+    public static ServiceComponent Empty() => new(Array.Empty<ServiceOffer>());
+}
+
 public sealed record FixtureComponent(
     string FixtureType,
     IReadOnlyList<string> Tags,

@@ -56,7 +56,9 @@ ignite actors, and vines can snare bodies. Item depth has a first general slice:
 reagents enter resolver context with spell-bias hints, and generated zones create deterministic
 curios whose metadata survives pickup. Curses now have a minimal mechanical layer: close, far,
 narrow, straight-path, and anchored templates can constrain later spell resolutions. Generated
-residents can trade through explicit engine-side `wares`, `buy`, and `sell` commands. The first
+residents can trade through explicit engine-side `wares`, `buy`, and `sell` commands, and NPCs can
+offer revealed services through `services` and `request` without completing bargains inside
+dialogue. The first
 lush-content slice is live: Markdown lore cards load from `content/lore`, `LoreRouter` injects
 relevant access-gated canon into magic context and atlas output, generated zone fixtures use
 deterministic texture naming with durable subject tags, and background detail jobs write canon that

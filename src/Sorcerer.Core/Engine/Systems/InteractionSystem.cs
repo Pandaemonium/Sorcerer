@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
@@ -348,6 +349,104 @@ public sealed class InteractionSystem
                 : $"{entity.Name}: no personal bond yet")
             .ToArray();
         return ActionResult.Simple("bonds", true, false, turn, turn, actors.Length == 0 ? new[] { "No personal bonds have crystallized yet." } : actors);
+    }
+
+    public ActionResult Services(string? targetText)
+    {
+        var turn = State.Turn;
+        var providers = NearbyServiceProviders(targetText).ToArray();
+        if (providers.Length == 0)
+        {
+            return ActionResult.Simple("services", false, false, turn, turn, "No nearby services are being offered.");
+        }
+
+        var lines = providers
+            .SelectMany(provider => VisibleServices(provider)
+                .Select(service => FormatServiceLine(provider, service)))
+            .ToArray();
+        return ActionResult.Simple(
+            "services",
+            true,
+            false,
+            turn,
+            turn,
+            lines.Length == 0 ? new[] { "No nearby services are being offered." } : lines);
+    }
+
+    public ActionResult RequestService(string serviceText, string? targetText)
+    {
+        var turnBefore = State.Turn;
+        if (string.IsNullOrWhiteSpace(serviceText))
+        {
+            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, "Name the service you want.");
+        }
+
+        var provider = ResolveServiceProvider(targetText, serviceText);
+        if (provider is null)
+        {
+            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, "No nearby provider offers that service.");
+        }
+
+        var service = FindService(VisibleServices(provider), serviceText);
+        if (service is null)
+        {
+            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, $"{provider.Name} is not offering {serviceText}.");
+        }
+
+        var inventory = State.ControlledEntity.Get<InventoryComponent>();
+        var costProblem = ServiceCostProblem(inventory, service);
+        if (costProblem is not null)
+        {
+            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, costProblem);
+        }
+
+        var applied = ApplyServiceEffect(provider, service);
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"{provider.Name} cannot complete that service here.";
+            return new ActionResult
+            {
+                Action = "request",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = applied.Deltas,
+            };
+        }
+
+        PayServiceCost(inventory, service);
+        var serviceMessage = $"{provider.Name} provides {service.Name}.";
+        State.AddMessage(serviceMessage);
+        var deltas = new List<StateDelta>
+        {
+            new(
+                "requestService",
+                provider.Id.Value,
+                serviceMessage,
+                new Dictionary<string, object?>
+                {
+                    ["serviceId"] = service.Id,
+                    ["serviceName"] = service.Name,
+                    ["effectKind"] = service.EffectKind,
+                    ["goldCost"] = service.GoldCost,
+                    ["itemCost"] = service.ItemCost,
+                }),
+        };
+        deltas.AddRange(applied.Deltas);
+
+        var turnDeltas = AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "request",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = State.Turn,
+            Messages = new[] { serviceMessage }.Concat(applied.Messages).Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Deltas = deltas.Concat(turnDeltas).ToArray(),
+        };
     }
 
     public ActionResult Read(string? target)
@@ -711,6 +810,193 @@ public sealed class InteractionSystem
         var line = DialogueLine(target);
         messages.Add(line);
     }
+
+    private IEnumerable<Entity> NearbyServiceProviders(string? targetText)
+    {
+        if (!string.IsNullOrWhiteSpace(targetText))
+        {
+            var provider = ResolveNearbyEntity(targetText, entity => entity.Has<ServiceComponent>(), range: 2);
+            return provider is null ? Array.Empty<Entity>() : new[] { provider };
+        }
+
+        var origin = State.ControlledEntity.Get<PositionComponent>().Position;
+        return State.Entities.Values
+            .Where(entity => entity.Has<ServiceComponent>())
+            .Where(entity => entity.TryGet<PositionComponent>(out var position)
+                && GameEngine.Distance(origin, position.Position) <= 2)
+            .OrderBy(entity => entity.TryGet<PositionComponent>(out var position)
+                ? GameEngine.Distance(origin, position.Position)
+                : int.MaxValue)
+            .ThenBy(entity => entity.Id.Value)
+            .ToArray();
+    }
+
+    private Entity? ResolveServiceProvider(string? targetText, string serviceText)
+    {
+        var providers = NearbyServiceProviders(targetText);
+        if (!string.IsNullOrWhiteSpace(targetText))
+        {
+            return providers.FirstOrDefault();
+        }
+
+        return providers.FirstOrDefault(provider => FindService(VisibleServices(provider), serviceText) is not null);
+    }
+
+    private static IEnumerable<ServiceOffer> VisibleServices(Entity provider) =>
+        provider.TryGet<ServiceComponent>(out var services)
+            ? services.Offers.Where(service => service.Revealed)
+            : Array.Empty<ServiceOffer>();
+
+    private static ServiceOffer? FindService(IEnumerable<ServiceOffer> services, string serviceText)
+    {
+        var normalized = serviceText.Trim();
+        return services.FirstOrDefault(service =>
+            service.Id.Equals(normalized, StringComparison.OrdinalIgnoreCase)
+            || service.Name.Equals(normalized, StringComparison.OrdinalIgnoreCase)
+            || service.Name.Contains(normalized, StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains(service.Name, StringComparison.OrdinalIgnoreCase)
+            || service.Tags?.Any(tag => tag.Equals(normalized, StringComparison.OrdinalIgnoreCase)) == true);
+    }
+
+    private static string FormatServiceLine(Entity provider, ServiceOffer service)
+    {
+        var costs = new List<string>();
+        if (service.GoldCost > 0)
+        {
+            costs.Add($"{service.GoldCost} gold");
+        }
+
+        if (!string.IsNullOrWhiteSpace(service.ItemCost))
+        {
+            costs.Add(service.ItemCost);
+        }
+
+        var cost = costs.Count == 0 ? "no listed price" : string.Join(" and ", costs);
+        return $"{provider.Name} offers {service.Name}: {service.Description} ({cost}).";
+    }
+
+    private string? ServiceCostProblem(InventoryComponent inventory, ServiceOffer service)
+    {
+        if (service.GoldCost > 0)
+        {
+            inventory.Items.TryGetValue("gold", out var gold);
+            if (gold < service.GoldCost)
+            {
+                return $"You need {service.GoldCost} gold for {service.Name}.";
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(service.ItemCost))
+        {
+            var itemKey = FindInventoryKey(inventory, service.ItemCost);
+            if (itemKey is null)
+            {
+                return $"You need {service.ItemCost} for {service.Name}.";
+            }
+
+            if (inventory.TreasuredItems.Contains(itemKey))
+            {
+                return $"{itemKey} is protected; unprotect it before offering it.";
+            }
+        }
+
+        return null;
+    }
+
+    private void PayServiceCost(InventoryComponent inventory, ServiceOffer service)
+    {
+        if (service.GoldCost > 0)
+        {
+            inventory.Items.TryGetValue("gold", out var gold);
+            var remaining = gold - service.GoldCost;
+            if (remaining <= 0)
+            {
+                inventory.Items.Remove("gold");
+                inventory.TreasuredItems.Remove("gold");
+            }
+            else
+            {
+                inventory.Items["gold"] = remaining;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(service.ItemCost))
+        {
+            var itemKey = FindInventoryKey(inventory, service.ItemCost);
+            if (itemKey is not null)
+            {
+                DecrementInventory(inventory, itemKey);
+            }
+        }
+    }
+
+    private WorldConsequenceApplyResult ApplyServiceEffect(Entity provider, ServiceOffer service)
+    {
+        var effect = NormalizeServiceEffect(service.EffectKind);
+        if (effect is "open_or_unlock" or "unlock_or_open" or "ward_breaking")
+        {
+            var door = ResolveServiceDoor(service);
+            if (door is null)
+            {
+                return WorldConsequenceApplyResult.Empty("There is no nearby door for that service.");
+            }
+
+            return _engine.ApplyConsequence(WorldConsequence.OpenOrUnlock(
+                "service",
+                door.Id.Value,
+                actorId: provider.Id.Value,
+                unlock: true,
+                open: true,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: provider.Id.Value,
+                evidence: service.Description,
+                operation: "serviceOpenOrUnlock"));
+        }
+
+        if (effect is "create_route" or "escape_route" or "reveal_route")
+        {
+            return _engine.ApplyConsequence(WorldConsequence.CreateRoute(
+                "service",
+                provider.Id.Value,
+                string.IsNullOrWhiteSpace(service.TargetHint) ? service.Name : service.TargetHint,
+                service.Description,
+                effect,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: provider.Id.Value,
+                evidence: service.Description,
+                operation: "serviceCreateRoute"));
+        }
+
+        return _engine.ApplyConsequence(WorldConsequence.RecordMemory(
+            "service",
+            provider.Id.Value,
+            $"{provider.Name} provided {service.Name}: {service.Description}",
+            "service",
+            2,
+            shareable: true,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: provider.Id.Value,
+            operation: "serviceMemory"));
+    }
+
+    private Entity? ResolveServiceDoor(ServiceOffer service)
+    {
+        var target = FirstNonBlank(service.TargetHint, service.Name);
+        return ResolveNearbyEntity(target, entity => entity.Has<DoorComponent>(), range: 2)
+            ?? ResolveNearbyEntity(null, entity => entity.Has<DoorComponent>(), range: 2);
+    }
+
+    private static string NormalizeServiceEffect(string effect)
+    {
+        var normalized = string.Join(
+            "_",
+            effect.Trim().ToLowerInvariant()
+                .Split(new[] { ' ', '-', '.', ',', ':', ';', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(normalized) ? "record_memory" : normalized;
+    }
+
+    private static string? FirstNonBlank(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
     private string DialogueLine(Entity target)
     {
@@ -1123,6 +1409,18 @@ public sealed class InteractionSystem
     private static string InferRealizationKind(string kind, string text)
     {
         var lower = $"{kind} {text}".ToLowerInvariant();
+        if (lower.Contains("route")
+            || lower.Contains("passage")
+            || lower.Contains("hidden path")
+            || lower.Contains("escape")
+            || lower.Contains("drain")
+            || lower.Contains("tunnel")
+            || lower.Contains("grate")
+            || lower.Contains("hidden exit"))
+        {
+            return "escape_route";
+        }
+
         if (lower.Contains("item") || lower.Contains("blade") || lower.Contains("key"))
         {
             return "item";
