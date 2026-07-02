@@ -67,14 +67,14 @@ bounded bond shifts, and the first concrete action proposals:
 `step_aside`, `flee`, `call_help`, `give_item`, and `open_door`. Unsupported
 actions are rejected with diagnostic deltas.
 
-The first shared consequence-grammar slice is implemented in
+The first shared typed consequence-grammar slice is implemented in
 `WorldConsequence`/`WorldConsequenceApplier`, exposed through
 `GameEngine.ApplyConsequence`. Dialogue memory proposals, dialogue bond
 proposals, claim-extraction bond proposals, and merchant-stock claim payoffs now
 submit `record_memory`, `update_bond`, or `add_merchant_stock` consequences
 instead of mutating those ledgers directly. The old dialogue proposal records
 remain the provider-facing schema for now; internally they are normalized into
-source-agnostic world consequences before mutation.
+source-agnostic typed consequences before mutation.
 
 Live-model robustness is also implemented for the Ollama dialogue provider. The
 provider preserves usable `spokenText` while normalizing common proposal shape
@@ -195,7 +195,7 @@ The exact schema can evolve, but the separation is important:
 The current provider-facing C# shape uses `DialogueClaimProposal` for claim
 proposals, with separate `DialogueMemoryProposal`, `DialogueBondProposal`, and
 `DialogueActionProposal` records. The engine-facing direction is to normalize
-these into `WorldConsequence` records so the same applier can be used by
+these into typed consequence records so the same applier can be used by
 dialogue, documents, services, promises, AI plans, and magic.
 
 ## Request Context
@@ -229,15 +229,17 @@ assemble prompt context directly.
 Dialogue should start with a small set of general proposal types and grow only
 when a new type unlocks many interactions.
 
-## World Consequence Grammar
+## Typed Consequence Grammar
 
-Dialogue consequences should be part of a broader world-consequence grammar.
+Dialogue consequences should be part of the broader typed consequence grammar.
 The first implemented envelope is:
 
 - `type`: the consequence kind, such as `record_memory`, `update_bond`, or
   `add_merchant_stock`
 - `source`: where the proposal came from, such as dialogue, claim extraction,
   a promise payoff, a service, AI, or magic
+- `timing`: when the consequence applies, normally `immediate`; deferred or
+  world-pump behavior must be explicit
 - `sourceEntityId` and `targetEntityId`: provenance and mutation target
 - `salience`, `confidence`, and `visibility`: player/debug surfacing signals
 - `evidence` and `reason`: audit context for why this was proposed
@@ -249,6 +251,11 @@ target validation, clamping, mutation, visible messages, and deltas. This keeps
 the same bond, stock, service, route, or door change from behaving differently
 depending on whether it came from generated dialogue, delayed claim extraction,
 a service, a promise payoff, or some other source.
+
+The long-term direction is that immediate tactical effects such as damage,
+movement, terrain edits, summoning, and door changes use this same consequence
+envelope too. They remain fast because their `timing` is immediate and their
+handlers are concrete engine code, not because they live in a separate grammar.
 
 Planned next consequence types:
 

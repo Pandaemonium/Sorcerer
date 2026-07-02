@@ -466,7 +466,7 @@ for later dialogue, recruitment changes combat allegiance while preserving membe
 `followers` reads bond posture rather than same-faction membership. The first deterministic
 dialogue parser handles a few common organic intents; post-dialogue claim extraction handles
 reported claims, promise proposals, merchant stock, and bond shifts through structured proposals
-that the engine validates. The shared world-consequence applier now owns common side effects such
+that the engine validates. The shared typed consequence applier now owns common side effects such
 as memory recording, bond updates, merchant-stock changes, trade offers, service offers, door
 open/unlock effects, and route creation, so dialogue, claim extraction, services, promise payoffs,
 and future systems can request the same engine-authorized mutations.

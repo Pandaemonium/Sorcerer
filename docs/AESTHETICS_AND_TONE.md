@@ -80,9 +80,10 @@ never grimdark. **Grimdark is the placeholder aesthetic we are deleting.**
       from culture and character, never from the world winking at the player.
     - *Peculiar and dreamlike*: logic may bend — doors that open only for songs,
       markets that exist on Thursdays, a mountain slowly walking somewhere.
-    - *Weird scales with wild-magic saturation*: imperial provinces feel surveyed
-      and sensible; deep wild places go dreamlike. Strangeness is a literal map
-      gradient — and a navigational signal to the player.
+    - *Weirdness has causes*: imperial provinces feel surveyed and sensible;
+      old, remote, wounded, or tradition-rich places can go dreamlike. Strangeness
+      should come from region identity, customs, history, promises, and visible
+      consequences, not from a hidden regional meter.
 
 11. **Look & UI: region-skinned.** The ASCII presentation's palette and ornament
     shift with the region — sun-baked ochre and turquoise in the desert,

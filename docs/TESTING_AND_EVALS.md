@@ -92,6 +92,39 @@ fallbacks.
 Interestingness cannot be fully automated, but the harness can surface candidates for
 human review.
 
+## Feel Evals: Memorable More Often Than Merely Valid
+
+Status: proposed 2026-07.
+
+The current harness measures correctness; the top failure mode on the vision's list is *boring
+magic*, and nothing measures that yet. The feel-eval program closes the gap:
+
+- **An LLM-judge pass over the audit log.** A background/offline job scores each live resolution
+  against a fixed rubric:
+  - **Specificity:** did the resolution use local anchors from context (named entities,
+    materials, regional texture) or could it have happened anywhere?
+  - **Consequence:** did it write anything beyond the immediate effect - a trait, promise, deed,
+    memory, or durable status - or was it a bare damage/status delta?
+  - **Surprise:** did the outcome interpret the spell text, or merely transcribe it?
+  - **Tone fit:** does the prose match the region voice and the wonder-with-teeth register
+    (flag generic-grimdark and generic-fantasy phrasing for deletion on sight)?
+- **Boring-tail mining.** Rank audited casts by rubric score and human-review the worst decile.
+  Every recurring boredom pattern becomes either an operation-card improvement, a prompt change,
+  or a new eval corpus case - the same loop that already turns parse failures into repairs.
+- **Judge discipline.** The judge is an eval tool, never a runtime gate: it runs offline or as a
+  throttled background job, its scores land in eval reports rather than game state, and its
+  rubric lives in content so it can be tuned without code changes.
+- **Latency as a feel metric.** Track command-to-visible-text time per purpose (cast, dialogue)
+  in the same reports; a memorable spell that took forty seconds still fails the feel bar.
+
+The judge should also periodically score the *dialogue* audit log with the analogous rubric
+(directness, voice, claim quality), per [DIALOGUE_SYSTEM.md](DIALOGUE_SYSTEM.md).
+
+Related, and prerequisite to good tone scores: the region voice + tradition idiom injection that
+[AESTHETICS_AND_TONE.md](AESTHETICS_AND_TONE.md) calls the highest-leverage tone change still
+needs its C# implementation in the resolver prompt path (the doc's reference to
+`wildmagic/prompts.py` is the old prototype). The feel judge is how we will know it landed.
+
 ## Agent Playtesting
 
 The JSON CLI supports an initial unattended episode runner:

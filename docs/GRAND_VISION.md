@@ -50,8 +50,10 @@ Two textures we will protect:
   see, you can try to make part of a spell. The richness of the world is not decoration; it is
   raw material.
 
-Weirdness scales with wild-magic saturation: imperial provinces feel surveyed and sensible;
-deep wild places go dreamlike. Strangeness is a map gradient and a navigational signal.
+Weirdness has causes, not a meter. Imperial provinces feel surveyed and sensible; old, remote,
+or wounded places can go dreamlike because of region identity, history, promises, factions,
+customs, and the player's deeds. Strangeness should be legible as something the world believes
+or remembers, not as a hidden regional meter.
 
 ## What It Plays Like
 

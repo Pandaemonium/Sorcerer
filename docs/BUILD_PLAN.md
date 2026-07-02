@@ -555,8 +555,8 @@ Run this thread **alongside** every phase (the bar is a modest Ollama model):
 - **Mine `WildMagic/wildmagic/resolution_parsing.py`** for every distinct malformation it repairs
   (singular vs plural effects/costs, nested `outcome`/`details`, element/flavor-status aliases,
   point/tile shorthand, array-valued traits, string/numeric costs, stray commentary after JSON) and
-  add each as a case in a `SpellResolutionJson` test suite. The Sorcerer `HANDOFF.md` "Spell Notes"
-  list is the seed.
+  add each as a case in a `SpellResolutionJson` test suite, seeded from the live-model dialects
+  already repaired in Sorcerer and recorded in `logs/wild_magic_audit.jsonl`.
 - **Port the 107-spell intent-tagged corpus** (common/creative/exploit) into `SpellEvalHarness`,
   and score not just JSON-validity but **specificity, consequence, and surprise**, plus hallucinated
   targets, exploit leakage, and latency. Magic must be memorable more often than merely valid.
@@ -572,8 +572,9 @@ Run this thread **alongside** every phase (the bar is a modest Ollama model):
 **Spirit:** each death rolls a wholly new geopolitics — a fresh map to read and master. The
 **procedural roll fixes the structure deterministically; the model names and flavors it.** Every
 rolled feature must imply at least one **tactical affordance** the player can act on, never just
-lore. Weirdness scales with wild-magic saturation: imperial provinces feel surveyed, deep wild
-places go dreamlike. (See [EMERGENT_WORLD.md](EMERGENT_WORLD.md),
+lore. Weirdness comes from region identity, history, customs, promises, and consequences:
+imperial provinces feel surveyed, while old or remote places can go dreamlike for reasons the
+player can discover. (See [EMERGENT_WORLD.md](EMERGENT_WORLD.md),
 [WORLD_REACTION_AND_EMPIRE.md](WORLD_REACTION_AND_EMPIRE.md), [WORLDBUILDING.md](WORLDBUILDING.md).)
 
 This is the largest phase. Build it in the sub-steps below; **5.1 (a minimal multi-zone slice) is
@@ -581,7 +582,7 @@ shippable on its own** before the full geopolitical roll.
 
 > **RESOLVED: a bounded region grid with lazy zone interiors.** Places live on a small overworld
 > grid of regions; each region holds zones generated on first visit. Directional promises ("a blade
-> waits north") and the wild-magic saturation gradient map onto grid coordinates directly, and this
+> waits north") and region identity map onto grid coordinates directly, and this
 > is the WildMagic-proven shape. No specific grid size is fixed yet; pick the smallest useful size
 > when implementing the first multi-zone slice. (Considered and rejected for now: an abstract
 > place-graph — cleaner but loses cheap directionality; a hybrid compass layout.)

@@ -444,8 +444,11 @@ Adjacent dialogue side effects have started the same consolidation. The
 `update_bond`, `add_merchant_stock`, `offer_trade`, `offer_service`,
 `open_or_unlock`, and `create_route` consequences through a shared engine path.
 Generated dialogue, claim extraction, services, promise payoffs, books, AI
-plans, and magic should increasingly submit these same source-agnostic
-consequences instead of owning separate mutation helpers.
+plans, factions, and magic should increasingly submit the same source-agnostic
+typed consequences instead of owning separate mutation helpers. Immediate
+tactical payoffs and durable social/world payoffs should share the envelope;
+their handlers and `timing` fields decide whether they resolve now, after the
+turn, at a world pump, or later.
 
 The next step is to deepen that service:
 
@@ -454,8 +457,8 @@ The next step is to deepen that service:
 - Build explicit realization plans using registered archetype handlers.
 - Validate all entity ids, positions, stock targets, components, and event
   slots before mutation.
-- Route simple payoff side effects through `WorldConsequenceApplier` when they
-  match an existing consequence type.
+- Route simple payoff side effects through the typed consequence applier when
+  they match an existing consequence type.
 - Route buy, trade, wait, magic, and faction-turn payoffs through the same
   service.
 - Deepen merchant-stock selection, then add service, door-rule, route,

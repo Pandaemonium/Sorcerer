@@ -82,11 +82,13 @@ perception unless a test explicitly asks for a player-knowledge-only view.
 - Prefer actor-agnostic actions over player-only action paths.
 - Prefer read-only state views over renderer access to rule internals.
 - Prefer durable state lanes over free-text flags that become invisible rules.
-- Prefer the shared world-consequence grammar for model- or content-authored side effects.
-  Dialogue, books, promises, services, AI plans, and magic should submit validated
-  consequences such as memory, bond, stock, service, route, faction, trigger, or promise
-  changes instead of mutating those systems through bespoke helper code.
-- Prefer small composable effects: damage, status, terrain, movement, summoning,
+- Prefer the shared typed consequence grammar for model- or content-authored side effects.
+  Dialogue, books, promises, services, AI plans, factions, and magic should submit validated
+  consequences instead of mutating systems through bespoke helper code. Consequence families
+  include immediate tactical effects such as damage, status, terrain, movement, and summoning,
+  plus durable social/world effects such as memory, bond, stock, service, route, faction,
+  trigger, rumor, or promise changes.
+- Prefer small composable consequences: damage, status, terrain, movement, summoning,
   faction changes, tags, memory, traits, inventory, curses, promises, triggers, timers.
 - Keep technical LLM failures from consuming turns.
 - Keep intentional magical rejections turn-consuming.
@@ -110,9 +112,11 @@ LLM output is untrusted. It must go through:
 8. produce action results and audit records
 
 Do not let renderer code, prompt code, or provider code directly mutate world state.
-When an LLM, dialogue provider, authored text, prophecy, service, or background job proposes
-world change, normalize it into the narrowest existing engine operation or world consequence
-before applying it. Add new consequence types only when they unlock broad reuse across systems.
+When an LLM, dialogue provider, authored text, prophecy, service, magic resolver, faction, or
+background job proposes state change, normalize it into the narrowest existing typed consequence
+before applying it. Consequences are fast by default; deferred or world-pump timing must be an
+explicit field, not an implied side effect of which subsystem produced the change. Add new
+consequence types only when they unlock broad reuse across systems.
 
 ## Entity Unification
 

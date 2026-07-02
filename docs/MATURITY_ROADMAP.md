@@ -228,8 +228,8 @@ effective imperial grip by run seed, and generated zones seed one resident NPC f
 profile. Full geopolitical ownership graphs, town layouts, population rosters, and rich
 promise-site archetypes are still future Phase 5 work.
 
-- **Zone graph** beyond the single chamber: regions with identity, a wild-magic saturation gradient
-  (imperial -> dreamlike), and a tradition lean. Zone transition is a reaction pump point.
+- **Zone graph** beyond the single chamber: regions with identity, imperial grip, tradition lean,
+  and discoverable sources of strangeness. Zone transition is a reaction pump point.
   Start with the smallest useful bounded grid; no exact size is fixed by the roadmap.
 - **Worldgen rolls geopolitics from the seed** (which realms are conquered/defiant, who rules, where
   traditions survive, imperial grip per province). Procedural rolls the structure deterministically;

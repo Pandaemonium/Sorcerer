@@ -286,7 +286,7 @@ Trigger hints are intentionally simple. Empty hints can realize at the first mat
 anchor interaction, while hints such as `read`, `open`, `door`, `talk`, `name`, `inspect`,
 or `examine` route
 the promise to an ordinary verb. This is not a full quest system yet; it is the first
-engine-owned bridge from wild narrative claim to durable world consequence.
+engine-owned bridge from wild narrative claim to durable typed consequence.
 
 ## Agent And Debug Surface
 

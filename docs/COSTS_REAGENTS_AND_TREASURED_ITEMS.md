@@ -110,6 +110,51 @@ Sorcerer should eventually support many cost families:
 
 Body changes are extremely severe and should be rare.
 
+## The Cost Palette And The Overreach Ladder
+
+Status: proposed 2026-07.
+
+"Overreach is answered with severe cost, not a refusal" is the game's core instinct, but left to
+the model alone, costs regress to mana and HP taxes - merely punitive, exactly what the tone
+bible forbids. The fix is a **designed palette the resolver composes from**, organized as a
+severity ladder the world climbs when the player reaches too high.
+
+> The best costs are story generators. A cost that binds a promise ("a debt collector from
+> tomorrow has accepted the charge") feeds the world instead of draining a bar.
+
+The ladder, from mundane to terrible:
+
+| Tier | Family | Examples | Lands as |
+|---|---|---|---|
+| 0 - mundane | mana, minor health | fatigue, a nosebleed | resource deltas |
+| 1 - material | reagents, items, blood | the pearl is spent; the wand chars | item costs (treasured guard applies) |
+| 2 - strange | statuses and traits on the caster | a memory of a name gone; your shadow lags; your voice loses its color for a day | `addStatus` / resolver-minted traits with real mechanical hooks |
+| 3 - binding | curses, debts, attention | a curse with a clearing condition; a bound debt-promise; the deed ledger marks the cast louder than intended; a visible omen stains the place | `addCurse`, `createPromise`, deed/suspicion writes |
+| 4 - severe | max stats, body, treasured things | max health carved away; a body change; the spell demands the moon pearl by name | max-stat deltas, transformation, treasured confirmation flow |
+
+Rules that make the ladder work:
+
+- **Overreach climbs, never refuses.** Magnitude beyond the caster's band is priced up-ladder
+  rather than rejected. Rejection is reserved for the mechanically impossible.
+- **Stats and performance shift where the world reaches.** Low Composure or a poor casting
+  performance reaches higher on the ladder for the same spell; high Composure keeps costs near
+  the floor. High Vigor makes physical costs plausible; low Vigor steers the reach toward
+  strange and binding tiers instead ([CHARACTER_AND_STATS.md](CHARACTER_AND_STATS.md)).
+- **Every cost must be mechanically real.** A tier-2 "strange" cost is a status or trait with an
+  actual hook (the resolver and dialogue read it; some have engine ticks), never prose-only. If a
+  cost cannot land in a ledger, it is not a cost.
+- **Every cost carries its cause.** The player may not know the price before casting, but they
+  must always understand afterward what was taken and by which spell.
+- **Tier 3-4 costs are content, not punishments.** A curse has a clearing condition someone in
+  the world knows; a debt-promise realizes as a claimant you can fight, pay, or out-bargain; a
+  place-marking omen creates witnesses, rumors, or a promise site. Severe costs should open play,
+  not close it.
+
+Implementation shape: the palette ships as resolver guidance (a cost card alongside operation
+cards) with tier vocabulary and examples; the engine validates that proposed costs map to real
+cost families and enforces the existing bite/treasured rules. A deterministic fallback prices by
+tier when the model omits costs on a high-magnitude resolution.
+
 ## Focus Versus Sacrifice
 
 Focus and reagent sacrifice are different choices:
