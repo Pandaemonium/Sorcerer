@@ -15,10 +15,24 @@ spell text
   -> raw JSON
   -> parse and repair
   -> normalize
+  -> materialized magic resolution
+  -> re-parse at apply point
   -> validate
   -> apply operations transactionally
   -> action result, deltas, audit
 ```
+
+`IWildMagicController.ResolveAsync` owns the provider-facing half of this pipeline. It may call a
+live or mock model, but it must not mutate `GameState`; its output is a
+`MaterializedMagicResolution` containing provider metadata, raw text, accepted/error flags, effect
+types, and normalized `resolvedMagicJson`. `ApplyResolved` owns the authoritative half. It rebuilds
+the current engine context, re-parses the materialized JSON, validates against the present state,
+and only then applies mutations transactionally. `CastAsync` remains the ordinary convenience path:
+resolve, then immediately apply.
+
+Pending casts use the same split. `begin_cast` starts `ResolveAsync` in the background and may save
+the materialized result before any turn is consumed; `await_cast` is the explicit apply point.
+`cancel_cast` cancels the pending provider token instead of merely hiding the pending record.
 
 ## Primary Failure Modes
 
@@ -64,13 +78,18 @@ Current implementation:
   3, +1 for a compositional connective like `" and "`, hard ceiling 7) instead of a flat cap.
 - Cards load from `content/capabilities/*.json` via `CapabilityCardLoader` (same shape/loader
   pattern as `OperationCardLoader` for `content/operations`), with an in-code fallback set that
-  currently owns 11 cards (terrain_shape, summoning, transformation, prophecy, conjure_item,
+  covers the core card families (terrain_shape, summoning, transformation, prophecy, conjure_item,
   memory_edit, faction_charm, delayed_effects, triggers_reactions, persistent_effect,
-  behavior_control, environment_flow).
-- `WildMagicController.CastAsync` calls `Select` per cast and builds a narrowed `OperationIndex`
+  behavior_control, environment_flow). Content cards can add newer routed families such as
+  `fixture_manifestation`, which unlocks `conjureFixture` for discrete shrines, markers,
+  landmarks, hazards, and props.
+- `WildMagicController.ResolveAsync` calls `Select` per cast and builds a narrowed `OperationIndex`
   (core operations, per `IOperation.IsCore`, plus the effect types the routed cards unlock) instead
   of always advertising the full registry; `OllamaSpellProvider` assembles the core prompt, the
   always-on one-line capability index, and only the routed cards' detail blocks/examples.
+- `WildMagicController.ApplyResolved` re-parses the materialized resolution and validates it against
+  the current state. A materialized spell can therefore be applied after a save/load or by replay
+  without trusting stale provider context as state authority.
 - Narrowing only shapes what is advertised. `OperationRegistry.Resolve`/`Supports` still validate
   against the full registry regardless of what a given cast's prompt/context exposed; Sorcerer does
   not hard-enforce a per-cast schema enum, matching Wild Magic's own choice to defer that.
@@ -134,20 +153,70 @@ Current implementation:
 - Cost parsing has a similar repair lane for common live-model shapes. A cost object with
   `name: "mana"` becomes a mana cost, while a named carried material such as `name: "charcoal wand"`
   becomes an item cost before validation. Unsupported cost families still reject normally.
+- `consequence` is the generic operation for already-modeled world-consequence effects.
+  It carries `consequenceType`, optional `target` / `targetEntityId`, provenance/visibility fields,
+  `timing`, and a typed `consequencePayload`, then submits one `WorldConsequence` through
+  `GameEngine.ApplyConsequence`. This is how wild magic reaches social/world handlers such as
+  tags, memory, wants, services (`offer_service` to create an affordance, `request_service` to
+  perform one), routes, canon, rumors, or messages without growing a spell-only helper.
+  The shared consequence applier canonicalizes common spellings like `addTags`,
+  `requestService`, and hyphenated ids to snake_case before dispatch, so model
+  spelling repair stays at the engine boundary rather than in each source adapter.
+  The operation also reads common nested payload aliases (`payload.world_consequence_type`,
+  `payload.target_id`, `payload.consequence_timing`, and visibility aliases), matching the
+  dialogue consequence path's tolerance for model-shaped JSON.
+  The shared world-consequence payload merge helper makes nested payload fields win on conflicts,
+  while top-level typed fields fill missing payload values, so
+  `{"type":"consequence","consequenceType":"apply_status","targetEntityId":"prisoner_1","status":"blue-marked","consequencePayload":{"operation":"spellMark"}}`
+  preserves both the operation metadata and the status fields.
+  `immediate` timing applies now; `after_turn`, `world_pump`, and `deferred` schedule the same
+  typed consequence through the shared scheduled-event pump. Use `scheduleEvent`, `createTrigger`,
+  persistent effects, or another explicit deferred primitive only when the desired shape is a broad
+  future event, repeating trigger, aura, ward, or hook rather than one delayed consequence.
+  Narrative guardrails inspect the inner `consequenceType` too, so outcome text about binding a
+  promise, opening a door, revealing a route, or changing inventory can be backed by
+  `create_promise`, `open_or_unlock`, `create_route`, `modify_inventory`, and other typed
+  consequences without adding a spell-only operation.
 - `createTrigger` is the canonical operation for delayed tactical effects, auras, and
   ward-shaped pulses. It writes `TriggerLedger` records with an anchor, radius, target filter,
-  cadence, use count, and one embedded small effect. The current embedded effect set is
-  `addStatus`, `damage`, `heal`, and `message`; richer predicates are future work.
+  cadence, use count, and one embedded effect. The shorthand embedded effect set remains
+  `addStatus`, `damage`, `heal`, and `message`, and the broader path is `effectType:
+  consequence` with a `consequenceType` plus typed payload fields. That generic path lets a
+  delayed ward submit the same consequence grammar used by dialogue, promises, services, and
+  scheduled events.
+  Trigger advancement, completion, and expiry now route through the shared `update_trigger`
+  consequence. When a trigger fires, its embedded effect fan-out and lifecycle update are staged as
+  one transaction; explicit target ids stay binding, so a vanished named target fizzles instead of
+  being retargeted to the player. Rejected generic trigger payloads roll back, report the
+  underlying rejection, and expire the bad trigger.
+- High-use operation families now apply by submitting typed `WorldConsequence` records through
+  `GameEngine.ApplyConsequence`: damage/heal/mana, movement, terrain creation/lifecycle, status, summon/item spawn,
+  promises, messages, inventory changes, tags/traits, faction allegiance, world flags, scheduled
+  event creation/lifecycle, trigger creation/lifecycle, transformations, resistance/weakness, delayed incoming damage, status
+  acceleration, memory edits, persistent effect creation/lifecycle, behavior tag creation/lifecycle, tile flows, faction
+  standing/resource adjustments, legend tags, and canon records. `IOperation` remains the
+  resolver-facing validation layer; the authoritative mutation lifecycle is converging on the
+  shared consequence applier.
+- The transformation family is broad enough for prop and fixture retuning: `transformEntity`,
+  `transformItem`, and generic `consequenceType: transform_entity` can change material, tags,
+  description, passability/sight blocking, glyph/palette, fixture type, and interactable verbs.
+  This is the general route for bridge-collapse, shrine-repair, sign-becomes-door, and similar
+  local object changes.
 - `createPersistentEffect` is a separate combat-hook primitive, not a hidden recursive spell
-  engine. It stores only a deliberately small validated effect-kind set (`damage`, `heal`,
-  `addStatus`, `message`) or a resolved sympathetic link. Unsupported embedded effects reject
-  before mutation; legacy unsupported records surface an explicit failure delta instead of silently
-  consuming a use.
+  engine. It stores a deliberately small shorthand effect-kind set (`damage`, `heal`,
+  `addStatus`, `message`), a generic `effectType: consequence` payload with `consequenceType`, or
+  a resolved sympathetic link. Unsupported embedded effects reject before mutation; legacy
+  unsupported records surface an explicit failure delta and then follow the normal use-consumption
+  lifecycle instead of disappearing silently. Hook firing collects the full child consequence delta
+  set before submitting `update_persistent_effect`, so combat hooks remain compatible with compound
+  consequence handlers. Rejected generic payloads roll back the fired child and remove the malformed
+  persistent record.
 - HP loss should flow through the shared combat damage path. Ordinary attacks, spell damage,
-  delayed damage releases, terrain/status harm, resistance/weakness, and delay buffers should not
-  grow separate arithmetic rules.
-- `createFlow` writes zone-local tile-flow fields. They travel with zone snapshots like terrain and
-  terrain expirations, so environmental fields do not leak between places or vanish on return.
+  delayed damage releases (`release_delayed_damage`), terrain/status harm, resistance/weakness,
+  and delay buffers should not grow separate arithmetic rules.
+- `createFlow` writes zone-local tile-flow fields; expiry/removal routes through `update_flow`.
+  They travel with zone snapshots like terrain and terrain expirations, so environmental fields do
+  not leak between places or vanish on return.
 
 This means prompt guidance can improve without creating a second source of truth for
 mechanics.
@@ -204,7 +273,9 @@ Mechanical curses are promise-backed validation constraints. `addCurse` should i
 `template` / `curseType` when it intends a known mechanical limit (`close`, `far`, `narrow`,
 `straight-path`, `anchored`). `MechanicalCurseValidator` then rejects future accepted resolutions
 that violate the active curse before any operation mutates state. Curses without a known template
-remain semantic promise/debt text.
+remain semantic promise/debt text. Curse costs use the same `create_promise` consequence lane with
+operation `cost:curse`, including stacking metadata, so a debt paid by magic is still an ordinary
+promise/debt record for later payoff systems.
 
 Live-provider feel tests should check that prose and mechanics agree. If the model says an
 enemy is pinned, asleep, frozen, charmed, burning, or otherwise altered, the applied engine
@@ -225,6 +296,9 @@ technical failure and does not consume a turn.
 
 `transformItem` rejects no-op transforms that provide no name, material, or tag change. This keeps
 live output from producing misleading "X changes into X" messages.
+`modifyInventory` remove-style effects (`consume`, `remove`, `subtract`) also validate available
+quantity before application; the shared `modify_inventory` consequence rejects insufficient
+consumes at apply time for magic, costs, services, and future systems.
 
 Malformed provider shapes are technical failures, not in-world spell rejections. For
 example, an unrecognized target object must not be stringified into a .NET type name and
@@ -317,6 +391,12 @@ Every live resolver call should record:
 Audits are not optional polish. They are how the team improves the most important system.
 
 When a spell produces a normalized accepted or intentional-rejection resolution, the action result's
-`MagicResolutionRecord` should preserve `resolvedMagicJson` where practical. Transcripts use that
-materialized JSON to replay command sequences with `ReplaySpellProvider` instead of re-calling the
-model. This keeps replay deterministic without making the model a source of authoritative state.
+`MagicResolutionRecord` should preserve `resolvedMagicJson` where practical. `ResolveAsync` also
+exposes the same materialized JSON before mutation. Transcripts use that materialized JSON to replay
+command sequences with `ReplaySpellProvider` instead of re-calling the model. This keeps replay
+deterministic without making the model a source of authoritative state.
+
+Player-facing resolver narration is also a consequence. Accepted `outcomeText`, fallback sparks,
+intentional rejection reasons, and technical failure notices enter the log through typed
+`message` consequences, so audits and transcripts can distinguish `wildMagicOutcome`,
+`wildMagicRejected`, and `wildMagicTechnicalFailure` from mechanical effect deltas.

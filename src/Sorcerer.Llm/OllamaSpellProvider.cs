@@ -12,17 +12,20 @@ public sealed class OllamaSpellProvider : ISpellProvider
     private readonly string _host;
     private readonly string _model;
     private readonly OperationRegistry _registry;
+    private readonly TimeSpan _timeout;
 
     public OllamaSpellProvider(
         string host = "http://127.0.0.1:11434",
         string model = "qwen3.5:9b",
         HttpClient? httpClient = null,
-        OperationRegistry? registry = null)
+        OperationRegistry? registry = null,
+        TimeSpan? timeout = null)
     {
         _host = host.TrimEnd('/');
         _model = model;
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? CreateHttpClient();
         _registry = registry ?? OperationRegistry.CreateDefault();
+        _timeout = timeout ?? TimeSpan.FromSeconds(240);
     }
 
     public string Name => "ollama";
@@ -31,6 +34,8 @@ public sealed class OllamaSpellProvider : ISpellProvider
         SpellRequest request,
         CancellationToken cancellationToken)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_timeout);
         var rawResponse = string.Empty;
         var content = string.Empty;
         var supported = string.Join(", ", request.SupportedOperations);
@@ -70,8 +75,8 @@ public sealed class OllamaSpellProvider : ISpellProvider
             var response = await _httpClient.PostAsJsonAsync(
                 $"{_host}/api/chat",
                 payload,
-                cancellationToken);
-            rawResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+                timeout.Token);
+            rawResponse = await response.Content.ReadAsStringAsync(timeout.Token);
             if (!response.IsSuccessStatusCode)
             {
                 return Failure(rawResponse, $"Ollama returned HTTP {(int)response.StatusCode}.");
@@ -101,7 +106,7 @@ public sealed class OllamaSpellProvider : ISpellProvider
                     contextJson,
                     content,
                     ex.Message,
-                    cancellationToken);
+                    timeout.Token);
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
@@ -111,7 +116,7 @@ public sealed class OllamaSpellProvider : ISpellProvider
         }
     }
 
-    private static string BuildSystemPrompt(
+    internal static string BuildSystemPrompt(
         string supported,
         string? capabilityIndex,
         IReadOnlyList<CapabilityCard>? selectedCapabilities)
@@ -255,4 +260,10 @@ public sealed class OllamaSpellProvider : ISpellProvider
             Resolution: null,
             TechnicalFailure: true,
             Error: error);
+
+    private static HttpClient CreateHttpClient() =>
+        new()
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
 }

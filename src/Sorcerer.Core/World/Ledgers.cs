@@ -216,19 +216,6 @@ public sealed class FactionLedger
         faction.Resources[resource] = Math.Max(min, adjusted);
     }
 
-    public bool TrySpendResource(string factionId, string resource, int amount)
-    {
-        var faction = AddOrGet(factionId, factionId, "unknown");
-        faction.Resources.TryGetValue(resource, out var current);
-        if (current < amount)
-        {
-            return false;
-        }
-
-        faction.Resources[resource] = current - amount;
-        return true;
-    }
-
     public IReadOnlyList<FactionRecord> FactionsByRole(string role) =>
         _factions.Values
             .Where(faction => faction.Role.Equals(role, StringComparison.OrdinalIgnoreCase))
@@ -457,6 +444,224 @@ public sealed class ClaimLedger
     }
 }
 
+public sealed record RumorRecord(
+    string Id,
+    int CreatedTurn,
+    int LastTurn,
+    string SourceKind,
+    string SourceId,
+    string OriginRegionId,
+    string CurrentRegionId,
+    string Text,
+    string OriginalText,
+    int Salience,
+    string Status,
+    IReadOnlyList<string> CarrierIds,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> DistortionHistory,
+    int Hops);
+
+public sealed class RumorLedger
+{
+    private readonly List<RumorRecord> _records = new();
+
+    public IReadOnlyList<RumorRecord> Records => _records;
+
+    public RumorRecord Append(
+        int turn,
+        string sourceKind,
+        string sourceId,
+        string originRegionId,
+        string currentRegionId,
+        string text,
+        int salience,
+        IEnumerable<string>? carrierIds = null,
+        IEnumerable<string>? tags = null,
+        string status = "active",
+        IEnumerable<string>? distortionHistory = null,
+        int hops = 0,
+        string? originalText = null)
+    {
+        var record = new RumorRecord(
+            $"rumor_{_records.Count + 1}",
+            turn,
+            turn,
+            NormalizeToken(sourceKind, "unknown"),
+            NormalizeToken(sourceId, "unknown"),
+            NormalizeToken(originRegionId, "unknown"),
+            NormalizeToken(currentRegionId, "unknown"),
+            text.Trim(),
+            string.IsNullOrWhiteSpace(originalText) ? text.Trim() : originalText.Trim(),
+            Math.Clamp(salience, 1, 5),
+            NormalizeToken(status, "active"),
+            NormalizeList(carrierIds),
+            NormalizeList(tags),
+            NormalizeHistoryList(distortionHistory),
+            Math.Max(0, hops));
+        _records.Add(record);
+        return record;
+    }
+
+    public bool HasSource(string sourceKind, string sourceId) =>
+        _records.Any(record =>
+            record.SourceKind.Equals(sourceKind, StringComparison.OrdinalIgnoreCase)
+            && record.SourceId.Equals(sourceId, StringComparison.OrdinalIgnoreCase));
+
+    public RumorRecord? Replace(RumorRecord record)
+    {
+        var index = _records.FindIndex(existing => existing.Id.Equals(record.Id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return null;
+        }
+
+        _records[index] = Normalize(record);
+        return _records[index];
+    }
+
+    public IReadOnlyList<RumorRecord> Snapshot() => _records.ToArray();
+
+    public void ReplaceAll(IEnumerable<RumorRecord> records)
+    {
+        _records.Clear();
+        foreach (var record in records)
+        {
+            _records.Add(Normalize(record));
+        }
+    }
+
+    private static RumorRecord Normalize(RumorRecord record) =>
+        record with
+        {
+            SourceKind = NormalizeToken(record.SourceKind, "unknown"),
+            SourceId = NormalizeToken(record.SourceId, "unknown"),
+            OriginRegionId = NormalizeToken(record.OriginRegionId, "unknown"),
+            CurrentRegionId = NormalizeToken(record.CurrentRegionId, record.OriginRegionId),
+            Text = record.Text.Trim(),
+            OriginalText = string.IsNullOrWhiteSpace(record.OriginalText) ? record.Text.Trim() : record.OriginalText.Trim(),
+            Salience = Math.Clamp(record.Salience, 1, 5),
+            Status = NormalizeToken(record.Status, "active"),
+            CarrierIds = NormalizeList(record.CarrierIds),
+            Tags = NormalizeList(record.Tags),
+            DistortionHistory = NormalizeHistoryList(record.DistortionHistory),
+            Hops = Math.Max(0, record.Hops),
+        };
+
+    private static string NormalizeToken(string text, string fallback)
+    {
+        var chars = (text ?? "")
+            .Trim()
+            .ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : '_')
+            .ToArray();
+        var normalized = string.Join(
+            "_",
+            new string(chars).Split('_', StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(normalized) ? fallback : normalized;
+    }
+
+    private static IReadOnlyList<string> NormalizeList(IEnumerable<string>? values) =>
+        (values ?? Array.Empty<string>())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static IReadOnlyList<string> NormalizeHistoryList(IEnumerable<string>? values)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var normalized = new List<string>();
+        foreach (var value in values ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            var trimmed = value.Trim();
+            if (seen.Add(trimmed))
+            {
+                normalized.Add(trimmed);
+            }
+        }
+
+        return normalized.ToArray();
+    }
+}
+
+public sealed record WorldTurnRecord(
+    string Id,
+    int Turn,
+    string Reason,
+    string Kind,
+    string SourceId,
+    string Summary,
+    IReadOnlyDictionary<string, object?> Details);
+
+public sealed class WorldTurnLedger
+{
+    private readonly List<WorldTurnRecord> _records = new();
+
+    public IReadOnlyList<WorldTurnRecord> Records => _records;
+
+    public WorldTurnRecord Add(
+        int turn,
+        string reason,
+        string kind,
+        string sourceId,
+        string summary,
+        IReadOnlyDictionary<string, object?>? details = null)
+    {
+        var record = new WorldTurnRecord(
+            $"world_turn_{_records.Count + 1}",
+            turn,
+            Clean(reason, "turn"),
+            Clean(kind, "move"),
+            Clean(sourceId, "unknown"),
+            summary.Trim(),
+            NormalizeDetails(details));
+        _records.Add(record);
+        if (_records.Count > 160)
+        {
+            _records.RemoveRange(0, _records.Count - 160);
+        }
+
+        return record;
+    }
+
+    public bool HasRecent(string kind, string sourceId, int currentTurn, int cooldownTurns) =>
+        _records.Any(record =>
+            record.Kind.Equals(kind, StringComparison.OrdinalIgnoreCase)
+            && record.SourceId.Equals(sourceId, StringComparison.OrdinalIgnoreCase)
+            && currentTurn - record.Turn < cooldownTurns);
+
+    public IReadOnlyList<WorldTurnRecord> Snapshot() => _records.ToArray();
+
+    public void ReplaceAll(IEnumerable<WorldTurnRecord> records)
+    {
+        _records.Clear();
+        _records.AddRange(records.Select(record => record with
+        {
+            Reason = Clean(record.Reason, "turn"),
+            Kind = Clean(record.Kind, "move"),
+            SourceId = Clean(record.SourceId, "unknown"),
+            Summary = record.Summary.Trim(),
+            Details = NormalizeDetails(record.Details),
+        }));
+    }
+
+    private static string Clean(string text, string fallback) =>
+        string.IsNullOrWhiteSpace(text) ? fallback : text.Trim();
+
+    private static IReadOnlyDictionary<string, object?> NormalizeDetails(IReadOnlyDictionary<string, object?>? details) =>
+        details is null
+            ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            : details
+                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+}
+
 public sealed record CanonRecord(
     string Id,
     string Kind,
@@ -612,25 +817,15 @@ public sealed class ScheduledEventLedger
         return record;
     }
 
-    public IReadOnlyList<ScheduledEventRecord> PopDue(int turn)
-    {
-        var due = _events
+    public IReadOnlyList<ScheduledEventRecord> Due(int turn) =>
+        _events
             .Where(record => record.DueTurn <= turn)
             .OrderBy(record => record.DueTurn)
             .ThenBy(record => record.Id)
             .ToArray();
-        if (due.Length == 0)
-        {
-            return due;
-        }
 
-        foreach (var record in due)
-        {
-            _events.Remove(record);
-        }
-
-        return due;
-    }
+    public void Remove(string id) =>
+        _events.RemoveAll(record => record.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
     public IReadOnlyList<ScheduledEventRecord> Snapshot() => _events.ToArray();
 
@@ -730,13 +925,6 @@ public sealed class TriggerLedger
     public void Remove(string id) =>
         _records.RemoveAll(record => record.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
-    public void RemoveExpired(int turn)
-    {
-        _records.RemoveAll(record =>
-            record.RemainingUses <= 0
-            || (record.ExpiresTurn is not null && record.ExpiresTurn < turn));
-    }
-
     public IReadOnlyList<TriggerRecord> Snapshot() =>
         _records
             .Select(record => record with
@@ -827,6 +1015,21 @@ public sealed class PersistentEffectLedger
             _records[index] = _records[index] with { RemainingUses = remaining };
         }
     }
+
+    public void Replace(PersistentEffectRecord record)
+    {
+        var index = _records.FindIndex(existing => existing.Id.Equals(record.Id, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0)
+        {
+            _records[index] = record with
+            {
+                EffectFields = new Dictionary<string, object?>(record.EffectFields, StringComparer.OrdinalIgnoreCase),
+            };
+        }
+    }
+
+    public void Remove(string id) =>
+        _records.RemoveAll(record => record.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
     public IReadOnlyList<PersistentEffectRecord> Snapshot() =>
         _records

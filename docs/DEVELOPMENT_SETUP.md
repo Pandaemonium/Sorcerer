@@ -110,5 +110,5 @@ Or launch directly:
 
 The Godot GUI constructs the same `GameSession` as the CLI. It currently provides a
 playable ASCII encounter with keyboard movement, mouse targeting, spell entry, command
-entry, quick spells, Ollama model controls, pending casts, and read-only state panels.
+entry, quick spells, provider/model controls, pending casts, and read-only state panels.
 Mock provider mode is intentionally CLI-only for deterministic agent testing.

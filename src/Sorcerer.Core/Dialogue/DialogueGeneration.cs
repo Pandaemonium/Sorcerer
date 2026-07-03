@@ -10,7 +10,8 @@ public sealed record PreparedDialogueTurn(
     bool SpeakerHostile,
     string? SpeakerProfile,
     string? SpeakerFaction,
-    string? BondSummary);
+    string? BondSummary,
+    string? SpeakerWant = null);
 
 public sealed record DialoguePreparation(
     PreparedDialogueTurn? Turn,
@@ -26,7 +27,8 @@ public sealed record DialogueParticipantCard(
     string? BondSummary = null,
     IReadOnlyList<string>? Inventory = null,
     IReadOnlyList<string>? Wares = null,
-    IReadOnlyList<string>? Services = null);
+    IReadOnlyList<string>? Services = null,
+    string? Want = null);
 
 public sealed record DialogueSceneCard(
     string RegionId,
@@ -43,12 +45,14 @@ public sealed record DialogueRequest(
     DialogueSceneCard Scene,
     IReadOnlyList<string> RecentMemories,
     IReadOnlyList<string> RecentClaims,
-    IReadOnlyList<string> CapabilityCards);
+    IReadOnlyList<string> CapabilityCards,
+    IReadOnlyList<string>? RecentRumors = null);
 
 public sealed record DialogueProposalSet(
     IReadOnlyList<DialogueClaimProposal>? Claims = null,
     IReadOnlyList<DialogueMemoryProposal>? Memories = null,
     DialogueBondProposal? Bond = null,
+    DialogueWantProposal? Want = null,
     IReadOnlyList<DialogueActionProposal>? Actions = null);
 
 public sealed record DialogueResponse(
@@ -73,11 +77,61 @@ public sealed record DialogueBondProposal(
     string? Posture = null,
     string? Reason = null);
 
+public sealed record DialogueWantProposal(
+    string EntityId,
+    string? Text = null,
+    int? Salience = null,
+    string? Status = null,
+    string? Stakes = null,
+    IReadOnlyList<string>? Tags = null,
+    IReadOnlyList<string>? AddTags = null,
+    IReadOnlyList<string>? RemoveTags = null,
+    string? Reason = null);
+
 public sealed record DialogueActionProposal(
     string Type,
     string? TargetEntityId = null,
     string? ItemName = null,
-    string? Reason = null);
+    string? Reason = null,
+    int? Quantity = null,
+    int? Gold = null,
+    string? Name = null,
+    string? Description = null,
+    string? FixtureType = null,
+    string? Material = null,
+    IReadOnlyList<string>? Tags = null,
+    IReadOnlyList<string>? InteractableVerbs = null,
+    int? X = null,
+    int? Y = null,
+    bool? BlocksMovement = null,
+    bool? BlocksSight = null,
+    string? ServiceId = null,
+    string? EffectKind = null,
+    string? TargetHint = null,
+    string? ItemCost = null,
+    int? GoldCost = null,
+    string? PromiseKind = null,
+    string? PromiseText = null,
+    string? TriggerHint = null,
+    string? RealizationKind = null,
+    string? ClaimedPlace = null,
+    string? Subject = null,
+    bool? PlayerVisible = null,
+    int? Salience = null,
+    bool? AutoBind = null,
+    bool? StackExisting = null,
+    string? WantStatusOnComplete = null,
+    string? WantStakesOnComplete = null,
+    IReadOnlyList<string>? WantAddTagsOnComplete = null,
+    IReadOnlyList<string>? WantRemoveTagsOnComplete = null,
+    string? CanonKind = null,
+    string? CanonText = null,
+    string? CanonSummary = null,
+    string? ConsequenceType = null,
+    string? ConsequenceTiming = null,
+    string? ConsequenceVisibility = null,
+    int? ConsequenceConfidence = null,
+    IReadOnlyDictionary<string, object?>? ConsequencePayload = null);
 
 public sealed record DialogueProviderResult(
     string Provider,

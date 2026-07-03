@@ -91,6 +91,25 @@ public sealed class Entity
             {
                 Offers = services.Offers.ToArray(),
             },
+            ClaimSourceComponent claims => claims with
+            {
+                Claims = claims.Claims
+                    .Select(claim => claim with { Tags = claim.Tags?.ToArray() })
+                    .ToArray(),
+            },
+            ResistanceComponent resistance => resistance with
+            {
+                Resistances = new Dictionary<string, int>(resistance.Resistances, StringComparer.OrdinalIgnoreCase),
+                Weaknesses = new Dictionary<string, int>(resistance.Weaknesses, StringComparer.OrdinalIgnoreCase),
+            },
+            BehaviorTagsComponent behaviors => behaviors with
+            {
+                Tags = new Dictionary<string, int?>(behaviors.Tags, StringComparer.OrdinalIgnoreCase),
+            },
+            WantComponent want => want with
+            {
+                Tags = want.Tags.ToArray(),
+            },
             _ => component,
         };
 }

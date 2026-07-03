@@ -39,7 +39,7 @@ The short pitch:
 
 This repository now contains the first playable Godot/C# slice. The shared backend drives
 both the JSON-first CLI and a Godot ASCII GUI with map interaction, spell entry, command
-entry, Ollama model controls, pending casts, inventory/status/promise panels, and an imperial
+entry, provider/model controls, pending casts, inventory/status/promise panels, and an imperial
 encounter scenario. The current chamber also includes shared-engine item verbs,
 equipment/focus handling, readable and examinable fixtures, a locked cell, a prisoner
 rescue consequence, origins and soul/body stats, deeds/legend/faction pressure, first-pass
@@ -64,8 +64,9 @@ relevant access-gated canon into magic context and atlas output, generated zone 
 deterministic texture naming with durable subject tags, and background detail jobs write canon that
 appears on later examine. Zone entry can now echo your current legend through deterministic rumor
 lines, making reputation visible without adding hidden simulation. CLI provider creation now uses
-purpose-based LLM settings for foreground wild magic, and background jobs can be disabled or
-throttled for resource-sensitive playtests. The long-run spine has its first durable slice:
+purpose-based LLM settings for foreground wild magic/dialogue, with mock, Ollama, and
+OpenAI-compatible chat-completion adapters, and background jobs can be disabled or throttled for
+resource-sensitive playtests. The long-run spine has its first durable slice:
 schema-v1 save/load, transcript replay with materialized spell JSON, a reachable Vigovian Capital
 with Emperor Odran as a normal killable actor, victory/defeat run completion, run-closing
 chronicles, and inert cross-run memorial records. The CLI includes a spell eval harness, transcript
@@ -133,7 +134,7 @@ The CLI should support:
 - compact local map output
 - perfect debug state when requested
 - visible enemies, NPCs, floor items, props, and terrain
-- inventory, equipment, reagents, curses, promises, journal, standing, and messages
+- inventory, equipment, reagents, curses, promises, journal, rumors, standing, and messages
 - current zone/region, atlas/world affordances, and travel commands
 - save/load, transcript replay, run status, and optional debug-perfect state
 - mock LLM mode for fast deterministic CLI/agent testing

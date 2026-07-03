@@ -67,6 +67,176 @@ public sealed class OllamaDialogueProviderTests
         Assert.True(Assert.Single(result.Response!.Proposals!.Claims!).PlayerAuthored);
     }
 
+    [Fact]
+    public async Task DialogueParserReadsWantProposal()
+    {
+        var rawDialogue = """
+            {"spokenText":"If the door opens, I want a quiet road south.","proposals":{"claims":[],"memories":[],"bond":null,"want":{"entityId":"prisoner_1","text":"Reach a quiet road south.","salience":4,"status":"active","stakes":"The escape now depends on leaving quietly.","addTags":["road","south"],"removeTags":["cell"],"reason":"Lio changed his immediate desire."},"actions":[]}}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(rawDialogue));
+        var provider = new OllamaDialogueProvider(httpClient: new HttpClient(handler), model: "test-model");
+
+        var result = await provider.ResolveAsync(Request("Lio, what do you want now?"), CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        var want = result.Response!.Proposals!.Want!;
+        Assert.Equal("prisoner_1", want.EntityId);
+        Assert.Contains("quiet road south", want.Text);
+        Assert.Equal(4, want.Salience);
+        Assert.Equal("active", want.Status);
+        Assert.Contains("leaving quietly", want.Stakes);
+        Assert.Contains("road", want.AddTags!);
+        Assert.Contains("south", want.AddTags!);
+        Assert.Contains("cell", want.RemoveTags!);
+    }
+
+    [Fact]
+    public async Task DialogueParserReadsExpandedActionGrammarFields()
+    {
+        var rawDialogue = """
+            {"spokenText":"I can follow, trade, whisper the lock loose, mark the board, tag myself helpful, and tell you the local law: folk-magic practice is punishable by execution here.","proposals":{"actions":[{"type":"follow_me","reason":"Lio agrees to follow."},{"type":"offer_trade","itemName":"silver pin","quantity":2,"gold":9},{"type":"reveal_service","name":"ward-breaking","description":"I can whisper a lock loose.","serviceId":"ward_breaking","effectKind":"open_or_unlock","targetHint":"cell door","itemCost":"grave salt","goldCost":3,"tags":["folk_magic","door"]},{"type":"mark_location","name":"loose floorboard","fixtureType":"marker","description":"A board with fresh nail-scars.","x":5,"y":6,"blocksMovement":false,"interactableVerbs":["examine"]},{"type":"consequence","consequenceType":"add_tags","consequenceTiming":"deferred","targetEntityId":"prisoner_1","consequencePayload":{"tags":["helpful"],"operation":"dialogueConsequence","delay":1}},{"type":"canonize_fact","canonKind":"local_law","canonText":"Folk-magic practice is punishable by execution here.","canonSummary":"Folk magic is a capital crime","tags":["folk_magic","vigovia"]}]}}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(rawDialogue));
+        var provider = new OllamaDialogueProvider(httpClient: new HttpClient(handler), model: "test-model");
+
+        var result = await provider.ResolveAsync(Request("Lio, what can you do?"), CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        var actions = result.Response!.Proposals!.Actions!;
+        Assert.Equal("follow_me", actions[0].Type);
+        Assert.Equal("Lio agrees to follow.", actions[0].Reason);
+        Assert.Equal("offer_trade", actions[1].Type);
+        Assert.Equal("silver pin", actions[1].ItemName);
+        Assert.Equal(2, actions[1].Quantity);
+        Assert.Equal(9, actions[1].Gold);
+        Assert.Equal("reveal_service", actions[2].Type);
+        Assert.Equal("ward-breaking", actions[2].Name);
+        Assert.Equal("ward_breaking", actions[2].ServiceId);
+        Assert.Equal("open_or_unlock", actions[2].EffectKind);
+        Assert.Equal("cell door", actions[2].TargetHint);
+        Assert.Equal("grave salt", actions[2].ItemCost);
+        Assert.Equal(3, actions[2].GoldCost);
+        Assert.Contains("folk_magic", actions[2].Tags!);
+        Assert.Equal("mark_location", actions[3].Type);
+        Assert.Equal("marker", actions[3].FixtureType);
+        Assert.Equal(5, actions[3].X);
+        Assert.Equal(6, actions[3].Y);
+        Assert.False(actions[3].BlocksMovement);
+        Assert.Contains("examine", actions[3].InteractableVerbs!);
+        Assert.Equal("consequence", actions[4].Type);
+        Assert.Equal("add_tags", actions[4].ConsequenceType);
+        Assert.Equal("deferred", actions[4].ConsequenceTiming);
+        Assert.Equal("prisoner_1", actions[4].TargetEntityId);
+        Assert.NotNull(actions[4].ConsequencePayload);
+        var payload = actions[4].ConsequencePayload!;
+        Assert.Equal("dialogueConsequence", payload["operation"]);
+        Assert.Equal(1, payload["delay"]);
+        var tags = Assert.IsType<object[]>(payload["tags"]);
+        Assert.Contains("helpful", tags);
+        Assert.Equal("canonize_fact", actions[5].Type);
+        Assert.Equal("local_law", actions[5].CanonKind);
+        Assert.Contains("punishable by execution", actions[5].CanonText);
+        Assert.Equal("Folk magic is a capital crime", actions[5].CanonSummary);
+        Assert.Contains("vigovia", actions[5].Tags!);
+    }
+
+    [Fact]
+    public async Task DialogueParserReadsDirectConsequenceTopLevelFields()
+    {
+        var rawDialogue = """
+            {"spokenText":"I can mark myself helpful and worry the lock open.","proposals":{"actions":[{"type":"add_tags","targetEntityId":"prisoner_1","tags":["helpful"]},{"type":"request_service","service":"ward-breaking"}]}}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(rawDialogue));
+        var provider = new OllamaDialogueProvider(httpClient: new HttpClient(handler), model: "test-model");
+
+        var result = await provider.ResolveAsync(Request("Lio, what can you do?"), CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        var actions = result.Response!.Proposals!.Actions!;
+        Assert.Equal("add_tags", actions[0].Type);
+        Assert.Equal("prisoner_1", actions[0].TargetEntityId);
+        Assert.Contains("helpful", actions[0].Tags!);
+        Assert.Equal("request_service", actions[1].Type);
+        Assert.Equal("ward-breaking", actions[1].ServiceId);
+        Assert.NotNull(actions[1].ConsequencePayload);
+        Assert.Equal("ward-breaking", actions[1].ConsequencePayload!["service"]);
+    }
+
+    [Fact]
+    public async Task DialogueParserPreservesArbitraryTopLevelConsequenceFields()
+    {
+        var rawDialogue = """
+            {"spokenText":"Hold still; I can mark you for two breaths.","proposals":{"actions":[{"type":"apply_status","targetEntityId":"prisoner_1","status":"oath-marked","duration":2,"displayName":"oath marked"}]}}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(rawDialogue));
+        var provider = new OllamaDialogueProvider(httpClient: new HttpClient(handler), model: "test-model");
+
+        var result = await provider.ResolveAsync(Request("Lio, can you mark yourself?"), CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        var action = Assert.Single(result.Response!.Proposals!.Actions!);
+        Assert.Equal("apply_status", action.Type);
+        Assert.NotNull(action.ConsequencePayload);
+        var payload = action.ConsequencePayload!;
+        Assert.Equal("apply_status", payload["type"]);
+        Assert.Equal("prisoner_1", payload["targetEntityId"]);
+        Assert.Equal("oath-marked", payload["status"]);
+        Assert.Equal(2, payload["duration"]);
+        Assert.Equal("oath marked", payload["displayName"]);
+    }
+
+    [Fact]
+    public async Task DialogueParserMergesNestedPayloadWithTopLevelConsequenceFields()
+    {
+        var rawDialogue = """
+            {"spokenText":"Hold still; I can mark you for two breaths.","proposals":{"actions":[{"type":"apply_status","targetEntityId":"prisoner_1","status":"top-level-mark","duration":2,"consequencePayload":{"status":"nested-mark","operation":"dialogueNestedWins"}}]}}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(rawDialogue));
+        var provider = new OllamaDialogueProvider(httpClient: new HttpClient(handler), model: "test-model");
+
+        var result = await provider.ResolveAsync(Request("Lio, can you mark yourself?"), CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        var action = Assert.Single(result.Response!.Proposals!.Actions!);
+        Assert.Equal("apply_status", action.Type);
+        Assert.NotNull(action.ConsequencePayload);
+        var payload = action.ConsequencePayload!;
+        Assert.Equal("apply_status", payload["type"]);
+        Assert.Equal("prisoner_1", payload["targetEntityId"]);
+        Assert.Equal("nested-mark", payload["status"]);
+        Assert.Equal(2, payload["duration"]);
+        Assert.Equal("dialogueNestedWins", payload["operation"]);
+    }
+
+    [Fact]
+    public async Task DialoguePromptAdvertisesSharedConsequenceTiming()
+    {
+        var rawDialogue = """
+            {"spokenText":"Give me a breath and I will mark the ledger.","proposals":{"actions":[]}}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(rawDialogue));
+        var provider = new OllamaDialogueProvider(httpClient: new HttpClient(handler), model: "test-model");
+
+        var result = await provider.ResolveAsync(Request("Lio, can you mark this later?"), CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        var requestBody = Assert.Single(handler.RequestBodies);
+        using var document = JsonDocument.Parse(requestBody);
+        var systemPrompt = document.RootElement
+            .GetProperty("messages")[0]
+            .GetProperty("content")
+            .GetString();
+        Assert.NotNull(systemPrompt);
+        Assert.Contains("consequenceTiming immediate, after_turn, world_pump, or deferred", systemPrompt);
+        Assert.Contains("non-immediate timing schedules one typed consequence", systemPrompt);
+        Assert.Contains("known consequence id directly in type", systemPrompt);
+        Assert.Contains("{\"type\":\"request_service\"", systemPrompt);
+        Assert.Contains("{\"type\":\"transform_entity\"", systemPrompt);
+        Assert.Contains("known typed consequence ids", systemPrompt);
+        Assert.Contains("extra top-level fields on generic/typed consequence actions are preserved as payload fields", systemPrompt);
+        Assert.DoesNotContain("use schedule_event rather than non-immediate timing", systemPrompt);
+    }
+
     private static DialogueRequest Request(string playerText) =>
         new(
             0,

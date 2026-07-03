@@ -35,8 +35,8 @@ The existing opening seed already has useful bones:
 
 - a small imperial containment encounter
 - two soldiers
-- a brass containment brazier
-- a readable containment notice
+- a brass containment brazier with an examinable oath/landmark claim source
+- a readable containment notice with a document/escape-route claim source
 - loose items, including a tincture and cell key
 - a locked cell door
 - Lio of Hollowmere as a prisoner and possible follower
@@ -67,6 +67,13 @@ to five promise vectors:
 These are archetypes, not required exact beats. The important part is coverage: the opening
 should show that promises can come from dialogue, documents, props, deeds, and spells, and
 that all of them flow through the same ledger.
+
+Documents and props should use `ClaimSourceComponent` rather than opening-specific handlers.
+Reading the containment notice, examining a brazier, or inspecting an evidence tag can surface
+authored claim seeds, record them through `record_claim`, mint rumors through `record_rumor`, and
+bind only the salient ones through `create_promise`. That keeps the first room dense while
+exercising the same claim, rumor, and promise machinery later books, road signs, shrine plaques,
+and odd fixtures will use.
 
 ## First 20-Minute Beat Shape
 
@@ -125,6 +132,16 @@ a scripted quest giver. Lio, for example, can know a refuge, a blade-seller, a n
 burned-oak landmark, or a drainage route; imperial guards can know confiscation ledgers, patrol
 timing, warrants, and procedural weaknesses. The model should still decide what is actually said
 from the immediate conversation.
+
+The first NPC-want slice now supports this more directly. Opening NPCs can carry an authored
+`WantComponent` - one active desire with stakes and salience - which is passed into generated
+dialogue context but does not become a quest or journal lead by itself. Lio wants escape and word
+to Hollowmere; the ordinary soldier wants to survive the shift without blame; the ward-captain
+wants order, paperwork, and no public folk-magic scandal. Those wants should bias what they
+disclose while still relying on dialogue claims and promises for durable world change. When a
+plain engine action resolves an active want, it should still use the same consequence grammar:
+opening the cell marks Lio's escape want satisfied through `update_want` rather than relying on a
+later conversation to notice the obvious payoff.
 
 NPC information should first become reported claims with provenance. Some claims bind as promises
 when they map to a buildable archetype. Vague color remains dialogue or memory. Concrete, salient
@@ -317,8 +334,8 @@ To make this opening work without scripts, prioritize these general improvements
   items, landmarks, people, and towns.
 - **Partial player-facing journal hints:** players see evocative fragments; debug/agent views
   see exact bound records.
-- **Follower pathing ergonomics:** followers yield, swap, or step aside so social success does
-  not become movement friction.
+- **Follower pathing ergonomics:** followers yield by validated `move_entity` swaps when they
+  block the controlled body, so social success does not become movement friction.
 - **Consequence messages with causes:** when deeds, bonds, promises, or faction pressure change,
   messages should make the cause legible without exposing raw math.
 - **Opening feel eval:** scripted and live-provider playtests should inspect whether the

@@ -81,11 +81,28 @@ The target pipeline:
    claim spans, rough categories, confidence, and which claim capability cards are needed.
 3. If the router says yes, a larger **claim structuring** call runs with the selected capability
    cards, compact world context, and strict JSON formats. It proposes structured claim records,
-   memory writes, canon notes, merchant-stock hints, person/site/item promises, or rejection/no-op.
+   memory writes, `bindAsCanon` canon notes, merchant-stock hints, person/site/item promises, or
+   rejection/no-op.
 4. The engine validates and applies proposals at an explicit apply point. The model never mutates
-   state directly.
+   state directly. Delayed extractor proposals must pass the same spoken-text support check as
+   live generated-dialogue proposals before they can record claims, bind promises, or add canon.
 5. The player may see a light follow-up such as "Lio's words settle into your journal" or "A rumor
    finds a place to stand." Debug/agent views expose the exact records.
+
+When a claim becomes a promise, the apply point is the shared `create_promise` world consequence.
+The consequence carries the claim id, speaker/source, visibility, salience, subject, claimed place,
+trigger hint, realization kind, and binding policy; the promise ledger is not written by a
+dialogue-only helper. Legacy callers may still use `GameEngine.AddPromise`, but that method is
+only a wrapper around the same `create_promise` consequence lifecycle.
+
+When an existing promise needs to sharpen, bind to a target, or change status, the apply point is
+the companion `update_promise` consequence. Dialogue duplicate-claim handling and promise
+realization use this path instead of reaching directly into `PromiseLedger`.
+
+When a claim should become durable lore rather than a future obligation, the apply point is
+`add_canon`. The extractor should set `bindAsCanon` for local law, custom, public history,
+lineage, known relationships, or other facts that should inform later context without requiring a
+promise payoff.
 
 Use the `dialogue` purpose for both router and structuring by default. Loading a separate tiny
 model for the router risks local-model thrash and can cost more latency than it saves. Separate
@@ -111,15 +128,18 @@ Current implementation:
 
 - `ClaimLedger` records reported dialogue claims with source, speaker, listener, subject,
   category, salience, confidence, status, visibility, tags, and optional promise/application ids.
+  Accepted dialogue claims enter it through the shared `record_claim` consequence, and later
+  status/promise/application updates go through `update_claim`.
 - `GameSession` queues post-dialogue extraction and applies completed results on a later command,
   so the dialogue turn returns immediately.
 - `save` should flush pending dialogue extraction first: wait for queued extraction to complete,
   apply accepted proposals or record technical failures, and only then snapshot durable state.
-- `Sorcerer.Llm` provides a deterministic mock extractor and an Ollama extractor with the
+- `Sorcerer.Llm` provides deterministic mock, Ollama, and OpenAI-compatible extractors with the
   router-then-detail flow on the `dialogue` purpose.
-- Structured proposals may record memories, bind promises, add stock to an existing merchant, or
-  request an engine-clamped bond shift. Gift actions write memory only; any bond change from a
-  gift must be inferred and proposed during later dialogue.
+- Structured proposals may record claims, record memories, bind promises, add canon to the lore
+  ledger, add stock to an existing merchant, or request an engine-clamped bond shift. Gift actions write memory through
+  `record_memory` only; any bond change from a gift must be inferred and proposed during later
+  dialogue.
 - Generated NPC speech now flows through `IDialogueProvider` when configured. Generated dialogue
   applies structured claim proposals directly; the extractor remains for fallback deterministic
   dialogue and future authored text.
@@ -188,7 +208,9 @@ can later be contradicted, reinterpreted, or corrected by the world. Preserve pr
 game can say "Lio believed this" rather than silently converting every NPC sentence into fact.
 
 **Cost scales with binding strength.** Vague color promises are cheap; a guaranteed item, ally,
-or threat is major magic. A prophecy spell that writes a concrete future obligation should
+or threat is major magic. A prophecy spell that writes a concrete future obligation may use the
+direct `createPromise` spell operation or the generic `consequence` operation with
+`consequenceType: create_promise`; both routes enter the same Promise Ledger lifecycle and should
 carry an engine cost floor on top of the resolution's own costs - writing the world a debt is
 powerful, and powerful magic is paid for.
 
@@ -258,6 +280,11 @@ through the same authoritative session/engine boundary as other background resul
 extractor can write memories, canon, merchant-stock reservations, or promises only when the engine
 validates and applies the structured proposal.
 
+When a dialogue claim or authored claim seed binds into a promise, the claim, rumor, promise, and
+claim-status writes are staged as one packet. If any child consequence is rejected, the packet
+rolls back and leaves a hidden audit delta (`claimPromiseSkipped` or `claimSeedSkipped`) rather
+than partially recording a lead the world cannot honor.
+
 Current apply points include:
 
 - `travel`: realizes region-bound promises as generated sites, items, people, or threats.
@@ -286,7 +313,7 @@ Trigger hints are intentionally simple. Empty hints can realize at the first mat
 anchor interaction, while hints such as `read`, `open`, `door`, `talk`, `name`, `inspect`,
 or `examine` route
 the promise to an ordinary verb. This is not a full quest system yet; it is the first
-engine-owned bridge from wild narrative claim to durable world consequence.
+engine-owned bridge from wild narrative claim to durable typed consequence.
 
 ## Agent And Debug Surface
 

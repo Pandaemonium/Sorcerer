@@ -76,6 +76,10 @@ public sealed class GameState
 
     public ClaimLedger Claims { get; } = new();
 
+    public RumorLedger Rumors { get; } = new();
+
+    public WorldTurnLedger WorldTurns { get; } = new();
+
     public CanonLedger Canon { get; } = new();
 
     public BondLedger Bonds { get; } = new();

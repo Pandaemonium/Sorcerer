@@ -50,8 +50,10 @@ Two textures we will protect:
   see, you can try to make part of a spell. The richness of the world is not decoration; it is
   raw material.
 
-Weirdness scales with wild-magic saturation: imperial provinces feel surveyed and sensible;
-deep wild places go dreamlike. Strangeness is a map gradient and a navigational signal.
+Weirdness has causes, not a meter. Imperial provinces feel surveyed and sensible; old, remote,
+or wounded places can go dreamlike because of region identity, history, promises, factions,
+customs, and the player's deeds. Strangeness should be legible as something the world believes
+or remembers, not as a hidden regional meter.
 
 ## What It Plays Like
 
@@ -189,11 +191,12 @@ legend -> a personal bond -> a recruit for your cause.* Several systems, no scri
 
 **The gift that became a secret that became a place.**
 You imbue a plain Vintan scarf with a small wild charm - it warms when someone nearby lies - and
-give it to a fence you have been cultivating. The gift lifts her bond to you. Trusting you now,
+give it to a fence you have been cultivating. The gift becomes a durable memory; later dialogue
+lets her decide whether that memory changes her bond to you. Trusting you now,
 she lets slip a secret: her brother is held at an imperial checkpoint two valleys east. That
 secret does not stay talk. It binds as a promise, and the world honors it - the next time you
 travel east, the checkpoint is really there, her brother really inside, the guards really
-expecting no trouble. *Wild magic on an object -> a trait -> a gift -> a bond -> a confided secret
+expecting no trouble. *Wild magic on an object -> a trait -> a gift memory -> a bond -> a confided secret
 -> a bound promise -> a realized place you can act on.*
 
 **The mercy that made you a monster.**
@@ -212,7 +215,7 @@ The recurring hand-offs that produce emergence. Each is a general capability, no
 - wild magic on an ordinary object -> a minted trait -> something the world can later use
 - any visible act -> a deed gated by witnesses -> a rumor -> a multidimensional legend
 - legend -> faction standing -> recruitment, hostility, and the Empire's rising heat
-- items and traits -> gifts and leverage -> personal bonds
+- items and traits -> gifts and leverage -> memories that can influence personal bonds
 - bonds + dialogue -> confided secrets and commitments -> bound promises
 - promises -> world generation and timed events -> futures the world actually delivers
 - deeds -> the Empire spends finite resources -> escalation that ebbs, and a path to the emperor

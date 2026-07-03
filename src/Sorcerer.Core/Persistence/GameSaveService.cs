@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
+using Sorcerer.Core.Magic;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Runtime;
 using Sorcerer.Core.World;
@@ -134,7 +135,8 @@ public sealed record LoadedGameSave(
 public sealed record PendingCastSave(
     string Id,
     string Text,
-    CastPerformance? Performance);
+    CastPerformance? Performance,
+    MaterializedMagicResolution? Resolution = null);
 
 public sealed record GameStateSave(
     int Width,
@@ -163,6 +165,8 @@ public sealed record GameStateSave(
     List<LegendTag> LegendTags,
     List<WorldMemoryRecord> Memories,
     List<ClaimRecord> Claims,
+    List<RumorRecord> Rumors,
+    List<WorldTurnRecord> WorldTurns,
     List<WorldPromise> Promises,
     List<ScheduledEventRecord> ScheduledEvents,
     List<TriggerRecord> Triggers,
@@ -231,6 +235,10 @@ public sealed record GameStateSave(
             state.Legend.Snapshot().ToList(),
             state.Memories.Snapshot().ToList(),
             state.Claims.Snapshot().ToList(),
+            state.Rumors.Snapshot().ToList(),
+            state.WorldTurns.Snapshot()
+                .Select(record => record with { Details = GameSaveService.NormalizeMap(record.Details) })
+                .ToList(),
             state.PromiseLedger.Snapshot().ToList(),
             state.ScheduledEvents.Snapshot()
                 .OrderBy(record => record.DueTurn)
@@ -323,6 +331,9 @@ public sealed record GameStateSave(
         state.Legend.ReplaceAll(LegendTags ?? new List<LegendTag>());
         state.Memories.ReplaceAll(Memories ?? new List<WorldMemoryRecord>());
         state.Claims.ReplaceAll(Claims ?? new List<ClaimRecord>());
+        state.Rumors.ReplaceAll(Rumors ?? new List<RumorRecord>());
+        state.WorldTurns.ReplaceAll((WorldTurns ?? new List<WorldTurnRecord>())
+            .Select(record => record with { Details = GameSaveService.NormalizeMap(record.Details) }));
         state.PromiseLedger.ReplaceAll(Promises ?? new List<WorldPromise>());
         state.ScheduledEvents.ReplaceAll((ScheduledEvents ?? new List<ScheduledEventRecord>())
             .Select(record => record with { Payload = GameSaveService.NormalizeMap(record.Payload) }));
@@ -503,6 +514,9 @@ public sealed record EntitySave(
             case ReadableComponent typed:
                 entity.Set(typed);
                 break;
+            case ClaimSourceComponent typed:
+                entity.Set(typed);
+                break;
             case InteractableComponent typed:
                 entity.Set(typed);
                 break;
@@ -510,6 +524,9 @@ public sealed record EntitySave(
                 entity.Set(typed);
                 break;
             case ProfileComponent typed:
+                entity.Set(typed);
+                break;
+            case WantComponent typed:
                 entity.Set(typed);
                 break;
             case StatusContainerComponent typed:
@@ -604,6 +621,7 @@ public sealed record ComponentSave(
                 ("tags", value.Tags.ToArray()),
                 ("canAnchorMagic", value.CanAnchorMagic)),
             ReadableComponent value => New("readable", ("title", value.Title), ("textKey", value.TextKey)),
+            ClaimSourceComponent value => New("claimSource", ("claims", value.Claims.ToArray())),
             InteractableComponent value => New("interactable", ("verbs", value.Verbs.ToArray())),
             SoulComponent value => New("soul", ("soulId", value.SoulId)),
             ProfileComponent value => New(
@@ -613,6 +631,14 @@ public sealed record ComponentSave(
                 ("origin", value.Origin),
                 ("magicalSignature", value.MagicalSignature),
                 ("backstory", value.Backstory)),
+            WantComponent value => New(
+                "want",
+                ("id", value.Id),
+                ("text", value.Text),
+                ("salience", value.Salience),
+                ("status", value.Status),
+                ("stakes", value.Stakes),
+                ("tags", value.Tags.ToArray())),
             StatusContainerComponent value => New("statuses", ("statuses", value.Statuses.ToArray())),
             MemoryComponent value => New("memory", ("records", value.Records.ToArray())),
             FactionComponent value => New("faction", ("factionId", value.FactionId), ("roles", value.Roles.ToArray())),
@@ -677,6 +703,7 @@ public sealed record ComponentSave(
                 ReadStringList(fields, "tags"),
                 ReadBool(fields, "canAnchorMagic", true)),
             "readable" => new ReadableComponent(ReadString(fields, "title"), ReadString(fields, "textKey")),
+            "claimsource" => new ClaimSourceComponent(ReadClaimSeedList(fields, "claims")),
             "interactable" => new InteractableComponent(ReadStringList(fields, "verbs")),
             "soul" => new SoulComponent(ReadString(fields, "soulId")),
             "profile" => new ProfileComponent(
@@ -685,6 +712,13 @@ public sealed record ComponentSave(
                 ReadString(fields, "origin"),
                 ReadString(fields, "magicalSignature"),
                 ReadString(fields, "backstory")),
+            "want" => new WantComponent(
+                ReadString(fields, "id", "want"),
+                ReadString(fields, "text"),
+                ReadInt(fields, "salience", 2),
+                ReadString(fields, "status", "active"),
+                ReadString(fields, "stakes"),
+                ReadStringList(fields, "tags")),
             "statuses" => new StatusContainerComponent(ReadStatusList(fields, "statuses")),
             "memory" => new MemoryComponent(ReadEntityMemoryList(fields, "records")),
             "faction" => new FactionComponent(ReadString(fields, "factionId"), ReadStringList(fields, "roles")),
@@ -763,6 +797,23 @@ public sealed record ComponentSave(
                 ReadBool(map, "shareable")))
             .ToArray();
 
+    private static IReadOnlyList<ClaimSeed> ReadClaimSeedList(IReadOnlyDictionary<string, object?> fields, string key) =>
+        ReadObjectList(fields, key)
+            .Select(map => new ClaimSeed(
+                ReadString(map, "text"),
+                ReadString(map, "category", "rumor"),
+                ReadString(map, "subject"),
+                ReadInt(map, "salience", 3),
+                ReadInt(map, "confidence", 75),
+                ReadBoolAny(map, true, "playerVisible", "player_visible"),
+                ReadBoolAny(map, false, "bindAsPromise", "bind_as_promise"),
+                ReadString(map, "promiseKind", ReadString(map, "promise_kind", "rumor")),
+                ReadNullableString(map, "realizationKind") ?? ReadNullableString(map, "realization_kind"),
+                ReadNullableString(map, "triggerHint") ?? ReadNullableString(map, "trigger_hint"),
+                ReadNullableString(map, "claimedPlace") ?? ReadNullableString(map, "claimed_place"),
+                ReadStringList(map, "tags")))
+            .ToArray();
+
     private static IReadOnlyList<ServiceOffer> ReadServiceOfferList(IReadOnlyDictionary<string, object?> fields, string key) =>
         ReadObjectList(fields, key)
             .Select(map =>
@@ -777,7 +828,11 @@ public sealed record ComponentSave(
                     ReadNullableString(map, "itemCost"),
                     ReadNullableString(map, "targetHint"),
                     ReadBool(map, "revealed", true),
-                    ReadStringList(map, "tags"));
+                    ReadStringList(map, "tags"),
+                    ReadNullableString(map, "wantStatusOnComplete") ?? ReadNullableString(map, "want_status_on_complete"),
+                    ReadNullableString(map, "wantStakesOnComplete") ?? ReadNullableString(map, "want_stakes_on_complete"),
+                    ReadStringList(map, "wantAddTagsOnComplete").Concat(ReadStringList(map, "want_add_tags_on_complete")).ToArray(),
+                    ReadStringList(map, "wantRemoveTagsOnComplete").Concat(ReadStringList(map, "want_remove_tags_on_complete")).ToArray());
             })
             .ToArray();
 
@@ -886,6 +941,28 @@ public sealed record ComponentSave(
                 _ => fallback,
             }
             : fallback;
+
+    private static bool ReadBoolAny(IReadOnlyDictionary<string, object?> fields, bool fallback, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!fields.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
+            return value switch
+            {
+                bool typed => typed,
+                string text when bool.TryParse(text, out var parsed) => parsed,
+                int integer => integer != 0,
+                long integer => integer != 0,
+                _ => fallback,
+            };
+        }
+
+        return fallback;
+    }
 
     private static int ToInt(object? value, int fallback = 0) =>
         value switch

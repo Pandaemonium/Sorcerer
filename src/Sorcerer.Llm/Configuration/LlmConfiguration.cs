@@ -16,7 +16,8 @@ public sealed record LlmPurposeSettings(
     string? Model,
     int TimeoutSeconds,
     int MaxConcurrentCalls = 1,
-    bool Enabled = true);
+    bool Enabled = true,
+    string? ApiKey = null);
 
 public sealed record LlmConfiguration(
     IReadOnlyDictionary<LlmPurpose, LlmPurposeSettings> Purposes)
@@ -33,7 +34,8 @@ public sealed record LlmConfiguration(
         string? model = null,
         int? timeoutSeconds = null,
         int? maxConcurrentCalls = null,
-        bool? enabled = null)
+        bool? enabled = null,
+        string? apiKey = null)
     {
         var current = SettingsFor(purpose);
         var updated = current with
@@ -44,6 +46,7 @@ public sealed record LlmConfiguration(
             TimeoutSeconds = timeoutSeconds ?? current.TimeoutSeconds,
             MaxConcurrentCalls = maxConcurrentCalls ?? current.MaxConcurrentCalls,
             Enabled = enabled ?? current.Enabled,
+            ApiKey = string.IsNullOrWhiteSpace(apiKey) ? current.ApiKey : apiKey,
         };
         var purposes = new Dictionary<LlmPurpose, LlmPurposeSettings>(Purposes)
         {
@@ -94,7 +97,8 @@ public sealed record LlmConfiguration(
         var timeout = ReadInt($"{prefix}_TIMEOUT_SECONDS", defaultTimeoutSeconds);
         var concurrency = ReadInt($"{prefix}_MAX_CONCURRENT_CALLS", maxConcurrentCalls);
         var purposeEnabled = ReadBool($"{prefix}_ENABLED", enabled);
-        return new LlmPurposeSettings(provider, host, model, timeout, concurrency, purposeEnabled);
+        var apiKey = Environment.GetEnvironmentVariable($"{prefix}_API_KEY") ?? DefaultApiKey();
+        return new LlmPurposeSettings(provider, host, model, timeout, concurrency, purposeEnabled, apiKey);
     }
 
     private static int ReadInt(string name, int fallback) =>
@@ -106,6 +110,11 @@ public sealed record LlmConfiguration(
         bool.TryParse(Environment.GetEnvironmentVariable(name), out var parsed)
             ? parsed
             : fallback;
+
+    private static string? DefaultApiKey() =>
+        Environment.GetEnvironmentVariable("SORCERER_OPENAI_API_KEY")
+        ?? Environment.GetEnvironmentVariable("SORCERER_API_KEY")
+        ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 }
 
 public sealed record LlmCallResult<T>(

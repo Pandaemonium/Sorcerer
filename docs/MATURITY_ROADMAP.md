@@ -47,14 +47,14 @@ Solid and shipping:
 - Engine actions: movement, collision, doors, bump-combat, items/equip/focus, read/examine,
   statuses and terrain with expiry, possession/body-swap seam, hostile actor turns.
 - Promises with target/trigger binding and read/open/talk realization.
-- Background-job lane (deterministic placeholder generation), CLI eval (26/26 mock), episode
+- Background-job lane (provider-backed candidate text with deterministic fallback), CLI eval (26/26 mock), episode
   runner, transcript logs, transcript replay, mock + Ollama providers.
 - Save/load with a schema-v1 persistence envelope, materialized spell replay, a reachable
   killable emperor, run victory/defeat transitions, chronicles, and inert cross-run memorials.
 
-Still thin or future work: live LLM dialogue, full geopolitics and towns, deeper quests, richer
-background generation, item identification, late-game capital access, court infiltration, and
-death-to-new-run UX polish.
+Still thin or future work: live dialogue polish/evals, full geopolitics and towns, deeper quests,
+richer background generation, item identification, late-game capital access, court infiltration,
+and death-to-new-run UX polish.
 
 ## Build Discipline (applies to every phase)
 
@@ -202,8 +202,8 @@ to validate through.
 - **Personal bond per NPC** (`BondRecord` exists: loyalty / fear / admiration / resentment /
   posture), kept as **three orthogonal layers never conflated:** combat allegiance, organization
   membership, personal bond to the player.
-- **Gifts and leverage:** giving items (especially imbued ones) shifts bonds; deeds and legend color
-  every bond check.
+- **Gifts and leverage:** giving items (especially imbued ones) writes durable memory; later
+  dialogue, deeds, and legend can move bonds through validated consequences.
 - **Followers** recruit at bond thresholds and act through the existing actor-agnostic turn seam.
 - Personal bond can override faction hostility in AI targeting and recruitment decisions.
 - **Devotion / drift / departure / betrayal** emerge from thresholds + durable deed marks; the model
@@ -211,9 +211,9 @@ to validate through.
   The math stays invisible - it must read as relationships, not stat bars.
 - **Secrets and commitments** confided in dialogue bind as promises.
 
-**Unlocks:** items/traits -> gifts -> bonds -> confided secrets -> bound promises -> delivered
+**Unlocks:** items/traits -> gift memories -> dialogue/deeds -> bonds -> confided secrets -> bound promises -> delivered
 futures. Makes the "gift -> secret -> place" and "mercy -> monster" vignettes possible. **Tests:**
-bond layers independent; gift/deed effects on bonds; threshold-driven recruit/betray; secret ->
+bond layers independent; gift memories influencing later bond proposals; deed effects on bonds; threshold-driven recruit/betray; secret ->
 promise binding.
 
 ### Phase 5 - Procedural World: Regions, Traditions, A Fresh World Each Run
@@ -228,8 +228,8 @@ effective imperial grip by run seed, and generated zones seed one resident NPC f
 profile. Full geopolitical ownership graphs, town layouts, population rosters, and rich
 promise-site archetypes are still future Phase 5 work.
 
-- **Zone graph** beyond the single chamber: regions with identity, a wild-magic saturation gradient
-  (imperial -> dreamlike), and a tradition lean. Zone transition is a reaction pump point.
+- **Zone graph** beyond the single chamber: regions with identity, imperial grip, tradition lean,
+  and discoverable sources of strangeness. Zone transition is a reaction pump point.
   Start with the smallest useful bounded grid; no exact size is fixed by the roadmap.
 - **Worldgen rolls geopolitics from the seed** (which realms are conquered/defiant, who rules, where
   traditions survive, imperial grip per province). Procedural rolls the structure deterministically;
@@ -297,10 +297,9 @@ promotion is resolver-authored only.
   run-closing chronicle, consequence-bearing detail (a shrine raised to what you did). First slice:
   deterministic zone-entry rumors reflect current legend and standing after travel without changing
   mechanics.
-- **Provider-backed background generation:** replace deterministic placeholders behind the same
-  queue/apply boundary; resource-aware, cancellable, inspectable. First harness slice: CLI wild
-  magic uses purpose-based `LlmConfiguration`, with separate background settings and background
-  queue throttle/disable flags.
+- **Provider-backed background generation:** candidate prose now comes from the optional background
+  provider or deterministic fallback behind the same queue/apply boundary. Continued maturity work:
+  richer prompts, audits, cancellation, and developer queue inspection.
 - **Legibility layer:** rumor lines on zone entry, NPCs greeting by legend, named voices, standing
   readouts.
 
@@ -320,8 +319,8 @@ cross-lane invariants.
 
 - **Save/load:** deepen migration/version tooling, compress/organize run folders, and keep every new
   state lane serializable.
-- **Replay:** expand materialized apply points beyond spell JSON as narrator/dialogue/background
-  generation become provider-backed.
+- **Replay:** keep expanding materialized apply points as new provider-backed systems land; spell
+  JSON, generated dialogue, claim extraction, and background text are already replay-fed.
 - **Cross-run traces** that commemorate, not empower: grave markers, chronicles, memorial records,
   and other inert echoes.
 - **Win condition wired:** the emperor exists as a killable character; deepen the late-game access

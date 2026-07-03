@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
@@ -64,7 +65,7 @@ public sealed class AiSystem
                 var fleeDestination = StepAway(actorPosition.Position, playerPosition.Position);
                 if (CanEnter(fleeDestination))
                 {
-                    deltas.Add(_engine.MoveEntity(actor, fleeDestination, "aiMove"));
+                    AddMoveDeltas(deltas, actor, fleeDestination, "coward");
                 }
 
                 continue;
@@ -77,7 +78,7 @@ public sealed class AiSystem
                     var mimicDestination = actorPosition.Position.Translate(mimicDelta.X, mimicDelta.Y);
                     if (CanEnter(mimicDestination))
                     {
-                        deltas.Add(_engine.MoveEntity(actor, mimicDestination, "aiMove"));
+                        AddMoveDeltas(deltas, actor, mimicDestination, "mimic");
                     }
                 }
 
@@ -96,12 +97,29 @@ public sealed class AiSystem
                 var destination = StepToward(actorPosition.Position, playerPosition.Position);
                 if (CanEnter(destination))
                 {
-                    deltas.Add(_engine.MoveEntity(actor, destination, "aiMove"));
+                    AddMoveDeltas(deltas, actor, destination, "hostile_pursuit");
                 }
             }
         }
 
         return deltas;
+    }
+
+    private void AddMoveDeltas(List<StateDelta> deltas, Entity actor, GridPoint destination, string behavior)
+    {
+        var applied = _engine.ApplyConsequence(WorldConsequence.MoveEntity(
+            "ai",
+            actor.Id.Value,
+            destination.X,
+            destination.Y,
+            operation: "aiMove",
+            sourceEntityId: actor.Id.Value,
+            reason: $"AI behavior: {behavior}",
+            details: new Dictionary<string, object?>
+            {
+                ["aiBehavior"] = behavior,
+            }));
+        deltas.AddRange(applied.Deltas);
     }
 
     private bool HasActiveBehavior(Entity entity, string tag) =>

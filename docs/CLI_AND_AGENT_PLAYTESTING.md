@@ -85,8 +85,7 @@ dotnet run --project src/Sorcerer.Cli -- --provider mock --quickstart social `
   --command "wait" `
   --command "travel east" `
   --command "inspect" `
-  --command "recruit Lio" `
-  --command "followers"
+  --command "bonds Lio"
 ```
 
 The `wait` step gives queued dialogue claim extraction a turn boundary to apply. The travel step
@@ -136,8 +135,16 @@ dotnet run --project src/Sorcerer.Cli -- --provider mock --json --debug-state `
   --command "standing"
 ```
 
-The travel result should include a `zone_entry_rumor` message that reflects the current legend tag
-and faction pressure, without creating new standing by itself.
+The cast should mint a durable rumor in debug/view state, the travel result may include a
+`worldTurn` delta with `kind=rumor_spread` as that record reaches the next region, and
+`zone_entry_rumor` may still add legibility text based on legend/faction pressure without creating
+new standing by itself. Player-facing messages should show the concrete rumor or lead once; the
+`worldTurn` wrapper remains in deltas/debug as audit-only structure. The `journal` command should
+show the mixed lead/claim/pressure overview, while the dedicated `rumors` command should show only
+player-heard high-salience rumor records, including status and recent retelling history; debug
+observations expose full `debug.rumors` cards with carriers, status, hops, and distortion history.
+Debug ledger summaries should expose bounded world-turn counts and recent `debug.worldTurns` cards
+with kind, source, summary, and details.
 
 For a focused persistence/replay/win smoke, record a short run, replay it, and then exercise the
 capital:
@@ -162,8 +169,11 @@ dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cp
 ```
 
 The save/load commands should preserve state and pending casts, replay should consume materialized
-spell JSON instead of calling the model, and the capital smoke should show whether the emperor and
-Empire reaction feel like ordinary systems rather than a scripted finale.
+spell JSON and background text instead of calling the model, and the capital smoke should show
+whether the emperor and Empire reaction feel like ordinary systems rather than a scripted finale.
+Internally, wild magic resolution is now split from application: a provider result can be
+materialized without changing state, then applied later through the same authoritative validation
+path.
 
 Background enrichment can be throttled for resource-sensitive runs:
 
@@ -202,8 +212,16 @@ Agents can also split casting into submit/resolve steps:
 {"type":"await_cast"}
 ```
 
-While a cast is pending, turn-consuming commands are blocked until the agent sends
-`await_cast` or `cancel_cast`. The pending cast appears in `observation.pendingCast`.
+While a cast is pending, turn-consuming and state-changing commands are blocked until the agent
+sends `await_cast` or `cancel_cast`. Read-only state and ledger commands remain available:
+`inspect`, `map`, `atlas`, `journal`, `rumors`, `character`, `reagents`, `wares`, `services`, `bonds`,
+`standing`, `followers`, `jobs`, `save`, `load`, `help`, and `quit`. The pending cast appears in
+`observation.pendingCast` with state (`resolving`, `ready`, `failed`, or legacy `waiting`),
+provider, accepted/technical-failure flags, effect types, and error metadata when materialized.
+`begin_cast` starts the non-mutating provider resolution immediately; `await_cast` applies the
+materialized result through the ordinary validation path. `cancel_cast` signals the provider
+cancellation token and consumes no turn. Saving while pending waits for resolution and persists
+the materialized spell, so a loaded pending cast can be applied without another model call.
 
 Every command should return an action result and a fresh observation:
 
@@ -238,10 +256,15 @@ Every command should return an action result and a fresh observation:
 
 The exact schema can evolve, but fields must stay stable once agents depend on them.
 
-`ActionResult.Messages` should include both the direct command outcome and turn-boundary
-messages produced by the same consumed turn, such as temporary terrain fading, scheduled
-magic coming due, or background detail settling. These boundary messages also appear as
-`turnEvent` deltas where the engine can surface them.
+`ActionResult.Messages` should include both the direct command outcome and diegetic turn-boundary
+messages produced by the same consumed turn, such as temporary terrain fading or scheduled magic
+coming due. Background jobs expose queue/apply state through `jobs` and debug observations; their
+durable content should surface later through ordinary world views such as `examine`, not as raw
+queue narration.
+Promise payoff action results may include hidden `promiseRealizationPlan` deltas before
+`realizePromise` and the concrete payoff consequence. These are agent/debug breadcrumbs with the
+normalized handler, score, selection reasons, trigger, target, and `realizedIn`; they should not be
+rendered as player-facing prose.
 
 Player-facing observations are perception-bound. `view.tiles` includes every map
 coordinate, but unexplored tiles use `terrain: "unknown"` with `visible: false` and
@@ -250,9 +273,9 @@ coordinate, but unexplored tiles use `terrain: "unknown"` with `visible: false` 
 When `--debug-state` or transcripts are enabled, debug observations may include perfect
 diagnostic state such as all entity ids and ledger counts. Agents should use debug state for
 testing and reproduction, not as a model of what the human player knows.
-Debug observations also include raw faction standing/resources, hostile roles, raw bond values, and
-ledger counts such as scheduled events and triggers. Those exact resource and relationship counts
-are intentionally debug-only; player-facing
+Debug observations also include raw faction standing/resources, hostile roles, raw bond values,
+active NPC wants, and ledger counts such as scheduled events and triggers. Those exact resource,
+motivation, and relationship counts are intentionally debug-only; player-facing
 `standing` reports role, axes, pressure, mood, and rank, `bonds` reports qualitative posture, and
 `journal` shows pending patrol/warrant pressure when it is player-legible.
 
@@ -263,6 +286,7 @@ Human-friendly commands:
 ```text
 inspect
 map
+map 5
 atlas
 travel east
 move east
@@ -278,6 +302,10 @@ recruit Lio
 bonds
 quit
 ```
+
+`map [radius]` returns a compact coordinate-stamped, perception-bound text map centered on the
+controlled body. It is for quick human/agent orientation; JSON agents should still prefer
+`view.tiles` for full structured tile state.
 
 Scripted shared-engine smoke:
 
@@ -302,6 +330,12 @@ Blank lines and `#` comments in script files are ignored. Any `--command` entrie
 appended after script commands. The example above intentionally uses `mock` because it is
 a deterministic troubleshooting smoke; exploratory playtest scripts should usually use
 `--provider ollama`.
+
+CLI text commands and the Godot command line both parse through `TextCommandParser`; CLI JSON
+commands should map the same verbs and common aliases onto the same typed `GameCommand`s.
+The Godot Journal scene reads `GameView.Journal`, which is built by the same helper used by the
+CLI `journal` command, so agent-visible leads/claims/rumors and the human GUI journal stay in
+lockstep.
 
 ## Agent Observation
 
@@ -332,6 +366,18 @@ Important observation details:
 - player position, HP, mana, statuses
 - character sheet fields in `view.character`: body id, soul id, origin, Vigor,
   Attunement, Composure, public name, appearance, magical signature
+- debug-only NPC wants in `debug.wants`: entity id/name, want id, text, salience, status, stakes,
+  and tags
+- promise cards in `view.promises`: id, status, kind, trigger hint, realization kind, bound
+  place/target, salience, source claim/speaker/listener/confidence when present, and the last
+  eligibility failure/context/turn when a payoff check has recently found the promise waiting
+  rather than realizable
+- debug rumor cards in `debug.rumors`: id, source, current/origin region, carrier ids, status,
+  hops, salience, text, original text, and distortion history
+- recent bounded world-turn audit cards in `debug.worldTurns`: id, turn, reason, kind, source,
+  summary, and detail fields. Current kinds include `rumor_spread`, `promise_stir`,
+  `want_stir`, `faction_pressure`, `faction_pressure_blocked`, and `faction_recovery`;
+  `want_stir` is private context and should not appear as player-facing journal truth by itself.
 - reagent cards in `view.reagents`: unprotected carried fuel with quantity, value, material, tags,
   and `spellBias`
 - local coordinate map
@@ -438,9 +484,14 @@ Recommended CLI flags:
 --background-jobs-per-turn <n>
 ```
 
-`ollama` and `local` currently select the live Ollama provider. `mock` is deterministic and
-fast enough for frequent focused checks, but it should not be treated as the ordinary
-playtest resolver.
+`ollama` and `local` select the live Ollama provider. `api`, `openai`, and
+`openai-compatible` select the OpenAI-compatible `/v1/chat/completions` adapter for wild magic,
+generated dialogue, and dialogue-claim extraction; use `--host` for the base URL and `--model` for
+the model id. Hosted endpoints can read credentials from `SORCERER_OPENAI_API_KEY`,
+`SORCERER_API_KEY`, or `OPENAI_API_KEY`; purpose-specific `SORCERER_WILD_API_KEY` and
+`SORCERER_DIALOGUE_API_KEY` override the shared key for their lanes. `mock` is deterministic and
+fast enough for frequent focused checks, but it should not be treated as the ordinary playtest
+resolver.
 
 Live providers exercise the real resolver and write audit logs. They are the right choice
 when judging wild magic quality.
@@ -463,15 +514,29 @@ different seeds should give coherent variation.
 ## Replay
 
 Replay stays lightweight and command-oriented. `--transcript` writes JSONL records for
-`transcript_start`, each `transcript_step`, and `transcript_final`. The start record captures seed,
-origin, and background settings. Each step includes command text, `ActionResult`, debug
-observation, and, for model-touched magic where available, `magic.resolvedMagicJson`: the normalized
-materialized spell resolution that actually passed validation.
+`transcript_start`, each `transcript_step`, and `transcript_final`. `--episode-log` records use
+the parallel `episode_start`, `episode_step`, and `episode_final` shape and can also be fed to
+`--replay`. The start record captures seed, origin when present, background settings when present,
+and quickstart scene metadata. Each step includes command text, `ActionResult`, debug observation,
+and materialized model outputs where available:
+`magic.resolvedMagicJson` for validated or pending-materialized spell resolution, `dialogue` for
+the normalized generated dialogue response, `dialogueClaimExtractions` for completed post-dialogue
+claim extraction, and background job `resultText` for provider-backed background prose. Faulted or
+canceled claim-extraction tasks are recorded as technical-failure extraction records, so replay keeps
+the attempted extraction visible even when it produced no claims.
 
-`--replay <path>` reads one of those transcripts, creates a fresh `GameSession`, and uses
-`ReplaySpellProvider` to feed the recorded materialized spell JSON back into the resolver pipeline.
-It does not call the model. `--replay-assert-final` compares a compact final observation summary
-when the transcript has one.
+`--replay <path>` reads one of those transcripts or episode logs, creates a fresh `GameSession`,
+reapplies recorded quickstart setup, and uses replay providers to feed recorded spell, dialogue,
+claim-extraction, and background-text outputs back through the normal engine pipeline. It does not
+call the model.
+Spell replay still re-enters the ordinary apply path: materialized spell JSON is parsed, repaired,
+validated against the current replay state, and only then applied.
+For split casts, transcript replay feeds materialized spell JSON back into the pending-cast
+resolution lane; a replayed `await_cast` should apply the saved materialized result rather than
+calling the provider a second time.
+`--replay-assert-final` compares a compact final observation summary when the transcript has one,
+including the main social flywheel counts: promises, claims, rumors, world turns, bonds, and
+memories, plus a background job result-text fingerprint.
 
 This is not a historical rewind system. Prefer preserving command scripts, seeds, transcripts,
 audit records, and compact final summaries over building heavier time-travel machinery until a
@@ -498,9 +563,9 @@ dotnet run --project src/Sorcerer.Cli -- --provider mock --episode --episodes 5 
 With `mock`, it uses a deterministic heuristic agent over the real `GameSession`, writes
 diagnostic JSONL records when `--episode-log` is provided, and fails the process if hard
 invariants fail. Logs include `episode_start`, `episode_step`, and `episode_final` records
-with full debug observations, so they can support troubleshooting first and lightweight
-replay material where practical. This is intentionally simple, but it is already useful
-for catching engine regressions.
+with full debug observations and step `ActionResult`s, so generated spell/dialogue/claim outputs
+are materialized for replay in the same way as ordinary transcripts. This is intentionally simple,
+but it is already useful for catching engine regressions.
 
 At episode end, the runner also checks long-run invariants across the newer lanes: state
 validation, save -> load -> save byte stability, loaded-state validation, duplicate promise ids,

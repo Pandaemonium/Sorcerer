@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
@@ -40,7 +41,14 @@ public sealed class AreaStatusOperation : OperationBase
                 && GameEngineDistance(position.Position, origin) <= radius)
             .Where(entity => AffectsTarget(context, entity, affects))
             .Take(context.GroupTargetCap)
-            .Select(entity => context.Engine.ApplyStatus(entity, status, duration, displayName))
+            .SelectMany(entity => context.Engine.ApplyConsequence(WorldConsequence.ApplyStatus(
+                "wild_magic",
+                entity.Id.Value,
+                status,
+                duration,
+                displayName,
+                sourceEntityId: context.Caster.Id.Value,
+                operation: "areaStatus")).Deltas)
             .ToArray();
     }
 }
@@ -57,10 +65,37 @@ public sealed class ModifyInventoryOperation : OperationBase
     {
     }
 
-    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect) =>
-        string.IsNullOrWhiteSpace(Text(effect, "item", ""))
-            ? ValidationOutcome.Reject("modifyInventory needs an item.")
-            : ValidationOutcome.Pass;
+    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect)
+    {
+        var item = Text(effect, "item", "");
+        if (string.IsNullOrWhiteSpace(item))
+        {
+            return ValidationOutcome.Reject("modifyInventory needs an item.");
+        }
+
+        var op = NormalizeToken(Text(effect, "op", "add"), "add");
+        if (op is not ("remove" or "subtract" or "consume"))
+        {
+            return ValidationOutcome.Pass;
+        }
+
+        var target = ResolveTargets(context, effect, "self").FirstOrDefault() ?? context.Caster;
+        var amount = Int(effect, "amount", 1, min: 0, max: 99);
+        if (amount <= 0)
+        {
+            return ValidationOutcome.Pass;
+        }
+
+        if (!target.TryGet<InventoryComponent>(out var inventory))
+        {
+            return ValidationOutcome.Reject($"{target.Name} is not carrying {item}.");
+        }
+
+        var key = FindInventoryKey(inventory, item) ?? FindInventoryKey(inventory, NormalizeToken(item, item));
+        return key is not null && inventory.Items.TryGetValue(key, out var count) && count >= amount
+            ? ValidationOutcome.Pass
+            : ValidationOutcome.Reject($"{target.Name} is not carrying enough {item}.");
+    }
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
     {
@@ -68,36 +103,31 @@ public sealed class ModifyInventoryOperation : OperationBase
         var item = NormalizeToken(Text(effect, "item", ""), fallback: "trinket");
         var op = Text(effect, "op", "add").Trim().ToLowerInvariant();
         var amount = Int(effect, "amount", 1, min: 0, max: 99);
-        var inventory = target.TryGet<InventoryComponent>(out var existing) ? existing : InventoryComponent.Empty();
-        var current = inventory.Items.TryGetValue(item, out var count) ? count : 0;
-        var updated = op switch
-        {
-            "remove" or "subtract" => Math.Max(0, current - amount),
-            "set" => Math.Max(0, amount),
-            _ => current + Math.Max(1, amount),
-        };
+        return context.Engine.ApplyConsequence(WorldConsequence.ModifyInventory(
+            "wild_magic",
+            target.Id.Value,
+            item,
+            op,
+            amount,
+            WorldConsequenceVisibility.Message,
+            context.Caster.Id.Value)).Deltas;
+    }
 
-        if (updated <= 0)
+    private static string? FindInventoryKey(InventoryComponent inventory, string item)
+    {
+        if (string.IsNullOrWhiteSpace(item))
         {
-            inventory.Items.Remove(item);
-            inventory.TreasuredItems.Remove(item);
-        }
-        else
-        {
-            inventory.Items[item] = updated;
+            return null;
         }
 
-        target.Set(inventory);
-        var summary = $"{item.Replace('_', ' ')} count becomes {updated}.";
-        context.Engine.AddMessage(summary);
-        return new[]
+        if (inventory.Items.ContainsKey(item))
         {
-            new StateDelta(
-                "modifyInventory",
-                target.Id.Value,
-                summary,
-                new Dictionary<string, object?> { ["item"] = item, ["count"] = updated }),
-        };
+            return item;
+        }
+
+        var normalized = NormalizeToken(item, item);
+        return inventory.Items.Keys.FirstOrDefault(key =>
+            NormalizeToken(key, key).Equals(normalized, StringComparison.OrdinalIgnoreCase));
     }
 }
 
@@ -125,17 +155,12 @@ public sealed class AddTagOperation : OperationBase
         }
 
         return ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target =>
-            {
-                AddTags(target, tags);
-                var summary = $"{Subject(context, target)} {Verb(context, target, "are", "is")} tagged {string.Join(", ", tags)}.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "addTag",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["tags"] = tags });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.AddTags(
+                "wild_magic",
+                target.Id.Value,
+                tags,
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -159,23 +184,12 @@ public sealed class RemoveTagOperation : OperationBase
     {
         var tags = Tags(effect, "tags", Tags(effect, "tag", Array.Empty<string>()));
         return ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target =>
-            {
-                var current = target.TryGet<TagsComponent>(out var existing)
-                    ? existing.Tags.ToList()
-                    : new List<string>();
-                current.RemoveAll(tag => tags.Contains(tag, StringComparer.OrdinalIgnoreCase));
-                target.Set(new TagsComponent(current));
-                var summary = tags.Count > 0
-                    ? $"{Subject(context, target)} {Verb(context, target, "lose", "loses")} {string.Join(", ", tags)}."
-                    : $"{Possessive(context, target)} tags are unchanged.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "removeTag",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["tags"] = tags });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.RemoveTags(
+                "wild_magic",
+                target.Id.Value,
+                tags,
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -199,51 +213,12 @@ public sealed class AccelerateStatusOperation : OperationBase
     {
         var statusId = NormalizeToken(Text(effect, "status", ""), fallback: "");
         return ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target => Accelerate(context, target, statusId))
-            .Where(delta => delta is not null)
-            .Select(delta => delta!)
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.AccelerateStatus(
+                "wild_magic",
+                target.Id.Value,
+                statusId,
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value)).Deltas)
             .ToArray();
-    }
-
-    private static StateDelta? Accelerate(EffectContext context, Entity target, string statusId)
-    {
-        if (!target.TryGet<StatusContainerComponent>(out var container) || container.Statuses.Count == 0)
-        {
-            return null;
-        }
-
-        var canonical = string.IsNullOrWhiteSpace(statusId) ? "" : context.Engine.Statuses.Canonicalize(statusId);
-        var instance = container.Statuses.FirstOrDefault(status =>
-            string.IsNullOrWhiteSpace(canonical)
-                ? context.Engine.Statuses.DamagePerTurn(status.Id) != 0 || context.Engine.Statuses.HealPerTurn(status.Id) != 0
-                : status.Id.Equals(canonical, StringComparison.OrdinalIgnoreCase));
-        if (instance is null)
-        {
-            return null;
-        }
-
-        var remainingTurns = Math.Max(1, (instance.ExpiresTurn ?? context.Engine.State.Turn + 1) - context.Engine.State.Turn);
-        var damagePerTurn = context.Engine.Statuses.DamagePerTurn(instance.Id);
-        var healPerTurn = context.Engine.Statuses.HealPerTurn(instance.Id);
-        var remaining = container.Statuses.Where(status => !ReferenceEquals(status, instance)).ToList();
-        target.Set(new StatusContainerComponent(remaining));
-
-        if (damagePerTurn > 0)
-        {
-            return context.Engine.DamageEntity(target, damagePerTurn * remainingTurns, instance.Id);
-        }
-
-        if (healPerTurn > 0)
-        {
-            return context.Engine.HealEntity(target, healPerTurn * remainingTurns);
-        }
-
-        var summary = $"{Possessive(context, target)} {instance.DisplayName.Replace('_', ' ')} rushes to its conclusion.";
-        context.Engine.AddMessage(summary);
-        return new StateDelta(
-            "accelerateStatus",
-            target.Id.Value,
-            summary,
-            new Dictionary<string, object?> { ["status"] = instance.Id });
     }
 }

@@ -31,11 +31,16 @@ references inside them to Python modules or the old name.
 
 - [GRAND_VISION.md](GRAND_VISION.md): the central vision (supersedes GAME_VISION) - play, the
   systems, and how they interact.
+- [SYSTEMS_VISION.md](SYSTEMS_VISION.md): the systems-level unification - the
+  act/witness/record/circulate/respond/deliver loop, the one-consequence-grammar discipline, and
+  the four convergence moves (consequence grammar, rumor transport, wants, world-turn).
 - [WORLD_REACTION_AND_EMPIRE.md](WORLD_REACTION_AND_EMPIRE.md): the Empire, factions,
   consequences, and player-driven emergence.
 - [EMERGENT_WORLD.md](EMERGENT_WORLD.md): how the world responds to the player - deeds,
   legend, multidimensional reputation, the interpret/narrate (never simulate) model, and
   event-driven world reaction.
+- [IDENTITY_AND_ATTRIBUTION.md](IDENTITY_AND_ATTRIBUTION.md): soul-bound legend vs
+  identity-bound warrants - disguise, body swap, forked identities, and evidence-driven merges.
 - [PROMISES_AND_PROPHECY.md](PROMISES_AND_PROPHECY.md): the promise ledger, always-honor, and
   prophecy as foundational systems.
 - [PROMISE_PAYOFF_PLAN.md](PROMISE_PAYOFF_PLAN.md): how bound promises become concrete sites,
@@ -46,12 +51,18 @@ references inside them to Python modules or the old name.
   system-driven vertical slice rather than a scripted tutorial.
 - [SEMANTIC_EFFECTS.md](SEMANTIC_EFFECTS.md): entity descriptions/traits as dormant mechanics
   the resolver surfaces (semantic by default, mechanical on demand).
+- [CHARTER_MAGIC.md](CHARTER_MAGIC.md): the deterministic licensed counterpoint - instant
+  authored spell bundles, charter infrastructure as entities, and witness-classification splits.
+- [SPELL_ECHOES.md](SPELL_ECHOES.md): proposed experiment - re-casting recorded resolutions as a
+  within-run repertoire, with drift and fatigue guardrails.
 - [COSTS_REAGENTS_AND_TREASURED_ITEMS.md](COSTS_REAGENTS_AND_TREASURED_ITEMS.md): post-cast
-  costs, protected inventory, and item fuel.
+  costs, the cost palette and overreach ladder, protected inventory, and item fuel.
 - [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md): the future casting-performance
   minigame contract.
 - [CHARACTER_AND_STATS.md](CHARACTER_AND_STATS.md): the Vigor/Attunement/Composure triad,
   origins, and how stats modulate the resolver.
+- [DEATH_AND_CHRONICLE.md](DEATH_AND_CHRONICLE.md): killer-split death screens, the run-closing
+  chronicle assembled from ledgers, and cross-run traces that commemorate without empowering.
 
 ## Architecture
 

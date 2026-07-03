@@ -35,7 +35,7 @@ freedom**.
 **Richness comes from interaction, not from scripted content.** We build a small number of
 general systems - wild magic, items and entities, traits, promises, deeds and reputation,
 factions, relationships, regions - and let them collide. A spell witnessed by a villager
-becomes a rumor becomes a recruit; an imbued gift becomes a bond becomes a confided secret
+becomes a rumor becomes a recruit; an imbued gift becomes a remembered gesture becomes a bond becomes a confided secret
 becomes a place the world then delivers. None of that is coded as a story; it falls out of
 systems handing off to each other. So when you build a mechanic, ask whether it **creates more
 combinations than it adds complexity**, and build the smallest *general* capability that
@@ -82,12 +82,74 @@ perception unless a test explicitly asks for a player-knowledge-only view.
 - Prefer actor-agnostic actions over player-only action paths.
 - Prefer read-only state views over renderer access to rule internals.
 - Prefer durable state lanes over free-text flags that become invisible rules.
-- Prefer the shared world-consequence grammar for model- or content-authored side effects.
-  Dialogue, books, promises, services, AI plans, and magic should submit validated
-  consequences such as memory, bond, stock, service, route, faction, trigger, or promise
-  changes instead of mutating those systems through bespoke helper code.
-- Prefer small composable effects: damage, status, terrain, movement, summoning,
-  faction changes, tags, memory, traits, inventory, curses, promises, triggers, timers.
+- Prefer the shared typed consequence grammar for model- or content-authored side effects.
+  Dialogue, books, promises, services, AI plans, factions, and magic should submit validated
+  consequences instead of mutating systems through bespoke helper code. Consequence families
+  include immediate tactical effects such as damage, actor resources, status, terrain creation/update, movement, summoning,
+  transformations, resistance/weakness, delayed damage creation/release, status acceleration, behavior tag creation/update,
+  persistent effect creation/update, and tile flow creation/update, plus durable social/world effects such as memory, bond,
+  claim, want, stock, trade, service offer/request, route, fixture/place spawn, item transfer, equipment, faction, control policy, controlled-entity pointer, run status, faction standing/resources, legend, canon, world-turn audit, world flag, scheduled event creation/update, trigger creation/update,
+  suspicion/deed recording and updates, rumor creation/update, or promise changes.
+- Prefer the shared apply point as well as the shared schema. Engine-owned flows should apply
+  consequences through `GameEngine.ApplyConsequence` or an injected consequence sink; construct a
+  local `WorldConsequenceApplier` only behind `WorldConsequenceGuard` for standalone helpers,
+  tests, or deliberately detached generated-state sandboxes.
+- Detached generated-state sandboxes are still apply-point packets: start them from the real
+  global ledgers, stage zone-local entities separately when needed, and commit ledger changes
+  such as canon, memories, rumors, scheduled events, world flags, RNG, and serial state only after
+  all child consequences succeed.
+- Generated zone terrain texture should also go through typed consequences, usually hidden
+  `set_terrain` deltas in the detached generation sandbox. Do not add terrain flavor by writing
+  directly to the active map unless you are loading an already-authoritative zone snapshot.
+- Do not reintroduce public engine convenience helpers that hide ordinary world mutations behind
+  old-style methods like "apply status", "add promise", or "record deed". If a helper is needed,
+  keep the helper local to tests or a narrow system boundary and have it submit a typed
+  `WorldConsequence`.
+- When a model or content source produces both a claim and an immediate action for the same
+  local affordance, attach the ledger record to the already-applied consequence instead of
+  applying duplicate state changes. Example: a service claim plus `reveal_service` should produce
+  one `offer_service` mutation and one claim update.
+- For authored documents, signs, fixtures, books, and props that should seed future hooks, prefer
+  `ClaimSourceComponent` plus `read`/`examine` consequences over bespoke interaction code. The
+  object supplies claim seeds; the engine still records claims and binds promises through
+  `record_claim`, `record_rumor`, `create_promise`, and `update_claim`.
+- Prefer small composable consequences: damage, status, terrain, movement, summoning,
+  faction changes, tags, memory, traits, inventory, curses, promises, triggers, timers,
+  and bundled social outcomes such as `free_captive` when one player-visible event must
+  transactionally update faction/control/bond/want/deed/message state.
+- Prefer `WantComponent` for notable NPC motivation. Opening NPCs can have authored wants;
+  generated NPCs should receive deterministic wants at instantiation. Do not create bespoke quest
+  flags when an NPC want plus claims, promises, and typed consequences can express the same
+  pressure. When a want changes because of dialogue, services, world-turns, or magic, route the
+  change through `update_want` rather than setting the component directly. Use the consequence's
+  optional hidden memory child when the NPC should remember why the want changed.
+- When a service should satisfy or redirect its provider's want, put completion metadata on the
+  `ServiceOffer`/`offer_service` consequence and let `request_service` submit `update_want`
+  after success; do not create service-specific quest flags. Explicit `request` commands should
+  call the shared `request_service` consequence and own only command resolution and turn
+  consumption.
+- Treat memory creation as `record_memory` even when the surface verb is `edit_memory`; memory-edit
+  side effects such as calming hostility should emit child consequences rather than writing bonds or
+  ledgers inline. Witnessed deeds should leave NPC witness memories through `record_memory` with
+  deed provenance, not through a bespoke witness-knowledge store.
+- Treat `BondLedger` rows as crystallized relationship facts. Inspections, dialogue context, and
+  eligibility checks should use `TryGet` plus a neutral in-memory fallback; only `update_bond`
+  should create or mutate bond records.
+- For provider-backed wild magic and future slow model-backed actions, keep resolution and
+  application separate when latency or replay matters. A materialized result is evidence, not
+  authority: the apply point must re-parse, normalize, validate against current state, and mutate
+  through engine operations/consequences.
+- Prefer the bounded `WorldTurnSystem` for world initiative at pump points. Rumor spread, promise
+  stirring, private high-salience want stirring, faction expenditures, memos, and future autonomous moves should be budgeted and audited
+  there through `record_world_turn` instead of becoming unbounded hidden turn side effects. If a
+  world-turn move has child effects, such as rumor spread writing heard-rumor memories or want
+  stirring writing private NPC memory, keep them
+  as typed child consequences under the same budgeted move. Rejected child packets should roll back
+  the whole move and leave only rejection diagnostics plus a hidden `worldTurnSkipped` audit.
+- When replaying generated, consequence, or world-turn deltas into action-result messages or durable
+  message logs, use `StateDelta.IsPlayerVisible()` / `PlayerMessages()` so audit-only or
+  player-invisible records stay available to debug state and transcripts without duplicating or
+  leaking into player-facing logs.
 - Keep technical LLM failures from consuming turns.
 - Keep intentional magical rejections turn-consuming.
 - Keep background generation resource-aware and user-configurable.
@@ -110,9 +172,14 @@ LLM output is untrusted. It must go through:
 8. produce action results and audit records
 
 Do not let renderer code, prompt code, or provider code directly mutate world state.
-When an LLM, dialogue provider, authored text, prophecy, service, or background job proposes
-world change, normalize it into the narrowest existing engine operation or world consequence
-before applying it. Add new consequence types only when they unlock broad reuse across systems.
+When an LLM, dialogue provider, authored text, prophecy, service, magic resolver, faction, or
+background job proposes state change, normalize it into the narrowest existing typed consequence
+before applying it. Consequences are fast by default; deferred or world-pump timing must be an
+explicit field, not an implied side effect of which subsystem produced the change. Non-immediate
+timing is delivered by the shared scheduled-event pump for one delayed consequence; use explicit
+scheduled-event or trigger consequences only for broader events, repeating triggers, auras, wards,
+or hooks. Add new
+consequence types only when they unlock broad reuse across systems.
 
 ## Entity Unification
 
@@ -137,10 +204,14 @@ position, rendering, targeting, persistence, and inspection.
 Body swap should be a natural consequence of the model:
 
 - control points to an entity id
+- soul exchanges should use `swap_souls`, not direct `SoulComponent`, soul-ledger, or
+  actor-stat mutation
 - inventory stays with the body
 - stats and appearance come from the body
 - the vacated body becomes an entity with no agency
 - the CLI, GUI, FOV, resolver context, and camera follow the controlled entity
+- changes to the controlled entity pointer should use `set_controlled_entity`, not direct
+  `ControlledEntityId` assignment, except during scenario setup or save/load restoration
 
 ## Renderer Boundary
 
@@ -171,6 +242,9 @@ Good agent-facing affordances:
 - `--provider mock` for quick deterministic troubleshooting, evals, and regression checks
 - `--json` for machine-readable observations/results
 - `--command`, `--script`, `--transcript`, and `--episode-log` for reproducible runs
+- transcript replay should materialize live spell JSON, generated dialogue responses, dialogue
+  claim-extraction results, background text results, and quickstart setup instead of calling live
+  providers
 - `inspect` or equivalent structured state view
 - optional perfect debug state
 - local coordinate map
@@ -181,6 +255,9 @@ Good agent-facing affordances:
 ## Background Jobs
 
 Background generation can exist, but it must not secretly starve the foreground game.
+Provider-backed background text is candidate prose only; it must still become durable through the
+background job queue and the narrow typed consequence for that job purpose (`add_canon`,
+`update_rumor`, etc.). Keep deterministic fallback available when the provider is disabled or fails.
 
 Design it with:
 

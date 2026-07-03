@@ -58,6 +58,13 @@ public static class CharacterMath
         });
     }
 
+    public static ActorComponent ActorWithSoulMana(ActorComponent actor, SoulRecord soul) =>
+        actor with
+        {
+            Mana = Math.Clamp(soul.Mana, 0, Math.Max(0, soul.MaxMana)),
+            MaxMana = Math.Max(0, soul.MaxMana),
+        };
+
     public static BodyStatsComponent InferBodyStats(ActorComponent actor)
     {
         var vigor = actor.MaxHitPoints switch
@@ -92,6 +99,11 @@ public static class CharacterMath
     public static SoulRecord EnsureSoulRecord(GameState state, Entity entity)
     {
         var soulId = entity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : entity.Id.Value;
+        return EnsureSoulRecord(state, entity, soulId);
+    }
+
+    public static SoulRecord EnsureSoulRecord(GameState state, Entity entity, string soulId)
+    {
         if (state.Souls.TryGet(soulId, out var existing))
         {
             return existing;

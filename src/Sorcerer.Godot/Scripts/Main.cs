@@ -7,6 +7,7 @@ using Sorcerer.Core.Results;
 using Sorcerer.Core.Views;
 using Sorcerer.Llm;
 using Sorcerer.Llm.Auditing;
+using Sorcerer.Llm.Configuration;
 using Sorcerer.Magic;
 
 namespace Sorcerer.Godot;
@@ -38,11 +39,15 @@ public partial class Main : Control
     private RichTextLabel _log = null!;
     private LineEdit _spellLine = null!;
     private LineEdit _commandLine = null!;
+    private LineEdit _provider = null!;
+    private LineEdit _host = null!;
     private LineEdit _model = null!;
     private Button _cast = null!;
 
     private ActionResult? _lastResult;
     private string? _lastError;
+    private string? _lastPendingCastKey;
+    private string _activeProviderName = "ollama";
     private bool _busy;
 
     public override void _Ready()
@@ -108,6 +113,21 @@ public partial class Main : Control
 
         _ = ExecuteAsync(command);
         GetViewport().SetInputAsHandled();
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_busy || _session is null)
+        {
+            return;
+        }
+
+        var pending = _session.Observation().PendingCast;
+        var key = PendingCastKey(pending);
+        if (key != _lastPendingCastKey)
+        {
+            RefreshView();
+        }
     }
 
     private void BuildUi()
@@ -188,9 +208,28 @@ public partial class Main : Control
         _providerStatusPanel.AddChild(_providerStatus);
         providerRow.AddChild(_providerStatusPanel);
 
-        var providerLabel = SmallLabel("Ollama");
-        providerLabel.CustomMinimumSize = new Vector2(56, 34);
+        var providerLabel = SmallLabel("Provider");
+        providerLabel.CustomMinimumSize = new Vector2(70, 34);
         providerRow.AddChild(providerLabel);
+
+        _provider = new LineEdit
+        {
+            Text = System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "ollama",
+            PlaceholderText = "provider",
+            CustomMinimumSize = new Vector2(116, 34),
+        };
+        providerRow.AddChild(_provider);
+        _busyControls.Add(_provider);
+
+        _host = new LineEdit
+        {
+            Text = DefaultProviderHost(System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "ollama") ?? "",
+            PlaceholderText = "host",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 34),
+        };
+        providerRow.AddChild(_host);
+        _busyControls.Add(_host);
 
         _model = new LineEdit
         {
@@ -227,13 +266,29 @@ public partial class Main : Control
         runRow.AddChild(load);
         _busyControls.Add(load);
 
-        var promises = SmallButton("Promises");
-        promises.Pressed += () =>
-        {
-            SessionHost.Session = _session;
-            GetTree().ChangeSceneToFile("res://Scenes/Promises.tscn");
-        };
-        stack.AddChild(promises);
+        var recordsRow = new HBoxContainer();
+        recordsRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        stack.AddChild(recordsRow);
+
+        AddSceneButton(recordsRow, "Journal", "res://Scenes/Journal.tscn");
+        AddSceneButton(recordsRow, "Promises", "res://Scenes/Promises.tscn");
+        AddSceneButton(recordsRow, "Rumors", "res://Scenes/Rumors.tscn");
+
+        var systemsRow = new HBoxContainer();
+        systemsRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        stack.AddChild(systemsRow);
+
+        AddMenuCommandButton(systemsRow, "Character", new CharacterCommand());
+        AddMenuCommandButton(systemsRow, "Standing", new StandingCommand());
+        AddMenuCommandButton(systemsRow, "Followers", new FollowersCommand());
+
+        var affordanceRow = new HBoxContainer();
+        affordanceRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        stack.AddChild(affordanceRow);
+
+        AddMenuCommandButton(affordanceRow, "Services", new ServicesCommand());
+        AddMenuCommandButton(affordanceRow, "Jobs", new JobsCommand());
+        AddMenuCommandButton(affordanceRow, "Atlas", new AtlasCommand());
 
         var resume = SmallButton("Resume");
         resume.Pressed += CloseEscMenu;
@@ -242,12 +297,39 @@ public partial class Main : Control
         return overlay;
     }
 
+    private void AddSceneButton(BoxContainer parent, string label, string scenePath)
+    {
+        var button = SmallButton(label);
+        button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        button.Pressed += () =>
+        {
+            SessionHost.Session = _session;
+            GetTree().ChangeSceneToFile(scenePath);
+        };
+        parent.AddChild(button);
+        _busyControls.Add(button);
+    }
+
+    private void AddMenuCommandButton(BoxContainer parent, string label, GameCommand command)
+    {
+        var button = SmallButton(label);
+        button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        button.Pressed += () =>
+        {
+            CloseEscMenu();
+            _ = ExecuteAsync(command);
+        };
+        parent.AddChild(button);
+        _busyControls.Add(button);
+    }
+
     private void ToggleEscMenu()
     {
         _escMenu.Visible = !_escMenu.Visible;
         if (_escMenu.Visible)
         {
-            RenderSidebars(_session.View());
+            var observation = _session.Observation();
+            RenderSidebars(observation.View, observation.PendingCast);
         }
     }
 
@@ -460,20 +542,30 @@ public partial class Main : Control
 
     private void StartNewRun()
     {
+        var providerName = string.IsNullOrWhiteSpace(_provider?.Text)
+            ? System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "ollama"
+            : _provider.Text.Trim();
+        var host = string.IsNullOrWhiteSpace(_host?.Text)
+            ? DefaultProviderHost(providerName)
+            : _host.Text.Trim();
         var model = string.IsNullOrWhiteSpace(_model?.Text) ? null : _model.Text.Trim();
-        var host = System.Environment.GetEnvironmentVariable("SORCERER_OLLAMA_HOST")
-            ?? System.Environment.GetEnvironmentVariable("WILDMAGIC_OLLAMA_HOST");
-        var provider = SpellProviderFactory.Create("ollama", host, model);
+        var provider = SpellProviderFactory.Create(providerName, host, model);
         var dialogueProvider = DialogueProviderFactory.Create(new Sorcerer.Llm.Configuration.LlmPurposeSettings(
-            "ollama",
+            providerName,
             host,
             model,
             TimeoutSeconds: 180));
         var dialogueClaims = DialogueClaimExtractorFactory.Create(new Sorcerer.Llm.Configuration.LlmPurposeSettings(
-            "ollama",
+            providerName,
             host,
             model,
             TimeoutSeconds: 180));
+        var backgroundAudit = new JsonlBackgroundTextAuditSink(Path.Combine("logs", "background_audit.jsonl"));
+        var backgroundTextGenerator = BackgroundTextGeneratorFactory.Create(
+            LlmConfiguration.FromEnvironment(),
+            LlmPurpose.Background,
+            backgroundAudit);
+        _activeProviderName = provider.Name;
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
         var dialogueAudit = new JsonlDialogueAuditSink(Path.Combine("logs", "dialogue_audit.jsonl"));
         var origin = System.Environment.GetEnvironmentVariable("SORCERER_ORIGIN");
@@ -487,11 +579,88 @@ public partial class Main : Control
             CrossRunMemorialStore.LoadDefault(),
             dialogueClaims,
             dialogueProvider,
-            dialogueAudit);
+            dialogueAudit,
+            backgroundTextGenerator);
         _lastResult = null;
         _lastError = null;
         EnsureMapCells(_session.View());
     }
+
+    private static string? DefaultProviderHost(string provider)
+    {
+        var shared = System.Environment.GetEnvironmentVariable("SORCERER_HOST");
+        if (!string.IsNullOrWhiteSpace(shared))
+        {
+            return shared;
+        }
+
+        var normalized = provider.Trim().ToLowerInvariant();
+        if (normalized is "api" or "openai" or "openai-compatible")
+        {
+            return System.Environment.GetEnvironmentVariable("SORCERER_OPENAI_HOST")
+                ?? System.Environment.GetEnvironmentVariable("OPENAI_BASE_URL")
+                ?? "https://api.openai.com/v1";
+        }
+
+        return System.Environment.GetEnvironmentVariable("SORCERER_OLLAMA_HOST")
+            ?? System.Environment.GetEnvironmentVariable("WILDMAGIC_OLLAMA_HOST")
+            ?? System.Environment.GetEnvironmentVariable("OLLAMA_HOST")
+            ?? "http://127.0.0.1:11434";
+    }
+
+    private string ProviderStatusText(PendingCastView? pendingCast, bool errored)
+    {
+        if (_busy)
+        {
+            return "resolving...";
+        }
+
+        if (pendingCast is not null)
+        {
+            return pendingCast.State switch
+            {
+                "ready" => "spell ready",
+                "failed" => "spell failed",
+                "resolving" => "spell resolving",
+                _ => $"spell {pendingCast.State}",
+            };
+        }
+
+        return errored ? "error" : $"{_activeProviderName} ready";
+    }
+
+    private Color ProviderStatusColor(PendingCastView? pendingCast, bool errored)
+    {
+        if (_busy)
+        {
+            return UiTheme.Warning;
+        }
+
+        if (pendingCast is not null)
+        {
+            return pendingCast.State switch
+            {
+                "ready" => UiTheme.Wild,
+                "failed" => UiTheme.Danger,
+                _ => UiTheme.Warning,
+            };
+        }
+
+        return errored ? UiTheme.Danger : UiTheme.Muted;
+    }
+
+    private static string? PendingCastKey(PendingCastView? pendingCast) =>
+        pendingCast is null
+            ? null
+            : string.Join(
+                "|",
+                pendingCast.Id,
+                pendingCast.State,
+                pendingCast.Provider ?? "",
+                pendingCast.Accepted?.ToString() ?? "",
+                pendingCast.TechnicalFailure?.ToString() ?? "",
+                pendingCast.Error ?? "",
+                pendingCast.EffectTypes is null ? "" : string.Join(",", pendingCast.EffectTypes));
 
     private async Task CastSpellAsync(string text)
     {
@@ -548,11 +717,13 @@ public partial class Main : Control
 
     private void RefreshView()
     {
-        var view = _session.View();
+        var observation = _session.Observation();
+        var view = observation.View;
         EnsureMapCells(view);
         UpdateMapCellSizing();
         RenderMap(view);
-        RenderSidebars(view);
+        RenderSidebars(view, observation.PendingCast);
+        _lastPendingCastKey = PendingCastKey(observation.PendingCast);
         SetBusy(_busy);
         SessionHost.Session = _session;
     }
@@ -590,7 +761,7 @@ public partial class Main : Control
         }
     }
 
-    private void RenderSidebars(GameView view)
+    private void RenderSidebars(GameView view, PendingCastView? pendingCast)
     {
         var player = view.Entities.FirstOrDefault(entity => entity.Id == view.ControlledEntityId);
         Color hpColor;
@@ -620,9 +791,10 @@ public partial class Main : Control
         _hpLabel.AddThemeColorOverride("font_color", hpColor);
 
         var origin = view.Character?.OriginName;
+        var pendingSuffix = pendingCast is null ? "" : $" | Cast {pendingCast.State}";
         _statusLine.Text = view.Character is null
-            ? $"Turn {view.Turn}"
-            : $"Turn {view.Turn} — {origin} (VIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure})";
+            ? $"Turn {view.Turn}{pendingSuffix}"
+            : $"Turn {view.Turn} — {origin} (VIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure}){pendingSuffix}";
 
         foreach (var child in _statusChips.GetChildren().ToArray())
         {
@@ -641,8 +813,8 @@ public partial class Main : Control
         }
 
         var errored = !_busy && _lastError is not null;
-        _providerStatus.Text = _busy ? "resolving..." : errored ? "error" : "ollama ready";
-        var pillColor = _busy ? UiTheme.Warning : errored ? UiTheme.Danger : UiTheme.Muted;
+        _providerStatus.Text = ProviderStatusText(pendingCast, errored);
+        var pillColor = ProviderStatusColor(pendingCast, errored);
         _providerStatus.AddThemeColorOverride("font_color", UiTheme.Background);
         _providerStatusPanel.AddThemeStyleboxOverride("panel", UiTheme.PillBox(pillColor));
 
@@ -671,6 +843,26 @@ public partial class Main : Control
             var resultLabel = _lastResult.Success ? "ok" : _lastResult.TechnicalFailure ? "technical failure" : "rejected";
             var resultColor = _lastResult.Success ? UiTheme.Wild : _lastResult.TechnicalFailure ? UiTheme.Danger : UiTheme.Warning;
             logLines.Add($"{UiTheme.Escape(_lastResult.Action)}: {UiTheme.Colorize(resultLabel, resultColor)}");
+        }
+
+        if (pendingCast is not null)
+        {
+            var pendingColor = pendingCast.State switch
+            {
+                "ready" => UiTheme.Wild,
+                "failed" => UiTheme.Danger,
+                _ => UiTheme.Warning,
+            };
+            var effectText = pendingCast.EffectTypes is { Count: > 0 }
+                ? $" [{string.Join(", ", pendingCast.EffectTypes)}]"
+                : "";
+            logLines.Add(UiTheme.Colorize(
+                $"Pending {pendingCast.Id}: {pendingCast.State}{effectText}",
+                pendingColor));
+            if (!string.IsNullOrWhiteSpace(pendingCast.Error))
+            {
+                logLines.Add(UiTheme.Colorize(UiTheme.Escape(pendingCast.Error), UiTheme.Danger));
+            }
         }
 
         logLines.AddRange(view.Messages.TakeLast(14).Select(UiTheme.Escape));

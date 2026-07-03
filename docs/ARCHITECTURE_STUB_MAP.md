@@ -1,8 +1,7 @@
-# Architecture Stub Map
+# Architecture Lane Map
 
-This file tracks the broad system lanes created before the first long implementation pass.
-Most lanes are intentionally thin. They exist so future work has a correct home instead of
-growing one-off feature paths.
+This file tracks the broad system lanes that keep Sorcerer from growing one-off feature paths.
+Some lanes are still modest, but they should be extended in place rather than bypassed.
 
 ## Core
 
@@ -29,7 +28,7 @@ growing one-off feature paths.
 
 - `Configuration`: provider-purpose settings for wild magic, dialogue, item, canon, background, and agent calls.
 - `Auditing`: JSONL spell audit sink.
-- Providers: mock, Ollama, and an explicit API-compatible placeholder.
+- Providers: mock, Ollama, and the OpenAI-compatible chat-completions adapter.
 
 ## Frontends
 
@@ -38,6 +37,6 @@ growing one-off feature paths.
 
 ## Rule
 
-Do not fill these stubs by bypassing them. New mechanics should enter through typed
+Do not extend the game by bypassing these lanes. New mechanics should enter through typed
 commands, validated references, engine-owned operations, state transactions, and shared
 views.

@@ -133,6 +133,9 @@ public sealed class EngineViewBuilder
             .Where(claim => claim.PlayerVisible)
             .Select(ToClaimCard)
             .ToArray();
+        var rumors = RumorViewBuilder.Visible(_state, limit: 12)
+            .Select(ToRumorCard)
+            .ToArray();
 
         var tiles = BuildPlayerTiles(perception);
         var inventory = _inventoryService.BuildInventoryCards(_state.ControlledEntity);
@@ -155,7 +158,9 @@ public sealed class EngineViewBuilder
             _state.SelectedTarget,
             character,
             BuildWorldCard(),
-            claims);
+            claims,
+            rumors,
+            JournalViewBuilder.Build(_state));
     }
 
     public AgentObservation Observation(bool debug)
@@ -178,12 +183,19 @@ public sealed class EngineViewBuilder
                     _state.Suspicions.Records.Count,
                     _state.Souls.Records.Count,
                     _state.Triggers.Records.Count,
-                    _state.Claims.Records.Count),
+                    _state.Claims.Records.Count,
+                    _state.Rumors.Records.Count,
+                    _state.WorldTurns.Records.Count),
                 validation.Issues.Select(issue => $"{issue.Code}: {issue.Message}").ToArray(),
                 BuildBackgroundJobCards(),
                 BuildFactionDebugCards(),
                 BuildBondDebugCards(),
+                BuildWantDebugCards(),
                 _state.Claims.Records.Select(claim => claim.Id).ToArray(),
+                _state.Rumors.Records.Select(rumor => rumor.Id).ToArray(),
+                BuildRumorDebugCards(),
+                _state.WorldTurns.Records.Select(record => record.Id).ToArray(),
+                BuildWorldTurnDebugCards(),
                 _state.RunStatus,
                 _state.RunConclusion)
             : null;
@@ -201,6 +213,61 @@ public sealed class EngineViewBuilder
                 new Dictionary<string, int>(faction.Standing, StringComparer.OrdinalIgnoreCase),
                 new Dictionary<string, int>(faction.Resources, StringComparer.OrdinalIgnoreCase),
                 faction.HostileRoles.ToArray()))
+            .ToArray();
+
+    private IReadOnlyList<WantDebugCard> BuildWantDebugCards() =>
+        _state.Entities.Values
+            .Where(entity => entity.TryGet<WantComponent>(out _))
+            .OrderBy(entity => entity.Id.Value, StringComparer.OrdinalIgnoreCase)
+            .Select(entity =>
+            {
+                var want = entity.Get<WantComponent>();
+                return new WantDebugCard(
+                    entity.Id.Value,
+                    entity.Name,
+                    want.Id,
+                    want.Text,
+                    want.Salience,
+                    want.Status,
+                    want.Stakes,
+                    want.Tags.ToArray());
+            })
+            .ToArray();
+
+    private IReadOnlyList<RumorDebugCard> BuildRumorDebugCards() =>
+        _state.Rumors.Records
+            .OrderByDescending(rumor => rumor.Salience)
+            .ThenByDescending(rumor => rumor.LastTurn)
+            .ThenBy(rumor => rumor.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(rumor => new RumorDebugCard(
+                rumor.Id,
+                rumor.Text,
+                rumor.OriginalText,
+                rumor.SourceKind,
+                rumor.SourceId,
+                rumor.OriginRegionId,
+                rumor.CurrentRegionId,
+                rumor.Salience,
+                rumor.Status,
+                rumor.Hops,
+                rumor.CreatedTurn,
+                rumor.LastTurn,
+                rumor.CarrierIds.ToArray(),
+                rumor.Tags.ToArray(),
+                rumor.DistortionHistory.ToArray()))
+            .ToArray();
+
+    private IReadOnlyList<WorldTurnDebugCard> BuildWorldTurnDebugCards() =>
+        _state.WorldTurns.Records
+            .TakeLast(16)
+            .Select(record => new WorldTurnDebugCard(
+                record.Id,
+                record.Turn,
+                record.Reason,
+                record.Kind,
+                record.SourceId,
+                record.Summary,
+                new Dictionary<string, object?>(record.Details, StringComparer.OrdinalIgnoreCase)))
             .ToArray();
 
     private IReadOnlyList<BondDebugCard> BuildBondDebugCards() =>
@@ -547,7 +614,14 @@ public sealed class EngineViewBuilder
             promise.BoundTargetId,
             promise.TriggerHint,
             promise.RealizationKind,
-            promise.RealizedIn);
+            promise.RealizedIn,
+            promise.LastEligibilityFailure,
+            promise.LastEligibilityContext,
+            promise.LastEligibilityTurn,
+            promise.SourceClaimId,
+            promise.SourceSpeakerId,
+            promise.SourceListenerSoulId,
+            promise.SourceConfidence);
 
     private static ClaimCard ToClaimCard(ClaimRecord claim) =>
         new(
@@ -564,6 +638,23 @@ public sealed class EngineViewBuilder
             claim.Tags,
             claim.BoundPromiseId,
             claim.AppliedTo);
+
+    private static RumorCard ToRumorCard(RumorRecord rumor) =>
+        new(
+            rumor.Id,
+            rumor.Text,
+            rumor.SourceKind,
+            rumor.SourceId,
+            rumor.OriginRegionId,
+            rumor.CurrentRegionId,
+            rumor.Salience,
+            rumor.Hops,
+            rumor.Status,
+            rumor.OriginalText,
+            rumor.CreatedTurn,
+            rumor.LastTurn,
+            rumor.Tags,
+            rumor.DistortionHistory);
 
     private bool IsStatusActive(StatusInstance status) =>
         status.ExpiresTurn is null || status.ExpiresTurn > _state.Turn;

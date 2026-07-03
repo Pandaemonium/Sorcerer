@@ -1,5 +1,6 @@
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
@@ -28,6 +29,11 @@ public sealed class WinConditionTests
         Assert.True(actor.Alive);
         Assert.True(emperor.TryGet<TagsComponent>(out var tags));
         Assert.Contains("emperor", tags.Tags);
+        Assert.True(emperor.TryGet<WantComponent>(out var want));
+        Assert.Equal("want_emperor_odran_order", want.Id);
+        Assert.Equal(5, want.Salience);
+        Assert.Contains("containment", want.Tags);
+        Assert.Contains("promise_source", want.Tags);
         Assert.Equal("running", session.Engine.State.RunStatus);
     }
 
@@ -62,7 +68,16 @@ public sealed class WinConditionTests
         Assert.Equal("victory", session.Engine.State.RunStatus);
         Assert.Contains(result.Messages, message => message.Contains("Emperor Odran falls", StringComparison.OrdinalIgnoreCase));
         Assert.False(session.Engine.EntityById("emperor_odran")!.Get<ActorComponent>().Alive);
-        Assert.Contains(result.Deltas, delta => delta.Operation == "runComplete" && delta.Target == "emperor_odran");
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "runComplete"
+            && delta.Target == "emperor_odran"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.UpdateRunStatus)
+            && Equals(delta.Details["status"], "victory"));
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "runCompleteMessage"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.Message)
+            && Equals(delta.Details["status"], "victory"));
+        Assert.DoesNotContain(result.Deltas, delta => delta.Operation == "runCompleteSkipped");
         Assert.Equal("victory", session.Observation(debug: true).Debug!.RunStatus);
         Assert.Contains(session.Engine.State.Canon.Records, record =>
             record.Kind == "chronicle"
@@ -96,7 +111,16 @@ public sealed class WinConditionTests
         Assert.True(result.Success);
         Assert.True(result.ShouldQuit);
         Assert.Equal("defeat", session.Engine.State.RunStatus);
-        Assert.Contains(result.Deltas, delta => delta.Operation == "runComplete" && delta.Target == "player");
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "runComplete"
+            && delta.Target == "player"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.UpdateRunStatus)
+            && Equals(delta.Details["status"], "defeat"));
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "runCompleteMessage"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.Message)
+            && Equals(delta.Details["status"], "defeat"));
+        Assert.DoesNotContain(result.Deltas, delta => delta.Operation == "runCompleteSkipped");
         Assert.Contains(result.Messages, message => message.Contains("Your body falls", StringComparison.OrdinalIgnoreCase));
         Assert.False(session.Engine.State.ControlledEntity.Get<ActorComponent>().Alive);
         Assert.Contains(session.Engine.State.Canon.Records, record =>

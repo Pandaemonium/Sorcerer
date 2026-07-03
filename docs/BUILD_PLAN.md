@@ -152,8 +152,8 @@ Proposed seams (each operates on `GameState`, returns `StateDelta`s where it mut
 
 | System | Absorbs from today's GameEngine |
 |---|---|
-| `MovementSystem` | `MoveControlled`, `MoveEntity`, `CanEnter`, collision, doors, teleport/push/pull mechanics |
-| `CombatSystem` | `AttackEntity`, `DamageEntity`, `MarkDefeated`, death/corpse, loot |
+| `MovementSystem` | controlled movement, `CanEnter`, collision, doors, and command-level movement orchestration; coordinate mutation flows through `move_entity` |
+| `WorldConsequenceApplier` | damage, healing, actor resources, delayed-damage release, defeated cleanup, terrain, statuses, spawned entities/items/fixtures, and other typed mutations |
 | `AiSystem` | `RunActorTurns`, target selection, `IsHostile`, `IsUnableToAct` |
 | `PerceptionSystem` | FOV/visibility/explored/witnesses (new — see 0.2) |
 | `ItemSystem` | `Pickup`/`DropItem`/`UseItem`/`Equip`/`Unequip`/`Focus`/`Unfocus`, inventory keys |
@@ -314,7 +314,7 @@ at pump points.**
 
 ### The pipeline (new `WorldReactionSystem`, run from `TurnSystem`)
 
-1. **Deed capture.** Engine events emit pending deeds: kills/damage (`CombatSystem`), accepted
+1. **Deed capture.** Engine events emit pending deeds: kills/damage (`damage` consequences), accepted
    casts (`WildMagicController` → pass effect families/severity through to a deed), theft,
    rescues, oaths/promises, property/terrain damage. A deed records the actor's **soul id**
    (`SoulComponent`, falling back to entity id), kind, magnitude, `PlaceKey` (region+local), and
@@ -367,13 +367,13 @@ reads.
 First implementation is in place:
 
 - `WorldReactionSystem` captures and applies deeds through `GameEngine.RecordDeed` and
-  `TurnSystem.AdvanceTurn`.
+  `TurnSystem.AdvanceTurn`; deed application is marked through `update_deed`/`deedApplied`.
 - Accepted wild magic, player attacks/kills, prisoner rescue, and body swap emit deeds.
 - Deeds store actor soul id, effect witnesses, attribution status, visibility, magnitude,
   tags, and applied ids for transactional snapshot/rollback safety.
 - Secret deeds stay out of public legend/standing; suspicious effect-only deeds raise
-  suspicion without attaching legend; witnessed/public/mythic deeds can create soul-bound
-  legend tags and faction standing deltas.
+  suspicion through `record_suspicion` without attaching legend; witnessed/public/mythic deeds can
+  create soul-bound legend tags and faction standing deltas.
 - `standing` and `journal` now surface reputation axes and legend tags; debug ledger
   summaries include deed/legend counts.
 - Regression coverage includes public, secret, suspicious, and post-body-swap deed cases.
@@ -439,10 +439,11 @@ First implementation is in place:
 
 - `content/factions/initial_factions.json` defines the starter factions, roles, hostile roles,
   and finite resource pools; `FactionCatalog` loads these with deterministic fallbacks.
-- `WorldReactionSystem` applies empire-bloc standing by role, raises heat from witnessed deeds,
-  spends patrol/warrant/defense resources at pump points, and regenerates pressure resources on
-  quiet turns. Patrol response is capped by an active/pending patrol check and a response
-  cooldown so early pressure stays bounded.
+- `WorldReactionSystem` applies empire-bloc standing by role and raises heat from witnessed deeds;
+  `WorldTurnSystem` spends patrol/warrant/defense resources as budgeted `faction_pressure` moves at
+  pump points, while quiet deed-free turn pumps run `WorldTurnSystem` maintenance that regenerates
+  pressure resources before any budgeted pressure move. Patrol response is capped by an
+  active/pending patrol check and a response cooldown so early pressure stays bounded.
 - Imperial pressure uses `ScheduledEventLedger`; patrol pressure resolves into a real hostile
   entity through the normal entity/component model.
 - `AiSystem.IsHostile` now uses the faction ledger's role/standing lookup, so explicit alliance
@@ -450,8 +451,9 @@ First implementation is in place:
 - `Standing()` shows role, standing axes, pressure, mood, and rank; `journal` shows pending
   patrol/warrant pressure; debug observations expose raw faction resources.
 - `GameEngine.EmperorReachable()` wires the first long-arc seam to the imperial defenses pool.
-- Regression coverage includes expenditure, regeneration, role-keyed empire-bloc rules, hostility
-  override, body-swap heat, and the defense reachability seam.
+- Regression coverage includes expenditure, world-turn audit/budget behavior, regeneration,
+  role-keyed empire-bloc rules, hostility override, body-swap heat, and the defense reachability
+  seam.
 
 ---
 
@@ -482,8 +484,9 @@ membership.
   engine validates the proposal against allowed mechanics, relationship state, inventory,
   visibility, faction context, and turn-cost rules before applying anything. Malformed dialogue
   resolver output is a technical failure and must not mutate state.
-- The deterministic skeleton still stands: mock dialogue resolves common intents such as greet,
-  ask, gift, recruit, threaten, promise, and disclose with simple rule-driven fallbacks. Do not
+- The deterministic skeleton still stands for no-provider fallback, while mock/live generated
+  dialogue resolves common intents such as greet, ask, gift memory follow-up, recruitment,
+  threat, promise, trade, service, and disclosure through typed proposals. Do not
   build a menu-only conversation system as the design target; menus can expose shortcuts, but the
   main feel should be organic, responsive, and free.
 - Dialogue context includes the NPC's `MemoryComponent`, the player's legend (Phase 2), and the
@@ -491,8 +494,9 @@ membership.
 
 ### Bonds, gifts, followers (deterministic core)
 
-- **Gifts/leverage:** giving items (especially imbued/trait-bearing ones) shifts bonds; deeds and
-  legend color every bond check (`drift_bond` = legend × traits × memory, deterministic).
+- **Gifts/leverage:** giving items (especially imbued/trait-bearing ones) writes durable memory.
+  Later dialogue, deeds, and legend can propose bond changes through validated consequences,
+  using those memories as context.
 - **Followers:** recruit at bond thresholds; a follower acts through the **existing actor-agnostic
   turn seam** (`AiSystem` + `ControllerKind.Ai` + allied faction). No player-only path.
 - **Devotion / drift / departure / betrayal:** emerge from thresholds + durable deed marks written
@@ -519,7 +523,7 @@ membership.
 - Malformed dialogue resolver output causes no mutation; accepted dialogue proposals apply only
   through validated engine operations.
 
-**Acceptance & payoff:** items/traits → gifts → bonds → confided secrets → bound promises →
+**Acceptance & payoff:** items/traits → gift memories → dialogue/deeds → bonds → confided secrets → bound promises →
 delivered futures. The recruit-a-stranger and earned-betrayal vignettes are now possible from
 general systems with no script.
 
@@ -527,8 +531,9 @@ general systems with no script.
 
 First deterministic social slice is in place:
 
-- `talk` parses common organic intents through engine-owned rules: greet/ask, threaten,
-  recruit, and gift shortcuts.
+- `talk` now uses generated dialogue providers when configured, with no freeform give/recruit
+  command shortcuts intercepting the provider path. Explicit `give` and `recruit` commands remain
+  shared CLI/session actions.
 - Post-dialogue claim extraction can turn NPC-authored claims into memories, merchant stock,
   bond proposals, or bound promises at a later session apply point.
 - `give <item> to <target>`, `recruit <target>`, and `bonds [target]` are shared CLI/session
@@ -555,8 +560,8 @@ Run this thread **alongside** every phase (the bar is a modest Ollama model):
 - **Mine `WildMagic/wildmagic/resolution_parsing.py`** for every distinct malformation it repairs
   (singular vs plural effects/costs, nested `outcome`/`details`, element/flavor-status aliases,
   point/tile shorthand, array-valued traits, string/numeric costs, stray commentary after JSON) and
-  add each as a case in a `SpellResolutionJson` test suite. The Sorcerer `HANDOFF.md` "Spell Notes"
-  list is the seed.
+  add each as a case in a `SpellResolutionJson` test suite, seeded from the live-model dialects
+  already repaired in Sorcerer and recorded in `logs/wild_magic_audit.jsonl`.
 - **Port the 107-spell intent-tagged corpus** (common/creative/exploit) into `SpellEvalHarness`,
   and score not just JSON-validity but **specificity, consequence, and surprise**, plus hallucinated
   targets, exploit leakage, and latency. Magic must be memorable more often than merely valid.
@@ -572,8 +577,9 @@ Run this thread **alongside** every phase (the bar is a modest Ollama model):
 **Spirit:** each death rolls a wholly new geopolitics — a fresh map to read and master. The
 **procedural roll fixes the structure deterministically; the model names and flavors it.** Every
 rolled feature must imply at least one **tactical affordance** the player can act on, never just
-lore. Weirdness scales with wild-magic saturation: imperial provinces feel surveyed, deep wild
-places go dreamlike. (See [EMERGENT_WORLD.md](EMERGENT_WORLD.md),
+lore. Weirdness comes from region identity, history, customs, promises, and consequences:
+imperial provinces feel surveyed, while old or remote places can go dreamlike for reasons the
+player can discover. (See [EMERGENT_WORLD.md](EMERGENT_WORLD.md),
 [WORLD_REACTION_AND_EMPIRE.md](WORLD_REACTION_AND_EMPIRE.md), [WORLDBUILDING.md](WORLDBUILDING.md).)
 
 This is the largest phase. Build it in the sub-steps below; **5.1 (a minimal multi-zone slice) is
@@ -581,7 +587,7 @@ shippable on its own** before the full geopolitical roll.
 
 > **RESOLVED: a bounded region grid with lazy zone interiors.** Places live on a small overworld
 > grid of regions; each region holds zones generated on first visit. Directional promises ("a blade
-> waits north") and the wild-magic saturation gradient map onto grid coordinates directly, and this
+> waits north") and region identity map onto grid coordinates directly, and this
 > is the WildMagic-proven shape. No specific grid size is fixed yet; pick the smallest useful size
 > when implementing the first multi-zone slice. (Considered and rejected for now: an abstract
 > place-graph — cleaner but loses cheap directionality; a hybrid compass layout.)
@@ -613,8 +619,9 @@ deterministic fallback name always present.
   gameplay RNG**. Region identity drives floor theme, enemy pool, and ambient tables.
 - **RegionProfile** (extend the existing `Regions.cs`, ~57 lines today): voice + example outcome
   lines, enemy template pool, imperial presence, floor theme weights, ambient/wonder tables, and
-  `WildnessBase` (effective wildness = base + depth). Consumed by generation, ambience, and the
-  resolver lens (region voice spliced into the cast prompt addendum).
+  a static `WildnessBase` used as regional texture. This is not a mutable wild-magic saturation
+  map or gradient; consumed by generation, ambience, and the resolver lens (region voice spliced
+  into the cast prompt addendum).
 
 **Implementation checkpoint:** the first 5.1 slice is now live. `GenerationSystem` manages
 `CurrentZoneId`, `ZoneSnapshot`s, lazy generation, travel, and follower carry-over; the CLI and GUI
@@ -838,15 +845,15 @@ resolver as soft guidance, and `atlas` surfaces local lore for playtesting.
 - **Model-free texture grammars** (port the idea from `texture.py`): instant, deterministic naming
   for bulk content — placed books/props get concrete names, hidden shelf cards, and durable
   `subjects` (lore-router keys), about half pulling authored canon and half staying local/odd.
-- **Provider-backed background generation:** replace the current deterministic placeholder jobs
-  (`canon_detail`, `entity_detail` already queue/pump/apply) with real generation **behind the same
-  queue/apply boundary** — resource-aware, cancellable, inspectable. Durable output enters state
-  only at the apply pump point.
+- **Provider-backed background generation:** optional background text providers now run behind the
+  same queue/apply boundary as deterministic fallback text. Durable output enters state only at the
+  apply pump point; continued work should improve prompts, audit logs, cancellation, and developer
+  queue inspection without changing that lifecycle.
 
 **Implemented first slice:** generated zone fixtures use deterministic `TextureGrammar` names,
-descriptions, and subject tags. Existing `canon_detail`/`entity_detail` jobs remain deterministic
-but now enrich their fallback text with routed lore when available, write `CanonRecord`s only at
-the turn pump, and show attached canon as known detail on later examine.
+descriptions, and subject tags. Existing `canon_detail`/`entity_detail` jobs enrich fallback text
+with routed lore when available, can use configured background providers for candidate prose, write
+`CanonRecord`s only at the turn pump, and show attached canon as known detail on later examine.
 
 ### 7.3 - The narrator voice (legibility budget)
 
@@ -856,10 +863,15 @@ the turn pump, and show attached canon as known detail on later examine.
   shrine raised to what you did — each writes a `CanonRecord` and may spawn a prop entity.
 - All narration is read-only on mechanics; the deterministic template is the fallback.
 
-**Implemented first slice:** `NarrationSystem.ZoneEntryRumors` reads existing legend tags and
-faction standing after travel and emits deterministic `zone_entry_rumor` deltas/messages. It does
-not mutate mechanics, standing, promises, or canon; it only reflects already-authoritative state
-back to the player.
+**Implemented first slice:** dialogue claims now enter `ClaimLedger` through the shared
+`record_claim` consequence, and durable `RumorRecord`s can be minted from non-secret deeds and
+high-salience visible dialogue claims through the shared `record_rumor` consequence. Rumor
+propagation updates carrier, hop, and history state through `update_rumor`.
+`WorldTurnSystem` spends a bounded turn/travel budget on audited world moves such as
+`rumor_spread` and `promise_stir`; journal, debug views, save/load, and generated dialogue context
+can read the resulting rumor ledger. `NarrationSystem.ZoneEntryRumors` still reads existing legend
+tags and faction standing after travel and emits deterministic `zone_entry_rumor` deltas/messages,
+but that narration remains a read-only legibility layer.
 
 ### 7.4 - Provider harness maturity
 
@@ -870,8 +882,9 @@ back to the player.
 **Implemented first slice:** CLI wild-magic provider creation now flows through `LlmConfiguration`
 and `LlmPurpose.Wild`; purpose settings can be overridden per purpose by environment variables and
 in code. CLI playtests can disable/throttle background jobs with `--disable-background`,
-`--max-background-jobs`, and `--background-jobs-per-turn`, while background provider/model/host
-settings are captured separately for the later real background worker.
+`--max-background-jobs`, and `--background-jobs-per-turn`. Background provider/model/host settings
+now feed optional background text generation behind the same queue/apply boundary, with JSONL audit
+records and deterministic fallback.
 
 ### Tests
 
@@ -924,10 +937,10 @@ same shared-session commands, and tests cover byte-stable save -> load -> save p
 
 **Implemented first slice:** live and mock magic results now carry `resolvedMagicJson` on
 `MagicResolutionRecord` when a normalized resolution applied or rejected intentionally. Transcripts
-record seed, origin, background settings, command text, results, observations, and materialized
-spell JSON. `ReplaySpellProvider` consumes those materialized resolutions in order, and the CLI
-supports `--replay <transcript>` plus optional `--replay-assert-final` to re-feed commands through a
-fresh session without model calls.
+record seed, origin, background settings, command text, results, observations, materialized spell
+JSON, generated dialogue/claim records, and background job result text. Replay providers consume
+those materialized records, and the CLI supports `--replay <transcript>` plus optional
+`--replay-assert-final` to re-feed commands through a fresh session without model calls.
 
 ### 8.3 - Emperor and win condition
 
@@ -942,8 +955,8 @@ fresh session without model calls.
 - **Player death ends the current run; the next run rolls a fresh world** (Phase 5) and carries no
   power forward.
 
-**Implemented first slice:** the `vigovian_capital` region is reachable east of Hollowmere in the
-thin-slice world graph. It contains Emperor Odran as an ordinary actor entity tagged `emperor` and
+**Implemented first capital path:** the `vigovian_capital` region is reachable east of Hollowmere in the
+current world graph. It contains Emperor Odran as an ordinary actor entity tagged `emperor` and
 `win_condition`; validated damage through the normal engine can kill him. Killing him sets
 `RunStatus = victory`, writes a run conclusion, emits a `runComplete` delta, adds a chronicle, and
 ends the session. The controlled body dying now completes the run as `defeat` through the same

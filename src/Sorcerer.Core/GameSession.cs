@@ -10,6 +10,7 @@ using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Runtime;
 using Sorcerer.Core.Scenarios;
+using Sorcerer.Core.Transactions;
 using Sorcerer.Core.Views;
 using Sorcerer.Core.World;
 
@@ -24,6 +25,7 @@ public sealed class GameSession
     private readonly IDialogueProvider _dialogueProvider;
     private readonly IDialogueAuditSink _dialogueAudit;
     private readonly IDialogueClaimExtractor _claimExtractor;
+    private readonly IBackgroundTextGenerator? _backgroundTextGenerator;
     private readonly List<PendingClaimExtraction> _pendingClaimExtractions = new();
     private PendingCast? _pendingCast;
     private int _pendingCastSerial;
@@ -33,13 +35,15 @@ public sealed class GameSession
         IWildMagicController? magic = null,
         IDialogueClaimExtractor? claimExtractor = null,
         IDialogueProvider? dialogueProvider = null,
-        IDialogueAuditSink? dialogueAudit = null)
+        IDialogueAuditSink? dialogueAudit = null,
+        IBackgroundTextGenerator? backgroundTextGenerator = null)
     {
-        Engine = new GameEngine(state);
+        Engine = new GameEngine(state, backgroundTextGenerator);
         _magic = magic ?? NullWildMagicController.Instance;
         _claimExtractor = claimExtractor ?? NullDialogueClaimExtractor.Instance;
         _dialogueProvider = dialogueProvider ?? NullDialogueProvider.Instance;
         _dialogueAudit = dialogueAudit ?? NullDialogueAuditSink.Instance;
+        _backgroundTextGenerator = backgroundTextGenerator;
     }
 
     public GameEngine Engine { get; private set; }
@@ -51,12 +55,13 @@ public sealed class GameSession
         IReadOnlyList<RunChronicleRecord>? memorials = null,
         IDialogueClaimExtractor? claimExtractor = null,
         IDialogueProvider? dialogueProvider = null,
-        IDialogueAuditSink? dialogueAudit = null)
+        IDialogueAuditSink? dialogueAudit = null,
+        IBackgroundTextGenerator? backgroundTextGenerator = null)
     {
         var state = TestScenarios.ImperialEncounter(originId, memorials);
         state.Seed = Math.Max(1, seed);
         state.Rng = new DeterministicRng(state.Seed);
-        return new GameSession(state, magic, claimExtractor, dialogueProvider, dialogueAudit);
+        return new GameSession(state, magic, claimExtractor, dialogueProvider, dialogueAudit, backgroundTextGenerator);
     }
 
     public async Task<ActionResult> ExecuteAsync(
@@ -86,7 +91,7 @@ public sealed class GameSession
             CancelCastCommand => CancelCast(),
             TargetCommand target => SetTarget(target),
             ClearTargetCommand => ClearTarget(),
-            MapCommand => Engine.Inspect(),
+            MapCommand map => Engine.Map(map.Radius),
             TravelCommand travel => Engine.Travel(travel.Direction),
             AtlasCommand => Engine.Atlas(),
             PickupCommand pickup => Engine.Pickup(pickup.Target),
@@ -105,6 +110,7 @@ public sealed class GameSession
             ServicesCommand services => Engine.Services(services.Target),
             RequestServiceCommand service => Engine.RequestService(service.Service, service.Target),
             JournalCommand => Engine.Journal(),
+            RumorsCommand => Engine.Rumors(),
             CharacterCommand => Engine.CharacterSheet(),
             TalkCommand talk => await TalkAsync(talk, cancellationToken),
             GiveCommand give => Engine.Give(give.Item, give.Target),
@@ -117,7 +123,7 @@ public sealed class GameSession
             StandingCommand => Engine.Standing(),
             FollowersCommand => Engine.Followers(),
             JobsCommand => Engine.Jobs(),
-            SaveCommand save => await SaveGameAsync(save.Path),
+            SaveCommand save => await SaveGameAsync(save.Path, cancellationToken),
             LoadCommand load => LoadGame(load.Path),
             HelpCommand => Help(),
             QuitCommand => Quit(),
@@ -151,14 +157,30 @@ public sealed class GameSession
 
     public AgentObservation Observation(bool debug = false)
     {
+        RefreshPendingCastResolution();
         var observation = Engine.Observation(debug);
         return observation with
         {
             PendingCast = _pendingCast is null
                 ? null
-                : new PendingCastView(_pendingCast.Id, _pendingCast.Command.Text, "waiting"),
+                : BuildPendingCastView(_pendingCast),
         };
     }
+
+    private WorldConsequenceApplyResult ApplySessionMessage(
+        string source,
+        string message,
+        string operation,
+        IReadOnlyDictionary<string, object?>? details = null) =>
+        Engine.ApplyConsequence(WorldConsequence.Message(
+            source,
+            message,
+            targetEntityId: Engine.State.ControlledEntityId.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: Engine.State.ControlledEntityId.Value,
+            evidence: message,
+            operation: operation,
+            details: details));
 
     private ActionResult SetTarget(TargetCommand command)
     {
@@ -174,31 +196,71 @@ public sealed class GameSession
                 "Target is outside the encounter.");
         }
 
-        Engine.State.SelectedTarget = command.Position;
-        var message = $"Target set to {command.Position.X},{command.Position.Y}.";
-        Engine.AddMessage(message);
-        return ActionResult.Simple(
+        var targetState = Engine.ApplyConsequence(WorldConsequence.SetSelectedTarget(
             "target",
-            success: true,
-            consumedTurn: false,
-            turn,
-            turn,
-            message);
+            command.Position.X,
+            command.Position.Y,
+            sourceEntityId: Engine.State.ControlledEntityId.Value,
+            evidence: $"Target command set {command.Position.X},{command.Position.Y}.",
+            operation: "setSelectedTarget"));
+        if (!targetState.Applied)
+        {
+            var failure = targetState.Error ?? "Target could not be set.";
+            return new ActionResult
+            {
+                Action = "target",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turn,
+                TurnAfter = turn,
+                Messages = new[] { failure },
+                Deltas = targetState.Deltas,
+            };
+        }
+
+        var message = $"Target set to {command.Position.X},{command.Position.Y}.";
+        var applied = ApplySessionMessage(
+            "target",
+            message,
+            operation: "targetMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["x"] = command.Position.X,
+                ["y"] = command.Position.Y,
+            });
+        return new ActionResult
+        {
+            Action = "target",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = turn,
+            TurnAfter = turn,
+            Messages = applied.Messages.ToArray(),
+            Deltas = targetState.Deltas.Concat(applied.Deltas).ToArray(),
+        };
     }
 
     private ActionResult ClearTarget()
     {
         var turn = Engine.State.Turn;
-        Engine.State.SelectedTarget = null;
-        var message = "Target cleared.";
-        Engine.AddMessage(message);
-        return ActionResult.Simple(
+        var targetState = Engine.ApplyConsequence(WorldConsequence.SetSelectedTarget(
             "target",
-            success: true,
-            consumedTurn: false,
-            turn,
-            turn,
-            message);
+            clear: true,
+            sourceEntityId: Engine.State.ControlledEntityId.Value,
+            evidence: "Target command cleared the selected target.",
+            operation: "clearSelectedTarget"));
+        var message = "Target cleared.";
+        var applied = ApplySessionMessage("target", message, operation: "targetMessage");
+        return new ActionResult
+        {
+            Action = "target",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = turn,
+            TurnAfter = turn,
+            Messages = applied.Messages.ToArray(),
+            Deltas = targetState.Deltas.Concat(applied.Deltas).ToArray(),
+        };
     }
 
     private ActionResult BeginCast(BeginCastCommand command)
@@ -216,18 +278,34 @@ public sealed class GameSession
         }
 
         var id = $"cast_{++_pendingCastSerial}";
+        var castCommand = new CastCommand(command.Text, command.Performance ?? CastPerformance.Neutral);
+        var cancellation = new CancellationTokenSource();
         _pendingCast = new PendingCast(
             id,
-            new CastCommand(command.Text, command.Performance ?? CastPerformance.Neutral));
-        var message = $"Pending cast {id} is waiting to resolve.";
-        Engine.AddMessage(message);
-        return ActionResult.Simple(
-            "begin_cast",
-            success: true,
-            consumedTurn: false,
-            turn,
-            turn,
-            message);
+            castCommand,
+            ResolutionTask: _magic.ResolveAsync(Engine, castCommand, cancellation.Token),
+            Cancellation: cancellation);
+        var message = $"Pending cast {id} is resolving.";
+        var applied = ApplySessionMessage(
+            "pending_cast",
+            message,
+            operation: "pendingCastMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["pendingCastId"] = id,
+                ["status"] = "resolving",
+                ["performance"] = command.Performance?.ToString() ?? CastPerformance.Neutral.ToString(),
+            });
+        return new ActionResult
+        {
+            Action = "begin_cast",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = turn,
+            TurnAfter = turn,
+            Messages = applied.Messages.ToArray(),
+            Deltas = applied.Deltas,
+        };
     }
 
     private async Task<ActionResult> AwaitCast(CancellationToken cancellationToken)
@@ -244,8 +322,14 @@ public sealed class GameSession
                 "No spell is waiting to resolve.");
         }
 
-        _pendingCast = null;
-        return await _magic.CastAsync(Engine, pending.Command, cancellationToken);
+        var materialized = await MaterializePendingCastAsync(pending, cancellationToken);
+        if (_pendingCast?.Id == pending.Id)
+        {
+            _pendingCast = null;
+        }
+
+        DisposePendingCastResolutionOwnership(pending);
+        return _magic.ApplyResolved(Engine, materialized);
     }
 
     private ActionResult CancelCast()
@@ -262,55 +346,76 @@ public sealed class GameSession
                 "No spell is waiting to cancel.");
         }
 
-        var id = _pendingCast.Id;
+        var pending = _pendingCast;
+        var id = pending.Id;
         _pendingCast = null;
+        CancelPendingCastResolution(pending);
         var message = $"Pending cast {id} dissipates.";
-        Engine.AddMessage(message);
-        return ActionResult.Simple(
-            "cancel_cast",
-            success: true,
-            consumedTurn: false,
-            turn,
-            turn,
-            message);
+        var applied = ApplySessionMessage(
+            "pending_cast",
+            message,
+            operation: "pendingCastMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["pendingCastId"] = id,
+                ["status"] = "cancelled",
+            });
+        return new ActionResult
+        {
+            Action = "cancel_cast",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = turn,
+            TurnAfter = turn,
+            Messages = applied.Messages.ToArray(),
+            Deltas = applied.Deltas,
+        };
     }
 
     private ActionResult ProtectItem(string item, bool protectedState)
     {
         var turn = Engine.State.Turn;
         var actor = Engine.State.ControlledEntity;
-        if (!actor.TryGet<InventoryComponent>(out var inventory)
-            || !inventory.Items.ContainsKey(item))
-        {
-            return ActionResult.Simple(
-                protectedState ? "protect" : "unprotect",
-                success: false,
-                consumedTurn: false,
-                turn,
-                turn,
-                $"You are not carrying {item}.");
-        }
-
-        if (protectedState)
-        {
-            inventory.TreasuredItems.Add(item);
-        }
-        else
-        {
-            inventory.TreasuredItems.Remove(item);
-        }
-
+        var action = protectedState ? "protect" : "unprotect";
         var message = protectedState
             ? $"{item} is protected from wild magic costs."
             : $"{item} is available as ordinary spell fuel.";
-        Engine.AddMessage(message);
-        return ActionResult.Simple(
-            protectedState ? "protect" : "unprotect",
-            success: true,
-            consumedTurn: false,
-            turn,
-            turn,
-            message);
+        var applied = Engine.ApplyConsequence(WorldConsequence.ModifyInventory(
+            "inventory",
+            actor.Id.Value,
+            item,
+            op: action,
+            amount: 0,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: actor.Id.Value,
+            evidence: item,
+            operation: action,
+            message: message));
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"You are not carrying {item}.";
+            return new ActionResult
+            {
+                Action = action,
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turn,
+                TurnAfter = turn,
+                Messages = new[] { failure },
+                Deltas = applied.Deltas,
+            };
+        }
+
+        return new ActionResult
+        {
+            Action = action,
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = turn,
+            TurnAfter = turn,
+            Messages = applied.Messages.ToArray(),
+            Deltas = applied.Deltas,
+        };
     }
 
     private ActionResult Help() =>
@@ -320,9 +425,9 @@ public sealed class GameSession
             consumedTurn: false,
             Engine.State.Turn,
             Engine.State.Turn,
-                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, protect, unprotect, reagents, wares, buy, sell, services, request, journal, character, standing, followers, jobs, save, load, quit.");
+                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, protect, unprotect, reagents, wares, buy, sell, services, request, journal, rumors, character, standing, followers, jobs, save, load, quit.");
 
-    private async Task<ActionResult> SaveGameAsync(string path)
+    private async Task<ActionResult> SaveGameAsync(string path, CancellationToken cancellationToken)
     {
         var turn = Engine.State.Turn;
         var result = await FlushPendingClaimExtractionsAsync(new ActionResult
@@ -333,6 +438,7 @@ public sealed class GameSession
             TurnBefore = turn,
             TurnAfter = turn,
         });
+        var materializedPendingCast = await FlushPendingCastResolutionAsync(cancellationToken);
 
         try
         {
@@ -340,6 +446,9 @@ public sealed class GameSession
             return result with
             {
                 Messages = result.Messages.Concat(new[] { $"Saved run to {path}." }).ToArray(),
+                Magic = materializedPendingCast is null
+                    ? result.Magic
+                    : ToMagicRecord(materializedPendingCast.Resolution),
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
@@ -359,13 +468,19 @@ public sealed class GameSession
         try
         {
             var loaded = GameSaveService.Load(path);
-            Engine = new GameEngine(loaded.State);
+            if (_pendingCast is not null)
+            {
+                CancelPendingCastResolution(_pendingCast);
+            }
+
+            Engine = new GameEngine(loaded.State, _backgroundTextGenerator);
             _pendingCastSerial = loaded.PendingCastSerial;
             _pendingCast = loaded.PendingCast is null
                 ? null
                 : new PendingCast(
                     loaded.PendingCast.Id,
-                    new CastCommand(loaded.PendingCast.Text, loaded.PendingCast.Performance ?? CastPerformance.Neutral));
+                    new CastCommand(loaded.PendingCast.Text, loaded.PendingCast.Performance ?? CastPerformance.Neutral),
+                    Resolution: loaded.PendingCast.Resolution);
             _pendingClaimExtractions.Clear();
             return ActionResult.Simple(
                 "load",
@@ -405,7 +520,7 @@ public sealed class GameSession
 
         return result with
         {
-            Messages = result.Messages.Concat(deltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = result.Messages.Concat(deltas.PlayerMessages()).ToArray(),
             Deltas = result.Deltas.Concat(deltas).ToArray(),
         };
     }
@@ -452,7 +567,7 @@ public sealed class GameSession
                 "",
                 ex.Message);
             RecordDialogueAudit(request, providerResult, failure, new[] { ex.Message });
-            return failure;
+            return failure with { Dialogue = ToDialogueResolutionRecord(providerResult) };
         }
 
         if (providerResult.TechnicalFailure || providerResult.Response is null)
@@ -463,7 +578,7 @@ public sealed class GameSession
                 providerResult.RawText,
                 providerResult.Error ?? "Dialogue provider failed.");
             RecordDialogueAudit(request, providerResult, failure, new[] { providerResult.Error ?? "Dialogue provider failed." });
-            return failure;
+            return failure with { Dialogue = ToDialogueResolutionRecord(providerResult) };
         }
 
         var normalized = NormalizeDialogueResponse(request, providerResult.Response, out var validationError);
@@ -475,7 +590,7 @@ public sealed class GameSession
                 providerResult.RawText,
                 validationError ?? "Dialogue provider returned invalid speech.");
             RecordDialogueAudit(request, providerResult, failure, new[] { validationError ?? "invalid_dialogue" });
-            return failure;
+            return failure with { Dialogue = ToDialogueResolutionRecord(providerResult) };
         }
 
         var result = Engine.ApplyGeneratedDialogue(
@@ -491,9 +606,21 @@ public sealed class GameSession
             request,
             providerResult.Provider,
             normalized);
+        result = result with
+        {
+            Dialogue = ToDialogueResolutionRecord(providerResult with { Response = normalized }),
+        };
         RecordDialogueAudit(request, providerResult, result, Array.Empty<string>());
         return result;
     }
+
+    private static DialogueResolutionRecord ToDialogueResolutionRecord(DialogueProviderResult providerResult) =>
+        new(
+            providerResult.Provider,
+            providerResult.RawText,
+            providerResult.TechnicalFailure,
+            providerResult.Error,
+            providerResult.Response);
 
     private DialogueRequest BuildDialogueRequest(PreparedDialogueTurn turn)
     {
@@ -502,7 +629,7 @@ public sealed class GameSession
         return new DialogueRequest(
             turn.TurnBefore,
             turn.PlayerText,
-            ParticipantCard(speaker, turn.BondSummary),
+            ParticipantCard(speaker, turn.BondSummary, turn.SpeakerWant),
             ParticipantCard(listener, null),
             new DialogueSceneCard(
                 Engine.State.RegionId,
@@ -515,10 +642,11 @@ public sealed class GameSession
                 .TakeLast(8)
                 .Select(claim => $"{claim.Subject} [{claim.Category}/{claim.Status}]: {claim.Text}")
                 .ToArray(),
-            DialogueCapabilityCards());
+            DialogueCapabilityCards(),
+            RumorSystem.HeardRumorLines(Engine.State, turn.SpeakerId, Engine.State.RegionId, limit: 6));
     }
 
-    private DialogueParticipantCard ParticipantCard(Entity? entity, string? bondSummary)
+    private DialogueParticipantCard ParticipantCard(Entity? entity, string? bondSummary, string? preparedWant = null)
     {
         if (entity is null)
         {
@@ -565,6 +693,9 @@ public sealed class GameSession
                 .Select(service => $"{service.Name} [{service.EffectKind}]")
                 .ToArray()
             : Array.Empty<string>();
+        var want = preparedWant ?? (entity.TryGet<WantComponent>(out var wantComponent)
+            ? WantSummary(wantComponent)
+            : null);
         return new DialogueParticipantCard(
             entity.Id.Value,
             entity.Name,
@@ -575,7 +706,8 @@ public sealed class GameSession
             bondSummary,
             inventory,
             wares,
-            services);
+            services,
+            want);
     }
 
     private IEnumerable<string> VisibleEntityLines()
@@ -648,10 +780,12 @@ public sealed class GameSession
             "always bind concrete useful NPC claims about named/role-specific people, route landmarks, hidden exits, item locations, direct services, concrete trades, future patrols, door rules, and omens with triggers.",
             "bind actionable salience 3+ categories by default: site, town, landmark, person, item, merchant_stock, service, trade, threat, escape_route, prophecy, and door_rule.",
             "claims must be plainly supported by spokenText; do not invent useful places, people, items, or threats the NPC did not actually say.",
+            "rumors: stories the speaker may have heard; they are not guaranteed true, but can color answers or be cited as rumor.",
             "do not bind denials, jokes, child-invented monsters, tiny ambience, ordinary weather, vague mood, insults, impossible boasts, or claims only the player authored.",
             "memories: durable memories for the speaker or listener when this exchange should be remembered later.",
             "bond: null or an object with entityId, integer loyaltyDelta, fearDelta, admirationDelta, resentmentDelta, posture, and reason.",
-            "actions: array of objects like {\"type\":\"none\"}, {\"type\":\"step_aside\"}, {\"type\":\"give_item\",\"itemName\":\"brass key\"}, or {\"type\":\"open_door\",\"targetEntityId\":\"cell_door_1\"}.",
+            "want: null or one object with entityId, optional text, salience, status, stakes, tags/addTags/removeTags, and reason; use only when the NPC's active desire is materially satisfied, blocked, or redirected.",
+            "actions: array of local, plausible now-actions such as none, step_aside, flee, call_help, give, open, attack, recruit, create_promise, canonize_fact/add_canon, offer_trade, reveal_service, mark_location, spawn_fixture, or consequence with consequenceType and consequencePayload. Use reveal_service to expose a service; use consequence/request_service only when the NPC is performing an already-known service now. Use aliases like give_item/open_door/follow_me only when natural; distant facts should be claims/promises, not immediate actions.",
         };
 
     private ActionResult ApplyGeneratedDialogueProposals(
@@ -664,8 +798,10 @@ public sealed class GameSession
         var proposals = response.Proposals;
         if (proposals is null)
         {
-            AddDialogueExchangeMemory(turn, response.SpokenText);
-            return result;
+            var exchangeDeltas = AddDialogueExchangeMemory(turn, response.SpokenText);
+            return exchangeDeltas.Count == 0
+                ? result
+                : result with { Deltas = result.Deltas.Concat(exchangeDeltas).ToArray() };
         }
 
         var messages = new List<string>();
@@ -683,6 +819,19 @@ public sealed class GameSession
             RecentMemoriesFor(turn.SpeakerId),
             Engine.State.Claims.Records.TakeLast(8).ToArray());
 
+        var actions = proposals.Actions ?? Array.Empty<DialogueActionProposal>();
+        var preAppliedActionIndexes = new HashSet<int>();
+        for (var index = 0; index < actions.Count; index++)
+        {
+            if (NormalizeDialogueActionType(actions[index].Type) != "reveal_service")
+            {
+                continue;
+            }
+
+            ApplyDialogueActionProposal(provider, turn, response.Intent, response.SpokenText, actions[index], messages, deltas);
+            preAppliedActionIndexes.Add(index);
+        }
+
         foreach (var claim in proposals.Claims ?? Array.Empty<DialogueClaimProposal>())
         {
             if (!GeneratedClaimIsSupportedBySpokenText(claim, response.SpokenText))
@@ -697,6 +846,8 @@ public sealed class GameSession
                         ["proposalType"] = "claim",
                         ["claimText"] = claim.Text,
                         ["reason"] = "unsupported_by_spoken_text",
+                        ["auditOnly"] = true,
+                        ["playerVisible"] = false,
                     }));
                 continue;
             }
@@ -714,12 +865,23 @@ public sealed class GameSession
             ApplyDialogueBondProposal(provider, proposals.Bond, messages, deltas);
         }
 
-        foreach (var action in proposals.Actions ?? Array.Empty<DialogueActionProposal>())
+        if (proposals.Want is not null)
         {
-            ApplyDialogueActionProposal(provider, turn, response.Intent, action, messages, deltas);
+            ApplyDialogueWantProposal(provider, proposals.Want, messages, deltas);
         }
 
-        AddDialogueExchangeMemory(turn, response.SpokenText);
+        for (var index = 0; index < actions.Count; index++)
+        {
+            if (preAppliedActionIndexes.Contains(index))
+            {
+                continue;
+            }
+
+            var action = actions[index];
+            ApplyDialogueActionProposal(provider, turn, response.Intent, response.SpokenText, action, messages, deltas);
+        }
+
+        deltas.AddRange(AddDialogueExchangeMemory(turn, response.SpokenText));
         if (messages.Count == 0 && deltas.Count == 0)
         {
             return result;
@@ -759,6 +921,37 @@ public sealed class GameSession
 
         var overlap = claimTokens.Count(spokenTokens.Contains);
         var required = Math.Min(3, Math.Max(1, claimTokens.Count / 2));
+        return overlap >= required;
+    }
+
+    private static bool GeneratedFactIsSupportedBySpokenText(string factText, string? subject, string spokenText)
+    {
+        if (string.IsNullOrWhiteSpace(factText))
+        {
+            return false;
+        }
+
+        var spokenTokens = ClaimSupportTokens(spokenText);
+        if (spokenTokens.Count == 0)
+        {
+            return false;
+        }
+
+        var factSource = $"{factText} {subject}";
+        var namedTokens = ProperNameTokens(factSource);
+        if (namedTokens.Count > 0 && !namedTokens.Any(spokenTokens.Contains))
+        {
+            return false;
+        }
+
+        var factTokens = ClaimSupportTokens(factSource);
+        if (factTokens.Count == 0)
+        {
+            return false;
+        }
+
+        var overlap = factTokens.Count(spokenTokens.Contains);
+        var required = Math.Min(3, Math.Max(1, factTokens.Count / 2));
         return overlap >= required;
     }
 
@@ -879,11 +1072,29 @@ public sealed class GameSession
             proposal.Shareable,
             sourceEntityId: ownerId,
             operation: "dialogueMemory",
-            details: new Dictionary<string, object?> { ["provider"] = provider },
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "memory",
+                ["requireOwnerEntity"] = true,
+            },
             reason: "Dialogue response proposed a durable memory.");
         var applied = Engine.ApplyConsequence(consequence);
         messages.AddRange(applied.Messages);
         deltas.AddRange(applied.Deltas);
+        if (!applied.Applied)
+        {
+            AddDialogueProposalSkipped(
+                provider,
+                "memory",
+                ownerId,
+                applied.Error ?? "Dialogue memory proposal could not be applied.",
+                deltas,
+                new Dictionary<string, object?>
+                {
+                    ["memoryText"] = proposal.Text.Trim(),
+                });
+        }
     }
 
     private void ApplyDialogueBondProposal(
@@ -912,20 +1123,123 @@ public sealed class GameSession
             }));
         messages.AddRange(applied.Messages);
         deltas.AddRange(applied.Deltas);
+        if (!applied.Applied)
+        {
+            AddDialogueProposalSkipped(
+                provider,
+                "bond",
+                proposal.EntityId,
+                applied.Error ?? "Dialogue bond proposal could not be applied.",
+                deltas,
+                new Dictionary<string, object?>
+                {
+                    ["posture"] = proposal.Posture,
+                    ["providerReason"] = proposal.Reason,
+                });
+        }
+    }
+
+    private void ApplyDialogueWantProposal(
+        string provider,
+        DialogueWantProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var entityId = string.IsNullOrWhiteSpace(proposal.EntityId)
+            ? Engine.State.ControlledEntityId.Value
+            : proposal.EntityId.Trim();
+        var applied = Engine.ApplyConsequence(WorldConsequence.UpdateWant(
+            $"dialogue:{provider}",
+            entityId,
+            proposal.Text,
+            proposal.Salience,
+            proposal.Status,
+            proposal.Stakes,
+            proposal.Tags,
+            proposal.AddTags,
+            proposal.RemoveTags,
+            WorldConsequenceVisibility.Hidden,
+            sourceEntityId: entityId,
+            reason: proposal.Reason,
+            operation: "dialogueWantShift",
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "want",
+            },
+            recordMemory: true,
+            memoryText: FirstNonBlank(
+                proposal.Reason,
+                string.IsNullOrWhiteSpace(proposal.Text)
+                    ? "A conversation with the sorcerer changed the speaker's active want."
+                    : $"A conversation with the sorcerer changed the speaker's active want: {proposal.Text.Trim()}"),
+            memoryProvenance: "conversation",
+            memorySalience: proposal.Salience,
+            memoryShareable: null));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+        if (!applied.Applied)
+        {
+            AddDialogueProposalSkipped(
+                provider,
+                "want",
+                entityId,
+                applied.Error ?? "Dialogue want proposal could not be applied.",
+                deltas,
+                new Dictionary<string, object?>
+                {
+                    ["status"] = proposal.Status,
+                    ["providerReason"] = proposal.Reason,
+                });
+        }
+    }
+
+    private static void AddDialogueProposalSkipped(
+        string provider,
+        string proposalType,
+        string? target,
+        string reason,
+        List<StateDelta> deltas,
+        IReadOnlyDictionary<string, object?>? details = null)
+    {
+        var payload = details is null
+            ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, object?>(details, StringComparer.OrdinalIgnoreCase);
+        payload["provider"] = provider;
+        payload["proposalType"] = proposalType;
+        payload["reason"] = reason;
+        payload["auditOnly"] = true;
+        payload["playerVisible"] = false;
+        deltas.Add(new StateDelta(
+            "dialogueProposalSkipped",
+            target ?? "",
+            $"Dialogue {proposalType} proposal skipped: {reason}",
+            payload));
     }
 
     private void ApplyDialogueActionProposal(
         string provider,
         PreparedDialogueTurn turn,
         string? intent,
+        string spokenText,
         DialogueActionProposal proposal,
         List<string> messages,
         List<StateDelta> deltas)
     {
-        var type = NormalizeToken(proposal.Type, "none");
+        var type = NormalizeDialogueActionType(proposal.Type);
         if (type == "none")
         {
             return;
+        }
+
+        if (IsDirectWorldConsequenceActionType(type))
+        {
+            proposal = proposal with
+            {
+                Type = "consequence",
+                ConsequenceType = FirstNonBlank(proposal.ConsequenceType, type),
+            };
+            type = "consequence";
         }
 
         if (IsRefusalIntent(intent) && IsCooperativeDialogueAction(type))
@@ -951,6 +1265,31 @@ public sealed class GameSession
             case "call_help":
                 ApplyDialogueCallHelp(provider, turn.SpeakerId, proposal, messages, deltas);
                 return;
+            case "attack":
+                ApplyDialogueAttack(provider, turn.SpeakerId, proposal, messages, deltas);
+                return;
+            case "create_promise":
+                ApplyDialogueCreatePromise(provider, turn.SpeakerId, proposal, messages, deltas);
+                return;
+            case "add_canon":
+                ApplyDialogueAddCanon(provider, turn.SpeakerId, spokenText, proposal, messages, deltas);
+                return;
+            case "offer_trade":
+                ApplyDialogueOfferTrade(provider, turn.SpeakerId, proposal, messages, deltas);
+                return;
+            case "mark_location":
+            case "spawn_fixture":
+                ApplyDialogueSpawnFixture(provider, turn.SpeakerId, type, proposal, messages, deltas);
+                return;
+            case "reveal_service":
+                ApplyDialogueRevealService(provider, turn.SpeakerId, proposal, messages, deltas);
+                return;
+            case "recruit":
+                ApplyDialogueRecruit(provider, turn.SpeakerId, proposal, messages, deltas);
+                return;
+            case "consequence":
+                ApplyDialogueTypedConsequence(provider, turn.SpeakerId, proposal, messages, deltas);
+                return;
         }
 
         RejectDialogueAction(provider, proposal, "Dialogue action handlers are not implemented for this action type yet.", deltas);
@@ -960,7 +1299,251 @@ public sealed class GameSession
         NormalizeToken(intent ?? "", "").Equals("refuse", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsCooperativeDialogueAction(string type) =>
-        type is "step_aside" or "give_item" or "open_door";
+        type is "step_aside" or "give_item" or "open_door" or "create_promise" or "add_canon" or "offer_trade" or "mark_location" or "reveal_service" or "recruit" or "consequence";
+
+    private static bool IsDirectWorldConsequenceActionType(string type) =>
+        WorldConsequenceTypes.IsKnown(type)
+        && !type.Equals(WorldConsequenceTypes.CreatePromise, StringComparison.OrdinalIgnoreCase)
+        && !type.Equals(WorldConsequenceTypes.AddCanon, StringComparison.OrdinalIgnoreCase)
+        && !type.Equals(WorldConsequenceTypes.SpawnFixture, StringComparison.OrdinalIgnoreCase)
+        && !type.Equals(WorldConsequenceTypes.OfferTrade, StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeDialogueActionType(string? type)
+    {
+        var normalized = NormalizeToken(type ?? "", "none");
+        return normalized switch
+        {
+            "" or "none" or "no_action" => "none",
+            "open" or "unlock" or "open_or_unlock" => "open_door",
+            "give" or "hand_over" or "transfer" or "transfer_item" => "give_item",
+            "move_aside" or "make_room" or "step_out_of_the_way" => "step_aside",
+            "run" or "run_away" or "retreat" => "flee",
+            "summon_help" or "raise_alarm" or "call_for_help" => "call_help",
+            "strike" or "hit" or "attack_entity" => "attack",
+            "promise" or "make_promise" or "bind_promise" or "create_promise_now" => "create_promise",
+            "canonize" or "canonize_fact" or "canonicalize_fact" or "add_canon" or "record_canon" or "record_fact" => "add_canon",
+            "trade" or "offer_trade_now" or "open_trade" => "offer_trade",
+            "service" or "offer_service" or "reveal_service_now" => "reveal_service",
+            "world_consequence" or "worldconsequence" or "typed_consequence" or "apply_consequence" => "consequence",
+            "mark" or "mark_place" or "mark_site" or "mark_point" => "mark_location",
+            "create_fixture" or "create_marker" or "place_fixture" => "spawn_fixture",
+            "join" or "join_me" or "follow" or "follow_me" or "come_with" or "come_with_me" or "ally" => "recruit",
+            _ => normalized,
+        };
+    }
+
+    private void ApplyDialogueRecruit(
+        string provider,
+        string actorId,
+        DialogueActionProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var result = Engine.RecruitFromDialogue(actorId, provider, proposal.Reason);
+        if (result.Deltas.Count == 0)
+        {
+            RejectDialogueAction(
+                provider,
+                proposal,
+                result.Messages.FirstOrDefault() ?? "Dialogue recruit action could not be applied.",
+                deltas);
+            return;
+        }
+
+        messages.AddRange(result.Messages);
+        deltas.AddRange(result.Deltas);
+    }
+
+    private void ApplyDialogueTypedConsequence(
+        string provider,
+        string actorId,
+        DialogueActionProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var consequenceType = FirstNonBlank(
+            proposal.ConsequenceType,
+            TextPayload(proposal.ConsequencePayload, "consequenceType"),
+            TextPayload(proposal.ConsequencePayload, "consequence_type"),
+            TextPayload(proposal.ConsequencePayload, "worldConsequenceType"),
+            TextPayload(proposal.ConsequencePayload, "world_consequence_type"));
+        if (string.IsNullOrWhiteSpace(consequenceType))
+        {
+            RejectDialogueAction(provider, proposal, "Generic dialogue consequence did not include consequenceType.", deltas);
+            return;
+        }
+
+        var timing = WorldConsequenceTiming.Normalize(FirstNonBlank(
+            proposal.ConsequenceTiming,
+            TextPayload(proposal.ConsequencePayload, "timing"),
+            TextPayload(proposal.ConsequencePayload, "consequenceTiming"),
+            TextPayload(proposal.ConsequencePayload, "consequence_timing"),
+            WorldConsequenceTiming.Immediate));
+
+        var normalizedConsequenceType = NormalizeDialogueConsequenceType(consequenceType);
+        var payload = proposal.ConsequencePayload is null
+            ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, object?>(proposal.ConsequencePayload, StringComparer.OrdinalIgnoreCase);
+        PromoteDialogueActionFieldsToPayload(proposal, normalizedConsequenceType, payload);
+        payload["operation"] = FirstNonBlank(TextPayload(payload, "operation"), "dialogueConsequence");
+        payload["provider"] = provider;
+        payload["proposalType"] = "consequence";
+        payload["speakerId"] = actorId;
+        if (proposal.PlayerVisible is not null)
+        {
+            payload["playerVisible"] = proposal.PlayerVisible.Value;
+        }
+
+        var targetEntityId = FirstNonBlank(
+            proposal.TargetEntityId,
+            TextPayload(payload, "targetEntityId"),
+            TextPayload(payload, "target_entity_id"),
+            TextPayload(payload, "targetId"),
+            TextPayload(payload, "target_id"),
+            TextPayload(payload, "entityId"),
+            TextPayload(payload, "entity_id"),
+            TextPayload(payload, "target"),
+            normalizedConsequenceType.Equals(WorldConsequenceTypes.RequestService, StringComparison.OrdinalIgnoreCase)
+                ? actorId
+                : null);
+        if (normalizedConsequenceType.Equals(WorldConsequenceTypes.RequestService, StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(TextPayload(payload, "actorEntityId"))
+            && string.IsNullOrWhiteSpace(TextPayload(payload, "actor_entity_id"))
+            && string.IsNullOrWhiteSpace(TextPayload(payload, "requesterEntityId"))
+            && string.IsNullOrWhiteSpace(TextPayload(payload, "requester_entity_id")))
+        {
+            payload["actorEntityId"] = Engine.State.ControlledEntityId.Value;
+        }
+
+        var sourceEntityId = FirstNonBlank(
+            TextPayload(payload, "sourceEntityId"),
+            TextPayload(payload, "source_entity_id"),
+            actorId);
+        var visibility = NormalizeToken(FirstNonBlank(
+            proposal.ConsequenceVisibility,
+            TextPayload(payload, "visibility"),
+            TextPayload(payload, "consequenceVisibility"),
+            TextPayload(payload, "consequence_visibility"),
+            proposal.PlayerVisible == true ? WorldConsequenceVisibility.Message : WorldConsequenceVisibility.Hidden)!, WorldConsequenceVisibility.Hidden);
+        var salience = Math.Clamp(proposal.Salience ?? IntPayload(payload, "salience") ?? 1, 1, 5);
+        var confidence = Math.Clamp(proposal.ConsequenceConfidence ?? IntPayload(payload, "confidence") ?? 100, 0, 100);
+
+        var applied = Engine.ApplyConsequence(new WorldConsequence(
+            normalizedConsequenceType,
+            $"dialogue:{provider}",
+            SourceEntityId: sourceEntityId,
+            TargetEntityId: targetEntityId,
+            Salience: salience,
+            Confidence: confidence,
+            Visibility: visibility,
+            Evidence: FirstNonBlank(proposal.Reason, TextPayload(payload, "evidence")),
+            Reason: FirstNonBlank(proposal.Reason, TextPayload(payload, "reason"), $"Dialogue action proposed {consequenceType}."),
+            Payload: payload,
+            Timing: timing));
+        if (!applied.Applied)
+        {
+            RejectDialogueAction(provider, proposal, applied.Error ?? $"Dialogue consequence {consequenceType} could not be applied.", deltas);
+            deltas.AddRange(applied.Deltas);
+            return;
+        }
+
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+    }
+
+    private static string NormalizeDialogueConsequenceType(string type) =>
+        WorldConsequenceTypes.Normalize(type);
+
+    private static void PromoteDialogueActionFieldsToPayload(
+        DialogueActionProposal proposal,
+        string normalizedConsequenceType,
+        Dictionary<string, object?> payload)
+    {
+        PutPayloadIfMissing(payload, "targetEntityId", proposal.TargetEntityId);
+        PutPayloadIfMissing(payload, "itemName", proposal.ItemName);
+        PutPayloadIfMissing(payload, "item", proposal.ItemName);
+        PutPayloadIfMissing(payload, "quantity", proposal.Quantity);
+        PutPayloadIfMissing(payload, "gold", proposal.Gold);
+        PutPayloadIfMissing(payload, "name", proposal.Name);
+        PutPayloadIfMissing(payload, "description", proposal.Description);
+        PutPayloadIfMissing(payload, "fixtureType", proposal.FixtureType);
+        PutPayloadIfMissing(payload, "material", proposal.Material);
+        PutPayloadIfMissing(payload, "tags", proposal.Tags);
+        PutPayloadIfMissing(payload, "interactableVerbs", proposal.InteractableVerbs);
+        PutPayloadIfMissing(payload, "x", proposal.X);
+        PutPayloadIfMissing(payload, "y", proposal.Y);
+        PutPayloadIfMissing(payload, "blocksMovement", proposal.BlocksMovement);
+        PutPayloadIfMissing(payload, "blocksSight", proposal.BlocksSight);
+        PutPayloadIfMissing(payload, "serviceId", proposal.ServiceId);
+        PutPayloadIfMissing(payload, "service", proposal.ServiceId);
+        PutPayloadIfMissing(payload, "serviceName", proposal.Name);
+        PutPayloadIfMissing(payload, "effectKind", proposal.EffectKind);
+        PutPayloadIfMissing(payload, "targetHint", proposal.TargetHint);
+        PutPayloadIfMissing(payload, "itemCost", proposal.ItemCost);
+        PutPayloadIfMissing(payload, "goldCost", proposal.GoldCost);
+        PutPayloadIfMissing(payload, "triggerHint", proposal.TriggerHint);
+        PutPayloadIfMissing(payload, "realizationKind", proposal.RealizationKind);
+        PutPayloadIfMissing(payload, "claimedPlace", proposal.ClaimedPlace);
+        PutPayloadIfMissing(payload, "subject", proposal.Subject);
+        PutPayloadIfMissing(payload, "playerVisible", proposal.PlayerVisible);
+        PutPayloadIfMissing(payload, "salience", proposal.Salience);
+        PutPayloadIfMissing(payload, "autoBind", proposal.AutoBind);
+        PutPayloadIfMissing(payload, "stackExisting", proposal.StackExisting);
+        PutPayloadIfMissing(payload, "wantStatusOnComplete", proposal.WantStatusOnComplete);
+        PutPayloadIfMissing(payload, "wantStakesOnComplete", proposal.WantStakesOnComplete);
+        PutPayloadIfMissing(payload, "wantAddTagsOnComplete", proposal.WantAddTagsOnComplete);
+        PutPayloadIfMissing(payload, "wantRemoveTagsOnComplete", proposal.WantRemoveTagsOnComplete);
+
+        if (normalizedConsequenceType.Equals(WorldConsequenceTypes.CreatePromise, StringComparison.OrdinalIgnoreCase))
+        {
+            PutPayloadIfMissing(payload, "text", proposal.PromiseText);
+            PutPayloadIfMissing(payload, "kind", proposal.PromiseKind);
+        }
+        else if (normalizedConsequenceType.Equals(WorldConsequenceTypes.AddCanon, StringComparison.OrdinalIgnoreCase))
+        {
+            PutPayloadIfMissing(payload, "text", proposal.CanonText);
+            PutPayloadIfMissing(payload, "kind", proposal.CanonKind);
+            PutPayloadIfMissing(payload, "summary", proposal.CanonSummary);
+        }
+        else if (normalizedConsequenceType is WorldConsequenceTypes.Message or WorldConsequenceTypes.RecordMemory)
+        {
+            PutPayloadIfMissing(payload, "text", FirstNonBlank(proposal.Description, proposal.Name, proposal.Reason));
+        }
+    }
+
+    private static void PutPayloadIfMissing(Dictionary<string, object?> payload, string key, object? value)
+    {
+        if (value is null || payload.ContainsKey(key))
+        {
+            return;
+        }
+
+        if (value is string text)
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                payload[key] = text.Trim();
+            }
+
+            return;
+        }
+
+        if (value is IEnumerable<string> strings)
+        {
+            var values = strings
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Select(item => item.Trim())
+                .ToArray();
+            if (values.Length > 0)
+            {
+                payload[key] = values;
+            }
+
+            return;
+        }
+
+        payload[key] = value;
+    }
 
     private void ApplyDialogueMoveAction(
         string provider,
@@ -972,15 +1555,11 @@ public sealed class GameSession
         var actor = Engine.EntityById(actorId);
         if (actor is null || !actor.TryGet<PositionComponent>(out var position))
         {
-            deltas.Add(new StateDelta(
-                "dialogueActionSkipped",
-                actorId,
-                "Dialogue move action skipped because the actor is missing or has no position.",
-                new Dictionary<string, object?>
-                {
-                    ["provider"] = provider,
-                    ["type"] = flee ? "flee" : "step_aside",
-                }));
+            RejectDialogueAction(
+                provider,
+                new DialogueActionProposal(flee ? "flee" : "step_aside", actorId),
+                "The speaker is missing or has no position.",
+                deltas);
             return;
         }
 
@@ -996,9 +1575,30 @@ public sealed class GameSession
             return;
         }
 
-        var delta = Engine.MoveEntity(actor, destination.Value, flee ? "dialogueFlee" : "dialogueStepAside");
-        messages.Add(delta.Summary);
-        deltas.Add(delta);
+        var operation = flee ? "dialogueFlee" : "dialogueStepAside";
+        var applied = Engine.ApplyConsequence(WorldConsequence.MoveEntity(
+            $"dialogue:{provider}",
+            actor.Id.Value,
+            destination.Value.X,
+            destination.Value.Y,
+            operation,
+            WorldConsequenceVisibility.Message,
+            sourceEntityId: actor.Id.Value,
+            reason: flee ? "dialogue action: flee" : "dialogue action: step aside",
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = flee ? "flee" : "step_aside",
+            }));
+        if (!applied.Applied)
+        {
+            RejectDialogueAction(provider, new DialogueActionProposal(flee ? "flee" : "step_aside", actorId), applied.Error ?? "Dialogue movement could not be applied.", deltas);
+            deltas.AddRange(applied.Deltas);
+            return;
+        }
+
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
     }
 
     private GridPoint? DialogueMoveDestination(GridPoint origin, GridPoint awayFrom, bool flee)
@@ -1103,30 +1703,43 @@ public sealed class GameSession
             return;
         }
 
+        if (giverInventory.TreasuredItems.Contains(item))
+        {
+            RejectDialogueAction(provider, proposal, "The proposed item is protected.", deltas);
+            return;
+        }
+
         var receiver = string.IsNullOrWhiteSpace(proposal.TargetEntityId)
             ? Engine.State.ControlledEntity
             : Engine.EntityById(proposal.TargetEntityId) ?? Engine.State.ControlledEntity;
-        var receiverInventory = receiver.TryGet<InventoryComponent>(out var existingReceiverInventory)
-            ? existingReceiverInventory
-            : InventoryComponent.Empty();
-        receiver.Set(receiverInventory);
-        ChangeInventory(giverInventory, item, -1);
-        ChangeInventory(receiverInventory, item, 1);
-
-        var message = $"{giver.Name} gives {item} to {receiver.Name}.";
-        messages.Add(message);
-        Engine.AddMessage(message);
-        deltas.Add(new StateDelta(
-            "dialogueGiveItem",
-            receiver.Id.Value,
-            message,
-            new Dictionary<string, object?>
+        var transfer = Engine.ApplyConsequence(WorldConsequence.TransferItem(
+            $"dialogue:{provider}",
+            giver.Id.Value,
+            "give",
+            item,
+            quantity: 1,
+            recipientEntityId: receiver.Id.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: giver.Id.Value,
+            evidence: proposal.Reason,
+            operation: "dialogueGiveItem",
+            message: $"{giver.Name} gives {item} to {receiver.Name}.",
+            details: new Dictionary<string, object?>
             {
                 ["provider"] = provider,
                 ["speakerId"] = giver.Id.Value,
-                ["item"] = item,
                 ["receiverId"] = receiver.Id.Value,
+                ["inventoryKey"] = item,
             }));
+        if (!transfer.Applied)
+        {
+            RejectDialogueAction(provider, proposal, transfer.Error ?? "The speaker could not give the proposed item.", deltas);
+            deltas.AddRange(transfer.Deltas);
+            return;
+        }
+
+        messages.AddRange(transfer.Messages);
+        deltas.AddRange(transfer.Deltas);
     }
 
     private void ApplyDialogueCallHelp(
@@ -1150,45 +1763,464 @@ public sealed class GameSession
         var text = imperial
             ? $"{actor.Name}'s call for help reaches an imperial ear."
             : $"{actor.Name}'s call for help starts looking for someone to answer.";
-        var scheduled = Engine.State.ScheduledEvents.Schedule(
-            Engine.State.Turn + 2,
+        var message = $"{actor.Name} calls for help.";
+        var applied = Engine.ApplyConsequence(WorldConsequence.ScheduleEvent(
+            $"dialogue:{provider}",
             kind,
-            actor.Id,
-            new Dictionary<string, object?>
+            turns: 2,
+            eventPayload: new Dictionary<string, object?>
             {
                 ["text"] = text,
                 ["source"] = "dialogue",
                 ["provider"] = provider,
                 ["reason"] = proposal.Reason,
-            });
-        var message = $"{actor.Name} calls for help.";
-        messages.Add(message);
-        Engine.AddMessage(message);
-        deltas.Add(new StateDelta(
-            "dialogueCallHelp",
-            actor.Id.Value,
-            message,
-            new Dictionary<string, object?>
+            },
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: actor.Id.Value,
+            evidence: proposal.Reason,
+            operation: "dialogueCallHelp",
+            message: message,
+            details: new Dictionary<string, object?>
             {
                 ["provider"] = provider,
-                ["eventId"] = scheduled.Id,
-                ["dueTurn"] = scheduled.DueTurn,
-                ["kind"] = scheduled.Kind,
+                ["kind"] = kind,
             }));
-    }
-
-    private static void ChangeInventory(InventoryComponent inventory, string item, int delta)
-    {
-        inventory.Items.TryGetValue(item, out var current);
-        var next = current + delta;
-        if (next <= 0)
+        if (!applied.Applied)
         {
-            inventory.Items.Remove(item);
-            inventory.TreasuredItems.Remove(item);
+            RejectDialogueAction(provider, proposal, applied.Error ?? "Help could not be scheduled.", deltas);
+            deltas.AddRange(applied.Deltas);
             return;
         }
 
-        inventory.Items[item] = next;
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+    }
+
+    private void ApplyDialogueAttack(
+        string provider,
+        string actorId,
+        DialogueActionProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var attacker = Engine.EntityById(actorId);
+        if (attacker is null || !attacker.TryGet<ActorComponent>(out var attackerActor) || !attackerActor.Alive)
+        {
+            RejectDialogueAction(provider, proposal, "The speaker is not a living actor who can attack.", deltas);
+            return;
+        }
+
+        var target = ResolveDialogueAttackTarget(attacker, proposal.TargetEntityId);
+        if (target is null || !target.TryGet<ActorComponent>(out var targetActor) || !targetActor.Alive)
+        {
+            RejectDialogueAction(provider, proposal, "No living attack target was found.", deltas);
+            return;
+        }
+
+        if (target.Id == attacker.Id)
+        {
+            RejectDialogueAction(provider, proposal, "The speaker cannot attack themself through dialogue.", deltas);
+            return;
+        }
+
+        if (!attacker.TryGet<PositionComponent>(out var attackerPosition)
+            || !target.TryGet<PositionComponent>(out var targetPosition)
+            || GameEngine.Distance(attackerPosition.Position, targetPosition.Position) > 1)
+        {
+            RejectDialogueAction(provider, proposal, "The attack target is not adjacent.", deltas);
+            return;
+        }
+
+        var attackDeltas = Engine.AttackEntity(
+            attacker,
+            target,
+            source: $"dialogue:{provider}",
+            evidence: proposal.Reason ?? $"{attacker.Name} attacked {target.Name} during dialogue.",
+            reason: "dialogue action: attack",
+            operation: "dialogueAttack",
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "attack",
+                ["targetEntityId"] = target.Id.Value,
+            });
+        if (attackDeltas.Count == 0)
+        {
+            RejectDialogueAction(provider, proposal, "The attack produced no consequence.", deltas);
+            return;
+        }
+
+        messages.AddRange(attackDeltas.PlayerMessages());
+        deltas.AddRange(attackDeltas);
+    }
+
+    private Entity? ResolveDialogueAttackTarget(Entity attacker, string? targetEntityId)
+    {
+        if (!string.IsNullOrWhiteSpace(targetEntityId)
+            && Engine.EntityById(targetEntityId) is { } target)
+        {
+            return target;
+        }
+
+        return Engine.State.ControlledEntity.Id == attacker.Id
+            ? null
+            : Engine.State.ControlledEntity;
+    }
+
+    private void ApplyDialogueCreatePromise(
+        string provider,
+        string actorId,
+        DialogueActionProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var speaker = Engine.EntityById(actorId);
+        if (speaker is null)
+        {
+            RejectDialogueAction(provider, proposal, "The speaker no longer exists.", deltas);
+            return;
+        }
+
+        Entity? anchor = null;
+        string? unresolvedTargetHint = null;
+        if (!string.IsNullOrWhiteSpace(proposal.TargetEntityId))
+        {
+            anchor = Engine.EntityById(proposal.TargetEntityId);
+            if (anchor is null)
+            {
+                unresolvedTargetHint = proposal.TargetEntityId.Trim();
+            }
+        }
+
+        var text = FirstNonBlank(proposal.PromiseText, proposal.Description, proposal.Name, proposal.ItemName);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            RejectDialogueAction(provider, proposal, "The promise action did not include promise text.", deltas);
+            return;
+        }
+
+        var triggerHint = FirstNonBlank(proposal.TriggerHint, proposal.TargetHint, unresolvedTargetHint, "");
+        var realizationKind = string.IsNullOrWhiteSpace(proposal.RealizationKind)
+            ? null
+            : proposal.RealizationKind.Trim();
+        var applied = Engine.ApplyConsequence(WorldConsequence.CreatePromise(
+            $"dialogue:{provider}",
+            string.IsNullOrWhiteSpace(proposal.PromiseKind) ? "rumor" : proposal.PromiseKind.Trim(),
+            text.Trim(),
+            anchorEntityId: anchor?.Id.Value,
+            triggerHint: triggerHint ?? "",
+            visibility: (proposal.PlayerVisible ?? true) ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+            sourceEntityId: speaker.Id.Value,
+            evidence: proposal.Reason ?? text.Trim(),
+            reason: "dialogue action: create promise",
+            operation: "dialogueCreatePromise",
+            stackExisting: proposal.StackExisting ?? true,
+            playerVisible: proposal.PlayerVisible ?? true,
+            salience: Math.Clamp(proposal.Salience ?? 3, 1, 5),
+            subject: FirstNonBlank(proposal.Subject, proposal.Name, proposal.ItemName, unresolvedTargetHint),
+            claimedPlace: FirstNonBlank(proposal.ClaimedPlace, unresolvedTargetHint),
+            realizationKind: realizationKind,
+            autoBind: proposal.AutoBind ?? (anchor is not null),
+            emitMessage: proposal.PlayerVisible ?? true,
+            message: $"A promise enters the world through {speaker.Name}: {text.Trim()}",
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "create_promise",
+                ["speakerId"] = speaker.Id.Value,
+                ["unresolvedTargetHint"] = unresolvedTargetHint,
+            }));
+        if (!applied.Applied)
+        {
+            RejectDialogueAction(provider, proposal, applied.Error ?? "The promise could not be created.", deltas);
+            deltas.AddRange(applied.Deltas);
+            return;
+        }
+
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+    }
+
+    private void ApplyDialogueAddCanon(
+        string provider,
+        string actorId,
+        string spokenText,
+        DialogueActionProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var speaker = Engine.EntityById(actorId);
+        if (speaker is null)
+        {
+            RejectDialogueAction(provider, proposal, "The speaker no longer exists.", deltas);
+            return;
+        }
+
+        var text = FirstNonBlank(
+            proposal.CanonText,
+            proposal.Description,
+            proposal.PromiseText,
+            proposal.Name,
+            proposal.ItemName);
+        var subject = FirstNonBlank(proposal.Subject, proposal.Name, proposal.TargetHint, proposal.TargetEntityId);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            RejectDialogueAction(provider, proposal, "The canon action did not include fact text.", deltas);
+            return;
+        }
+
+        if (!GeneratedFactIsSupportedBySpokenText(text, subject, spokenText))
+        {
+            RejectDialogueAction(provider, proposal, "The canon fact was not supported by the NPC's spoken line.", deltas);
+            return;
+        }
+
+        var attachedTo = FirstNonBlank(proposal.TargetEntityId, speaker.Id.Value)!;
+        var kind = NormalizeToken(
+            FirstNonBlank(
+                proposal.CanonKind,
+                proposal.FixtureType,
+                proposal.PromiseKind,
+                proposal.RealizationKind,
+                "dialogue_fact")!,
+            "dialogue_fact");
+        var summary = FirstNonBlank(proposal.CanonSummary, proposal.Name, proposal.Subject, text)!;
+        var tags = (proposal.Tags ?? Array.Empty<string>())
+            .Concat(new[] { "dialogue", "canonized" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var applied = Engine.ApplyConsequence(WorldConsequence.AddCanon(
+            $"dialogue:{provider}",
+            kind,
+            attachedTo,
+            text.Trim(),
+            summary.Trim(),
+            tags,
+            visibility: (proposal.PlayerVisible ?? false)
+                ? WorldConsequenceVisibility.Message
+                : WorldConsequenceVisibility.Hidden,
+            sourceEntityId: speaker.Id.Value,
+            evidence: spokenText,
+            reason: "dialogue action: canonize fact",
+            operation: "dialogueAddCanon",
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "add_canon",
+                ["speakerId"] = speaker.Id.Value,
+                ["playerVisible"] = proposal.PlayerVisible ?? false,
+            }));
+        if (!applied.Applied)
+        {
+            RejectDialogueAction(provider, proposal, applied.Error ?? "The canon fact could not be recorded.", deltas);
+            deltas.AddRange(applied.Deltas);
+            return;
+        }
+
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+    }
+
+    private void ApplyDialogueOfferTrade(
+        string provider,
+        string actorId,
+        DialogueActionProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var merchant = Engine.EntityById(actorId);
+        if (merchant is null)
+        {
+            RejectDialogueAction(provider, proposal, "The speaker no longer exists.", deltas);
+            return;
+        }
+
+        var itemName = string.IsNullOrWhiteSpace(proposal.ItemName)
+            ? null
+            : proposal.ItemName.Trim();
+        var applied = Engine.ApplyConsequence(WorldConsequence.OfferTrade(
+            $"dialogue:{provider}",
+            merchant.Id.Value,
+            itemName,
+            quantity: Math.Max(1, proposal.Quantity ?? 1),
+            gold: Math.Max(0, proposal.Gold ?? 30),
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: merchant.Id.Value,
+            evidence: proposal.Reason,
+            reason: "dialogue action: offer trade",
+            operation: "dialogueOfferTrade",
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "offer_trade",
+            }));
+        if (!applied.Applied)
+        {
+            RejectDialogueAction(provider, proposal, applied.Error ?? "The trade offer could not be applied.", deltas);
+            deltas.AddRange(applied.Deltas);
+            return;
+        }
+
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+    }
+
+    private void ApplyDialogueSpawnFixture(
+        string provider,
+        string actorId,
+        string type,
+        DialogueActionProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var actor = Engine.EntityById(actorId);
+        if (actor is null || !actor.TryGet<PositionComponent>(out var actorPosition))
+        {
+            RejectDialogueAction(provider, proposal, "The speaker is missing or has no local position.", deltas);
+            return;
+        }
+
+        var point = ResolveDialogueFixturePoint(actorPosition.Position, proposal);
+        if (point is null)
+        {
+            RejectDialogueAction(provider, proposal, "No valid nearby tile was available for the fixture.", deltas);
+            return;
+        }
+
+        var isMarker = type == "mark_location";
+        var name = FirstNonBlank(proposal.Name, proposal.ItemName, proposal.Description, isMarker ? "marked place" : "strange fixture")!;
+        var fixtureType = NormalizeToken(
+            FirstNonBlank(proposal.FixtureType, isMarker ? "marker" : "feature")!,
+            isMarker ? "marker" : "feature");
+        var material = NormalizeToken(
+            FirstNonBlank(proposal.Material, isMarker ? "chalk" : "wood")!,
+            isMarker ? "chalk" : "wood");
+        var tags = (proposal.Tags ?? Array.Empty<string>())
+            .Concat(new[] { "dialogue", isMarker ? "marked" : "spawned" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var verbs = proposal.InteractableVerbs is { Count: > 0 }
+            ? proposal.InteractableVerbs
+            : new[] { "examine" };
+        var blocksMovement = proposal.BlocksMovement ?? !isMarker;
+        var blocksSight = proposal.BlocksSight ?? false;
+        var operation = isMarker ? "dialogueMarkLocation" : "dialogueSpawnFixture";
+        var applied = Engine.ApplyConsequence(WorldConsequence.SpawnFixture(
+            $"dialogue:{provider}",
+            name,
+            point.Value.X,
+            point.Value.Y,
+            prefix: NormalizeToken(name, fixtureType),
+            glyph: isMarker ? '*' : '#',
+            palette: fixtureType,
+            fixtureType: fixtureType,
+            material: material,
+            tags: tags,
+            blocksMovement: blocksMovement,
+            blocksSight: blocksSight,
+            description: proposal.Description,
+            interactableVerbs: verbs,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: actor.Id.Value,
+            evidence: proposal.Reason,
+            reason: isMarker ? "dialogue action: mark location" : "dialogue action: spawn fixture",
+            operation: operation,
+            message: isMarker
+                ? $"{actor.Name} marks {name} nearby."
+                : $"{actor.Name} reveals {name} nearby.",
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = type,
+            }));
+        if (!applied.Applied)
+        {
+            RejectDialogueAction(provider, proposal, applied.Error ?? "The fixture could not be created.", deltas);
+            deltas.AddRange(applied.Deltas);
+            return;
+        }
+
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+    }
+
+    private GridPoint? ResolveDialogueFixturePoint(GridPoint actorPosition, DialogueActionProposal proposal)
+    {
+        if (proposal.X is not null && proposal.Y is not null)
+        {
+            var point = new GridPoint(proposal.X.Value, proposal.Y.Value);
+            return GameEngine.Distance(actorPosition, point) <= 2 && IsOpenDialogueFixturePoint(point)
+                ? point
+                : null;
+        }
+
+        return AdjacentOffsets()
+            .Select(offset => actorPosition.Translate(offset.X, offset.Y))
+            .Where(IsOpenDialogueFixturePoint)
+            .OrderBy(point => GameEngine.Distance(point, Engine.State.ControlledEntity.Get<PositionComponent>().Position))
+            .ThenBy(point => point.X)
+            .ThenBy(point => point.Y)
+            .Select(point => (GridPoint?)point)
+            .FirstOrDefault();
+    }
+
+    private bool IsOpenDialogueFixturePoint(GridPoint point) =>
+        Engine.InBounds(point)
+        && !Engine.State.BlockingTerrain.Contains(point)
+        && Engine.BlockingEntityAt(point) is null;
+
+    private void ApplyDialogueRevealService(
+        string provider,
+        string actorId,
+        DialogueActionProposal proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var serviceProvider = Engine.EntityById(actorId);
+        if (serviceProvider is null)
+        {
+            RejectDialogueAction(provider, proposal, "The speaker no longer exists.", deltas);
+            return;
+        }
+
+        var serviceName = FirstNonBlank(proposal.Name, proposal.ItemName, "quiet service")!;
+        var description = FirstNonBlank(proposal.Description, proposal.Reason, serviceName)!;
+        var serviceId = NormalizeToken(FirstNonBlank(proposal.ServiceId, serviceName)!, "service");
+        var effectKind = NormalizeToken(FirstNonBlank(proposal.EffectKind, InferServiceEffect(description, serviceName))!, "record_memory");
+        var applied = Engine.ApplyConsequence(WorldConsequence.OfferService(
+            $"dialogue:{provider}",
+            serviceProvider.Id.Value,
+            serviceId,
+            serviceName,
+            description,
+            effectKind,
+            goldCost: Math.Max(0, proposal.GoldCost ?? proposal.Gold ?? 0),
+            itemCost: proposal.ItemCost,
+            targetHint: proposal.TargetHint,
+            tags: proposal.Tags,
+            wantStatusOnComplete: proposal.WantStatusOnComplete,
+            wantStakesOnComplete: proposal.WantStakesOnComplete,
+            wantAddTagsOnComplete: proposal.WantAddTagsOnComplete,
+            wantRemoveTagsOnComplete: proposal.WantRemoveTagsOnComplete,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: serviceProvider.Id.Value,
+            evidence: proposal.Reason,
+            reason: "dialogue action: reveal service",
+            operation: "dialogueRevealService",
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "reveal_service",
+            }));
+        if (!applied.Applied)
+        {
+            RejectDialogueAction(provider, proposal, applied.Error ?? "The service offer could not be applied.", deltas);
+            deltas.AddRange(applied.Deltas);
+            return;
+        }
+
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
     }
 
     private static string? FindInventoryKey(InventoryComponent inventory, string item)
@@ -1221,9 +2253,12 @@ public sealed class GameSession
             {
                 ["provider"] = provider,
                 ["type"] = type,
+                ["normalizedType"] = NormalizeDialogueActionType(type),
                 ["itemName"] = proposal.ItemName,
                 ["reason"] = reason,
                 ["providerReason"] = proposal.Reason,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
             }));
     }
 
@@ -1240,26 +2275,32 @@ public sealed class GameSession
             new GridPoint(1, 1),
         };
 
-    private void AddDialogueExchangeMemory(PreparedDialogueTurn turn, string spokenText)
+    private IReadOnlyList<StateDelta> AddDialogueExchangeMemory(PreparedDialogueTurn turn, string spokenText)
     {
         var speaker = Engine.EntityById(turn.SpeakerId);
         if (speaker is null)
         {
-            return;
+            return Array.Empty<StateDelta>();
         }
 
         var text = $"{turn.SpeakerName} spoke with the sorcerer. Player: {turn.PlayerText} Reply: {spokenText}";
-        var memories = speaker.TryGet<MemoryComponent>(out var existing)
-            ? existing.Records.ToList()
-            : new List<EntityMemoryRecord>();
-        memories.Add(new EntityMemoryRecord(
-            $"dialogue_exchange_{Engine.State.Turn}_{memories.Count + 1}",
-            text,
+        return Engine.ApplyConsequence(WorldConsequence.RecordMemory(
             "dialogue_exchange",
+            speaker.Id.Value,
+            text,
             "conversation",
             2,
-            Shareable: false));
-        speaker.Set(new MemoryComponent(memories.TakeLast(24).ToArray()));
+            shareable: false,
+            sourceEntityId: Engine.State.ControlledEntityId.Value,
+            evidence: turn.PlayerText,
+            reason: "Generated dialogue exchange.",
+            operation: "dialogueExchangeMemory",
+            details: new Dictionary<string, object?>
+            {
+                ["speakerId"] = speaker.Id.Value,
+                ["playerText"] = turn.PlayerText,
+                ["spokenText"] = spokenText,
+            })).Deltas;
     }
 
     private DialogueResponse? NormalizeDialogueResponse(
@@ -1390,13 +2431,6 @@ public sealed class GameSession
             return;
         }
 
-        if (dialogue.Details.TryGetValue("generated", out var generated)
-            && generated is bool generatedBool
-            && generatedBool)
-        {
-            return;
-        }
-
         var speaker = Engine.EntityById(dialogue.Target);
         var request = new DialogueClaimRequest(
             Engine.State.Turn,
@@ -1413,7 +2447,10 @@ public sealed class GameSession
             Engine.State.Claims.Records.TakeLast(8).ToArray());
 
         var task = _claimExtractor.ExtractAsync(request, CancellationToken.None);
-        _pendingClaimExtractions.Add(new PendingClaimExtraction(request, task));
+        _pendingClaimExtractions.Add(new PendingClaimExtraction(
+            request,
+            task,
+            _claimExtractor.RequiresSpokenTextSupport));
     }
 
     private async Task<ActionResult> FlushPendingClaimExtractionsAsync(ActionResult result)
@@ -1445,6 +2482,7 @@ public sealed class GameSession
 
         var messages = new List<string>();
         var deltas = new List<StateDelta>();
+        var extractionRecords = new List<DialogueClaimExtractionRecord>();
         var completed = _pendingClaimExtractions
             .Take(maxExclusive)
             .Where(pending => pending.Task.IsCompleted)
@@ -1455,6 +2493,10 @@ public sealed class GameSession
             if (pending.Task.IsFaulted)
             {
                 var error = pending.Task.Exception?.GetBaseException().Message ?? "unknown claim extraction error";
+                extractionRecords.Add(FailedClaimExtractionRecord(
+                    pending,
+                    _claimExtractor.Name,
+                    error));
                 deltas.Add(new StateDelta(
                     "claimExtractionFailed",
                     pending.Request.SpeakerId,
@@ -1463,12 +2505,18 @@ public sealed class GameSession
                     {
                         ["provider"] = _claimExtractor.Name,
                         ["error"] = error,
+                        ["auditOnly"] = true,
+                        ["playerVisible"] = false,
                     }));
                 continue;
             }
 
             if (pending.Task.IsCanceled)
             {
+                extractionRecords.Add(FailedClaimExtractionRecord(
+                    pending,
+                    _claimExtractor.Name,
+                    "canceled"));
                 deltas.Add(new StateDelta(
                     "claimExtractionFailed",
                     pending.Request.SpeakerId,
@@ -1477,11 +2525,21 @@ public sealed class GameSession
                     {
                         ["provider"] = _claimExtractor.Name,
                         ["error"] = "canceled",
+                        ["auditOnly"] = true,
+                        ["playerVisible"] = false,
                     }));
                 continue;
             }
 
             var extraction = pending.Task.Result;
+            extractionRecords.Add(new DialogueClaimExtractionRecord(
+                pending.Request,
+                extraction.Provider,
+                extraction.RawText,
+                extraction.TechnicalFailure,
+                extraction.Error,
+                extraction.Claims,
+                pending.RequiresSpokenTextSupport));
             if (extraction.TechnicalFailure)
             {
                 deltas.Add(new StateDelta(
@@ -1492,17 +2550,40 @@ public sealed class GameSession
                     {
                         ["provider"] = extraction.Provider,
                         ["error"] = extraction.Error,
+                        ["auditOnly"] = true,
+                        ["playerVisible"] = false,
                     }));
                 continue;
             }
 
             foreach (var claim in extraction.Claims)
             {
+                if (pending.RequiresSpokenTextSupport
+                    && !GeneratedClaimIsSupportedBySpokenText(
+                        claim,
+                        string.Join(" ", pending.Request.DialogueLines)))
+                {
+                    deltas.Add(new StateDelta(
+                        "claimExtractionSkipped",
+                        pending.Request.SpeakerId,
+                        "Dialogue claim extraction skipped because it was not supported by spoken text.",
+                        new Dictionary<string, object?>
+                        {
+                            ["provider"] = extraction.Provider,
+                            ["proposalType"] = "claim",
+                            ["claimText"] = claim.Text,
+                            ["reason"] = "unsupported_by_spoken_text",
+                            ["auditOnly"] = true,
+                            ["playerVisible"] = false,
+                        }));
+                    continue;
+                }
+
                 ApplyClaimProposal(pending.Request, extraction.Provider, claim, messages, deltas);
             }
         }
 
-        if (messages.Count == 0 && deltas.Count == 0)
+        if (messages.Count == 0 && deltas.Count == 0 && extractionRecords.Count == 0)
         {
             return result;
         }
@@ -1511,8 +2592,22 @@ public sealed class GameSession
         {
             Messages = result.Messages.Concat(messages).ToArray(),
             Deltas = result.Deltas.Concat(deltas).ToArray(),
+            DialogueClaimExtractions = result.DialogueClaimExtractions.Concat(extractionRecords).ToArray(),
         };
     }
+
+    private static DialogueClaimExtractionRecord FailedClaimExtractionRecord(
+        PendingClaimExtraction pending,
+        string provider,
+        string error) =>
+        new(
+            pending.Request,
+            provider,
+            RawText: "",
+            TechnicalFailure: true,
+            Error: error,
+            Claims: Array.Empty<DialogueClaimProposal>(),
+            pending.RequiresSpokenTextSupport);
 
     private void ApplyClaimProposal(
         DialogueClaimRequest request,
@@ -1538,8 +2633,10 @@ public sealed class GameSession
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var record = Engine.State.Claims.Append(
-            Engine.State.Turn,
+        var intakeTransaction = GameTransaction.Begin(Engine.State);
+        var deltaStart = deltas.Count;
+        var messageStart = messages.Count;
+        var appliedClaim = Engine.ApplyConsequence(WorldConsequence.RecordClaim(
             $"dialogue:{provider}",
             request.SpeakerId,
             request.ListenerSoulId,
@@ -1549,22 +2646,81 @@ public sealed class GameSession
             salience,
             confidence,
             playerVisible,
-            tags);
-        deltas.Add(new StateDelta(
-            "claimRecorded",
-            record.Id,
-            $"A reported claim is recorded: {record.Text}",
-            new Dictionary<string, object?>
+            tags,
+            sourceEntityId: request.SpeakerId,
+            evidence: proposal.Text,
+            details: new Dictionary<string, object?>
             {
-                ["claimId"] = record.Id,
-                ["speakerId"] = record.SpeakerId,
-                ["category"] = record.Category,
-                ["salience"] = record.Salience,
-                ["confidence"] = record.Confidence,
-                ["playerVisible"] = record.PlayerVisible,
+                ["provider"] = provider,
             }));
+        messages.AddRange(appliedClaim.Messages);
+        deltas.AddRange(appliedClaim.Deltas);
+        if (!appliedClaim.Applied || string.IsNullOrWhiteSpace(appliedClaim.TargetId))
+        {
+            RollBackClaimIntakeTransaction(
+                intakeTransaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                proposal.Text,
+                appliedClaim.Deltas,
+                appliedClaim.Error ?? "claim_record_rejected");
+            return;
+        }
 
-        AddClaimMemory(request, record);
+        var record = Engine.State.Claims.Records.FirstOrDefault(claim =>
+            claim.Id.Equals(appliedClaim.TargetId, StringComparison.OrdinalIgnoreCase));
+        if (record is null)
+        {
+            RollBackClaimIntakeTransaction(
+                intakeTransaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                proposal.Text,
+                Array.Empty<StateDelta>(),
+                "claim_record_missing");
+            return;
+        }
+
+        var memory = AddClaimMemory(request, record, messages, deltas);
+        if (!memory.Applied)
+        {
+            RollBackClaimIntakeTransaction(
+                intakeTransaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                record.Text,
+                memory.Deltas,
+                memory.Error ?? "claim_memory_rejected");
+            return;
+        }
+
+        if (RumorSystem.ConsequenceFromClaim(Engine.State, record) is { } rumorConsequence)
+        {
+            var appliedRumor = Engine.ApplyConsequence(rumorConsequence);
+            messages.AddRange(appliedRumor.Messages);
+            deltas.AddRange(appliedRumor.Deltas);
+            if (!appliedRumor.Applied)
+            {
+                RollBackClaimIntakeTransaction(
+                    intakeTransaction,
+                    deltas,
+                    deltaStart,
+                    messages,
+                    messageStart,
+                    record.Text,
+                    appliedRumor.Deltas,
+                    appliedRumor.Error ?? "claim_rumor_rejected");
+                return;
+            }
+        }
+
+        intakeTransaction.Commit();
 
         if (proposal.UpdateBond)
         {
@@ -1587,13 +2743,23 @@ public sealed class GameSession
             immediateApplied |= ApplyTradeClaim(request, proposal, record, messages, deltas);
         }
 
+        if (proposal.BindAsCanon)
+        {
+            immediateApplied |= ApplyCanonClaim(request, provider, proposal, record, category, messages, deltas);
+        }
+
         if (ShouldBindClaimAsPromise(proposal, record, category, immediateApplied))
         {
             BindClaimAsPromise(request, proposal, record, messages, deltas);
         }
         else if (playerVisible)
         {
-            AddVisibleClaimMessage($"A claim settles into your journal: {record.Text}", messages);
+            AddVisibleClaimMessage(
+                record,
+                $"A claim settles into your journal: {record.Text}",
+                messages,
+                deltas,
+                "claimJournalMessage");
         }
     }
 
@@ -1641,34 +2807,240 @@ public sealed class GameSession
         List<string> messages,
         List<StateDelta> deltas)
     {
-        var applied = Engine.ApplyConsequence(WorldConsequence.UpdateBond(
-            $"dialogue_claim:{provider}",
+        ApplyClaimConsequenceWithStatus(
+            record,
+            WorldConsequence.UpdateBond(
+                $"dialogue_claim:{provider}",
+                request.SpeakerId,
+                request.ListenerSoulId,
+                proposal.LoyaltyDelta,
+                proposal.FearDelta,
+                proposal.AdmirationDelta,
+                proposal.ResentmentDelta,
+                proposal.BondPosture,
+                record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+                sourceEntityId: request.SpeakerId,
+                evidence: record.Text,
+                operation: "claimBondShift",
+                maxDelta: DialogueBondDeltaLimit,
+                details: new Dictionary<string, object?>
+                {
+                    ["provider"] = provider,
+                    ["proposalType"] = "bond",
+                    ["claimId"] = record.Id,
+                }),
             request.SpeakerId,
-            request.ListenerSoulId,
-            proposal.LoyaltyDelta,
-            proposal.FearDelta,
-            proposal.AdmirationDelta,
-            proposal.ResentmentDelta,
-            proposal.BondPosture,
-            record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
-            sourceEntityId: request.SpeakerId,
-            evidence: record.Text,
-            operation: "claimBondShift",
-            maxDelta: DialogueBondDeltaLimit,
+            request.SpeakerId,
+            record.Text,
+            "claimApplied",
+            messages,
+            deltas,
             details: new Dictionary<string, object?>
             {
                 ["provider"] = provider,
                 ["proposalType"] = "bond",
-                ["claimId"] = record.Id,
-            }));
+            });
+    }
+
+    private WorldConsequenceApplyResult ApplyClaimUpdate(
+        ClaimRecord record,
+        string? status,
+        string? boundPromiseId,
+        string? appliedTo,
+        string? sourceEntityId,
+        string? evidence,
+        string operation,
+        List<string> messages,
+        List<StateDelta> deltas,
+        IReadOnlyDictionary<string, object?>? details = null)
+    {
+        var applied = Engine.ApplyConsequence(WorldConsequence.UpdateClaim(
+            $"dialogue_claim:{record.Id}",
+            record.Id,
+            status,
+            boundPromiseId,
+            appliedTo,
+            visibility: WorldConsequenceVisibility.Hidden,
+            sourceEntityId: sourceEntityId,
+            evidence: evidence,
+            operation: operation,
+            details: details));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+        return applied;
+    }
+
+    private bool ApplyClaimConsequenceWithStatus(
+        ClaimRecord record,
+        WorldConsequence consequence,
+        string? appliedTo,
+        string? sourceEntityId,
+        string? evidence,
+        string operation,
+        List<string> messages,
+        List<StateDelta> deltas,
+        IReadOnlyDictionary<string, object?>? details = null)
+    {
+        var transaction = GameTransaction.Begin(Engine.State);
+        var deltaStart = deltas.Count;
+        var messageStart = messages.Count;
+        var applied = Engine.ApplyConsequence(consequence);
         messages.AddRange(applied.Messages);
         deltas.AddRange(applied.Deltas);
         if (!applied.Applied)
         {
-            return;
+            RollBackClaimApplicationTransaction(
+                transaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                record,
+                applied.Deltas,
+                applied.Error ?? $"{consequence.Type}_rejected",
+                details);
+            return false;
         }
 
-        Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: request.SpeakerId);
+        var update = ApplyClaimUpdate(
+            record,
+            status: "applied",
+            boundPromiseId: null,
+            appliedTo: appliedTo ?? applied.TargetId,
+            sourceEntityId: sourceEntityId,
+            evidence: evidence,
+            operation: operation,
+            messages,
+            deltas,
+            details: details);
+        if (!update.Applied)
+        {
+            RollBackClaimApplicationTransaction(
+                transaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                record,
+                update.Deltas,
+                update.Error ?? "claim_status_rejected",
+                details);
+            return false;
+        }
+
+        transaction.Commit();
+        return true;
+    }
+
+    private static void RollBackClaimApplicationTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        List<string> messages,
+        int messageStart,
+        ClaimRecord record,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure,
+        IReadOnlyDictionary<string, object?>? details)
+    {
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        RemoveRangeFrom(messages, messageStart);
+        var diagnostics = FailureDiagnostics(failedDeltas);
+        deltas.AddRange(diagnostics);
+        var payload = details is null
+            ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, object?>(details, StringComparer.OrdinalIgnoreCase);
+        payload["claimId"] = record.Id;
+        payload["failure"] = failure;
+        payload["rejectedCount"] = diagnostics.Count;
+        payload["auditOnly"] = true;
+        payload["playerVisible"] = false;
+        deltas.Add(new StateDelta(
+            "claimApplicationSkipped",
+            record.Id,
+            $"Claim application rolled back: {failure}.",
+            payload));
+    }
+
+    private static void RollBackClaimIntakeTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        List<string> messages,
+        int messageStart,
+        string claimText,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
+    {
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        RemoveRangeFrom(messages, messageStart);
+        var diagnostics = FailureDiagnostics(failedDeltas);
+        deltas.AddRange(diagnostics);
+        deltas.Add(new StateDelta(
+            "claimIntakeSkipped",
+            "dialogue_claim",
+            $"Claim intake rolled back: {failure}.",
+            new Dictionary<string, object?>
+            {
+                ["claimText"] = claimText,
+                ["failure"] = failure,
+                ["rejectedCount"] = diagnostics.Count,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
+    }
+
+    private bool ApplyCanonClaim(
+        DialogueClaimRequest request,
+        string provider,
+        DialogueClaimProposal proposal,
+        ClaimRecord record,
+        string category,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var attachedTo = FirstNonBlank(proposal.TargetEntityId, proposal.MerchantId, request.SpeakerId)!;
+        var kind = NormalizeToken(FirstNonBlank(proposal.CanonKind, category, "dialogue_fact")!, "dialogue_fact");
+        var summary = FirstNonBlank(proposal.CanonSummary, record.Subject, record.Text)!;
+        var tags = (proposal.Tags ?? Array.Empty<string>())
+            .Concat(new[] { "dialogue", "dialogue_claim", "canonized", kind })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return ApplyClaimConsequenceWithStatus(
+            record,
+            WorldConsequence.AddCanon(
+                $"dialogue_claim:{record.Id}",
+                kind,
+                attachedTo,
+                record.Text,
+                summary,
+                tags,
+                visibility: WorldConsequenceVisibility.Hidden,
+                sourceEntityId: request.SpeakerId,
+                evidence: record.Text,
+                reason: "dialogue claim: canonize fact",
+                operation: "claimAddCanon",
+                details: new Dictionary<string, object?>
+                {
+                    ["claimId"] = record.Id,
+                    ["provider"] = provider,
+                    ["proposalType"] = "add_canon",
+                    ["playerVisible"] = false,
+                }),
+            attachedTo,
+            request.SpeakerId,
+            record.Text,
+            "claimApplied",
+            messages,
+            deltas,
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "add_canon",
+                ["canonKind"] = kind,
+            });
     }
 
     private bool ApplyMerchantStockClaim(
@@ -1690,27 +3062,32 @@ public sealed class GameSession
             return false;
         }
 
-        var applied = Engine.ApplyConsequence(WorldConsequence.AddMerchantStock(
-            $"dialogue_claim:{record.Id}",
+        return ApplyClaimConsequenceWithStatus(
+            record,
+            WorldConsequence.AddMerchantStock(
+                $"dialogue_claim:{record.Id}",
+                merchant.Id.Value,
+                itemName,
+                visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+                sourceEntityId: request.SpeakerId,
+                evidence: record.Text,
+                operation: "claimMerchantStock",
+                details: new Dictionary<string, object?>
+                {
+                    ["claimId"] = record.Id,
+                    ["provider"] = "dialogue_claim",
+                }),
             merchant.Id.Value,
-            itemName,
-            visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
-            sourceEntityId: request.SpeakerId,
-            evidence: record.Text,
-            operation: "claimMerchantStock",
+            request.SpeakerId,
+            record.Text,
+            "claimApplied",
+            messages,
+            deltas,
             details: new Dictionary<string, object?>
             {
-                ["claimId"] = record.Id,
                 ["provider"] = "dialogue_claim",
-            }));
-        messages.AddRange(applied.Messages);
-        deltas.AddRange(applied.Deltas);
-        if (applied.Applied)
-        {
-            Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: merchant.Id.Value);
-        }
-
-        return applied.Applied;
+                ["proposalType"] = "merchant_stock",
+            });
     }
 
     private bool ApplyServiceClaim(
@@ -1727,33 +3104,68 @@ public sealed class GameSession
         }
 
         var serviceName = FirstNonBlank(proposal.ItemName, proposal.Subject, record.Subject, "quiet service")!;
-        var applied = Engine.ApplyConsequence(WorldConsequence.OfferService(
-            $"dialogue_claim:{record.Id}",
-            provider.Id.Value,
-            NormalizeToken(serviceName, "service"),
-            serviceName,
-            record.Text,
-            InferServiceEffect(record.Text, serviceName),
-            targetHint: proposal.TriggerHint,
-            tags: proposal.Tags,
-            visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
-            sourceEntityId: request.SpeakerId,
-            evidence: record.Text,
-            operation: "claimOfferService",
-            details: new Dictionary<string, object?>
-            {
-                ["claimId"] = record.Id,
-                ["provider"] = "dialogue_claim",
-            }));
-        messages.AddRange(applied.Messages);
-        deltas.AddRange(applied.Deltas);
-        if (applied.Applied)
+        var serviceId = NormalizeToken(serviceName, "service");
+        if (ProviderAlreadyOffersService(provider, serviceId, serviceName))
         {
-            Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: applied.TargetId);
+            ApplyClaimUpdate(
+                record,
+                status: "applied",
+                boundPromiseId: null,
+                appliedTo: provider.Id.Value,
+                sourceEntityId: request.SpeakerId,
+                evidence: record.Text,
+                operation: "claimApplied",
+                messages,
+                deltas,
+                details: new Dictionary<string, object?>
+                {
+                    ["provider"] = "dialogue_claim",
+                    ["proposalType"] = "service",
+                    ["matchedExistingService"] = true,
+                    ["serviceId"] = serviceId,
+                });
+            return true;
         }
 
-        return applied.Applied;
+        return ApplyClaimConsequenceWithStatus(
+            record,
+            WorldConsequence.OfferService(
+                $"dialogue_claim:{record.Id}",
+                provider.Id.Value,
+                serviceId,
+                serviceName,
+                record.Text,
+                InferServiceEffect(record.Text, serviceName),
+                targetHint: proposal.TriggerHint,
+                tags: proposal.Tags,
+                visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+                sourceEntityId: request.SpeakerId,
+                evidence: record.Text,
+                operation: "claimOfferService",
+                details: new Dictionary<string, object?>
+                {
+                    ["claimId"] = record.Id,
+                    ["provider"] = "dialogue_claim",
+                }),
+            appliedTo: null,
+            sourceEntityId: request.SpeakerId,
+            evidence: record.Text,
+            operation: "claimApplied",
+            messages,
+            deltas,
+            details: new Dictionary<string, object?>
+            {
+                ["provider"] = "dialogue_claim",
+                ["proposalType"] = "service",
+            });
     }
+
+    private static bool ProviderAlreadyOffersService(Entity provider, string serviceId, string serviceName) =>
+        provider.TryGet<ServiceComponent>(out var services)
+        && services.Offers.Any(offer =>
+            offer.Id.Equals(serviceId, StringComparison.OrdinalIgnoreCase)
+            || NormalizeToken(offer.Name, "service").Equals(serviceId, StringComparison.OrdinalIgnoreCase)
+            || offer.Name.Equals(serviceName, StringComparison.OrdinalIgnoreCase));
 
     private bool ApplyTradeClaim(
         DialogueClaimRequest request,
@@ -1769,27 +3181,32 @@ public sealed class GameSession
         }
 
         var itemName = FirstNonBlank(proposal.ItemName, proposal.Subject, record.Subject);
-        var applied = Engine.ApplyConsequence(WorldConsequence.OfferTrade(
-            $"dialogue_claim:{record.Id}",
-            traderId,
-            itemName,
-            visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+        return ApplyClaimConsequenceWithStatus(
+            record,
+            WorldConsequence.OfferTrade(
+                $"dialogue_claim:{record.Id}",
+                traderId,
+                itemName,
+                visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+                sourceEntityId: request.SpeakerId,
+                evidence: record.Text,
+                operation: "claimOfferTrade",
+                details: new Dictionary<string, object?>
+                {
+                    ["claimId"] = record.Id,
+                    ["provider"] = "dialogue_claim",
+                }),
+            appliedTo: null,
             sourceEntityId: request.SpeakerId,
             evidence: record.Text,
-            operation: "claimOfferTrade",
+            operation: "claimApplied",
+            messages,
+            deltas,
             details: new Dictionary<string, object?>
             {
-                ["claimId"] = record.Id,
                 ["provider"] = "dialogue_claim",
-            }));
-        messages.AddRange(applied.Messages);
-        deltas.AddRange(applied.Deltas);
-        if (applied.Applied)
-        {
-            Engine.State.Claims.Update(record.Id, status: "applied", appliedTo: applied.TargetId);
-        }
-
-        return applied.Applied;
+                ["proposalType"] = "trade",
+            });
     }
 
     private void BindClaimAsPromise(
@@ -1804,66 +3221,232 @@ public sealed class GameSession
         var existing = MatchingActivePromise(record, proposal, triggerHint, realizationKind);
         if (existing is not null)
         {
+            var transaction = GameTransaction.Begin(Engine.State);
+            var deltaStart = deltas.Count;
             var mergedTriggerHint = MergeTriggerHints(existing.TriggerHint, triggerHint);
             var mergedRealizationKind = MergeRealizationKind(existing.RealizationKind, realizationKind);
-            var linkedPromise = ShouldRebindExistingPromise(existing, mergedTriggerHint, mergedRealizationKind)
-                ? Engine.State.PromiseLedger.Bind(
+            var linkedPromise = existing;
+            if (ShouldRebindExistingPromise(existing, mergedTriggerHint, mergedRealizationKind))
+            {
+                var updateResult = Engine.ApplyConsequence(WorldConsequence.UpdatePromise(
+                    $"dialogue_claim:{record.Id}",
                     existing.Id,
-                    ShouldBindToRegion(mergedTriggerHint, mergedRealizationKind)
+                    status: "bound",
+                    boundPlace: ShouldBindToRegion(mergedTriggerHint, mergedRealizationKind)
                         ? existing.BoundPlace ?? Engine.State.RegionId
                         : existing.BoundPlace,
-                    existing.BoundTargetId,
-                    mergedTriggerHint,
-                    mergedRealizationKind) ?? existing
-                : existing;
-            var duplicate = Engine.State.Claims.Update(record.Id, status: "promised", boundPromiseId: linkedPromise.Id) ?? record;
-            deltas.Add(new StateDelta(
-                "claimPromiseLinked",
-                linkedPromise.Id,
-                $"A repeated claim points back to an existing promise: {linkedPromise.Text}",
-                new Dictionary<string, object?>
+                    boundTargetId: existing.BoundTargetId,
+                    triggerHint: mergedTriggerHint,
+                    realizationKind: mergedRealizationKind,
+                    visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+                    sourceEntityId: request.SpeakerId,
+                    evidence: record.Text,
+                    operation: "claimPromiseRebound",
+                    emitMessage: false,
+                    message: $"A repeated claim sharpens an existing promise: {existing.Text}",
+                    details: new Dictionary<string, object?>
+                    {
+                        ["claimId"] = record.Id,
+                        ["provider"] = "dialogue_claim",
+                    }));
+                messages.AddRange(updateResult.Messages);
+                deltas.AddRange(updateResult.Deltas);
+                if (!updateResult.Applied)
                 {
-                    ["claimId"] = duplicate.Id,
+                    RollBackClaimPromiseTransaction(
+                        transaction,
+                        deltas,
+                        deltaStart,
+                        record,
+                        updateResult.Deltas,
+                        updateResult.Error ?? "promise_rebind_rejected");
+                    return;
+                }
+
+                if (updateResult.Applied)
+                {
+                    linkedPromise = Engine.State.PromiseLedger.Promises.FirstOrDefault(promise =>
+                        promise.Id.Equals(existing.Id, StringComparison.OrdinalIgnoreCase)) ?? existing;
+                }
+            }
+
+            var updateClaim = ApplyClaimUpdate(
+                record,
+                status: "promised",
+                boundPromiseId: linkedPromise.Id,
+                appliedTo: null,
+                sourceEntityId: request.SpeakerId,
+                evidence: record.Text,
+                operation: "claimPromiseLinked",
+                messages,
+                deltas,
+                details: new Dictionary<string, object?>
+                {
                     ["promiseId"] = linkedPromise.Id,
-                    ["status"] = linkedPromise.Status,
+                    ["promiseStatus"] = linkedPromise.Status,
                     ["triggerHint"] = linkedPromise.TriggerHint,
                     ["realizationKind"] = linkedPromise.RealizationKind,
-                }));
+                    ["message"] = $"A repeated claim points back to an existing promise: {linkedPromise.Text}",
+                });
+            if (!updateClaim.Applied)
+            {
+                RollBackClaimPromiseTransaction(
+                    transaction,
+                    deltas,
+                    deltaStart,
+                    record,
+                    updateClaim.Deltas,
+                    updateClaim.Error ?? "claim_status_rejected");
+                return;
+            }
+
+            transaction.Commit();
             return;
         }
 
-        var promise = Engine.State.PromiseLedger.Add(
+        var createTransaction = GameTransaction.Begin(Engine.State);
+        var createDeltaStart = deltas.Count;
+        var shouldBindToRegion = ShouldBindToRegion(triggerHint, realizationKind);
+        var applied = Engine.ApplyConsequence(WorldConsequence.CreatePromise(
+            $"dialogue_claim:{record.Id}",
             string.IsNullOrWhiteSpace(proposal.PromiseKind) ? "rumor" : proposal.PromiseKind.Trim(),
             record.Text,
+            triggerHint: triggerHint,
+            visibility: record.PlayerVisible ? WorldConsequenceVisibility.Journal : WorldConsequenceVisibility.Hidden,
+            sourceEntityId: request.SpeakerId,
+            evidence: record.Text,
+            operation: "claimPromise",
             playerVisible: record.PlayerVisible,
-            source: $"dialogue_claim:{record.Id}",
             salience: record.Salience,
             subject: record.Subject,
             claimedPlace: string.IsNullOrWhiteSpace(proposal.ClaimedPlace) ? null : proposal.ClaimedPlace,
-            triggerHint: triggerHint,
-            realizationKind: realizationKind);
-        var bound = ShouldBindToRegion(triggerHint, realizationKind)
-            ? Engine.State.PromiseLedger.Bind(promise.Id, Engine.State.RegionId, null, triggerHint, realizationKind) ?? promise
-            : promise;
-        var updated = Engine.State.Claims.Update(record.Id, status: "promised", boundPromiseId: bound.Id) ?? record;
+            realizationKind: realizationKind,
+            bindPlace: shouldBindToRegion ? Engine.State.RegionId : null,
+            sourceClaimId: record.Id,
+            sourceSpeakerId: request.SpeakerId,
+            sourceListenerSoulId: request.ListenerSoulId,
+            sourceConfidence: record.Confidence,
+            useCurrentRegionAsClaimedPlace: false,
+            autoBind: false,
+            emitMessage: false,
+            message: shouldBindToRegion
+                ? $"A claim becomes a bound promise: {record.Text}"
+                : $"A claim becomes a promise: {record.Text}",
+            details: new Dictionary<string, object?>
+            {
+                ["claimId"] = record.Id,
+                ["provider"] = "dialogue_claim",
+            }));
+        if (!applied.Applied)
+        {
+            messages.AddRange(applied.Messages);
+            deltas.AddRange(applied.Deltas);
+            return;
+        }
+
+        var promiseId = applied.TargetId ?? applied.Deltas.FirstOrDefault()?.Target;
+        var bound = Engine.State.PromiseLedger.Promises.FirstOrDefault(promise =>
+            promise.Id.Equals(promiseId, StringComparison.OrdinalIgnoreCase));
+        if (bound is null)
+        {
+            RollBackClaimPromiseTransaction(
+                createTransaction,
+                deltas,
+                createDeltaStart,
+                record,
+                applied.Deltas,
+                "promise_missing_after_create");
+            return;
+        }
+
+        deltas.AddRange(applied.Deltas);
+        var updated = ApplyClaimUpdate(
+            record,
+            status: "promised",
+            boundPromiseId: bound.Id,
+            appliedTo: null,
+            sourceEntityId: request.SpeakerId,
+            evidence: record.Text,
+            operation: "claimPromiseStatus",
+            messages,
+            deltas,
+            details: new Dictionary<string, object?>
+            {
+                ["promiseId"] = bound.Id,
+                ["promiseStatus"] = bound.Status,
+                ["triggerHint"] = bound.TriggerHint,
+                ["realizationKind"] = bound.RealizationKind,
+            });
+        if (!updated.Applied)
+        {
+            RollBackClaimPromiseTransaction(
+                createTransaction,
+                deltas,
+                createDeltaStart,
+                record,
+                updated.Deltas,
+                updated.Error ?? "claim_status_rejected");
+            return;
+        }
+
+        createTransaction.Commit();
         var message = bound.Status.Equals("bound", StringComparison.OrdinalIgnoreCase)
             ? $"A claim becomes a bound promise: {bound.Text}"
             : $"A claim becomes a promise: {bound.Text}";
+        if (record.PlayerVisible)
+        {
+            AddVisibleClaimMessage(
+                record,
+                message,
+                messages,
+                deltas,
+                "claimPromiseMessage",
+                new Dictionary<string, object?>
+                {
+                    ["promiseId"] = bound.Id,
+                    ["promiseStatus"] = bound.Status,
+                    ["triggerHint"] = bound.TriggerHint,
+                    ["realizationKind"] = bound.RealizationKind,
+                });
+        }
+    }
+
+    private static void RollBackClaimPromiseTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        ClaimRecord record,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
+    {
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        var diagnostics = FailureDiagnostics(failedDeltas);
+        deltas.AddRange(diagnostics);
         deltas.Add(new StateDelta(
-            "claimPromise",
-            bound.Id,
-            message,
+            "claimPromiseSkipped",
+            record.Id,
+            $"Claim-promise binding rolled back: {failure}.",
             new Dictionary<string, object?>
             {
-                ["claimId"] = updated.Id,
-                ["promiseId"] = bound.Id,
-                ["status"] = bound.Status,
-                ["triggerHint"] = bound.TriggerHint,
-                ["realizationKind"] = bound.RealizationKind,
+                ["claimId"] = record.Id,
+                ["failure"] = failure,
+                ["rejectedCount"] = diagnostics.Count,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
             }));
-        if (updated.PlayerVisible)
+    }
+
+    private static IReadOnlyList<StateDelta> FailureDiagnostics(IReadOnlyList<StateDelta> deltas) =>
+        deltas
+            .Where(delta => delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+    private static void RemoveRangeFrom<T>(List<T> values, int start)
+    {
+        if (values.Count > start)
         {
-            AddVisibleClaimMessage(message, messages);
+            values.RemoveRange(start, values.Count - start);
         }
     }
 
@@ -1935,31 +3518,31 @@ public sealed class GameSession
     private static bool IsStockLikeRealization(string kind) =>
         kind is "merchant_stock" or "stock" or "trade";
 
-    private void AddClaimMemory(DialogueClaimRequest request, ClaimRecord record)
+    private WorldConsequenceApplyResult AddClaimMemory(
+        DialogueClaimRequest request,
+        ClaimRecord record,
+        List<string> messages,
+        List<StateDelta> deltas)
     {
-        Engine.State.Memories.Append(
+        var applied = Engine.ApplyConsequence(WorldConsequence.RecordMemory(
+            $"claim:{record.Id}",
             request.SpeakerId,
             record.Text,
             $"claim:{record.Id}",
             record.Salience,
-            shareable: true);
-        var speaker = Engine.EntityById(request.SpeakerId);
-        if (speaker is null)
-        {
-            return;
-        }
-
-        var existing = speaker.TryGet<MemoryComponent>(out var memory)
-            ? memory.Records.ToList()
-            : new List<EntityMemoryRecord>();
-        existing.Add(new EntityMemoryRecord(
-            $"memory_{record.Id}",
-            record.Text,
-            record.Id,
-            "dialogue_claim",
-            record.Salience,
-            Shareable: true));
-        speaker.Set(new MemoryComponent(existing));
+            shareable: true,
+            sourceEntityId: request.SpeakerId,
+            evidence: record.Text,
+            operation: "claimMemory",
+            details: new Dictionary<string, object?>
+            {
+                ["claimId"] = record.Id,
+                ["speakerId"] = record.SpeakerId,
+                ["category"] = record.Category,
+            }));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+        return applied;
     }
 
     private Entity? ResolveMerchantForClaim(DialogueClaimRequest request, DialogueClaimProposal proposal)
@@ -2009,10 +3592,30 @@ public sealed class GameSession
             .TakeLast(8)
             .ToArray();
 
-    private void AddVisibleClaimMessage(string message, List<string> messages)
+    private void AddVisibleClaimMessage(
+        ClaimRecord record,
+        string message,
+        List<string> messages,
+        List<StateDelta> deltas,
+        string operation,
+        IReadOnlyDictionary<string, object?>? details = null)
     {
-        Engine.State.AddMessage(message);
-        messages.Add(message);
+        var mergedDetails = new Dictionary<string, object?>(details ?? new Dictionary<string, object?>(), StringComparer.OrdinalIgnoreCase)
+        {
+            ["claimId"] = record.Id,
+            ["category"] = record.Category,
+            ["subject"] = record.Subject,
+        };
+        var applied = Engine.ApplyConsequence(WorldConsequence.Message(
+            $"dialogue_claim:{record.Id}",
+            message,
+            visibility: WorldConsequenceVisibility.Journal,
+            sourceEntityId: record.SpeakerId,
+            evidence: record.Text,
+            operation: operation,
+            details: mergedDetails));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
     }
 
     private static bool ShouldBindToRegion(string? triggerHint, string? realizationKind) =>
@@ -2244,6 +3847,28 @@ public sealed class GameSession
             _ => value?.ToString(),
         } : null;
 
+    private static string? TextPayload(IReadOnlyDictionary<string, object?>? map, string key) =>
+        map is null ? null : ReadString(map, key);
+
+    private static int? IntPayload(IReadOnlyDictionary<string, object?>? map, string key)
+    {
+        if (map is null || !map.TryGetValue(key, out var value))
+        {
+            return null;
+        }
+
+        return value switch
+        {
+            int integer => integer,
+            long longInteger when longInteger >= int.MinValue && longInteger <= int.MaxValue => (int)longInteger,
+            double number => (int)Math.Round(number),
+            float number => (int)Math.Round(number),
+            decimal number => (int)Math.Round(number),
+            string text when int.TryParse(text, out var parsed) => parsed,
+            _ => null,
+        };
+    }
+
     private static IReadOnlyList<string>? ReadStringList(IReadOnlyDictionary<string, object?> map, string key)
     {
         if (!map.TryGetValue(key, out var value))
@@ -2262,6 +3887,18 @@ public sealed class GameSession
 
     private static IReadOnlyList<string> TagsFor(Entity entity) =>
         entity.TryGet<TagsComponent>(out var tags) ? tags.Tags : Array.Empty<string>();
+
+    private static string? WantSummary(WantComponent want)
+    {
+        if (!want.Status.Equals("active", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(want.Text))
+        {
+            return null;
+        }
+
+        var stakes = string.IsNullOrWhiteSpace(want.Stakes) ? "" : $" Stakes: {want.Stakes}";
+        return $"{want.Text} (salience {want.Salience}).{stakes}";
+    }
 
     private static string SoulIdFor(Entity entity) =>
         entity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : entity.Id.Value;
@@ -2304,33 +3941,124 @@ public sealed class GameSession
         string target,
         string message)
     {
-        Engine.State.RunStatus = status;
-        Engine.State.RunConclusion = conclusion;
-        Engine.AddMessage(message);
+        var transaction = GameTransaction.Begin(Engine.State);
+        var stagedDeltas = new List<StateDelta>();
+        var stagedMessages = new List<string>();
+        var runStatus = Engine.ApplyConsequence(WorldConsequence.UpdateRunStatus(
+            "run_end",
+            status,
+            conclusion,
+            target,
+            sourceEntityId: Engine.State.ControlledEntityId.Value,
+            evidence: conclusion,
+            operation: "runComplete",
+            message: message));
+        if (!runStatus.Applied)
+        {
+            RollBackRunCompletionTransaction(
+                transaction,
+                stagedDeltas,
+                status,
+                target,
+                runStatus.Deltas,
+                runStatus.Error ?? "Run status could not be updated.");
+            return result with
+            {
+                Deltas = result.Deltas.Concat(stagedDeltas).ToArray(),
+            };
+        }
+
+        stagedDeltas.AddRange(runStatus.Deltas);
+        var runMessage = Engine.ApplyConsequence(WorldConsequence.Message(
+            "run_end",
+            message,
+            targetEntityId: target,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: Engine.State.ControlledEntityId.Value,
+            evidence: conclusion,
+            operation: "runCompleteMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["status"] = status,
+                ["conclusion"] = conclusion,
+            }));
+        if (!runMessage.Applied)
+        {
+            RollBackRunCompletionTransaction(
+                transaction,
+                stagedDeltas,
+                status,
+                target,
+                runMessage.Deltas,
+                runMessage.Error ?? "Run completion message could not be recorded.");
+            return result with
+            {
+                Deltas = result.Deltas.Concat(stagedDeltas).ToArray(),
+            };
+        }
+
+        stagedDeltas.AddRange(runMessage.Deltas);
+        stagedMessages.AddRange(runMessage.Messages);
         var chronicle = RunChronicle.Build(Engine.State);
-        Engine.State.Canon.Add(
+        var canon = Engine.ApplyConsequence(WorldConsequence.AddCanon(
+            "run_end",
             "chronicle",
             Engine.State.ControlledEntityId.Value,
             chronicle.Text,
             chronicle.Conclusion,
             new[] { "chronicle", status },
-            "run_end",
-            Engine.State.Turn);
-        var delta = new StateDelta(
-            "runComplete",
-            target,
-            message,
-            new Dictionary<string, object?>
+            evidence: chronicle.Text,
+            operation: "runChronicle"));
+        if (!canon.Applied)
+        {
+            RollBackRunCompletionTransaction(
+                transaction,
+                stagedDeltas,
+                status,
+                target,
+                canon.Deltas,
+                canon.Error ?? "Run chronicle could not be recorded.");
+            return result with
             {
-                ["status"] = status,
-                ["conclusion"] = conclusion,
-            });
+                Deltas = result.Deltas.Concat(stagedDeltas).ToArray(),
+            };
+        }
+
+        stagedDeltas.AddRange(canon.Deltas);
+        transaction.Commit();
         return result with
         {
             ShouldQuit = true,
-            Messages = result.Messages.Concat(new[] { message }).ToArray(),
-            Deltas = result.Deltas.Concat(new[] { delta }).ToArray(),
+            Messages = result.Messages.Concat(stagedMessages).ToArray(),
+            Deltas = result.Deltas.Concat(stagedDeltas).ToArray(),
         };
+    }
+
+    private static void RollBackRunCompletionTransaction(
+        GameTransaction transaction,
+        List<StateDelta> stagedDeltas,
+        string status,
+        string target,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
+    {
+        transaction.Rollback();
+        stagedDeltas.Clear();
+        stagedDeltas.AddRange(FailureDiagnostics(failedDeltas));
+        var rejectedCount = FailureDiagnostics(failedDeltas).Count;
+        stagedDeltas.Add(new StateDelta(
+            "runCompleteSkipped",
+            target,
+            $"Run completion rolled back: {failure}.",
+            new Dictionary<string, object?>
+            {
+                ["status"] = status,
+                ["target"] = target,
+                ["failure"] = failure,
+                ["rejectedCount"] = rejectedCount,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
     }
 
     private bool EmperorDefeated() =>
@@ -2349,18 +4077,216 @@ public sealed class GameSession
             or CancelCastCommand
             or InspectCommand
             or MapCommand
+            or AtlasCommand
+            or JournalCommand
+            or RumorsCommand
+            or CharacterCommand
+            or ReagentsCommand
+            or WaresCommand
+            or ServicesCommand
+            or BondsCommand
+            or StandingCommand
+            or FollowersCommand
+            or JobsCommand
             or SaveCommand
             or LoadCommand
             or HelpCommand
             or QuitCommand;
 
-    private PendingCastSave? PendingCastToSave() =>
-        _pendingCast is null
+    private void RefreshPendingCastResolution()
+    {
+        var pending = _pendingCast;
+        if (pending?.Resolution is not null
+            || pending?.ResolutionTask is not { IsCompleted: true } task)
+        {
+            return;
+        }
+
+        _pendingCast = pending with
+        {
+            Resolution = MaterializeCompletedPendingCast(pending, task),
+            ResolutionTask = null,
+            Cancellation = null,
+        };
+        DisposePendingCastResolutionOwnership(pending);
+    }
+
+    private async Task<PendingCastMaterialization?> FlushPendingCastResolutionAsync(CancellationToken cancellationToken)
+    {
+        var pending = _pendingCast;
+        if (pending is null)
+        {
+            return null;
+        }
+
+        var resolution = await MaterializePendingCastAsync(pending, cancellationToken);
+        if (_pendingCast?.Id == pending.Id)
+        {
+            _pendingCast = pending with
+            {
+                Resolution = resolution,
+                ResolutionTask = null,
+                Cancellation = null,
+            };
+        }
+
+        DisposePendingCastResolutionOwnership(pending);
+        return new PendingCastMaterialization(pending.Id, resolution);
+    }
+
+    private async Task<MaterializedMagicResolution> MaterializePendingCastAsync(
+        PendingCast pending,
+        CancellationToken cancellationToken)
+    {
+        if (pending.Resolution is not null)
+        {
+            return pending.Resolution;
+        }
+
+        try
+        {
+            if (pending.ResolutionTask is not null)
+            {
+                return await pending.ResolutionTask.WaitAsync(cancellationToken);
+            }
+
+            return await _magic.ResolveAsync(Engine, pending.Command, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return PendingCastTechnicalResolution(pending, ex.Message);
+        }
+    }
+
+    private static MaterializedMagicResolution MaterializeCompletedPendingCast(
+        PendingCast pending,
+        Task<MaterializedMagicResolution> task)
+    {
+        if (task.IsCanceled)
+        {
+            return PendingCastTechnicalResolution(pending, "Pending spell resolution was cancelled.");
+        }
+
+        if (task.IsFaulted)
+        {
+            return PendingCastTechnicalResolution(
+                pending,
+                task.Exception?.GetBaseException().Message ?? "Pending spell resolution failed.");
+        }
+
+        return task.Result;
+    }
+
+    private PendingCastSave? PendingCastToSave()
+    {
+        RefreshPendingCastResolution();
+        return _pendingCast is null
             ? null
             : new PendingCastSave(
                 _pendingCast.Id,
                 _pendingCast.Command.Text,
-                _pendingCast.Command.Performance);
+                _pendingCast.Command.Performance,
+                _pendingCast.Resolution);
+    }
+
+    private static PendingCastView BuildPendingCastView(PendingCast pending)
+    {
+        var resolution = pending.Resolution;
+        return new PendingCastView(
+            pending.Id,
+            pending.Command.Text,
+            PendingCastState(pending),
+            resolution?.Provider,
+            resolution?.Accepted,
+            resolution?.TechnicalFailure,
+            resolution?.Error,
+            resolution?.EffectTypes);
+    }
+
+    private static string PendingCastState(PendingCast pending)
+    {
+        if (pending.Resolution is { TechnicalFailure: true })
+        {
+            return "failed";
+        }
+
+        if (pending.Resolution is not null)
+        {
+            return "ready";
+        }
+
+        return pending.ResolutionTask is not null ? "resolving" : "waiting";
+    }
+
+    private static void CancelPendingCastResolution(PendingCast pending)
+    {
+        if (pending.Cancellation is null)
+        {
+            return;
+        }
+
+        pending.Cancellation.Cancel();
+        if (pending.ResolutionTask is null)
+        {
+            pending.Cancellation.Dispose();
+            return;
+        }
+
+        _ = pending.ResolutionTask.ContinueWith(
+            _ => pending.Cancellation.Dispose(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private static void DisposePendingCastResolutionOwnership(PendingCast pending)
+    {
+        if (pending.Cancellation is null)
+        {
+            return;
+        }
+
+        if (pending.ResolutionTask is { IsCompleted: false })
+        {
+            _ = pending.ResolutionTask.ContinueWith(
+                _ => pending.Cancellation.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            return;
+        }
+
+        pending.Cancellation.Dispose();
+    }
+
+    private static MaterializedMagicResolution PendingCastTechnicalResolution(
+        PendingCast pending,
+        string error) =>
+        new(
+            "pending_cast",
+            pending.Command.Text,
+            pending.Command.Performance ?? CastPerformance.Neutral,
+            RawText: "",
+            Accepted: false,
+            TechnicalFailure: true,
+            Error: error,
+            EffectTypes: Array.Empty<string>(),
+            ResolvedMagicJson: null);
+
+    private static MagicResolutionRecord ToMagicRecord(MaterializedMagicResolution resolution) =>
+        new(
+            resolution.Provider,
+            resolution.Accepted,
+            resolution.TechnicalFailure,
+            resolution.EffectTypes,
+            resolution.Error)
+        {
+            ResolvedMagicJson = resolution.ResolvedMagicJson,
+        };
 
     private ActionResult Quit() =>
         new()
@@ -2374,9 +4300,19 @@ public sealed class GameSession
             ShouldQuit = true,
         };
 
-    private sealed record PendingCast(string Id, CastCommand Command);
+    private sealed record PendingCast(
+        string Id,
+        CastCommand Command,
+        MaterializedMagicResolution? Resolution = null,
+        Task<MaterializedMagicResolution>? ResolutionTask = null,
+        CancellationTokenSource? Cancellation = null);
+
+    private sealed record PendingCastMaterialization(
+        string Id,
+        MaterializedMagicResolution Resolution);
 
     private sealed record PendingClaimExtraction(
         DialogueClaimRequest Request,
-        Task<DialogueClaimExtractionResult> Task);
+        Task<DialogueClaimExtractionResult> Task,
+        bool RequiresSpokenTextSupport);
 }

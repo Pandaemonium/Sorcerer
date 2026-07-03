@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.References;
@@ -18,6 +19,7 @@ public sealed class CreatePersistentEffectOperation : OperationBase
     private static readonly string[] SupportedEffectTypes =
     {
         "damage", "harm", "heal", "restorehealth", "restoreHealth", "addStatus", "status", "applyStatus", "message",
+        "consequence", "worldconsequence", "world_consequence",
     };
 
     public CreatePersistentEffectOperation()
@@ -58,9 +60,15 @@ public sealed class CreatePersistentEffectOperation : OperationBase
             return ValidationOutcome.Reject("createPersistentEffect needs effectType or a nested effect.type.");
         }
 
-        return SupportedEffectTypes.Contains(effectType, StringComparer.OrdinalIgnoreCase)
-            ? ValidationOutcome.Pass
-            : ValidationOutcome.Reject($"createPersistentEffect does not support embedded effect '{effectType}'.");
+        if (!SupportedEffectTypes.Contains(effectType, StringComparer.OrdinalIgnoreCase))
+        {
+            return ValidationOutcome.Reject($"createPersistentEffect does not support embedded effect '{effectType}'.");
+        }
+
+        return effectType.Trim().ToLowerInvariant() is "consequence" or "worldconsequence" or "world_consequence"
+            && string.IsNullOrWhiteSpace(NestedOrTopLevelText(effect, "consequenceType", NestedOrTopLevelText(effect, "consequence_type", "")))
+            ? ValidationOutcome.Reject("Persistent consequence effects need consequenceType.")
+            : ValidationOutcome.Pass;
     }
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
@@ -86,27 +94,17 @@ public sealed class CreatePersistentEffectOperation : OperationBase
         var effectFields = sympathetic
             ? new Dictionary<string, object?> { ["target"] = "other" }
             : ExtractEffectFields(effect);
-        var record = context.Engine.State.PersistentEffects.Add(
+        return context.Engine.ApplyConsequence(WorldConsequence.CreatePersistentEffect(
+            "wild_magic",
             anchor.Id.Value,
             hook,
             effectType,
             effectFields,
             uses,
             linkPartnerId,
-            playerVisible: true);
-        var anchorName = anchor.Id == context.Engine.State.ControlledEntityId ? "you" : anchor.Name;
-        var summary = sympathetic
-            ? $"A sympathetic link binds {anchorName} to another's wounds."
-            : $"A lasting mark settles onto {anchorName}, waiting to answer when {(hook == "on_hit" ? "it is struck" : "it strikes")}.";
-        context.Engine.AddMessage(summary);
-        return new[]
-        {
-            new StateDelta(
-                "createPersistentEffect",
-                record.Id,
-                summary,
-                new Dictionary<string, object?> { ["hook"] = hook, ["effectType"] = effectType }),
-        };
+            playerVisible: true,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: context.Caster.Id.Value)).Deltas;
     }
 
     private static bool IsSympatheticLink(SpellEffect effect) =>
@@ -132,6 +130,11 @@ public sealed class CreatePersistentEffectOperation : OperationBase
 
         return fields;
     }
+
+    private static string NestedOrTopLevelText(SpellEffect effect, string key, string fallback) =>
+        TryNestedEffect(effect, out var nested) && nested.TryGetValue(key, out var raw)
+            ? Convert.ToString(raw) ?? fallback
+            : Text(effect, key, fallback);
 
     private static bool TryNestedEffect(SpellEffect effect, out IReadOnlyDictionary<string, object?> nested)
     {
@@ -181,19 +184,13 @@ public sealed class SetBehaviorOperation : OperationBase
         var tag = Text(effect, "tag", "").Trim().ToLowerInvariant();
         var duration = Int(effect, "duration", 0, min: 0, max: 999);
         return ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target =>
-            {
-                var behaviors = target.TryGet<BehaviorTagsComponent>(out var existing) ? existing : BehaviorTagsComponent.Empty();
-                behaviors.Tags[tag] = duration > 0 ? context.Engine.State.Turn + duration : null;
-                target.Set(behaviors);
-                var summary = $"{Subject(context, target)} {Verb(context, target, "fall", "falls")} under a {tag.Replace('_', ' ')} compulsion.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "setBehavior",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["tag"] = tag, ["duration"] = duration });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.SetBehavior(
+                "wild_magic",
+                target.Id.Value,
+                tag,
+                duration,
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -221,34 +218,15 @@ public sealed class CreateFlowOperation : OperationBase
             return Array.Empty<StateDelta>();
         }
 
-        var radius = Int(effect, "radius", 1, min: 0, max: 5);
-        var dx = Math.Clamp(Int(effect, "dx", 1), -1, 1);
-        var dy = Math.Clamp(Int(effect, "dy", 0), -1, 1);
-        var duration = Int(effect, "duration", 5, min: 1, max: 99);
-        var expiresTurn = context.Engine.State.Turn + duration;
-        for (var y = origin.Value.Y - radius; y <= origin.Value.Y + radius; y++)
-        {
-            for (var x = origin.Value.X - radius; x <= origin.Value.X + radius; x++)
-            {
-                var point = new GridPoint(x, y);
-                if (context.Engine.InBounds(point)
-                    && GameEngineDistance(origin.Value, point) <= radius
-                    && !context.Engine.State.BlockingTerrain.Contains(point))
-                {
-                    context.Engine.State.TileFlows[point] = new TileFlow(dx, dy, expiresTurn);
-                }
-            }
-        }
-
-        var summary = $"The ground begins to flow near {origin.Value.X},{origin.Value.Y}.";
-        context.Engine.AddMessage(summary);
-        return new[]
-        {
-            new StateDelta(
-                "createFlow",
-                $"tile:{origin.Value.X},{origin.Value.Y}",
-                summary,
-                new Dictionary<string, object?> { ["dx"] = dx, ["dy"] = dy, ["radius"] = radius }),
-        };
+        return context.Engine.ApplyConsequence(WorldConsequence.CreateFlow(
+            "wild_magic",
+            origin.Value.X,
+            origin.Value.Y,
+            Int(effect, "radius", 1, min: 0, max: 5),
+            Math.Clamp(Int(effect, "dx", 1), -1, 1),
+            Math.Clamp(Int(effect, "dy", 0), -1, 1),
+            Int(effect, "duration", 5, min: 1, max: 99),
+            WorldConsequenceVisibility.Message,
+            context.Caster.Id.Value)).Deltas;
     }
 }

@@ -37,7 +37,10 @@ public sealed record DialogueClaimProposal(
     int FearDelta = 0,
     int AdmirationDelta = 0,
     int ResentmentDelta = 0,
-    string? BondPosture = null);
+    string? BondPosture = null,
+    bool BindAsCanon = false,
+    string? CanonKind = null,
+    string? CanonSummary = null);
 
 public sealed record DialogueClaimExtractionResult(
     string Provider,
@@ -49,6 +52,8 @@ public sealed record DialogueClaimExtractionResult(
 public interface IDialogueClaimExtractor
 {
     string Name { get; }
+
+    bool RequiresSpokenTextSupport => true;
 
     Task<DialogueClaimExtractionResult> ExtractAsync(
         DialogueClaimRequest request,
@@ -64,6 +69,8 @@ public sealed class NullDialogueClaimExtractor : IDialogueClaimExtractor
     }
 
     public string Name => "none";
+
+    public bool RequiresSpokenTextSupport => false;
 
     public Task<DialogueClaimExtractionResult> ExtractAsync(
         DialogueClaimRequest request,

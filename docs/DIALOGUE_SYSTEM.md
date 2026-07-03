@@ -53,9 +53,8 @@ The first generated-dialogue slice is implemented.
 providers. When configured, `talk` now resolves a speaker through the engine,
 builds a compact `DialogueRequest`, receives generated `spokenText` plus
 structured proposals, validates the spoken line, applies accepted proposals, and
-returns the result through the same GUI/CLI backend. Mock and Ollama dialogue
-providers live in `Sorcerer.Llm`; provider technical failures do not consume
-turns.
+returns the result through the same GUI/CLI backend. Mock, Ollama, and OpenAI-compatible dialogue
+providers live in `Sorcerer.Llm`; provider technical failures do not consume turns.
 
 The older deterministic `InteractionSystem.Talk` path still exists as the
 no-provider fallback and for tests. `IDialogueClaimExtractor` remains useful for
@@ -64,17 +63,74 @@ directly and are not re-extracted a second time.
 
 Implemented proposal handling covers claims/promises, memories, merchant stock,
 bounded bond shifts, and the first concrete action proposals:
-`step_aside`, `flee`, `call_help`, `give_item`, and `open_door`. Unsupported
-actions are rejected with diagnostic deltas.
+`step_aside`, `flee`, `call_help`, `give`, `open`, `attack`,
+`recruit`, `create_promise`, `offer_trade`, `reveal_service`, `mark_location`, and
+`spawn_fixture`, plus a generic `consequence` action that carries `consequenceType`
+and a typed `consequencePayload` for local effects already owned by
+`WorldConsequenceApplier`; non-immediate timing schedules one delayed consequence
+through the shared turn pump. Legacy aliases such as `give_item`, `open_door`, and
+`promise` still accepted. Unsupported actions are rejected with diagnostic
+deltas.
 
-The first shared consequence-grammar slice is implemented in
+The shared typed consequence-grammar slice is implemented in
 `WorldConsequence`/`WorldConsequenceApplier`, exposed through
-`GameEngine.ApplyConsequence`. Dialogue memory proposals, dialogue bond
-proposals, claim-extraction bond proposals, and merchant-stock claim payoffs now
-submit `record_memory`, `update_bond`, or `add_merchant_stock` consequences
-instead of mutating those ledgers directly. The old dialogue proposal records
-remain the provider-facing schema for now; internally they are normalized into
-source-agnostic world consequences before mutation.
+`GameEngine.ApplyConsequence`. Dialogue claim records, dialogue memory
+proposals, automatic exchange memories, dialogue bond proposals, claim-extraction bond proposals,
+merchant-stock claim payoffs, and a first set of immediate tactical effects
+(damage, healing, mana, movement, terrain, statuses, spawns, promises, and
+messages) now submit typed consequences instead of mutating those ledgers or
+tactical primitives directly. General state changes for inventory, tags/traits,
+faction allegiance, controller/AI policy, world flags, scheduled events, triggers, transformations,
+damage resistance/weakness, delayed incoming damage, status acceleration, memory
+edits, persistent combat hooks, behavior tags, tile flows, rumor records/updates,
+faction standing/resource adjustments, legend tags, and canon records also use
+the same applier, so dialogue, magic, services, world reactions, promise
+payoffs, books, and future AI/faction plans can share one validated mutation
+lifecycle. The old dialogue proposal records remain the provider-facing schema
+for now; internally they are normalized into source-agnostic typed consequences
+before mutation. New dialogue side effects should prefer the generic
+`consequence` action when an existing consequence type already fits, instead of
+adding another dialogue-only action helper. Non-immediate `timing` schedules the same
+typed consequence through the shared scheduled-event pump; dialogue should use
+specialized schedule/trigger consequences only when it needs a broader event,
+repeating ward, or other shape beyond one delayed consequence.
+
+NPC wants are also in the first implementation slice. `WantComponent` gives a
+notable NPC one active desire with salience, stakes, and tags. Authored notable
+NPCs, including opening figures and late-game figures like Emperor Odran, have
+authored wants; generated residents receive deterministic region-shaped wants at
+instantiation; promise-generated people, merchants, and service providers receive
+promise-shaped wants through `spawn_entity` payloads. If a typed `spawn_entity`
+creates a notable NPC without an explicit want, the applier synthesizes a default
+want from faction, roles, tags, interactable verbs, promise anchors, and AI policy;
+systems can pass `autoWant: false` when a spawned actor should remain creature-like
+or intentionally blank. Dialogue participant cards include an active-want summary
+so the model has direction without a scripted quest path. Generated dialogue may also propose one `want` update when the NPC's own
+active desire is materially satisfied, blocked, or redirected; `GameSession`
+applies that through the shared `update_want` consequence. Dialogue want updates
+opt into a hidden `record_memory` child delta, so the NPC remembers why the desire
+changed without making the want itself player-facing truth. Bounded world-turns may also emit a
+private `want_stir` memory for one high-salience active want; generated dialogue sees it only as
+ordinary recent memory, not as a special quest directive.
+
+Rumors are now another request-context lane. High-salience visible dialogue
+claims mint durable `RumorRecord`s through the shared `record_rumor`
+consequence. Rumor propagation and later distortion update those records through
+`update_rumor`; propagation into a local NPC also writes a hidden
+`record_memory` consequence so the rumor becomes durable personal context.
+Failed propagation rolls back the rumor update and heard-memory packet with hidden
+`rumorPropagationSkipped` audit context.
+Local propagation prefers carriers whose active wants, tags, faction roles, or
+profile text match the rumor, keeping transport deterministic while making later
+dialogue more likely to surface what that NPC would actually care about.
+Generated dialogue requests include `RecentRumors` that the
+current speaker or region plausibly carries. Rumors are reported stories, not
+authoritative truth; the model may cite or color speech with them, but any new
+concrete fact still has to appear in `spokenText` and be validated as a
+claim/promise/consequence. World-reaction deeds can also write hidden
+`deedWitnessMemory` records for NPC witnesses; these enter generated dialogue as
+ordinary recent memories with `deed:<id>` provenance, so an NPC can later discuss
+what they saw without a bespoke witness dialogue path.
 
 Live-model robustness is also implemented for the Ollama dialogue provider. The
 provider preserves usable `spokenText` while normalizing common proposal shape
@@ -83,8 +139,23 @@ mistakes such as string actions (`"step_aside"`), alternate bond fields
 over-eager `playerAuthored` flags. The engine then applies another validation
 layer: generated-dialogue and claim-extraction bond proposals share one
 engine-side bond-apply helper, conversational deltas are dampened to ordinary
-scale, missing bond targets produce structured skipped-proposal deltas, and
-cooperative actions are rejected when the NPC response is a refusal.
+scale, rejected generated memory/bond/want proposals produce structured
+skipped-proposal audit deltas alongside the raw `worldConsequenceRejected`
+child, and cooperative actions are rejected when the NPC response is a refusal.
+Dialogue memory proposals mark their `record_memory` consequence as requiring a
+live owner entity, so the broad memory ledger can still store abstract world
+memories while NPC-authored personal memories cannot silently attach to missing
+actors.
+Direct `create_promise` actions also repair unresolved natural-language
+`target` values into promise hints rather than treating them as hard entity ids;
+resolved entity ids still become anchors.
+Deterministic fallback threats stage the fear/resentment `update_bond` and
+owner-required `record_memory` as one packet, rolling back with a hidden
+`threatDialogueSkipped` audit if either child rejects. Recruitment routes
+relationship changes through `update_bond`, but ordinary fallback prisoner
+dialogue only records the exchange as memory; it does not hardcode a bond shift.
+Recruitment and prisoner rescue route follower control through `update_control`;
+and gift, claim, threat, and recruit memories route through `record_memory`.
 
 The current keyword dialogue-intent parser is temporary fallback behavior. It
 should not become the normal way to infer threats, confessions, bargains, or
@@ -95,7 +166,7 @@ trust.
 WildMagic already proved several useful patterns:
 
 - A provider stack for dialogue is valuable: mock for tests, local model for
-  normal play, API-compatible providers later.
+  normal play, and API-compatible endpoints for hosted or alternate local models.
 - Dialogue should have an audit log containing prompt, context, raw model
   output, parsed reply, errors, and provider metadata.
 - The NPC should speak as one character only: no narration, no markdown, no
@@ -195,7 +266,7 @@ The exact schema can evolve, but the separation is important:
 The current provider-facing C# shape uses `DialogueClaimProposal` for claim
 proposals, with separate `DialogueMemoryProposal`, `DialogueBondProposal`, and
 `DialogueActionProposal` records. The engine-facing direction is to normalize
-these into `WorldConsequence` records so the same applier can be used by
+these into typed consequence records so the same applier can be used by
 dialogue, documents, services, promises, AI plans, and magic.
 
 ## Request Context
@@ -204,7 +275,7 @@ The dialogue request should be compact but rich enough for the model to make
 good choices. It should include:
 
 - Speaker entity: id, name, role, faction, body, tags, current status, inventory
-  summary, speech capability, and visible temperament.
+  summary, speech capability, visible temperament, and active want when present.
 - Listener entity: controlled body, appearance, known reputation, visible
   equipment, active status, recent magic, and recent deeds known to the speaker.
 - Relationship: bond values, faction standing, hostility, fear, gratitude,
@@ -214,6 +285,8 @@ good choices. It should include:
 - Memory: firsthand memories, overheard claims, gossip, previous conversation,
   gift memories, claim-ledger references, and promise references with
   provenance clearly labeled.
+- Rumors: heard local stories with source and salience, explicitly treated as
+  possibly distorted rather than guaranteed truth.
 - Conversation history: the last few exchanges with this NPC, clipped for
   budget.
 - Capability cards: which proposal types are allowed in this call, with compact
@@ -229,36 +302,41 @@ assemble prompt context directly.
 Dialogue should start with a small set of general proposal types and grow only
 when a new type unlocks many interactions.
 
-## World Consequence Grammar
+## Typed Consequence Grammar
 
-Dialogue consequences should be part of a broader world-consequence grammar.
+Dialogue consequences should be part of the broader typed consequence grammar.
 The first implemented envelope is:
 
 - `type`: the consequence kind, such as `record_memory`, `update_bond`, or
   `add_merchant_stock`
 - `source`: where the proposal came from, such as dialogue, claim extraction,
   a promise payoff, a service, AI, or magic
+- `timing`: when the consequence applies, normally `immediate`; deferred or
+  world-pump behavior must be explicit
 - `sourceEntityId` and `targetEntityId`: provenance and mutation target
 - `salience`, `confidence`, and `visibility`: player/debug surfacing signals
 - `evidence` and `reason`: audit context for why this was proposed
 - `payload`: typed consequence-specific fields
 
-The first applier handles memory recording, bond updates, merchant stock, trade
-offers, service offers, door open/unlock effects, and route creation. It owns
+The applier handles claim recording, claim status updates, memory recording, bond updates, want updates, merchant
+stock, trade offers, service offers, door open/unlock effects, route creation,
+immediate tactical effects, terrain lifecycle updates, inventory changes, tag/trait changes, faction
+allegiance, world flags, scheduled event creation/lifecycle, trigger creation/lifecycle, transformations,
+resistance and weakness changes, delayed incoming damage/release, status acceleration,
+memory edits, persistent effect creation/update, behavior tag creation/update, tile flow creation/update, rumor records/updates,
+faction standing/resource adjustments, suspicion records/updates, deed records, legend tags, and canon records. It owns
 target validation, clamping, mutation, visible messages, and deltas. This keeps
-the same bond, stock, service, route, or door change from behaving differently
-depending on whether it came from generated dialogue, delayed claim extraction,
-a service, a promise payoff, or some other source.
+the same claim, bond, want, stock, service, route, inventory, faction, trigger, memory
+edit, transformation, or door change from behaving differently depending on
+whether it came from generated dialogue, delayed claim extraction, a service, a
+promise payoff, wild magic, world reaction, or some other source.
 
-Planned next consequence types:
-
-- `record_claim`
-- `create_promise`
-- `update_faction_standing`
-- `add_suspicion`
-- `schedule_event`
-- `create_trigger`
-- `canonize_fact`
+Immediate consequences remain fast because their `timing` is immediate and
+their handlers are concrete engine code, not because they live in a separate
+grammar. Durable narrative facts use the existing `add_canon` consequence;
+dialogue may request this through a `canonize_fact`/`add_canon` action, and
+delayed claim extraction may request it with `bindAsCanon`, when the NPC's
+spoken line plainly supports the fact.
 
 ### Claims
 
@@ -280,11 +358,44 @@ Initial claim kinds:
 Player-spoken claims should be context only. If the player says "your niece
 Nannerl is in the south town," that does not create Nannerl. If the NPC replies
 "Yes, Nannerl fled south to Bellweather," the NPC's reply can create a claim.
+Both live generated-dialogue claims and delayed extractor claims must pass a
+spoken-text support check before the engine records, canonizes, or promotes
+them. The extractor interface can mark a source as prevalidated only for
+authored/test sources; live model extractors should keep support validation on.
+
+Claims can have several outcomes:
+
+- `bindAsPromise` means the world should later deliver the claim organically
+  through ordinary promise realization.
+- `bindAsCanon` means the claim should become durable world lore now through
+  `add_canon`, without forcing a future payoff site or item.
+- immediate categories such as `merchant_stock`, `service`, and `trade` can
+  apply concrete affordances to existing entities.
+
+Initial claim intake is a packet of its own: the claim's `record_claim`, the
+speaker's `record_memory` (`claimMemory`), and any first visible rumor
+(`rumorMinted`) stage together before promise binding, canonization, bond
+changes, stock, services, or trades run. If an intake child rejects, the staged
+claim/memory/rumor state rolls back and the result keeps only hidden audit
+evidence through `claimIntakeSkipped` plus any rejected child diagnostics.
+
+Immediate claim applications use the same packet discipline as promise binding:
+the concrete consequence (`update_bond`, `add_canon`, `add_merchant_stock`,
+`offer_service`, or `offer_trade`) and the claim's `update_claim` status commit
+together. If either child rejects, the application rolls back with hidden
+`claimApplicationSkipped`.
+
+Use `bindAsCanon` for local law, custom, public history, known relationships,
+taboos, lineage, or other facts that should inform later context but are not
+obligations. Use `bindAsPromise` for useful future things the world should
+surface or generate.
 
 ### Memories
 
 Memories are local, durable facts attached to entities. Gifts should create
-memory immediately. Bond changes should be model-proposed during dialogue, using
+memory immediately, and the explicit gift path commits the item transfer plus
+gift memory together so the world never loses the provenance for a gift that
+changed hands. Bond changes should be model-proposed during dialogue, using
 recent gifts and behavior as context.
 
 Useful memory provenance values:
@@ -309,6 +420,11 @@ not swing a relationship wildly unless the context is extraordinary.
 Generated-dialogue bond proposals and delayed claim-extraction bond proposals
 should share the same clamp, entity resolution, mutation, visible-message, and
 skipped-proposal behavior.
+
+Explicit interaction outcomes that move relationships, such as recruitment and
+rescue, should also submit `update_bond` consequences. They may keep their own
+action-specific deltas for readability, but the bond ledger should have one
+apply path.
 
 ### World Actions
 
@@ -340,43 +456,147 @@ Early outcome verbs:
 - `flee`
 - `call_help`
 - `attack`
-- `give_item`
+- `give`
 - `open`
+- `recruit`
 - `create_promise`
 - `offer_trade`
 - `reveal_service`
 - `mark_location`
+- `spawn_fixture`
+- `consequence` with `consequenceType` and `consequencePayload`
 
 Each action must pass ordinary preconditions. An NPC cannot give an item they do
-not have or open a door they cannot reach. `create_promise` still passes
-through the claim/promise validators; `offer_trade` reveals stock or merchant
-affordances for later explicit commands rather than completing a trade inside dialogue.
-`step_aside` and `flee` use ordinary entity movement checks. `call_help`
-currently schedules a modest help response: imperial callers can schedule an
-`empire_patrol`, while non-imperial calls schedule a generic help-call message.
+not have or open a door they cannot reach. `create_promise` is applied by
+`WorldConsequenceApplier`, which owns promise creation, binding, anchor attachment,
+visibility, and audit deltas for every source. Rebinding or realizing an existing promise
+uses the matching `update_promise` consequence. Direct dialogue `create_promise`
+actions are for explicit vows, prophecies, curses, or mechanically important
+commitments in NPC `spokenText`; ordinary reports such as distant towns or
+item locations should still flow through claims that may bind as promises.
+Rejected dialogue actions produce hidden `dialogueActionRejected` audit deltas
+with both the proposed type and normalized type, so unsupported or invalid model
+actions remain inspectable without becoming player-facing truth.
+Generic `consequence` actions are for local effects that already have a typed
+handler, such as adding tags, applying a status, or requesting an already-known
+service. They also cover local prop/fixture transformations through
+`transform_entity`, so an NPC can collapse, mark, repair, retag, or make
+interactable an existing bridge, shrine, sign, door-like prop, or fixture
+without a bespoke dialogue action. They submit directly through
+`GameEngine.ApplyConsequence`;
+non-immediate `consequenceTiming` values such as `after_turn`, `world_pump`, or
+`deferred` schedule one typed consequence through the shared turn pump. Use
+explicit `schedule_event` only for broader future events such as calling help or
+setting a patrol, not for a simple delayed local consequence.
+The adapter accepts the same common model-shaped nested aliases as magic, including
+`consequencePayload.world_consequence_type`, `target_id` / `entity_id`,
+`consequence_timing`, and `consequence_visibility`.
+If a provider emits a known consequence id as the action type itself, such as
+`request_service` or `add_tags`, the adapter normalizes it into this same generic
+`consequence` path. Common top-level action fields such as `targetEntityId`,
+`tags`, `serviceId`, `itemName`, `quantity`, and `fixtureType` are promoted into
+the typed payload when `consequencePayload` does not already provide them, and
+the live provider parser uses the shared consequence payload merge helper to
+preserve additional top-level typed fields such as `status`, `duration`,
+`amount`, or `resource` as payload data. Named dialogue
+actions like `create_promise`, `add_canon`, `offer_trade`, and `spawn_fixture`
+keep their richer handlers.
+The shared consequence applier canonicalizes common source spellings such as
+`addTags` or `requestService` to the engine's snake_case consequence ids before
+validation, so dialogue, magic, scheduled events, triggers, and persistent
+effects all get the same repair lane.
+`offer_trade` reveals stock or merchant affordances for later explicit commands
+rather than completing a trade inside dialogue.
+`step_aside` and `flee` submit `move_entity` consequences with ordinary entity
+movement checks. `call_help` submits a visible `schedule_event` consequence:
+imperial callers can schedule an `empire_patrol`, while non-imperial calls
+schedule a generic help-call message. `attack` submits the same damage
+consequence as melee after validating speaker, target, living actor state, and
+adjacency. `recruit` submits the shared recruitment bundle: faction change,
+follower control, bond update, memory, and visible message all use the same
+validated helpers as explicit `recruit`, and the accepted bundle commits
+together or rolls back with `recruitmentSkipped`; the dialogue action itself
+does not consume an extra turn beyond the conversation. `offer_trade` submits the shared trade-offer consequence: it can turn
+an NPC into a normal merchant and optionally add stock, but buying and selling
+still require explicit trade commands. `mark_location` and `spawn_fixture`
+submit local `spawn_fixture` consequences after nearby-placement validation;
+`transform_entity` changes existing local entities and fixtures through the
+same applier. Remote places described by an NPC should be claims/promises, not
+immediate map edits. `reveal_service` submits `offer_service`, so dialogue can reveal a
+folk-magic or mundane service without performing it until the player uses an
+explicit `request` command. If the same dialogue also produces a service claim,
+the claim attaches to the already-revealed service instead of submitting a second
+`offer_service` consequence; the claim ledger still records what was said.
+`canonize_fact`/`add_canon` submits the shared `add_canon` consequence for
+local durable lore, law, custom, or entity/place facts that should inform later
+context but are not future obligations. The action is hidden by default so the
+spoken line remains the player-facing surface, and the same token-overlap
+support check used for claims prevents the provider from canonizing facts the
+NPC did not actually say.
 
 Implementation can migrate one verb at a time. `open` is actor-aware already:
-player `open`, dialogue `open_door`, and future magic/AI open requests flow
-through one engine action, with the source controlling turn consumption and
-audit wording rather than world truth. Promise payoff also has a shared first
-path now: travel, talk, read, open, and examine/inspect all route concrete
-promise realization through `PromiseRealizationSystem`.
+player `open`, dialogue `open`/`open_door`, services, and future magic/AI open
+requests flow through `open_or_unlock`, with the source controlling turn
+consumption and audit wording rather than world truth. Door-triggered rescue consequences are
+not dialogue specials either: after a captive-door opens, the follow-on
+faction/control/bond/want/deed/message bundle is requested as the shared
+`free_captive` consequence and commits together or rolls back with
+`freeCaptiveSkipped`. Ordinary player movement, dialogue
+movement, AI movement, tile-flow movement, and magic movement likewise converge
+on `move_entity`; follower yielding uses the same consequence with an explicit swap target rather
+than a private pathing shortcut. Promise payoff also has a shared first path now: travel, talk,
+read, open, examine/inspect, and explicit time-triggered wait payoffs all
+route concrete promise realization through `PromiseRealizationSystem`; `wares`,
+`buy`, and `sell` also route anchored merchant-stock promises through that
+service before ordinary stock listing or `execute_trade`; `services` and
+`request` route anchored service promises through it before listing or
+submitting `request_service`; `open` routes anchored door-rule promises through it
+before the lock check. Anchored route, service, door-rule, and canon payoffs
+apply as `create_route`, `offer_service`, `open_or_unlock`, and `add_canon`
+consequences.
 
 The first service/action consequence slice is live:
 
 - `offer_trade` can make an NPC a normal merchant and optionally add stock.
+- `execute_trade` completes explicit buy/sell commands by mutating buyer inventory,
+  merchant stock, and merchant gold in one validated transaction.
 - `offer_service` attaches a `ServiceComponent` to an NPC.
-- `services [target]` lists revealed services.
-- `request <service> [from <target>]` asks the provider to perform it.
+- `reveal_service` lets dialogue expose one of those services through the same
+  `offer_service` consequence.
+- `services [target]` lists revealed services and can wake anchored service
+  promises first.
+- `request <service> [from <target>]` asks the provider to perform it, after
+  waking a matching anchored service promise if needed, by submitting
+  `request_service`. The command wrapper owns turn consumption; the consequence
+  owns service effect, payment, want completion, and narration.
+- A generated dialogue `consequence` action can also submit `request_service`
+  when the NPC is performing an already-known local service right now. In that
+  dialogue path, the speaker/provider remains the consequence target, while the
+  player-controlled entity is the default requester/payer unless the payload
+  explicitly names another `actorEntityId`.
+- `move_entity` handles dialogue `step_aside` and `flee` movement.
+- `damage` handles dialogue `attack` after ordinary adjacency and living-actor checks.
+- `create_promise` handles explicit dialogue vows, curses, and prophecies
+  through the same promise ledger applier as claim promotion and magic.
+- `add_canon` handles dialogue `canonize_fact`/`add_canon` actions and
+  extracted `bindAsCanon` claims for durable local facts that should inform
+  later context without becoming promises.
+- `schedule_event` handles dialogue `call_help` responses.
 - `open_or_unlock` can unlock/open a nearby door through an engine-validated
   consequence.
+- `free_captive` can release a captive, update faction/control/bond/want/deed,
+  and emit narration as one reusable transactional consequence.
 - `create_route` creates a discoverable route fixture.
+- `spawn_fixture` creates a generic fixture/place/prop entity for marked
+  locations, promise sites, shrines, hazards, dialogue markers, and other
+  concrete world features.
 
 ### Stock And Services
 
 NPC dialogue may propose that an NPC gains stock or reveals available services.
 This is not a completed trade. It is a state update that makes later explicit
-commands possible.
+commands possible. Actual buy/sell commands then submit `execute_trade`; dialogue
+does not complete a purchase by implication.
 
 Examples:
 
@@ -391,9 +611,26 @@ Folk-magic services are practiced, but they are hush-hush. The dialogue model
 may reveal them through trust, fear, leverage, rumor, or coded speech, but
 characters should understand that Vigovia can execute people for practicing
 them. Mechanically, revealed services use `ServiceComponent` plus explicit
-`services`/`request` commands. Their first effects route through
+`services`/`request` commands. A request submits `request_service`, whose child
+effects route through
 `WorldConsequenceApplier`, including door open/unlock, route creation, and
-durable memory, rather than becoming a separate hidden spell engine.
+durable memory, rather than becoming a separate hidden spell engine. Listed
+service payments and gift item spending use the shared `modify_inventory`
+consequence as well, so social actions do not keep private inventory decrement
+helpers beside the consequence grammar. A revealed service can optionally carry
+completion metadata (`wantStatusOnComplete`, `wantStakesOnComplete`,
+`wantAddTagsOnComplete`, `wantRemoveTagsOnComplete`). The engine reads those
+fields only after a successful explicit `request` and applies them through
+`update_want`, which lets a service satisfy or redirect its provider's active
+desire without inventing a private service quest path. When a service declares
+that completion metadata, the want update is authoritative: failure to update
+the want rolls back the requested service effect, payment, and request message.
+The same `serviceRequestSkipped` rollback audit is used if the effect, payment,
+want update, or final request narration rejects, so service requests have one
+lifecycle rather than several partial failure lanes.
+Service-completion want updates also record a private memory through the same
+consequence; the public service fact remains the separate service memory/deed
+lane.
 
 ## Claim And Promise Relationship
 
@@ -410,6 +647,17 @@ The default path:
    a person appears, a town is generated, a landmark is placed, a merchant
    carries promised stock, an item is added, or a threat enters a region.
 6. The original dialogue remains attached as provenance.
+
+Implementation invariant: claim-to-promise promotion uses the shared
+`create_promise` world consequence with dialogue-specific metadata (`claimId`,
+source, visibility, salience, subject, claimed place, trigger hint, and
+realization kind), claim recording itself uses `record_claim`, claim memory uses
+`record_memory`, first rumor minting uses `record_rumor`, and later claim
+status changes use `update_claim`. The binding step is transactional: creating
+or rebinding the promise and marking the claim promised commit together, and a
+rejected child leaves only a hidden `claimPromiseSkipped` audit delta. Dialogue
+extraction may decide *whether* a claim should bind, but it does not write the
+claim or promise ledgers through private paths.
 
 The system should err toward "yes, and" for NPC-authored claims, but not to a
 ridiculous degree. Salience, specificity, fit, and current world pressure should
@@ -433,8 +681,8 @@ Dialogue prompt guidance should use this practical threshold:
 - Use `playerVisible: true`, `bindAsPromise: true`, salience 3-5, and a
   practical `realizationKind` such as `site`, `town`, `landmark`, `person`,
   `item`, `threat`, `service`, or `quest`.
-- Use a concrete `triggerHint` such as `travel`, `talk`, `buy`, `trade`, `open`,
-  `wait`, or `inspect`.
+- Use a concrete `triggerHint` such as `travel`, `talk`, `buy`, `trade`,
+  `services`, `request`, `open`, `wait`, or `inspect`.
 - Do not bind denials, obvious jokes, child-invented monsters, tiny ambience,
   ordinary weather, vague mood, insults, impossible boasts, or claims authored
   only by the player.
@@ -489,7 +737,17 @@ not unload one model just to run a tiny router.
 Pending extraction tasks should not be serialized. Saves should contain the
 durable result of completed dialogue work, not live provider tasks. If an
 extractor fails while a save is waiting on it, the failure should be recorded as
-an audit/debug delta before saving.
+an audit/debug delta before saving. Task-level extractor faults and cancellations
+are materialized as technical-failure extraction records too, so transcript
+replay can reconstruct the attempted failure without calling the live model.
+
+CLI transcripts materialize dialogue separately from save files. A generated
+`talk` result records the normalized `DialogueResponse` on the `ActionResult`,
+and any completed post-dialogue extractor result records the original request,
+claims, provider, raw text, error state, and spoken-text-support flag. Transcript
+replay feeds those records through `ReplayDialogueProvider` and
+`ReplayDialogueClaimExtractor`, so replay exercises the same `GameSession`
+proposal and consequence path without calling the live model.
 
 ## Provider Architecture
 
@@ -508,13 +766,15 @@ Suggested implementations:
   agent playthroughs.
 - `OllamaDialogueProvider`: local model path, JSON response, retry on degenerate
   output.
-- API-compatible providers later, behind the same interface.
+- `OpenAiCompatibleDialogueProvider`: OpenAI-compatible `/v1/chat/completions`
+  path, using the same response parser and retry policy.
 
 The provider should receive a purpose such as `dialogue`, but foreground
 dialogue and follow-up extraction should default to the same configured local
 model unless the user opts into separate models.
 
-Current dialogue action results include provider, raw output, delivery, intent,
+Current dialogue action results include a materialized dialogue record for
+generated provider calls, plus provider, raw output, delivery, intent,
 and generated/fallback markers on the `dialogue` delta. CLI and Godot wire
 `JsonlDialogueAuditSink` to `logs/dialogue_audit.jsonl`; the audit entry records
 the request, raw provider output, parsed response, validation issues, action
@@ -589,14 +849,20 @@ claims, the promise system should decide when and how the world pays them off.
 5. Wire `talk` through `GameSession` for both GUI and CLI. Done.
 6. Add action-result fields for accepted and rejected dialogue proposals. Done
    through deltas.
-7. Add `OllamaDialogueProvider` with audit logging and degenerate reply retry.
-   Done.
+7. Add live `OllamaDialogueProvider` and `OpenAiCompatibleDialogueProvider`
+   paths with audit logging and degenerate reply retry. Done.
 8. Integrate accepted claim proposals with the existing `ClaimLedger`. Done.
 9. Keep `IDialogueClaimExtractor` for authored text, books, signs, and
-   fallback/mock dialogue where no generated proposal was returned.
+   fallback/mock dialogue where no generated proposal was returned. For authored
+   objects with known hooks, prefer `ClaimSourceComponent`: `read`/`examine`
+   records those seeds through `record_claim`, mints high-salience visible rumors
+   through `record_rumor`, binds buildable hooks through `create_promise`, and
+   updates claim status through `update_claim`.
 10. Add validated handlers for concrete dialogue action proposals such as
-    `step_aside`, `flee`, `call_help`, `give_item`, and `open_door`. First
-    handlers are done.
+    `step_aside`, `flee`, `call_help`, `give`, `open`, `attack`,
+    `create_promise`, and `offer_trade`, plus service and local scene fixture
+    actions such as `reveal_service`, `mark_location`, and `spawn_fixture`.
+    First handlers are done.
 11. Add opening NPC profiles that rely on the same system as the rest of the
     game.
 12. Add live-model eval transcripts for directness, specificity, promise
@@ -616,6 +882,7 @@ Focused tests should cover:
 - Duplicate claims are merged or suppressed.
 - Gifts create memory immediately.
 - Dialogue can propose bond changes using recent gift memory.
+- Dialogue can propose want changes when an NPC's active desire materially shifts.
 - Dialogue action proposals obey normal preconditions.
 - Promise realization preserves dialogue provenance.
 - Save/load preserves conversation history, memories, claims, and promises.

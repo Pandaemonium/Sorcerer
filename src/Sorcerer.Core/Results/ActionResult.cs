@@ -1,3 +1,5 @@
+using Sorcerer.Core.Dialogue;
+
 namespace Sorcerer.Core.Results;
 
 public sealed record StateDelta(
@@ -5,6 +7,23 @@ public sealed record StateDelta(
     string Target,
     string Summary,
     IReadOnlyDictionary<string, object?> Details);
+
+public static class StateDeltaExtensions
+{
+    public static IEnumerable<string> PlayerMessages(this IEnumerable<StateDelta> deltas) =>
+        deltas.Where(IsPlayerVisible).Select(delta => delta.Summary);
+
+    public static bool IsPlayerVisible(this StateDelta delta) =>
+        !IsFalse(delta.Details, "playerVisible")
+        && !IsTrue(delta.Details, "auditOnly");
+
+    private static bool IsFalse(IReadOnlyDictionary<string, object?> details, string key) =>
+        details.TryGetValue(key, out var value) && value is bool visible && !visible;
+
+    private static bool IsTrue(IReadOnlyDictionary<string, object?> details, string key) =>
+        details.TryGetValue(key, out var value) && value is bool flag && flag;
+
+}
 
 public sealed record MagicResolutionRecord(
     string Provider,
@@ -15,6 +34,22 @@ public sealed record MagicResolutionRecord(
 {
     public string? ResolvedMagicJson { get; init; }
 }
+
+public sealed record DialogueResolutionRecord(
+    string Provider,
+    string RawText,
+    bool TechnicalFailure,
+    string? Error,
+    DialogueResponse? Response);
+
+public sealed record DialogueClaimExtractionRecord(
+    DialogueClaimRequest Request,
+    string Provider,
+    string RawText,
+    bool TechnicalFailure,
+    string? Error,
+    IReadOnlyList<DialogueClaimProposal> Claims,
+    bool RequiresSpokenTextSupport);
 
 public sealed record ActionResult
 {
@@ -33,6 +68,10 @@ public sealed record ActionResult
     public bool TechnicalFailure { get; init; }
 
     public MagicResolutionRecord? Magic { get; init; }
+
+    public DialogueResolutionRecord? Dialogue { get; init; }
+
+    public IReadOnlyList<DialogueClaimExtractionRecord> DialogueClaimExtractions { get; init; } = Array.Empty<DialogueClaimExtractionRecord>();
 
     public IReadOnlyList<StateDelta> Deltas { get; init; } = Array.Empty<StateDelta>();
 

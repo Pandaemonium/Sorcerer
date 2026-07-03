@@ -138,9 +138,11 @@ public sealed class CapabilityRegistry
             "prophecy",
             new[] { "promise", "prophecy", "omen", "debt", "future", "tomorrow" },
             "prophecy - write a future commitment into the Promise Ledger",
-            new[] { "createPromise", "scheduleEvent" },
+            new[] { "createPromise", "scheduleEvent", "consequence" },
             new[] { "promises", "region" },
-            "Promises are powerful because the world may later honor them. Use real costs.",
+            "Promises are powerful because the world may later honor them. Prefer createPromise for "
+                + "ordinary promises; effectType:'consequence' with consequenceType:'create_promise' "
+                + "is also valid when the spell is already using the shared consequence grammar. Use real costs.",
             Array.Empty<string>(),
             new[] { "delayed_effects" });
 
@@ -208,8 +210,10 @@ public sealed class CapabilityRegistry
             Array.Empty<string>(),
             "createPersistentEffect fields: target, hook (on_hit fires when the anchor is struck, "
                 + "on_strike fires when the anchor lands a hit), effect (a nested effect object), "
-                + "uses. For a sympathetic link, set kind:'sympathetic_link' and linkTarget to "
-                + "mirror a fraction of incoming damage onto the partner.",
+                + "uses. The nested effect can be a shorthand damage/heal/status/message effect or "
+                + "type:'consequence' with consequenceType plus typed payload fields. For a sympathetic "
+                + "link, set kind:'sympathetic_link' and linkTarget to mirror a fraction of incoming "
+                + "damage onto the partner.",
             Array.Empty<string>(),
             Array.Empty<string>());
 

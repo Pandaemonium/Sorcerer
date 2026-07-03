@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
@@ -52,26 +53,81 @@ public sealed class ConjureItemOperation : OperationBase
             .Concat(new[] { "conjured" })
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var entity = context.Engine.SpawnItem(
-            NormalizeToken(name, "curio"),
+        return context.Engine.ApplyConsequence(WorldConsequence.SpawnItem(
+            "wild_magic",
             name,
+            position.X,
+            position.Y,
+            NormalizeToken(name, "curio"),
             preset.Glyph,
-            position,
             preset.ItemType,
             material,
             tags,
             count,
-            preset.Value);
-        var summary = count > 1 ? $"{count} {name} appear." : $"{name} appears.";
-        context.Engine.AddMessage(summary);
-        return new[]
+            preset.Value,
+            sourceEntityId: context.Caster.Id.Value,
+            details: new Dictionary<string, object?> { ["template"] = template })).Deltas;
+    }
+}
+
+public sealed class ConjureFixtureOperation : OperationBase
+{
+    private static readonly IReadOnlyDictionary<string, (char Glyph, string FixtureType, string Material, string[] Tags, bool BlocksMovement)> Templates =
+        new Dictionary<string, (char, string, string, string[], bool)>(StringComparer.OrdinalIgnoreCase)
         {
-            new StateDelta(
-                "conjureItem",
-                entity.Id.Value,
-                summary,
-                new Dictionary<string, object?> { ["template"] = template, ["count"] = count }),
+            ["generic_feature"] = ('?', "feature", "stone", new[] { "conjured", "fixture" }, true),
+            ["shrine"] = ('?', "shrine", "stone", new[] { "conjured", "shrine" }, true),
+            ["marker"] = ('!', "marker", "wood", new[] { "conjured", "marker" }, false),
+            ["plant"] = ('T', "plant", "wood", new[] { "conjured", "plant" }, true),
+            ["hazard"] = ('^', "hazard", "thorn", new[] { "conjured", "hazard" }, false),
+            ["barrier_object"] = ('#', "barrier", "stone", new[] { "conjured", "barrier" }, true),
         };
+
+    public ConjureFixtureOperation()
+        : base(
+            "conjureFixture",
+            new[] { "createFixture", "createObject", "manifestFixture", "markLocation" },
+            "Create a discrete non-actor fixture, prop, marker, shrine, or place feature.",
+            "Fields: template (generic_feature, shrine, marker, plant, hazard, barrier_object), name, fixtureType, material, blocksMovement, glyph, tags.",
+            isCore: false)
+    {
+    }
+
+    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect) => ValidationOutcome.Pass;
+
+    public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
+    {
+        var template = Text(effect, "template", "generic_feature").Trim().ToLowerInvariant();
+        var preset = Templates.TryGetValue(template, out var found) ? found : Templates["generic_feature"];
+        var origin = ResolveOrigin(context, effect, "self") ?? context.Caster.Get<PositionComponent>().Position;
+        var position = FindOpenAdjacent(context, origin) ?? origin;
+        var name = Text(effect, "name", template.Replace('_', ' '));
+        var fixtureType = NormalizeToken(Text(effect, "fixtureType", Text(effect, "fixture_type", preset.FixtureType)), preset.FixtureType);
+        var material = NormalizeToken(Text(effect, "material", preset.Material), preset.Material);
+        var glyphText = Text(effect, "glyph", preset.Glyph.ToString());
+        var tags = Tags(effect, "tags", preset.Tags)
+            .Concat(new[] { "conjured", "fixture", fixtureType })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return context.Engine.ApplyConsequence(WorldConsequence.SpawnFixture(
+            "wild_magic",
+            name,
+            position.X,
+            position.Y,
+            NormalizeToken(name, "fixture"),
+            string.IsNullOrWhiteSpace(glyphText) ? preset.Glyph : glyphText[0],
+            fixtureType,
+            fixtureType,
+            material,
+            tags,
+            Bool(effect, "blocksMovement", preset.BlocksMovement),
+            Bool(effect, "blocksSight", false),
+            Math.Max(1, Int(effect, "size", 1, min: 1, max: 20)),
+            Math.Max(0, Int(effect, "durability", 0, min: 0, max: 100)),
+            Text(effect, "description", ""),
+            interactableVerbs: new[] { "examine" },
+            sourceEntityId: context.Caster.Id.Value,
+            details: new Dictionary<string, object?> { ["template"] = template })).Deltas;
     }
 }
 
@@ -124,28 +180,25 @@ public sealed class ConjureCreatureOperation : OperationBase
                 break;
             }
 
-            var entity = context.Engine.SpawnEntity(
-                NormalizeToken(name, "conjured"),
+            deltas.AddRange(context.Engine.ApplyConsequence(WorldConsequence.SpawnEntity(
+                "wild_magic",
                 name,
+                position.Value.X,
+                position.Value.Y,
+                NormalizeToken(name, "conjured"),
                 preset.Glyph,
-                position.Value,
                 faction,
                 preset.Hp,
                 preset.Attack,
-                tags);
-            entity.Set(new SummonedComponent(context.Caster.Id.Value));
-            var summary = $"{name} appears at {position.Value.X},{position.Value.Y}.";
-            context.Engine.AddMessage(summary);
-            deltas.Add(new StateDelta(
-                "conjureCreature",
-                entity.Id.Value,
-                summary,
-                new Dictionary<string, object?> { ["template"] = template, ["faction"] = faction }));
+                tags,
+                sourceEntityId: context.Caster.Id.Value,
+                operation: "conjureCreature",
+                details: new Dictionary<string, object?> { ["template"] = template })).Deltas);
         }
 
         if (deltas.Count == 0)
         {
-            deltas.Add(Message(context, "conjureCreature", "", "The conjuration has nowhere to stand."));
+            deltas.AddRange(Messages(context, "conjureCreature", "", "The conjuration has nowhere to stand."));
         }
 
         return deltas;
@@ -171,19 +224,13 @@ public sealed class AddResistanceOperation : OperationBase
         var damageType = NormalizeToken(Text(effect, "damageType", Text(effect, "damage_type", "physical")));
         var amount = Int(effect, "amount", 25, min: 0, max: 95);
         return ResolveTargets(context, effect, "self")
-            .Select(target =>
-            {
-                var resistance = target.TryGet<ResistanceComponent>(out var existing) ? existing : ResistanceComponent.Empty();
-                resistance.Resistances[damageType] = amount;
-                target.Set(resistance);
-                var summary = $"{Subject(context, target)} {Verb(context, target, "resist", "resists")} {damageType.Replace('_', ' ')} damage by {amount}%.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "addResistance",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["damageType"] = damageType, ["amount"] = amount });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.SetResistance(
+                "wild_magic",
+                target.Id.Value,
+                damageType,
+                amount,
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -207,19 +254,13 @@ public sealed class AddWeaknessOperation : OperationBase
         var damageType = NormalizeToken(Text(effect, "damageType", Text(effect, "damage_type", "physical")));
         var amount = Int(effect, "amount", 50, min: 0, max: 200);
         return ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target =>
-            {
-                var resistance = target.TryGet<ResistanceComponent>(out var existing) ? existing : ResistanceComponent.Empty();
-                resistance.Weaknesses[damageType] = amount;
-                target.Set(resistance);
-                var summary = $"{Subject(context, target)} {Verb(context, target, "grow", "grows")} vulnerable to {damageType.Replace('_', ' ')} damage (+{amount}%).";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "addWeakness",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["damageType"] = damageType, ["amount"] = amount });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.SetWeakness(
+                "wild_magic",
+                target.Id.Value,
+                damageType,
+                amount,
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -247,13 +288,13 @@ public sealed class SetFlagOperation : OperationBase
         var flag = NormalizeToken(Text(effect, "flag", Text(effect, "id", "marked")));
         var description = Text(effect, "description", flag.Replace('_', ' '));
         var value = effect.Fields.TryGetValue("value", out var raw) && raw is not null ? raw : true;
-        context.Engine.State.WorldFlags[flag] = value;
-        var summary = $"A world flag is set: {description}.";
-        context.Engine.AddMessage(summary);
-        var deltas = new List<StateDelta>
-        {
-            new StateDelta("setFlag", flag, summary, new Dictionary<string, object?> { ["flag"] = flag, ["value"] = value }),
-        };
+        var deltas = context.Engine.ApplyConsequence(WorldConsequence.SetWorldFlag(
+            "wild_magic",
+            flag,
+            value,
+            description,
+            WorldConsequenceVisibility.Message,
+            context.Caster.Id.Value)).Deltas.ToList();
 
         if (LooksLikeDebt(flag, description))
         {
@@ -272,32 +313,23 @@ public sealed class SetFlagOperation : OperationBase
     {
         var deltas = new List<StateDelta>();
         var text = $"Wild Debt: {description}";
-        var existing = context.Engine.State.PromiseLedger.FindActive("curse", text, boundTargetId: null);
-        if (existing is not null)
-        {
-            var stacked = context.Engine.State.PromiseLedger.Stack(existing.Id);
-            var stackMessage = $"{text} deepens ({stacked.Stacks} stacks).";
-            context.Engine.AddMessage(stackMessage);
-            deltas.Add(new StateDelta(
-                "addCurse",
-                stacked.Id,
-                stackMessage,
-                new Dictionary<string, object?> { ["stacks"] = stacked.Stacks }));
-        }
-        else
-        {
-            deltas.Add(context.Engine.AddPromise("curse", text));
-        }
+        deltas.AddRange(context.Engine.ApplyConsequence(WorldConsequence.CreatePromise(
+            "wild_magic",
+            "curse",
+            text,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: context.Caster.Id.Value,
+            operation: "addCurse",
+            stackExisting: true)).Deltas);
 
         var turnsOut = context.Engine.State.Rng.NextInt(8, 16);
-        var scheduled = context.Engine.State.ScheduledEvents.Schedule(
-            context.Engine.State.Turn + turnsOut,
+        deltas.AddRange(context.Engine.ApplyConsequence(WorldConsequence.ScheduleEvent(
+            "wild_magic",
             "debt_collector",
-            context.Caster.Id,
-            new Dictionary<string, object?> { ["text"] = $"A debt collector arrives, drawn by an old wild debt: {description}." });
-        var scheduleMessage = $"Something is scheduled for turn {scheduled.DueTurn}: debt_collector.";
-        context.Engine.AddMessage(scheduleMessage);
-        deltas.Add(new StateDelta("scheduleEvent", scheduled.Id, scheduleMessage, new Dictionary<string, object?>()));
+            turnsOut,
+            new Dictionary<string, object?> { ["text"] = $"A debt collector arrives, drawn by an old wild debt: {description}." },
+            WorldConsequenceVisibility.Message,
+            context.Caster.Id.Value)).Deltas);
 
         return deltas;
     }
@@ -322,17 +354,12 @@ public sealed class DelayIncomingOperation : OperationBase
     {
         var turns = Int(effect, "turns", 3, min: 1, max: 20);
         return ResolveTargets(context, effect, "self")
-            .Select(target =>
-            {
-                target.Set(new DelayedDamageComponent(0, context.Engine.State.Turn + turns));
-                var summary = $"{Possessive(context, target)} wounds are held back for {turns} turns.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "delayIncoming",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["turns"] = turns });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.DelayIncomingDamage(
+                "wild_magic",
+                target.Id.Value,
+                turns,
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -363,70 +390,17 @@ public sealed class EditMemoryOperation : OperationBase
             || subject.Equals("me", StringComparison.OrdinalIgnoreCase);
 
         return ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target => op switch
-            {
-                "remove" => RemoveMemory(context, target, subject, aboutCaster),
-                "alter" => AddMemory(target, context, text, strength, "altered by wild magic"),
-                _ => AddMemory(target, context, text, strength, "planted by wild magic"),
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.EditMemory(
+                "wild_magic",
+                target.Id.Value,
+                op,
+                text,
+                subject,
+                strength,
+                aboutCaster,
+                op.Equals("alter", StringComparison.OrdinalIgnoreCase) ? "altered by wild magic" : "planted by wild magic",
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value)).Deltas)
             .ToArray();
-    }
-
-    private static StateDelta AddMemory(Entity target, EffectContext context, string text, int strength, string provenance)
-    {
-        var trimmed = string.IsNullOrWhiteSpace(text) ? "something that did not happen" : text;
-        context.Engine.State.Memories.Append(target.Id.Value, trimmed, provenance, strength, shareable: strength >= 4);
-        var existing = target.TryGet<MemoryComponent>(out var memory) ? memory.Records.ToList() : new List<EntityMemoryRecord>();
-        existing.Add(new EntityMemoryRecord($"editMemory_{existing.Count + 1}", trimmed, "wild_magic", provenance, strength, Shareable: strength >= 4));
-        target.Set(new MemoryComponent(existing));
-        var summary = $"{Possessive(context, target)} memory shifts: {trimmed}";
-        context.Engine.AddMessage(summary);
-        return new StateDelta(
-            "editMemory",
-            target.Id.Value,
-            summary,
-            new Dictionary<string, object?> { ["op"] = "add", ["text"] = trimmed });
-    }
-
-    private static StateDelta RemoveMemory(EffectContext context, Entity target, string subject, bool aboutCaster)
-    {
-        if (target.TryGet<MemoryComponent>(out var memory))
-        {
-            var remaining = memory.Records
-                .Where(record => !RecordMentionsCaster(record, subject, aboutCaster))
-                .ToArray();
-            target.Set(new MemoryComponent(remaining));
-        }
-
-        var summary = aboutCaster
-            ? $"{Subject(context, target)} no longer {Verb(context, target, "remember", "remembers")} the caster; the hostility drains out of them."
-            : $"{Possessive(context, target)} memory of {subject} fades.";
-
-        if (aboutCaster && target.TryGet<SoulComponent>(out var npcSoul))
-        {
-            var playerSoulId = context.Engine.State.ControlledEntity.TryGet<SoulComponent>(out var playerSoul)
-                ? playerSoul.SoulId
-                : context.Engine.State.ControlledEntityId.Value;
-            var bond = context.Engine.State.Bonds.GetOrCreate(npcSoul.SoulId, playerSoulId);
-            context.Engine.State.Bonds.Set(bond with { Loyalty = Math.Max(bond.Loyalty, 5) });
-        }
-
-        context.Engine.AddMessage(summary);
-        return new StateDelta(
-            "editMemory",
-            target.Id.Value,
-            summary,
-            new Dictionary<string, object?> { ["op"] = "remove", ["subject"] = subject });
-    }
-
-    private static bool RecordMentionsCaster(EntityMemoryRecord record, string subject, bool aboutCaster)
-    {
-        if (aboutCaster)
-        {
-            return record.Text.Contains("caster", StringComparison.OrdinalIgnoreCase)
-                || record.Provenance.Contains("wild_magic", StringComparison.OrdinalIgnoreCase);
-        }
-
-        return !string.IsNullOrWhiteSpace(subject) && record.Text.Contains(subject, StringComparison.OrdinalIgnoreCase);
     }
 }

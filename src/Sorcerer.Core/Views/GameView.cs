@@ -140,7 +140,14 @@ public sealed record PromiseCard(
     string? BoundTargetId = null,
     string? TriggerHint = null,
     string? RealizationKind = null,
-    string? RealizedIn = null);
+    string? RealizedIn = null,
+    string? LastEligibilityFailure = null,
+    string? LastEligibilityContext = null,
+    int? LastEligibilityTurn = null,
+    string? SourceClaimId = null,
+    string? SourceSpeakerId = null,
+    string? SourceListenerSoulId = null,
+    int? SourceConfidence = null);
 
 public sealed record ClaimCard(
     string Id,
@@ -157,6 +164,22 @@ public sealed record ClaimCard(
     string? BoundPromiseId = null,
     string? AppliedTo = null);
 
+public sealed record RumorCard(
+    string Id,
+    string Text,
+    string SourceKind,
+    string SourceId,
+    string OriginRegionId,
+    string CurrentRegionId,
+    int Salience,
+    int Hops,
+    string Status,
+    string OriginalText,
+    int CreatedTurn,
+    int LastTurn,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> DistortionHistory);
+
 public sealed record GameView(
     int Width,
     int Height,
@@ -172,7 +195,9 @@ public sealed record GameView(
     GridPoint? SelectedTarget = null,
     CharacterSheetCard? Character = null,
     WorldCard? World = null,
-    IReadOnlyList<ClaimCard>? Claims = null);
+    IReadOnlyList<ClaimCard>? Claims = null,
+    IReadOnlyList<RumorCard>? Rumors = null,
+    IReadOnlyList<string>? Journal = null);
 
 public sealed record WorldCard(
     string CurrentZoneId,
@@ -216,7 +241,9 @@ public sealed record LedgerSummary(
     int Suspicions = 0,
     int Souls = 0,
     int Triggers = 0,
-    int Claims = 0);
+    int Claims = 0,
+    int Rumors = 0,
+    int WorldTurns = 0);
 
 public sealed record DebugStateView(
     int EntityCount,
@@ -228,7 +255,12 @@ public sealed record DebugStateView(
     IReadOnlyList<BackgroundJobCard>? BackgroundJobs = null,
     IReadOnlyList<FactionDebugCard>? Factions = null,
     IReadOnlyList<BondDebugCard>? Bonds = null,
+    IReadOnlyList<WantDebugCard>? Wants = null,
     IReadOnlyList<string>? ClaimIds = null,
+    IReadOnlyList<string>? RumorIds = null,
+    IReadOnlyList<RumorDebugCard>? Rumors = null,
+    IReadOnlyList<string>? WorldTurnIds = null,
+    IReadOnlyList<WorldTurnDebugCard>? WorldTurns = null,
     string RunStatus = "running",
     string? RunConclusion = null);
 
@@ -249,6 +281,42 @@ public sealed record BondDebugCard(
     int Resentment,
     string Posture);
 
+public sealed record WantDebugCard(
+    string EntityId,
+    string EntityName,
+    string WantId,
+    string Text,
+    int Salience,
+    string Status,
+    string Stakes,
+    IReadOnlyList<string> Tags);
+
+public sealed record RumorDebugCard(
+    string Id,
+    string Text,
+    string OriginalText,
+    string SourceKind,
+    string SourceId,
+    string OriginRegionId,
+    string CurrentRegionId,
+    int Salience,
+    string Status,
+    int Hops,
+    int CreatedTurn,
+    int LastTurn,
+    IReadOnlyList<string> CarrierIds,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> DistortionHistory);
+
+public sealed record WorldTurnDebugCard(
+    string Id,
+    int Turn,
+    string Reason,
+    string Kind,
+    string SourceId,
+    string Summary,
+    IReadOnlyDictionary<string, object?> Details);
+
 public sealed record BackgroundJobCard(
     string Id,
     string Purpose,
@@ -265,7 +333,12 @@ public sealed record BackgroundJobCard(
 public sealed record PendingCastView(
     string Id,
     string Text,
-    string State);
+    string State,
+    string? Provider = null,
+    bool? Accepted = null,
+    bool? TechnicalFailure = null,
+    string? Error = null,
+    IReadOnlyList<string>? EffectTypes = null);
 
 public sealed record AgentObservation(
     GameView View,

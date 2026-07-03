@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
@@ -10,12 +11,14 @@ public sealed class MovementSystem
 {
     private readonly GameEngine _engine;
     private readonly GameState _state;
+    private readonly PromiseRealizationSystem _promiseRealizationSystem;
     private readonly StatusRegistry _statusRegistry;
 
     public MovementSystem(GameEngine engine, StatusRegistry statusRegistry)
     {
         _engine = engine;
         _state = engine.State;
+        _promiseRealizationSystem = new PromiseRealizationSystem(engine.State, engine);
         _statusRegistry = statusRegistry;
     }
 
@@ -26,15 +29,27 @@ public sealed class MovementSystem
         if (IsUnableToMove(actor))
         {
             var blockedByStatus = $"{Subject(actor)} {Verb(actor, "struggle", "struggles")} against binding magic.";
-            _state.AddMessage(blockedByStatus);
+            var blockedMessage = ApplyPlayerCommandMessage(
+                blockedByStatus,
+                "moveBlockedMessage",
+                "The controlled body could not move because an active status blocked movement.",
+                new Dictionary<string, object?>
+                {
+                    ["direction"] = direction.ToString(),
+                    ["blockedReason"] = "status",
+                    ["statuses"] = BlockingMovementStatuses(actor).ToArray(),
+                });
             var turnDeltas = _engine.AdvanceTurn();
-            return ActionResult.Simple(
-                "move",
-                success: false,
-                consumedTurn: true,
-                turnBefore,
-                _state.Turn,
-                new[] { blockedByStatus }.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray());
+            return new ActionResult
+            {
+                Action = "move",
+                Success = false,
+                ConsumedTurn = true,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = blockedMessage.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+                Deltas = blockedMessage.Deltas.Concat(turnDeltas).ToArray(),
+            };
         }
 
         var position = actor.Get<PositionComponent>();
@@ -48,24 +63,24 @@ public sealed class MovementSystem
                 return _engine.Travel(direction);
             }
 
-            return ActionResult.Simple(
-                "move",
-                success: false,
-                consumedTurn: false,
+            return BlockedMoveResult(
+                direction,
+                destination,
                 turnBefore,
-                _state.Turn,
-                "Something solid refuses you.");
+                "Something solid refuses you.",
+                "edge",
+                "The controlled body tried to move past a non-travel map edge.");
         }
 
         if (_state.BlockingTerrain.Contains(destination))
         {
-            return ActionResult.Simple(
-                "move",
-                success: false,
-                consumedTurn: false,
+            return BlockedMoveResult(
+                direction,
+                destination,
                 turnBefore,
-                _state.Turn,
-                "Something solid refuses you.");
+                "Something solid refuses you.",
+                "terrain",
+                "The controlled body tried to move into blocking terrain.");
         }
 
         var blocker = _engine.BlockingEntityAt(destination);
@@ -77,14 +92,19 @@ public sealed class MovementSystem
                 var targetPoint = blocker.Get<PositionComponent>().Position;
                 var attackDeltas = _engine.AttackEntity(actor, blocker);
                 var kind = blocker.TryGet<ActorComponent>(out var targetActor) && !targetActor.Alive ? "kill" : "attack";
-                _engine.RecordDeed(
-                    actor,
+                var deed = _engine.ApplyConsequence(WorldConsequence.RecordDeed(
+                    "engine",
+                    actor.Id.Value,
                     kind,
                     kind == "kill" ? 4 : 2,
-                    origin,
-                    targetPoint,
-                    new[] { "combat", "violence", blocker.Get<ActorComponent>().Faction });
+                    origin.X,
+                    origin.Y,
+                    targetPoint.X,
+                    targetPoint.Y,
+                    new[] { "combat", "violence", blocker.Get<ActorComponent>().Faction },
+                    sourceEntityId: actor.Id.Value));
                 var turnDeltas = _engine.AdvanceTurn();
+                var actionDeltas = attackDeltas.Concat(deed.Deltas).ToArray();
                 return new ActionResult
                 {
                     Action = "attack",
@@ -92,38 +112,163 @@ public sealed class MovementSystem
                     ConsumedTurn = true,
                     TurnBefore = turnBefore,
                     TurnAfter = _state.Turn,
-                    Messages = attackDeltas.Select(item => item.Summary).Concat(turnDeltas.Select(item => item.Summary)).ToArray(),
-                    Deltas = attackDeltas.Concat(turnDeltas).ToArray(),
+                    Messages = actionDeltas.PlayerMessages().Concat(turnDeltas.PlayerMessages()).ToArray(),
+                    Deltas = actionDeltas.Concat(turnDeltas).ToArray(),
                 };
             }
 
-            return ActionResult.Simple(
-                "move",
-                success: false,
-                consumedTurn: false,
+            if (IsFollowerOfControlled(blocker, actor))
+            {
+                return FollowerYieldMove(direction, turnBefore, actor, blocker, destination);
+            }
+
+            return BlockedMoveResult(
+                direction,
+                destination,
                 turnBefore,
-                _state.Turn,
-                $"{blocker.Name} blocks the way.");
+                $"{blocker.Name} blocks the way.",
+                "entity",
+                "The controlled body tried to move into a non-hostile blocking entity.",
+                new Dictionary<string, object?>
+                {
+                    ["blockerId"] = blocker.Id.Value,
+                    ["blockerName"] = blocker.Name,
+                });
         }
 
-        actor.Set(new PositionComponent(destination));
-        _state.LastControlledMoveDelta = new GridPoint(offset.X, offset.Y);
+        var move = _engine.ApplyConsequence(WorldConsequence.MoveEntity(
+            "player_command",
+            actor.Id.Value,
+            destination.X,
+            destination.Y,
+            operation: "move",
+            sourceEntityId: actor.Id.Value,
+            evidence: $"The controlled body moved {direction}.",
+            emitMessage: false,
+            message: "You move.",
+            recordControlledMovement: true,
+            details: new Dictionary<string, object?>
+            {
+                ["direction"] = direction.ToString(),
+            }));
+        if (!move.Applied || move.Deltas.Any(delta => delta.Details.TryGetValue("blocked", out var blocked) && blocked is true))
+        {
+            var failure = move.Error ?? move.Deltas.FirstOrDefault()?.Summary ?? "Something solid refuses you.";
+            var blockedMessage = ApplyPlayerCommandMessage(
+                failure,
+                "moveBlockedMessage",
+                "The shared move consequence reported that movement was blocked.",
+                new Dictionary<string, object?>
+                {
+                    ["direction"] = direction.ToString(),
+                    ["toX"] = destination.X,
+                    ["toY"] = destination.Y,
+                    ["blockedReason"] = "consequence",
+                });
+            return new ActionResult
+            {
+                Action = "move",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = blockedMessage.Messages,
+                Deltas = move.Deltas.Concat(blockedMessage.Deltas).ToArray(),
+            };
+        }
+
         var movementTurnDeltas = _engine.AdvanceTurn();
-        _state.AddMessage("You move.");
-        return ActionResult.Simple(
-            "move",
-            success: true,
-            consumedTurn: true,
-            turnBefore,
-            _state.Turn,
-            new[] { "You move." }.Concat(movementTurnDeltas.Select(delta => delta.Summary)).ToArray());
+        var moveMessage = ApplyPlayerCommandMessage(
+            "You move.",
+            "moveMessage",
+            "The controlled body moved by player command.",
+            new Dictionary<string, object?>
+            {
+                ["direction"] = direction.ToString(),
+                ["toX"] = destination.X,
+                ["toY"] = destination.Y,
+            });
+        return new ActionResult
+        {
+            Action = "move",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = moveMessage.Messages.Concat(movementTurnDeltas.PlayerMessages()).ToArray(),
+            Deltas = move.Deltas.Concat(movementTurnDeltas).Concat(moveMessage.Deltas).ToArray(),
+        };
+    }
+
+    private ActionResult FollowerYieldMove(
+        Direction direction,
+        int turnBefore,
+        Entity actor,
+        Entity follower,
+        GridPoint destination)
+    {
+        var move = _engine.ApplyConsequence(WorldConsequence.MoveEntity(
+            "player_command",
+            actor.Id.Value,
+            destination.X,
+            destination.Y,
+            operation: "followerYieldSwap",
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: actor.Id.Value,
+            evidence: $"{follower.Name} yielded the way.",
+            reason: "A follower blocking the controlled body swapped places instead of blocking movement.",
+            message: $"You trade places with {follower.Name}.",
+            recordControlledMovement: true,
+            swapWithEntityId: follower.Id.Value,
+            details: new Dictionary<string, object?>
+            {
+                ["direction"] = direction.ToString(),
+                ["followerId"] = follower.Id.Value,
+            }));
+        if (!move.Applied || move.Deltas.Any(delta => delta.Details.TryGetValue("blocked", out var blocked) && blocked is true))
+        {
+            return BlockedMoveResult(
+                direction,
+                destination,
+                turnBefore,
+                $"{follower.Name} cannot make room.",
+                "follower",
+                "Follower-yield movement was requested but the shared move consequence could not swap positions.",
+                new Dictionary<string, object?>
+                {
+                    ["blockerId"] = follower.Id.Value,
+                    ["blockerName"] = follower.Name,
+                });
+        }
+
+        var turnDeltas = _engine.AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "move",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = move.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = move.Deltas.Concat(turnDeltas).ToArray(),
+        };
     }
 
     public ActionResult Wait()
     {
         var turnBefore = _state.Turn;
+        var waitMessage = ApplyPlayerCommandMessage(
+            "You wait.",
+            "waitMessage",
+            "The player intentionally spent a turn waiting.",
+            null);
+        var messages = waitMessage.Messages.ToList();
+        var deltas = waitMessage.Deltas.ToList();
+        deltas.AddRange(_promiseRealizationSystem.RealizeAmbientPromises(
+            "wait",
+            messages,
+            alreadyPersistedMessages: messages.ToList()));
         var turnDeltas = _engine.AdvanceTurn();
-        _state.AddMessage("You wait.");
         return new ActionResult
         {
             Action = "wait",
@@ -131,46 +276,64 @@ public sealed class MovementSystem
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = _state.Turn,
-            Messages = new[] { "You wait." }.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
-            Deltas = turnDeltas,
+            Messages = messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = deltas.Concat(turnDeltas).ToArray(),
         };
     }
 
-    public StateDelta MoveEntity(Entity entity, GridPoint destination, string operation)
+    private WorldConsequenceApplyResult ApplyPlayerCommandMessage(
+        string message,
+        string operation,
+        string reason,
+        IReadOnlyDictionary<string, object?>? details)
     {
-        var before = entity.Get<PositionComponent>().Position;
-        if (!_engine.InBounds(destination)
-            || _state.BlockingTerrain.Contains(destination)
-            || _engine.BlockingEntityAt(destination) is not null)
-        {
-            var blocked = $"{entity.Name} cannot move to {destination.X},{destination.Y}.";
-            _state.AddMessage(blocked);
-            return new StateDelta(
-                operation,
-                entity.Id.Value,
-                blocked,
-                new Dictionary<string, object?>
-                {
-                    ["fromX"] = before.X,
-                    ["fromY"] = before.Y,
-                    ["blocked"] = true,
-                });
-        }
-
-        entity.Set(new PositionComponent(destination));
-        var message = $"{Subject(entity)} {Verb(entity, "move", "moves")} to {destination.X},{destination.Y}.";
-        _state.AddMessage(message);
-        return new StateDelta(
-            operation,
-            entity.Id.Value,
+        var payload = details is null
+            ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, object?>(details, StringComparer.OrdinalIgnoreCase);
+        payload["playerVisible"] = true;
+        return _engine.ApplyConsequence(WorldConsequence.Message(
+            "player_command",
             message,
-            new Dictionary<string, object?>
-            {
-                ["fromX"] = before.X,
-                ["fromY"] = before.Y,
-                ["toX"] = destination.X,
-                ["toY"] = destination.Y,
-            });
+            targetEntityId: _state.ControlledEntityId.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: message,
+            reason: reason,
+            operation: operation,
+            details: payload));
+    }
+
+    private ActionResult BlockedMoveResult(
+        Direction direction,
+        GridPoint destination,
+        int turnBefore,
+        string message,
+        string blockedReason,
+        string reason,
+        IReadOnlyDictionary<string, object?>? details = null)
+    {
+        var payload = details is null
+            ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, object?>(details, StringComparer.OrdinalIgnoreCase);
+        payload["direction"] = direction.ToString();
+        payload["toX"] = destination.X;
+        payload["toY"] = destination.Y;
+        payload["blockedReason"] = blockedReason;
+        var blockedMessage = ApplyPlayerCommandMessage(
+            message,
+            "moveBlockedMessage",
+            reason,
+            payload);
+        return new ActionResult
+        {
+            Action = "move",
+            Success = false,
+            ConsumedTurn = false,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = blockedMessage.Messages,
+            Deltas = blockedMessage.Deltas,
+        };
     }
 
     public bool CanEnter(GridPoint point) =>
@@ -194,8 +357,37 @@ public sealed class MovementSystem
         return container.Statuses.Any(status => IsStatusActive(status) && _statusRegistry.BlocksMovement(status.Id));
     }
 
+    private IEnumerable<string> BlockingMovementStatuses(Entity entity)
+    {
+        if (!entity.TryGet<StatusContainerComponent>(out var container))
+        {
+            return Array.Empty<string>();
+        }
+
+        return container.Statuses
+            .Where(status => IsStatusActive(status) && _statusRegistry.BlocksMovement(status.Id))
+            .Select(status => status.Id);
+    }
+
     private bool IsStatusActive(StatusInstance status) =>
         status.ExpiresTurn is null || status.ExpiresTurn > _state.Turn;
+
+    private bool IsFollowerOfControlled(Entity entity, Entity controlled)
+    {
+        var followerSoulId = SoulIdFor(entity);
+        var controlledSoulId = SoulIdFor(controlled);
+        if (_state.Bonds.TryGet(followerSoulId, controlledSoulId, out var bond)
+            && (bond.Posture.Equals("follower", StringComparison.OrdinalIgnoreCase) || bond.Loyalty >= 5))
+        {
+            return true;
+        }
+
+        return entity.TryGet<FactionComponent>(out var faction)
+            && faction.Roles.Contains("follower", StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string SoulIdFor(Entity entity) =>
+        entity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : entity.Id.Value;
 
     private string Subject(Entity entity) =>
         entity.Id == _state.ControlledEntityId ? "You" : entity.Name;

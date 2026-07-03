@@ -15,12 +15,12 @@ using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Engine;
 
+internal sealed record DeedCaptureResult(DeedCapturePlan Plan, IReadOnlyList<StateDelta> Deltas);
+
 public sealed class GameEngine
 {
     private readonly AiSystem _aiSystem;
     private readonly BodySwapSystem _bodySwapSystem;
-    private readonly CombatSystem _combatSystem;
-    private readonly EffectSystem _effectSystem;
     private readonly GenerationSystem _generationSystem;
     private readonly InteractionSystem _interactionSystem;
     private readonly ItemCatalog _itemCatalog = ItemCatalog.CreateMinimal();
@@ -36,25 +36,23 @@ public sealed class GameEngine
     private readonly WorldConsequenceApplier _worldConsequences;
     private readonly WorldReactionSystem _worldReactions = new();
 
-    public GameEngine(GameState state)
+    public GameEngine(GameState state, IBackgroundTextGenerator? backgroundTextGenerator = null)
     {
         State = state;
         CharacterMath.EnsureCharacterState(State);
+        _worldConsequences = new WorldConsequenceApplier(State, this);
         _aiSystem = new AiSystem(this, _statusRegistry);
         _bodySwapSystem = new BodySwapSystem(this, _statusRegistry);
-        _combatSystem = new CombatSystem(State);
-        _effectSystem = new EffectSystem(State, _statusRegistry);
-        _generationSystem = new GenerationSystem(State, _itemCatalog, _loreCatalog);
+        _generationSystem = new GenerationSystem(State, _itemCatalog, _loreCatalog, ApplyConsequence);
         _inventoryService = new InventoryService(_itemCatalog);
         _itemSystem = new ItemSystem(this, _itemCatalog, _inventoryService);
         _movementSystem = new MovementSystem(this, _statusRegistry);
         _perceptionSystem = new PerceptionSystem(State);
         _persistentEffects = new PersistentEffectSystem(this);
-        _worldConsequences = new WorldConsequenceApplier(State);
-        _turnSystem = new TurnSystem(this, State, _statusRegistry, _loreCatalog);
+        _turnSystem = new TurnSystem(this, State, _statusRegistry, _loreCatalog, backgroundTextGenerator);
         _interactionSystem = new InteractionSystem(this, _itemSystem, _turnSystem);
         _viewBuilder = new EngineViewBuilder(this, _inventoryService, _statusRegistry, _perceptionSystem, _generationSystem, _loreCatalog);
-        _perceptionSystem.RefreshControlled();
+        RecordControlledExploration("perception_init", "recordInitialExploration");
     }
 
     public GameState State { get; }
@@ -62,7 +60,7 @@ public sealed class GameEngine
     public StatusRegistry Statuses => _statusRegistry;
 
     public WorldConsequenceApplyResult ApplyConsequence(WorldConsequence consequence) =>
-        _worldConsequences.Apply(consequence);
+        WorldConsequenceGuard.Apply(State, consequence, _worldConsequences.Apply);
 
     public ActionResult MoveControlled(Direction direction) => _movementSystem.MoveControlled(direction);
 
@@ -80,7 +78,7 @@ public sealed class GameEngine
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = State.Turn,
-            Messages = travelDeltas.Select(item => item.Summary).Concat(turnDeltas.Select(item => item.Summary)).ToArray(),
+            Messages = travelDeltas.PlayerMessages().Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = travelDeltas.Concat(turnDeltas).ToArray(),
         };
     }
@@ -138,6 +136,108 @@ public sealed class GameEngine
             messages.ToArray());
     }
 
+    public ActionResult Map(int radius = 8)
+    {
+        var player = State.ControlledEntity;
+        var origin = player.Get<PositionComponent>().Position;
+        var perception = _perceptionSystem.RefreshControlled();
+        var safeRadius = Math.Clamp(radius, 1, Math.Max(State.Width, State.Height));
+        var minX = Math.Max(0, origin.X - safeRadius);
+        var maxX = Math.Min(State.Width - 1, origin.X + safeRadius);
+        var minY = Math.Max(0, origin.Y - safeRadius);
+        var maxY = Math.Min(State.Height - 1, origin.Y + safeRadius);
+        var messages = new List<string>
+        {
+            $"Map radius {safeRadius}; zone {State.CurrentZoneId}; region {State.RegionId}; center {origin.X},{origin.Y}; x {minX}-{maxX}; y {minY}-{maxY}.",
+        };
+        for (var y = minY; y <= maxY; y++)
+        {
+            var row = new char[(maxX - minX) + 1];
+            for (var x = minX; x <= maxX; x++)
+            {
+                row[x - minX] = MapGlyph(new GridPoint(x, y), perception);
+            }
+
+            messages.Add($"{y:00} {new string(row)}");
+        }
+
+        messages.Add("Legend: @ you, letters visible actors, ! visible items, & fixtures, # blocking, ~ water, * growth, . floor, space unseen.");
+        return ActionResult.Simple(
+            "map",
+            success: true,
+            consumedTurn: false,
+            State.Turn,
+            State.Turn,
+            messages.ToArray());
+    }
+
+    private char MapGlyph(GridPoint point, PerceptionSnapshot perception)
+    {
+        if (!perception.VisibleTiles.Contains(point))
+        {
+            return perception.ExploredTiles.Contains(point) ? RememberedTerrainGlyph(point) : ' ';
+        }
+
+        var entity = State.Entities.Values
+            .Where(entity => entity.TryGet<PositionComponent>(out var position)
+                && position.Position == point)
+            .OrderBy(entity => entity.Id == State.ControlledEntityId ? 0 : 1)
+            .ThenBy(entity => entity.TryGet<PhysicalComponent>(out var physical) && physical.BlocksMovement ? 0 : 1)
+            .ThenBy(entity => entity.Id.Value, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if (entity is not null)
+        {
+            if (entity.Id == State.ControlledEntityId)
+            {
+                return '@';
+            }
+
+            return entity.TryGet<RenderableComponent>(out var renderable)
+                ? renderable.Glyph
+                : entity.TryGet<ActorComponent>(out _) ? 'a' : '!';
+        }
+
+        return TerrainGlyph(point);
+    }
+
+    private char RememberedTerrainGlyph(GridPoint point)
+    {
+        var glyph = TerrainGlyph(point);
+        return glyph == '#' ? '#' : ',';
+    }
+
+    private char TerrainGlyph(GridPoint point)
+    {
+        if (State.BlockingTerrain.Contains(point))
+        {
+            return '#';
+        }
+
+        var terrain = State.Terrain.TryGetValue(point, out var tile) ? tile : "floor";
+        if (terrain.Contains("water", StringComparison.OrdinalIgnoreCase)
+            || terrain.Contains("river", StringComparison.OrdinalIgnoreCase))
+        {
+            return '~';
+        }
+
+        if (terrain.Contains("flower", StringComparison.OrdinalIgnoreCase)
+            || terrain.Contains("grass", StringComparison.OrdinalIgnoreCase)
+            || terrain.Contains("moss", StringComparison.OrdinalIgnoreCase)
+            || terrain.Contains("vine", StringComparison.OrdinalIgnoreCase)
+            || terrain.Contains("reed", StringComparison.OrdinalIgnoreCase))
+        {
+            return '*';
+        }
+
+        if (terrain.Contains("fire", StringComparison.OrdinalIgnoreCase)
+            || terrain.Contains("flame", StringComparison.OrdinalIgnoreCase))
+        {
+            return '^';
+        }
+
+        return '.';
+    }
+
     public ActionResult Pickup(string? target) => _itemSystem.Pickup(target);
 
     public ActionResult DropItem(string item) => _itemSystem.DropItem(item);
@@ -167,83 +267,24 @@ public sealed class GameEngine
 
     public ActionResult Journal()
     {
-        var messages = new List<string>();
-        var visiblePromises = State.PromiseLedger.Promises
-            .Where(promise => promise.PlayerVisible)
-            .ToArray();
-        var leads = visiblePromises
-            .Where(IsLeadPromise)
-            .Select(promise => $"Lead: {promise.Id} [{promise.Status}] {promise.Text}")
-            .ToArray();
-        var otherPromises = visiblePromises
-            .Where(promise => !IsLeadPromise(promise))
-            .Select(promise => $"Promise: {promise.Id} [{promise.Status}] {promise.Text}")
-            .ToArray();
-        if (leads.Length == 0 && otherPromises.Length == 0)
-        {
-            messages.Add("No promises are visible yet.");
-        }
-        else
-        {
-            messages.AddRange(leads);
-            messages.AddRange(otherPromises);
-        }
-
-        var claims = State.Claims.Records
-            .Where(claim => claim.PlayerVisible)
-            .Where(claim => claim.Salience >= 3)
-            .OrderBy(claim => claim.Id, StringComparer.OrdinalIgnoreCase)
-            .Select(claim => $"{claim.Id} [{claim.Status}] {claim.Text}")
-            .ToArray();
-        if (claims.Length > 0)
-        {
-            messages.AddRange(claims.Select(claim => $"Claim: {claim}"));
-        }
-
-        var soulId = State.ControlledEntity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : State.ControlledEntityId.Value;
-        var legend = State.Legend.Tags
-            .Where(tag => tag.ActorSoulId.Equals(soulId, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(tag => tag.Tag)
-            .Select(group => $"{group.Key}:{group.Sum(tag => tag.Weight)}")
-            .OrderBy(text => text)
-            .ToArray();
-        if (legend.Length > 0)
-        {
-            messages.Add($"Legend: {string.Join(", ", legend)}");
-        }
-
-        var warrants = State.ScheduledEvents.Events
-            .Where(item => item.Kind.StartsWith("empire_", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(item => item.DueTurn)
-            .Select(item => item.Kind switch
-            {
-                "empire_warrant" => $"Warrant: a wanted poster is expected around turn {item.DueTurn}.",
-                "empire_patrol" => $"Pressure: an imperial patrol is expected around turn {item.DueTurn}.",
-                _ => $"Pressure: {item.Kind} is expected around turn {item.DueTurn}.",
-            })
-            .ToArray();
-        messages.AddRange(warrants);
-
         return ActionResult.Simple(
             "journal",
             true,
             false,
             State.Turn,
             State.Turn,
-            messages.ToArray());
+            JournalViewBuilder.Build(State).ToArray());
     }
 
-    private static bool IsLeadPromise(WorldPromise promise) =>
-        promise.Salience >= 3
-        && NormalizeJournalToken(promise.RealizationKind ?? promise.Kind) is
-            "site" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade" or "quest" or "door_rule" or "escape_route" or "prophecy";
-
-    private static string NormalizeJournalToken(string text)
+    public ActionResult Rumors()
     {
-        var chars = text.Trim().ToLowerInvariant()
-            .Select(character => char.IsLetterOrDigit(character) ? character : '_')
-            .ToArray();
-        return string.Join("_", new string(chars).Split('_', StringSplitOptions.RemoveEmptyEntries));
+        return ActionResult.Simple(
+            "rumors",
+            true,
+            false,
+            State.Turn,
+            State.Turn,
+            RumorViewBuilder.BuildLines(State, limit: 12).ToArray());
     }
 
     public ActionResult Talk(string text) => _interactionSystem.Talk(text);
@@ -262,6 +303,9 @@ public sealed class GameEngine
     public ActionResult Give(string item, string? target) => _interactionSystem.Give(item, target);
 
     public ActionResult Recruit(string? target) => _interactionSystem.Recruit(target);
+
+    public ActionResult RecruitFromDialogue(string actorId, string provider, string? reason) =>
+        _interactionSystem.RecruitFromDialogue(actorId, provider, reason);
 
     public ActionResult Bonds(string? target) => _interactionSystem.Bonds(target);
 
@@ -311,7 +355,7 @@ public sealed class GameEngine
 
         var capitalDefenses = State.Factions.FactionsByRole("empire_bloc")
             .Sum(faction => State.Factions.ResourceValue(faction.Id, "defenses"));
-        messages.Add($"Capital reach: thin-slice reachable; imperial defenses tracked at {capitalDefenses}.");
+        messages.Add($"Capital reach: reachable through the eastern road; imperial defenses tracked at {capitalDefenses}.");
 
         return ActionResult.Simple("standing", true, false, State.Turn, State.Turn, messages.Count == 0 ? new[] { "No faction standing is known." } : messages.ToArray());
     }
@@ -385,41 +429,61 @@ public sealed class GameEngine
             messages);
     }
 
-    public ActionResult Unsupported(string action, bool free = true)
-    {
-        var turnBefore = State.Turn;
-        var message = $"{action} is part of the Sorcerer architecture stub, but is not implemented yet.";
-        State.AddMessage(message);
-        if (!free)
-        {
-            AdvanceTurn();
-        }
-
-        return ActionResult.Simple(
-            action,
-            success: false,
-            consumedTurn: !free,
-            turnBefore,
-            State.Turn,
-            message);
-    }
-
     public IReadOnlyList<StateDelta> AdvanceTurn()
     {
         var messageCount = State.Messages.Count;
-        _turnSystem.AdvanceTurn();
-        _perceptionSystem.RefreshControlled();
-        return State.Messages
-            .Skip(messageCount)
-            .Select((message, index) => new StateDelta(
+        var structuredDeltas = _turnSystem.AdvanceTurn().ToList();
+        structuredDeltas.AddRange(ApplyPendingSuspicionUpdates());
+        structuredDeltas.AddRange(RecordControlledExploration("perception", "recordExploration"));
+
+        var unmatchedSummaries = structuredDeltas
+            .GroupBy(delta => delta.Summary, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var messageDeltas = new List<StateDelta>();
+        foreach (var message in State.Messages.Skip(messageCount))
+        {
+            if (unmatchedSummaries.TryGetValue(message, out var remaining) && remaining > 0)
+            {
+                if (remaining == 1)
+                {
+                    unmatchedSummaries.Remove(message);
+                }
+                else
+                {
+                    unmatchedSummaries[message] = remaining - 1;
+                }
+
+                continue;
+            }
+
+            messageDeltas.Add(new StateDelta(
                 "turnEvent",
-                $"turn:{State.Turn}:{index}",
+                $"turn:{State.Turn}:{messageDeltas.Count}",
                 message,
-                new Dictionary<string, object?> { ["turn"] = State.Turn }))
-            .ToArray();
+                new Dictionary<string, object?> { ["turn"] = State.Turn }));
+        }
+
+        return structuredDeltas.Concat(messageDeltas).ToArray();
     }
 
-    public void AddMessage(string message) => State.AddMessage(message);
+    private IReadOnlyList<StateDelta> ApplyPendingSuspicionUpdates()
+    {
+        var deltas = new List<StateDelta>();
+        foreach (var update in _perceptionSystem.PendingSuspicionUpdates())
+        {
+            var applied = ApplyConsequence(WorldConsequence.UpdateSuspicion(
+                "perception",
+                update.SuspicionId,
+                update.Status,
+                update.SuspectedSoulId,
+                update.AttributedTurn,
+                evidence: "Pending suspicion attribution checked at turn boundary.",
+                operation: "updateSuspicion"));
+            deltas.AddRange(applied.Deltas);
+        }
+
+        return deltas;
+    }
 
     public Entity? EntityAt(GridPoint point) =>
         State.Entities.Values.FirstOrDefault(entity =>
@@ -428,107 +492,60 @@ public sealed class GameEngine
 
     public Entity? FindNearestHostile() => _aiSystem.FindNearestHostile();
 
-    public StateDelta DamageEntity(Entity target, int amount, string damageType) =>
-        _combatSystem.DamageEntity(target, amount, damageType);
-
-    public StateDelta? ReleaseDelayedDamage(Entity target) => _combatSystem.ReleaseDelayedDamage(target);
-
-    public IReadOnlyList<StateDelta> AttackEntity(Entity attacker, Entity defender, string damageType = "physical")
+    public IReadOnlyList<StateDelta> AttackEntity(
+        Entity attacker,
+        Entity defender,
+        string damageType = "physical",
+        string source = "combat",
+        string? evidence = null,
+        string? reason = null,
+        string operation = "attack",
+        IReadOnlyDictionary<string, object?>? details = null)
     {
-        var attackDelta = _combatSystem.AttackEntity(attacker, defender, damageType);
+        var attackerActor = attacker.Get<ActorComponent>();
+        var consequenceDetails = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["attacker"] = attacker.Id.Value,
+            ["attackKind"] = "melee",
+        };
+        if (details is not null)
+        {
+            foreach (var pair in details)
+            {
+                consequenceDetails[pair.Key] = pair.Value;
+            }
+        }
+
+        var attackResult = ApplyConsequence(WorldConsequence.Damage(
+            source,
+            defender.Id.Value,
+            attackerActor.Attack,
+            damageType,
+            sourceEntityId: attacker.Id.Value,
+            evidence: evidence ?? $"{attacker.Name} attacked {defender.Name}.",
+            reason: reason ?? "Melee attack.",
+            operation: operation,
+            details: consequenceDetails));
+        if (!attackResult.Applied || attackResult.Deltas.Any(IsRejectedDelta))
+        {
+            return attackResult.Deltas;
+        }
+
+        var attackDelta = attackResult.Deltas.FirstOrDefault();
+        if (attackDelta is null)
+        {
+            return Array.Empty<StateDelta>();
+        }
+
         var hitAmount = attackDelta.Details.TryGetValue("amount", out var amount) ? Convert.ToInt32(amount) : 0;
-        var deltas = new List<StateDelta> { attackDelta };
+        var deltas = new List<StateDelta>(attackResult.Deltas);
         deltas.AddRange(_persistentEffects.FireHook("on_strike", attacker, defender, hitAmount));
         deltas.AddRange(_persistentEffects.FireHook("on_hit", defender, attacker, hitAmount));
         return deltas;
     }
 
-    public StateDelta RestoreMana(Entity target, int amount) => _combatSystem.RestoreMana(target, amount);
-
-    public StateDelta HealEntity(Entity target, int amount) => _combatSystem.HealEntity(target, amount);
-
-    public StateDelta MoveEntity(Entity entity, GridPoint destination, string operation) =>
-        _movementSystem.MoveEntity(entity, destination, operation);
-
-    public StateDelta SetTerrain(GridPoint point, string terrain, int? duration = null) =>
-        _effectSystem.SetTerrain(point, terrain, duration);
-
-    public StateDelta ApplyStatus(Entity target, string status, int duration, string displayName = "") =>
-        _effectSystem.ApplyStatus(target, status, duration, displayName);
-
-    public StateDelta RemoveStatus(Entity target, string status) => _effectSystem.RemoveStatus(target, status);
-
-    public StateDelta CreateTrigger(
-        string name,
-        string kind,
-        int delay,
-        int interval,
-        int uses,
-        int? duration,
-        EntityId? sourceEntityId,
-        string? anchorEntityId,
-        GridPoint? anchorPoint,
-        int radius,
-        string targetFilter,
-        string effectType,
-        IReadOnlyDictionary<string, object?> effectFields,
-        string description,
-        bool playerVisible)
-    {
-        var safeDelay = Math.Clamp(delay, 1, 99);
-        var safeInterval = Math.Clamp(interval, 1, 99);
-        var safeUses = Math.Clamp(uses, 1, 20);
-        var createdTurn = State.Turn;
-        var record = State.Triggers.Add(
-            name,
-            kind,
-            createdTurn,
-            createdTurn + safeDelay,
-            safeInterval,
-            safeUses,
-            duration is null ? null : createdTurn + Math.Max(safeDelay, duration.Value),
-            sourceEntityId,
-            anchorEntityId,
-            anchorPoint,
-            radius,
-            targetFilter,
-            effectType,
-            effectFields,
-            description,
-            playerVisible);
-        var message = record.Kind.Equals("aura", StringComparison.OrdinalIgnoreCase)
-            ? $"{record.Name} begins to pulse."
-            : $"{record.Name} settles into a later turn.";
-        State.AddMessage(message);
-        return new StateDelta(
-            "createTrigger",
-            record.Id,
-            message,
-            new Dictionary<string, object?>
-            {
-                ["kind"] = record.Kind,
-                ["nextTurn"] = record.NextTurn,
-                ["effectType"] = record.EffectType,
-            });
-    }
-
-    public Entity SpawnEntity(string prefix, string name, char glyph, GridPoint position, string faction, int hp, int attack, IReadOnlyList<string> tags) =>
-        _effectSystem.SpawnEntity(prefix, name, glyph, position, faction, hp, attack, tags);
-
-    public Entity SpawnItem(
-        string prefix,
-        string name,
-        char glyph,
-        GridPoint position,
-        string itemType,
-        string material,
-        IReadOnlyList<string> tags,
-        int quantity,
-        int value = 1) =>
-        _effectSystem.SpawnItem(prefix, name, glyph, position, itemType, material, tags, quantity, value);
-
-    public StateDelta AddPromise(string kind, string text, Entity? anchor = null, string triggerHint = "", string source = "wild_magic") =>
-        _interactionSystem.AddPromise(kind, text, anchor, triggerHint, source);
+    private static bool IsRejectedDelta(StateDelta delta) =>
+        delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase);
 
     public StateValidationReport ValidateState() => StateValidator.Validate(State);
 
@@ -537,16 +554,46 @@ public sealed class GameEngine
 
     public PerceptionSnapshot Perception() => _perceptionSystem.RefreshControlled();
 
+    private IReadOnlyList<StateDelta> RecordControlledExploration(string source, string operation)
+    {
+        var snapshot = _perceptionSystem.SnapshotForControlled();
+        if (snapshot.VisibleTiles.Count == 0)
+        {
+            return Array.Empty<StateDelta>();
+        }
+
+        var applied = ApplyConsequence(WorldConsequence.RecordExploration(
+            source,
+            snapshot.SoulId,
+            snapshot.VisibleTiles
+                .OrderBy(point => point.Y)
+                .ThenBy(point => point.X)
+                .ToArray(),
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: $"Controlled soul {snapshot.SoulId} perceived {snapshot.VisibleTiles.Count} tile(s).",
+            reason: "Soul-bound exploration memory is recorded through the shared consequence lifecycle.",
+            operation: operation,
+            details: new Dictionary<string, object?>
+            {
+                ["controlledEntityId"] = State.ControlledEntityId.Value,
+                ["currentZoneId"] = State.CurrentZoneId,
+                ["regionId"] = State.RegionId,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
+        return applied.Deltas;
+    }
+
     public IReadOnlyList<Entity> WitnessesOf(GridPoint point, EntityId? exclude = null) =>
         _perceptionSystem.WitnessesOf(point, exclude);
 
-    public IReadOnlyList<SuspicionRecord> RecordEffectSuspicion(
+    internal IReadOnlyList<SuspicionCapturePlan> PlanEffectSuspicion(
         GridPoint effectPoint,
         string kind,
         Entity? actor = null) =>
-        _perceptionSystem.RecordEffectSuspicion(effectPoint, kind, actor);
+        _perceptionSystem.PlanEffectSuspicion(effectPoint, kind, actor);
 
-    public DeedRecord RecordDeed(
+    internal DeedCaptureResult PlanDeedCapture(
         Entity actor,
         string kind,
         int magnitude,
@@ -558,12 +605,20 @@ public sealed class GameEngine
         var effectWitnesses = effectPoint is null
             ? Array.Empty<Entity>()
             : _perceptionSystem.WitnessesOf(effectPoint.Value, actor.Id);
+        var suspicionDeltas = Array.Empty<StateDelta>();
         if (effectPoint is not null && actorWitnesses.Count == 0 && effectWitnesses.Count > 0)
         {
-            _perceptionSystem.RecordEffectSuspicion(effectPoint.Value, kind, actor);
+            var suspicion = ApplyConsequence(WorldConsequence.RecordSuspicion(
+                "engine",
+                kind,
+                effectPoint.Value.X,
+                effectPoint.Value.Y,
+                actor.Id.Value,
+                sourceEntityId: actor.Id.Value));
+            suspicionDeltas = suspicion.Deltas.ToArray();
         }
 
-        return _worldReactions.CaptureDeed(
+        var plan = _worldReactions.PlanDeed(
             State,
             actor,
             kind,
@@ -573,6 +628,7 @@ public sealed class GameEngine
             actorWitnesses,
             effectWitnesses,
             tags);
+        return new DeedCaptureResult(plan, suspicionDeltas);
     }
 
     public Entity? ResolveEntity(string? target)
