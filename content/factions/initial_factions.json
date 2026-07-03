@@ -4,7 +4,7 @@
       "id": "player",
       "name": "The Sorcerer",
       "role": "player",
-      "hostileRoles": ["empire_bloc"],
+      "hostileRoles": ["empire_bloc", "independent_hostile"],
       "resources": {}
     },
     {
@@ -34,6 +34,13 @@
         "support": 1,
         "max_support": 1
       }
+    },
+    {
+      "id": "independent",
+      "name": "Independent Threats",
+      "role": "independent_hostile",
+      "hostileRoles": ["player"],
+      "resources": {}
     }
   ]
 }

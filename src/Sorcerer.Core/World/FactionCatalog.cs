@@ -157,7 +157,7 @@ public sealed class FactionCatalog
             "player",
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
-            new[] { "empire_bloc" }),
+            new[] { "empire_bloc", "independent_hostile" }),
         new FactionDefinition(
             "empire",
             "Grand Empire",
@@ -188,5 +188,12 @@ public sealed class FactionCatalog
                 ["max_support"] = 1,
             },
             new[] { "empire_bloc" }),
+        new FactionDefinition(
+            "independent",
+            "Independent Threats",
+            "independent_hostile",
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            new[] { "player" }),
     };
 }

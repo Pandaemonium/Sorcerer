@@ -22,7 +22,50 @@ public static class TranscriptReplayRunner
         bool assertFinal,
         bool json)
     {
-        var transcript = Load(path);
+        // A log can hold multiple episodes (--episode --episodes N writes them to one file).
+        // Each gets its own fresh session; folding them into one session would run episode 2's
+        // commands and materialized resolutions against episode 1's world under one seed.
+        var transcripts = LoadAll(path);
+        var summaries = new List<ReplayRunSummary>();
+        foreach (var transcript in transcripts)
+        {
+            summaries.Add(await ReplayOne(path, transcript, assertFinal));
+        }
+
+        var failed = summaries.Any(summary => summary.Failed);
+
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(
+                summaries.Count == 1 ? (object)summaries[0] : summaries,
+                JsonOptions));
+        }
+        else if (summaries.Count == 1)
+        {
+            PrintSummary(path, summaries[0]);
+        }
+        else
+        {
+            for (var i = 0; i < summaries.Count; i++)
+            {
+                Console.WriteLine($"--- Episode {i + 1}/{summaries.Count} ---");
+                PrintSummary(path, summaries[i]);
+            }
+
+            Console.WriteLine(
+                $"Replayed {summaries.Count} episodes from {path}: "
+                + $"{summaries.Count(summary => !summary.Failed)} passed, "
+                + $"{summaries.Count(summary => summary.Failed)} failed.");
+        }
+
+        return failed ? 1 : 0;
+    }
+
+    private static async Task<ReplayRunSummary> ReplayOne(
+        string path,
+        ReplayTranscript transcript,
+        bool assertFinal)
+    {
         var provider = new ReplaySpellProvider(transcript.ResolvedMagicJson);
         var dialogueProvider = transcript.DialogueRecords.Count == 0
             ? null
@@ -73,7 +116,7 @@ public static class TranscriptReplayRunner
             failed = true;
         }
 
-        var summary = new ReplayRunSummary(
+        return new ReplayRunSummary(
             path,
             transcript.Seed,
             transcript.OriginId,
@@ -85,31 +128,32 @@ public static class TranscriptReplayRunner
             actualFinal,
             assertFinal,
             assertionError,
-            steps);
-
-        if (json)
-        {
-            Console.WriteLine(JsonSerializer.Serialize(summary, JsonOptions));
-        }
-        else
-        {
-            Console.WriteLine($"Replayed {summary.StepCount} commands from {path}.");
-            Console.WriteLine($"Materialized spell resolutions: {summary.MaterializedSpellCount}.");
-            Console.WriteLine($"Materialized dialogue responses: {summary.MaterializedDialogueCount}.");
-            Console.WriteLine($"Materialized claim extractions: {summary.MaterializedClaimExtractionCount}.");
-            Console.WriteLine($"Materialized background texts: {summary.MaterializedBackgroundTextCount}.");
-            Console.WriteLine($"Final: turn {actualFinal.Turn}, zone {actualFinal.ZoneId}, status {actualFinal.RunStatus}, entities {actualFinal.EntityCount}, promises {actualFinal.Promises}, claims {actualFinal.Claims}, rumors {actualFinal.Rumors}, validation issues {actualFinal.ValidationIssues}.");
-            if (assertionError is not null)
-            {
-                Console.WriteLine(assertionError);
-            }
-        }
-
-        return failed ? 1 : 0;
+            steps,
+            failed);
     }
 
-    private static ReplayTranscript Load(string path)
+    private static void PrintSummary(string path, ReplayRunSummary summary)
     {
+        Console.WriteLine($"Replayed {summary.StepCount} commands from {path}.");
+        Console.WriteLine($"Materialized spell resolutions: {summary.MaterializedSpellCount}.");
+        Console.WriteLine($"Materialized dialogue responses: {summary.MaterializedDialogueCount}.");
+        Console.WriteLine($"Materialized claim extractions: {summary.MaterializedClaimExtractionCount}.");
+        Console.WriteLine($"Materialized background texts: {summary.MaterializedBackgroundTextCount}.");
+        var actualFinal = summary.FinalSummary;
+        Console.WriteLine($"Final: turn {actualFinal.Turn}, zone {actualFinal.ZoneId}, status {actualFinal.RunStatus}, entities {actualFinal.EntityCount}, promises {actualFinal.Promises}, claims {actualFinal.Claims}, rumors {actualFinal.Rumors}, validation issues {actualFinal.ValidationIssues}.");
+        if (summary.AssertionError is not null)
+        {
+            Console.WriteLine(summary.AssertionError);
+        }
+    }
+
+    /// <summary>
+    /// Splits the log into one <see cref="ReplayTranscript"/> per start record. A single-episode
+    /// transcript/script log is the common case and produces a one-element list.
+    /// </summary>
+    private static IReadOnlyList<ReplayTranscript> LoadAll(string path)
+    {
+        var transcripts = new List<ReplayTranscript>();
         var steps = new List<ReplayCommandStep>();
         var resolvedMagicJson = new List<string>();
         var dialogueRecords = new List<DialogueResolutionRecord>();
@@ -123,6 +167,30 @@ public static class TranscriptReplayRunner
         int? backgroundJobsPerTurn = null;
         var quickstart = false;
         string? quickstartScene = null;
+        var started = false;
+
+        void FinishCurrentEpisode()
+        {
+            if (!started)
+            {
+                return;
+            }
+
+            transcripts.Add(new ReplayTranscript(
+                seed,
+                originId,
+                backgroundEnabled,
+                maxBackgroundJobs,
+                backgroundJobsPerTurn,
+                quickstart,
+                quickstartScene,
+                steps.ToArray(),
+                resolvedMagicJson.ToArray(),
+                dialogueRecords.ToArray(),
+                claimExtractionRecords.ToArray(),
+                new Dictionary<string, string>(backgroundTextsByJobId, StringComparer.OrdinalIgnoreCase),
+                final));
+        }
 
         foreach (var line in File.ReadLines(path))
         {
@@ -136,7 +204,16 @@ public static class TranscriptReplayRunner
             var recordType = ReadString(root, "recordType");
             if (IsStartRecord(recordType))
             {
-                seed = ReadInt(root, "seed", seed);
+                FinishCurrentEpisode();
+                started = true;
+                steps = new List<ReplayCommandStep>();
+                resolvedMagicJson = new List<string>();
+                dialogueRecords = new List<DialogueResolutionRecord>();
+                claimExtractionRecords = new List<DialogueClaimExtractionRecord>();
+                backgroundTextsByJobId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                final = null;
+
+                seed = ReadInt(root, "seed", 7);
                 originId = ReadNullableString(root, "originId");
                 backgroundEnabled = ReadNullableBool(root, "backgroundEnabled");
                 maxBackgroundJobs = ReadNullableInt(root, "maxBackgroundJobs");
@@ -179,20 +256,8 @@ public static class TranscriptReplayRunner
             }
         }
 
-        return new ReplayTranscript(
-            seed,
-            originId,
-            backgroundEnabled,
-            maxBackgroundJobs,
-            backgroundJobsPerTurn,
-            quickstart,
-            quickstartScene,
-            steps,
-            resolvedMagicJson,
-            dialogueRecords,
-            claimExtractionRecords,
-            backgroundTextsByJobId,
-            final);
+        FinishCurrentEpisode();
+        return transcripts;
     }
 
     private static void ReadBackgroundTexts(
@@ -362,7 +427,8 @@ public static class TranscriptReplayRunner
         ReplayObservationSummary FinalSummary,
         bool AssertFinal,
         string? AssertionError,
-        IReadOnlyList<ReplayStepSummary> Steps);
+        IReadOnlyList<ReplayStepSummary> Steps,
+        bool Failed);
 
     private sealed record ReplayObservationSummary(
         int Turn,

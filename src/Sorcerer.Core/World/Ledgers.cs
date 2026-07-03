@@ -222,6 +222,9 @@ public sealed class FactionLedger
             .OrderBy(faction => faction.Id)
             .ToArray();
 
+    public string RoleOf(string factionId) =>
+        _factions.TryGetValue(factionId, out var faction) ? faction.Role : "unknown";
+
     public bool IsHostile(string actorFactionId, string targetFactionId)
     {
         if (actorFactionId.Equals(targetFactionId, StringComparison.OrdinalIgnoreCase)
@@ -601,7 +604,11 @@ public sealed record WorldTurnRecord(
 
 public sealed class WorldTurnLedger
 {
+    private const string IdPrefix = "world_turn_";
+    private const int MaxRecords = 160;
+
     private readonly List<WorldTurnRecord> _records = new();
+    private int _nextSerial;
 
     public IReadOnlyList<WorldTurnRecord> Records => _records;
 
@@ -614,7 +621,7 @@ public sealed class WorldTurnLedger
         IReadOnlyDictionary<string, object?>? details = null)
     {
         var record = new WorldTurnRecord(
-            $"world_turn_{_records.Count + 1}",
+            $"{IdPrefix}{++_nextSerial}",
             turn,
             Clean(reason, "turn"),
             Clean(kind, "move"),
@@ -622,9 +629,9 @@ public sealed class WorldTurnLedger
             summary.Trim(),
             NormalizeDetails(details));
         _records.Add(record);
-        if (_records.Count > 160)
+        if (_records.Count > MaxRecords)
         {
-            _records.RemoveRange(0, _records.Count - 160);
+            _records.RemoveRange(0, _records.Count - MaxRecords);
         }
 
         return record;
@@ -649,6 +656,7 @@ public sealed class WorldTurnLedger
             Summary = record.Summary.Trim(),
             Details = NormalizeDetails(record.Details),
         }));
+        _nextSerial = Math.Max(_nextSerial, LedgerIds.HighestSerial(_records.Select(record => record.Id), IdPrefix));
     }
 
     private static string Clean(string text, string fallback) =>
@@ -788,6 +796,33 @@ public sealed class BondLedger
     private static int ClampBond(int value) => Math.Clamp(value, -10, 10);
 }
 
+/// <summary>
+/// A ledger id is minted as "{prefix}_{serial}". Counting live records to pick the next serial
+/// collides once removals keep the count below the historical high-water mark (e.g. a fixed-size
+/// ledger that prunes old entries, or any ledger that removes fired/consumed records) -- a new
+/// record then reuses an existing id. Ledgers that mint ids this way should track a monotonic
+/// serial instead of deriving it from Count, and use <see cref="HighestSerial"/> to resume that
+/// counter correctly after ReplaceAll (rollback restore or save/load).
+/// </summary>
+internal static class LedgerIds
+{
+    public static int HighestSerial(IEnumerable<string> ids, string prefix)
+    {
+        var max = 0;
+        foreach (var id in ids)
+        {
+            if (id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(id.AsSpan(prefix.Length), out var serial)
+                && serial > max)
+            {
+                max = serial;
+            }
+        }
+
+        return max;
+    }
+}
+
 public sealed record ScheduledEventRecord(
     string Id,
     int DueTurn,
@@ -797,7 +832,10 @@ public sealed record ScheduledEventRecord(
 
 public sealed class ScheduledEventLedger
 {
+    private const string IdPrefix = "event_";
+
     private readonly List<ScheduledEventRecord> _events = new();
+    private int _nextSerial;
 
     public IReadOnlyList<ScheduledEventRecord> Events => _events;
 
@@ -808,7 +846,7 @@ public sealed class ScheduledEventLedger
         IReadOnlyDictionary<string, object?> payload)
     {
         var record = new ScheduledEventRecord(
-            $"event_{_events.Count + 1}",
+            $"{IdPrefix}{++_nextSerial}",
             dueTurn,
             kind,
             sourceEntityId,
@@ -833,6 +871,7 @@ public sealed class ScheduledEventLedger
     {
         _events.Clear();
         _events.AddRange(records);
+        _nextSerial = Math.Max(_nextSerial, LedgerIds.HighestSerial(_events.Select(record => record.Id), IdPrefix));
     }
 }
 

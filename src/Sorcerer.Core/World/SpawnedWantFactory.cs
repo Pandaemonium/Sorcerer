@@ -7,7 +7,7 @@ public static class SpawnedWantFactory
     public static WantComponent? Create(
         string entityId,
         string entityName,
-        string faction,
+        string factionRole,
         IReadOnlyList<string> tags,
         IReadOnlyList<string> roles,
         IReadOnlyList<string> interactableVerbs,
@@ -39,7 +39,7 @@ public static class SpawnedWantFactory
             return null;
         }
 
-        var profile = ProfileFor(entityName, faction, tags, roles, aiPolicyId, summoned);
+        var profile = ProfileFor(entityName, factionRole, tags, roles, aiPolicyId, summoned);
         return new WantComponent(
             $"want_{NormalizeToken(entityId, "entity")}",
             profile.Text,
@@ -64,7 +64,7 @@ public static class SpawnedWantFactory
 
     private static GeneratedWantProfile ProfileFor(
         string entityName,
-        string faction,
+        string factionRole,
         IReadOnlyList<string> tags,
         IReadOnlyList<string> roles,
         string? aiPolicyId,
@@ -99,7 +99,7 @@ public static class SpawnedWantFactory
 
         if (HasAny(tags, "empire", "imperial", "censorate", "patrol")
             || HasAny(roles, "empire", "censorate", "military", "patrol")
-            || IsFaction(faction, "empire"))
+            || IsRole(factionRole, "empire_bloc"))
         {
             return new GeneratedWantProfile(
                 "Contain disorder and make the incident read as proper procedure.",
@@ -108,7 +108,7 @@ public static class SpawnedWantFactory
                 Tags("empire", "procedure", "promise_source"));
         }
 
-        if (HasAny(tags, "hollowmere", "refuge") || IsFaction(faction, "hollowmere"))
+        if (HasAny(tags, "hollowmere", "refuge") || IsRole(factionRole, "resistance"))
         {
             return new GeneratedWantProfile(
                 "Keep local shelters safe while deciding whether this sorcerer is worth the risk.",
@@ -145,8 +145,8 @@ public static class SpawnedWantFactory
     private static bool HasAny(IReadOnlyList<string> values, params string[] needles) =>
         values.Any(value => needles.Any(needle => value.Equals(needle, StringComparison.OrdinalIgnoreCase)));
 
-    private static bool IsFaction(string faction, string expected) =>
-        faction.Equals(expected, StringComparison.OrdinalIgnoreCase);
+    private static bool IsRole(string factionRole, string expected) =>
+        factionRole.Equals(expected, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsHostilePolicy(string? aiPolicyId) =>
         !string.IsNullOrWhiteSpace(aiPolicyId)

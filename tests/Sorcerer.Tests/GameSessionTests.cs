@@ -2105,6 +2105,41 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public async Task GenericMagicConsequenceResolvesSelectorSentUnderTargetId()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(AcceptedSpell(
+            "A quiet mark finds the nearest soldier.",
+            new SpellEffect(
+                "consequence",
+                new Dictionary<string, object?>
+                {
+                    ["consequenceType"] = WorldConsequenceTypes.AddTags,
+                    // A live-model dialect: a selector word sent under targetId rather than
+                    // target. This must resolve like any other selector, not be treated as a
+                    // literal (and nonexistent) entity id named "nearest_enemy".
+                    ["targetId"] = "nearest_enemy",
+                    ["consequencePayload"] = new Dictionary<string, object?>
+                    {
+                        ["tags"] = new[] { "marked_by_selector" },
+                        ["operation"] = "testMagicSelectorTag",
+                    },
+                })))));
+        DisableImperialAi(session);
+
+        var result = await session.ExecuteAsync(new CastCommand("mark the nearest soldier"));
+
+        Assert.True(result.Success, string.Join(" | ", result.Messages));
+        Assert.False(result.TechnicalFailure);
+        Assert.Contains(
+            session.Engine.EntityById("soldier_1")!.Get<TagsComponent>().Tags,
+            tag => tag == "marked_by_selector");
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "testMagicSelectorTag"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.AddTags));
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
     public async Task GenericMagicConsequenceDoorEffectSatisfiesNarrativeDoorGuard()
     {
         var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(AcceptedSpell(
@@ -2173,9 +2208,11 @@ public sealed class GameSessionTests
         var restoredSoldier = session.Engine.EntityById("soldier_1")!;
 
         Assert.False(result.Success);
-        Assert.True(result.TechnicalFailure);
-        Assert.False(result.ConsumedTurn);
-        Assert.Equal(turnBefore, session.Engine.State.Turn);
+        // A world-refused consequence in an accepted cast is an in-world rejection that
+        // consumes the turn, never a free-retry technical failure (CORE_EXECUTION_MODEL section 5).
+        Assert.False(result.TechnicalFailure);
+        Assert.True(result.ConsumedTurn);
+        Assert.Equal(turnBefore + 1, session.Engine.State.Turn);
         Assert.DoesNotContain(restoredSoldier.Get<TagsComponent>().Tags, tag => tag == "half_applied_magic");
         Assert.DoesNotContain(result.Deltas, delta => delta.Operation == "testMagicAddTag");
         Assert.Contains(result.Deltas, delta =>
@@ -2184,7 +2221,7 @@ public sealed class GameSessionTests
             && delta.Target == "missing_fixture"
             && !delta.IsPlayerVisible());
         Assert.Contains(result.Deltas, delta =>
-            delta.Operation == "wildMagicTechnicalFailure"
+            delta.Operation == "wildMagicRejected"
             && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.Message));
         Assert.Contains("missing_fixture", result.Magic!.Error!, StringComparison.OrdinalIgnoreCase);
         Assert.True(session.Engine.ValidateState().IsValid);
@@ -3208,6 +3245,67 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public void UpdatePersistentEffectAcceptsExpireLikeTheOtherUpdateHandlersDo()
+    {
+        // "expire" is a terminal action shared by every Update* consequence handler
+        // (scheduled events, triggers, persistent effects, behavior tags, tile flows); it must
+        // not be silently rejected on persistent effects while working everywhere else.
+        var session = GameSession.CreateImperialEncounter();
+        var player = session.Engine.State.ControlledEntity;
+        var created = session.Engine.ApplyConsequence(WorldConsequence.CreatePersistentEffect(
+            "test",
+            player.Id.Value,
+            "on_hit",
+            "message",
+            new Dictionary<string, object?> { ["text"] = "A ward that never got to ring." },
+            uses: 3,
+            playerVisible: false,
+            sourceEntityId: player.Id.Value,
+            operation: "testCreatePersistentEffect"));
+        Assert.True(created.Applied, created.Error);
+
+        var result = session.Engine.ApplyConsequence(WorldConsequence.UpdatePersistentEffect(
+            "test",
+            created.TargetId!,
+            "expire"));
+
+        Assert.True(result.Applied, result.Error);
+        Assert.Empty(session.Engine.State.PersistentEffects.Records);
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "updatePersistentEffect"
+            && Equals(delta.Details["action"], "expire")
+            && Equals(delta.Details["remainingUses"], 0)
+            && delta.Summary.Contains("expired", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void UpdateBehaviorAcceptsCompleteLikeTheOtherUpdateHandlersDo()
+    {
+        // "complete" is a terminal action shared by every Update* consequence handler; it must
+        // not be silently rejected on behavior tags while working on persistent effects.
+        var session = GameSession.CreateImperialEncounter();
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var set = session.Engine.ApplyConsequence(WorldConsequence.SetBehavior(
+            "test",
+            soldier.Id.Value,
+            "dance",
+            duration: 5));
+        Assert.True(set.Applied, set.Error);
+
+        var result = session.Engine.ApplyConsequence(WorldConsequence.UpdateBehavior(
+            "test",
+            soldier.Id.Value,
+            "dance",
+            "complete"));
+
+        Assert.True(result.Applied, result.Error);
+        Assert.False(soldier.Has<BehaviorTagsComponent>());
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "updateBehavior"
+            && Equals(delta.Details["action"], "complete"));
+    }
+
+    [Fact]
     public void PersistentEffectCanDeliverGenericTypedConsequence()
     {
         var session = GameSession.CreateImperialEncounter();
@@ -3839,6 +3937,10 @@ public sealed class GameSessionTests
         Assert.True(result.Success);
         Assert.Equal(4, soldier.Get<ActorComponent>().HitPoints);
         Assert.DoesNotContain(soldier.Get<StatusContainerComponent>().Statuses, status => status.Id == "burning");
+        // The damage message must reach the persistent game log, not only the ActionResult --
+        // anything reading GameState.Messages (replay, GUI panels reopened later) needs it there.
+        Assert.Contains(session.Engine.State.Messages, message =>
+            message.Contains("burning damage", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

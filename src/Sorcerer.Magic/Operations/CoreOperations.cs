@@ -1058,31 +1058,55 @@ public sealed class ConsequenceOperation : OperationBase
             return ValidationOutcome.Reject("Generic consequence effects need consequenceType.");
         }
 
-        if (!string.IsNullOrWhiteSpace(ExplicitTargetEntityId(effect)) || !HasTargetReference(effect))
-        {
-            return ValidationOutcome.Pass;
-        }
-
-        var resolved = ResolveTargetSet(context, effect, "");
-        return IsMalformedTarget(resolved)
+        var plan = PlanTarget(context, effect);
+        return plan.Resolved is { } resolved && IsMalformedTarget(resolved)
             ? ValidationOutcome.Technical(resolved.Error ?? "Malformed target reference.")
             : ValidationOutcome.Pass;
     }
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
     {
-        var explicitTargetEntityId = ExplicitTargetEntityId(effect);
-        var resolvedTargets = string.IsNullOrWhiteSpace(explicitTargetEntityId) && HasTargetReference(effect)
-            ? ResolveTargets(context, effect, "")
-            : Array.Empty<Entity>();
-        if (resolvedTargets.Count == 0)
+        var plan = PlanTarget(context, effect);
+        if (plan.ExplicitEntityId is { } explicitEntityId)
         {
-            return ApplyForTarget(context, effect, explicitTargetEntityId);
+            return ApplyForTarget(context, effect, explicitEntityId);
+        }
+
+        var resolvedTargets = plan.Resolved?.Entities.Take(context.GroupTargetCap).ToArray()
+            ?? Array.Empty<Entity>();
+        if (resolvedTargets.Length == 0)
+        {
+            return ApplyForTarget(context, effect, null);
         }
 
         return resolvedTargets
             .SelectMany(target => ApplyForTarget(context, effect, target.Id.Value))
             .ToArray();
+    }
+
+    private readonly record struct ConsequenceTargetPlan(string? ExplicitEntityId, ResolvedEntitySet? Resolved);
+
+    /// <summary>
+    /// A target field's value decides how it is used, not which field name it arrived under.
+    /// targetEntityId/targetId/entityId (and their snake_case twins) are addressed through the
+    /// same id/selector/name/point classification every other operation uses, so a selector word
+    /// such as "nearest_enemy" sent under targetId still resolves instead of being looked up as a
+    /// literal (and nonexistent) entity id. Only a value that actually classifies as a literal id
+    /// skips resolution, matching how those fields have always behaved for real entity ids.
+    /// </summary>
+    private static ConsequenceTargetPlan PlanTarget(EffectContext context, SpellEffect effect)
+    {
+        var explicitRef = ExplicitTargetRef(effect);
+        if (explicitRef is { } reference)
+        {
+            return reference.Kind.Equals("id", StringComparison.OrdinalIgnoreCase)
+                ? new ConsequenceTargetPlan(reference.Value, null)
+                : new ConsequenceTargetPlan(null, context.Refs.Resolve(reference));
+        }
+
+        return effect.Fields.ContainsKey("target")
+            ? new ConsequenceTargetPlan(null, ResolveTargetSet(context, effect, ""))
+            : new ConsequenceTargetPlan(null, null);
     }
 
     private static IReadOnlyList<StateDelta> ApplyForTarget(
@@ -1176,28 +1200,35 @@ public sealed class ConsequenceOperation : OperationBase
             "")!.Trim();
     }
 
-    private static string? ExplicitTargetEntityId(SpellEffect effect)
+    private static readonly string[] TargetIdFieldAliases =
+    {
+        "targetEntityId", "target_entity_id", "targetId", "target_id", "entityId", "entity_id",
+    };
+
+    private static EntityRef? ExplicitTargetRef(SpellEffect effect)
     {
         var payload = ConsequencePayload(effect);
-        return FirstNonBlank(
-            Text(effect, "targetEntityId", ""),
-            Text(effect, "target_entity_id", ""),
-            Text(effect, "targetId", ""),
-            Text(effect, "target_id", ""),
-            Text(effect, "entityId", ""),
-            Text(effect, "entity_id", ""),
-            TextFromMap(payload, "targetEntityId"),
-            TextFromMap(payload, "target_entity_id"),
-            TextFromMap(payload, "targetId"),
-            TextFromMap(payload, "target_id"),
-            TextFromMap(payload, "entityId"),
-            TextFromMap(payload, "entity_id"));
+        foreach (var key in TargetIdFieldAliases)
+        {
+            if (effect.Fields.TryGetValue(key, out var raw) && HasText(raw))
+            {
+                return ReferenceBinder.NormalizeEntityRef(raw);
+            }
+        }
+
+        foreach (var key in TargetIdFieldAliases)
+        {
+            if (payload.TryGetValue(key, out var raw) && HasText(raw))
+            {
+                return ReferenceBinder.NormalizeEntityRef(raw);
+            }
+        }
+
+        return null;
     }
 
-    private static bool HasTargetReference(SpellEffect effect) =>
-        effect.Fields.ContainsKey("target")
-        || effect.Fields.ContainsKey("targetId")
-        || effect.Fields.ContainsKey("target_id");
+    private static bool HasText(object? raw) =>
+        raw is IReadOnlyDictionary<string, object?> || !string.IsNullOrWhiteSpace(Convert.ToString(raw));
 
     private static Dictionary<string, object?> ConsequencePayload(SpellEffect effect)
         => WorldConsequencePayloadBuilder.MergeNestedWithTopLevelFields(

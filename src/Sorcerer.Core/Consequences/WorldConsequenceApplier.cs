@@ -525,7 +525,10 @@ public sealed class WorldConsequenceApplier
                     var next = Math.Clamp(soul.Mana + delta, floor, Math.Max(floor, ceiling));
                     var updatedSoul = soul with { Mana = next };
                     state.Souls.Set(updatedSoul);
-                    entity.Set(actor with { Mana = updatedSoul.Mana, MaxMana = updatedSoul.MaxMana });
+                    // Always sync the actor mirror through the one shared helper (also used by
+                    // ApplyRestoreMana) so Mana is re-clamped to [0, MaxMana] the same way
+                    // everywhere, even when an explicit payload max exceeds the soul's MaxMana.
+                    entity.Set(CharacterMath.ActorWithSoulMana(actor, updatedSoul));
                     return next;
                 }
 
@@ -541,7 +544,7 @@ public sealed class WorldConsequenceApplier
                         Mana = Math.Clamp(soul.Mana, 0, nextMax),
                     };
                     state.Souls.Set(updatedSoul);
-                    entity.Set(actor with { Mana = updatedSoul.Mana, MaxMana = updatedSoul.MaxMana });
+                    entity.Set(CharacterMath.ActorWithSoulMana(actor, updatedSoul));
                     return nextMax;
                 }
 
@@ -969,6 +972,7 @@ public sealed class WorldConsequenceApplier
         if (damagePerTurn > 0)
         {
             var delta = DamageEntityDelta(target.Entity, damagePerTurn * remainingTurns, instance.Id);
+            AddMessageIfAllowed(consequence, payload, delta.Summary);
             return AppliedFromDelta(consequence, delta);
         }
 
@@ -981,6 +985,7 @@ public sealed class WorldConsequenceApplier
                 actor,
                 healPerTurn * remainingTurns,
                 ReadString(payload, "operation") ?? "accelerateStatusHeal");
+            AddMessageIfAllowed(consequence, payload, delta.Summary);
             return AppliedFromDelta(consequence, delta);
         }
 
@@ -1145,7 +1150,7 @@ public sealed class WorldConsequenceApplier
         var spawnedWant = SpawnedWantFactory.Create(
             entity.Id.Value,
             entity.Name,
-            faction,
+            _state.Factions.RoleOf(faction),
             tags,
             roles,
             interactableVerbs,
@@ -3195,6 +3200,27 @@ public sealed class WorldConsequenceApplier
         return Applied(consequence, scheduled.Id, messages, delta, ("eventId", scheduled.Id), ("dueTurn", scheduled.DueTurn));
     }
 
+    /// <summary>
+    /// The three terminal outcomes every Update* consequence (scheduled event, trigger,
+    /// persistent effect, behavior tag, tile flow) can end in. Each handler previously grew its
+    /// own ad hoc synonym list and they silently diverged -- "expire" worked on triggers and
+    /// flows but was rejected on persistent effects, "complete" worked on persistent effects but
+    /// was rejected on behavior tags -- so a content-authored consequence using one handler's
+    /// vocabulary would fail on another for no reason a player or content author could predict.
+    /// Classifying through one shared table keeps all three recognized everywhere; each handler
+    /// still picks its own verb text and may accept additional non-terminal actions of its own
+    /// (a trigger's "advance", a persistent effect's "consume").
+    /// </summary>
+    private enum TerminalUpdateAction { Complete, Expire, Remove }
+
+    private static TerminalUpdateAction? ClassifyTerminalAction(string action) => action switch
+    {
+        "complete" or "completed" => TerminalUpdateAction.Complete,
+        "expire" or "expired" => TerminalUpdateAction.Expire,
+        "remove" or "clear" or "delete" => TerminalUpdateAction.Remove,
+        _ => null,
+    };
+
     private WorldConsequenceApplyResult ApplyUpdateScheduledEvent(WorldConsequence consequence)
     {
         var payload = consequence.Payload ?? new Dictionary<string, object?>();
@@ -3212,11 +3238,12 @@ public sealed class WorldConsequenceApplier
         }
 
         var action = NormalizeToken(FirstNonBlank(ReadString(payload, "action"), "due")!, "due");
-        var verb = action switch
+        var terminal = action == "due" ? TerminalUpdateAction.Complete : ClassifyTerminalAction(action);
+        var verb = terminal switch
         {
-            "due" or "complete" or "completed" => "came due",
-            "remove" or "clear" or "delete" => "was removed",
-            "expire" or "expired" => "expired",
+            TerminalUpdateAction.Complete => "came due",
+            TerminalUpdateAction.Remove => "was removed",
+            TerminalUpdateAction.Expire => "expired",
             _ => null,
         };
         if (verb is null)
@@ -3342,13 +3369,12 @@ public sealed class WorldConsequenceApplier
 
         var action = NormalizeToken(FirstNonBlank(ReadString(payload, "action"), "advance")!, "advance");
         var operation = ReadString(payload, "operation") ?? "updateTrigger";
-        var summary = action switch
+        var summary = ClassifyTerminalAction(action) switch
         {
-            "advance" or "reschedule" or "set" => ApplyTriggerAdvance(payload, record),
-            "complete" or "completed" => RemoveTrigger(record, "completed"),
-            "expire" or "expired" => RemoveTrigger(record, "expired"),
-            "remove" or "clear" or "delete" => RemoveTrigger(record, "removed"),
-            _ => null,
+            TerminalUpdateAction.Complete => RemoveTrigger(record, "completed"),
+            TerminalUpdateAction.Expire => RemoveTrigger(record, "expired"),
+            TerminalUpdateAction.Remove => RemoveTrigger(record, "removed"),
+            _ => action is "advance" or "reschedule" or "set" ? ApplyTriggerAdvance(payload, record) : null,
         };
         if (summary is null)
         {
@@ -3439,7 +3465,11 @@ public sealed class WorldConsequenceApplier
         var payload = consequence.Payload ?? new Dictionary<string, object?>();
         var factionId = CleanLedgerKey(FirstNonBlank(ReadString(payload, "factionId"), consequence.TargetEntityId, "unknown")!, "unknown");
         var resource = CleanLedgerKey(FirstNonBlank(ReadString(payload, "resource"), "heat")!, "heat");
-        var deltaValue = Math.Clamp(ReadInt(payload, "delta") ?? 0, -999, 999);
+        var rawDelta = ReadInt(payload, "delta") ?? 0;
+        // Untrusted content (wild magic, dialogue) is clamped to a sane one-step swing; engine
+        // callers that already bound their own delta (see WorldConsequence.AdjustFactionResource)
+        // opt out explicitly instead of silently having it truncated out from under them.
+        var deltaValue = ReadBool(payload, "allowLargeDelta") == true ? rawDelta : Math.Clamp(rawDelta, -999, 999);
         if (deltaValue == 0)
         {
             return Reject(consequence, "Faction-resource consequence had zero delta.");
@@ -3463,7 +3493,7 @@ public sealed class WorldConsequenceApplier
                 ("min", min),
                 ("max", max),
                 ("playerVisible", ReadBool(payload, "playerVisible") ?? IsVisible(consequence.Visibility))));
-        return Applied(consequence, factionId, MaybeVisibleMessage(consequence, summary), delta, ("resource", resource), ("value", value));
+        return Applied(consequence, factionId, MaybeVisibleMessage(consequence, summary), delta, ("resource", resource), ("delta", deltaValue), ("value", value));
     }
 
     private WorldConsequenceApplyResult ApplyRecordSuspicion(WorldConsequence consequence)
@@ -4272,12 +4302,12 @@ public sealed class WorldConsequenceApplier
         var action = NormalizeToken(FirstNonBlank(ReadString(payload, "action"), "consume")!, "consume");
         var amount = Math.Clamp(ReadInt(payload, "amount") ?? 1, 1, 999);
         var remaining = record.RemainingUses;
-        var verb = action switch
+        var verb = ClassifyTerminalAction(action) switch
         {
-            "consume" or "use" or "fire" => ApplyPersistentEffectConsume(record, amount, out remaining),
-            "complete" or "completed" => RemovePersistentEffect(record, out remaining, "completed"),
-            "remove" or "clear" or "delete" => RemovePersistentEffect(record, out remaining, "removed"),
-            _ => null,
+            TerminalUpdateAction.Complete => RemovePersistentEffect(record, out remaining, "completed"),
+            TerminalUpdateAction.Expire => RemovePersistentEffect(record, out remaining, "expired"),
+            TerminalUpdateAction.Remove => RemovePersistentEffect(record, out remaining, "removed"),
+            _ => action is "consume" or "use" or "fire" ? ApplyPersistentEffectConsume(record, amount, out remaining) : null,
         };
         if (verb is null)
         {
@@ -4371,10 +4401,11 @@ public sealed class WorldConsequenceApplier
         }
 
         var action = NormalizeToken(FirstNonBlank(ReadString(payload, "action"), "remove")!, "remove");
-        var verb = action switch
+        var verb = ClassifyTerminalAction(action) switch
         {
-            "expire" or "expired" => "expires",
-            "remove" or "clear" or "delete" => "is removed",
+            TerminalUpdateAction.Complete => "completes",
+            TerminalUpdateAction.Expire => "expires",
+            TerminalUpdateAction.Remove => "is removed",
             _ => null,
         };
         if (verb is null)
@@ -4472,10 +4503,11 @@ public sealed class WorldConsequenceApplier
         }
 
         var action = NormalizeToken(FirstNonBlank(ReadString(payload, "action"), "expire")!, "expire");
-        var verb = action switch
+        var verb = ClassifyTerminalAction(action) switch
         {
-            "expire" or "expired" => "expires",
-            "remove" or "clear" or "delete" => "is removed",
+            TerminalUpdateAction.Complete => "completes",
+            TerminalUpdateAction.Expire => "expires",
+            TerminalUpdateAction.Remove => "is removed",
             _ => null,
         };
         if (verb is null)
@@ -5547,13 +5579,18 @@ public sealed class WorldConsequenceApplier
                         return Reject(consequence, $"{merchant.Name} cannot afford {itemName}.");
                     }
 
+                    // Resolve against an existing ware the same way buy does, so selling an item
+                    // under a slightly different name or case than the merchant's stock key does
+                    // not fragment one ware into two separate, unreconciled stock entries. Falls
+                    // back to the requested key only when the merchant never carried this ware.
+                    var wareKey = FindWareKey(stock, requestedWareKey) ?? requestedWareKey;
                     AdjustInventory(actor, inventory, itemKey, -quantity);
                     AdjustInventory(actor, inventory, "gold", totalPrice);
-                    stock.Wares.TryGetValue(requestedWareKey, out var current);
-                    stock.Wares[requestedWareKey] = current + quantity;
+                    stock.Wares.TryGetValue(wareKey, out var current);
+                    stock.Wares[wareKey] = current + quantity;
                     merchant.Set(stock with { Gold = stock.Gold - totalPrice });
                     summary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), $"{actor.Name} sells {itemName} to {merchant.Name} for {totalPrice} gold.")!;
-                    delta = TradeDelta(consequence, payload, merchant, actor, mode, itemName, requestedWareKey, price, quantity, totalPrice, stock.Gold, summary);
+                    delta = TradeDelta(consequence, payload, merchant, actor, mode, itemName, wareKey, price, quantity, totalPrice, stock.Gold, summary);
                     break;
                 }
 

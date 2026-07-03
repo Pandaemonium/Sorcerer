@@ -899,7 +899,7 @@ public sealed class PromiseRealizationSystem
                 position.Y,
                 prefix: "promise_threat",
                 glyph: 'D',
-                faction: "empire",
+                faction: PromiseThreatFaction(promise),
                 hp: 8,
                 attack: 3,
                 tags: tags,
@@ -1250,7 +1250,7 @@ public sealed class PromiseRealizationSystem
             position.Y,
             prefix: "promise_threat",
             glyph: 'D',
-            faction: "empire",
+            faction: PromiseThreatFaction(promise),
             hp: 8,
             attack: 3,
             tags: BasicPromiseTags(promise, "threat"),
@@ -2549,6 +2549,36 @@ public sealed class PromiseRealizationSystem
         return false;
     }
 
+    /// <summary>
+    /// Trigger words that should be treated as fully interchangeable, in both directions. A
+    /// pairwise "if trigger is X, hint Y also matches" table silently drifts asymmetric (a
+    /// promise hinted "sell" never fired on a "buy" trigger, because the "buy" row's allowed
+    /// hints never listed "sell" as its own trigger's synonym, and vice versa); one symmetric
+    /// group per concept fixes that structurally, since group membership is checked without
+    /// regard to which side is the trigger and which is the hint.
+    /// </summary>
+    private static readonly string[] WaitSynonymGroup =
+        { "wait", "rest", "linger", "delay", "time", "turn", "bellfall", "nightfall" };
+
+    private static readonly string[][] TriggerSynonymGroups =
+    {
+        new[] { "open", "door", "opened", "unlock" },
+        new[] { "talk", "speak", "name", "dialogue" },
+        new[] { "read", "notice", "sign", "book" },
+        new[] { "inspect", "examine", "look", "fixture" },
+        new[] { "trade", "buy", "sell", "wares", "merchant", "market", "stock" },
+        new[]
+        {
+            "services", "request", "service", "offer", "folk_magic",
+            "door", "lock", "ward", "mend", "heal", "guide",
+        },
+        WaitSynonymGroup,
+    };
+
+    private static IEnumerable<string> SplitHints(string triggerHint) =>
+        triggerHint.ToLowerInvariant()
+            .Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
     private static bool PromiseTriggerMatches(string? triggerHint, string trigger)
     {
         if (string.IsNullOrWhiteSpace(triggerHint))
@@ -2557,22 +2587,10 @@ public sealed class PromiseRealizationSystem
         }
 
         var normalizedTrigger = trigger.Trim().ToLowerInvariant();
-        var hints = triggerHint.ToLowerInvariant()
-            .Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return hints.Any(hint =>
+        return SplitHints(triggerHint).Any(hint =>
             hint == normalizedTrigger
             || hint.Equals("encounter", StringComparison.OrdinalIgnoreCase)
-            || (normalizedTrigger == "open" && hint is "door" or "opened" or "unlock")
-            || (normalizedTrigger == "talk" && hint is "speak" or "name" or "dialogue")
-            || (normalizedTrigger == "read" && hint is "notice" or "sign" or "book")
-            || (normalizedTrigger == "inspect" && hint is "examine" or "look" or "fixture")
-            || (normalizedTrigger == "trade" && hint is "buy" or "sell" or "wares" or "merchant" or "market" or "stock")
-            || (normalizedTrigger == "buy" && hint is "trade" or "wares" or "merchant" or "market" or "stock")
-            || (normalizedTrigger == "sell" && hint is "trade" or "wares" or "merchant" or "market" or "stock")
-            || (normalizedTrigger == "wares" && hint is "trade" or "buy" or "merchant" or "market" or "stock")
-            || (normalizedTrigger is "services" or "request" or "service"
-                && hint is "service" or "services" or "request" or "offer" or "folk_magic" or "door" or "lock" or "ward" or "mend" or "heal" or "guide")
-            || (normalizedTrigger == "wait" && hint is "rest" or "linger" or "delay" or "time" or "turn" or "bellfall" or "nightfall"));
+            || TriggerSynonymGroups.Any(group => group.Contains(normalizedTrigger) && group.Contains(hint)));
     }
 
     private static bool AmbientTriggerMatches(string? triggerHint, string trigger)
@@ -2583,11 +2601,9 @@ public sealed class PromiseRealizationSystem
         }
 
         var normalizedTrigger = trigger.Trim().ToLowerInvariant();
-        return triggerHint.ToLowerInvariant()
-            .Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Any(hint =>
-                hint == normalizedTrigger
-                || (normalizedTrigger == "wait" && hint is "rest" or "linger" or "delay" or "time" or "turn" or "bellfall" or "nightfall"));
+        return SplitHints(triggerHint).Any(hint =>
+            hint == normalizedTrigger
+            || (WaitSynonymGroup.Contains(normalizedTrigger) && WaitSynonymGroup.Contains(hint)));
     }
 
     private static bool TriggerHintHasExactMatch(string? triggerHint, string trigger)
@@ -2597,9 +2613,7 @@ public sealed class PromiseRealizationSystem
             return false;
         }
 
-        return triggerHint.ToLowerInvariant()
-            .Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Any(hint => hint.Equals(trigger, StringComparison.OrdinalIgnoreCase));
+        return SplitHints(triggerHint).Any(hint => hint.Equals(trigger, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string PromiseContextLabel(PromiseRealizationContext context)
@@ -2920,6 +2934,18 @@ public sealed class PromiseRealizationSystem
         return "promised merchant";
     }
 
+    /// <summary>
+    /// A threat promise only reads as imperial when its own text says so; otherwise it is a
+    /// private grudge (a debt collector, a rival, a personal enemy) and must not be spawned
+    /// under the Empire's faction, or killing it would feed Censorate heat and warrant pressure
+    /// for a threat that had nothing to do with the Empire.
+    /// </summary>
+    private static bool IsImperialThreat(WorldPromise promise)
+    {
+        var lower = $"{promise.Subject} {promise.Text}".ToLowerInvariant();
+        return lower.Contains("soldier") || lower.Contains("empire") || lower.Contains("imperial");
+    }
+
     private static string PromiseThreatName(WorldPromise promise)
     {
         var lower = $"{promise.Subject} {promise.Text}".ToLowerInvariant();
@@ -2928,13 +2954,22 @@ public sealed class PromiseRealizationSystem
             return "debt collector";
         }
 
-        if (lower.Contains("soldier") || lower.Contains("empire") || lower.Contains("imperial"))
+        if (IsImperialThreat(promise))
         {
             return "promised imperial claimant";
         }
 
         return "promised threat";
     }
+
+    /// <summary>
+    /// "empire" only for promises whose own text names the Empire; everything else spawns under
+    /// the "independent" faction (hostile to the player, but not in the empire_bloc role) so
+    /// WorldTurnSystem's empire-heat pressure (which reads FactionsByRole("empire_bloc")) is
+    /// never fed by a private threat like a debt collector.
+    /// </summary>
+    private static string PromiseThreatFaction(WorldPromise promise) =>
+        IsImperialThreat(promise) ? "empire" : "independent";
 
     private static string PromiseServiceName(WorldPromise promise)
     {

@@ -2,6 +2,7 @@ using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Transactions;
+using Sorcerer.Core.Validation;
 
 namespace Sorcerer.Core.World;
 
@@ -581,13 +582,29 @@ public sealed class WorldTurnSystem
         string attemptedSourceId,
         Func<List<StateDelta>, bool> applyMove)
     {
+        var beforeValidation = StateValidator.Validate(state);
         var snapshot = GameStateSnapshot.Capture(state);
         var transactionDeltas = new List<StateDelta>();
-        if (applyMove(transactionDeltas)
-            && !transactionDeltas.Any(IsRejectedDelta))
+        bool moveSucceeded;
+        using (WorldConsequenceGuard.EnterScope())
         {
-            deltas.AddRange(transactionDeltas);
-            return true;
+            // This snapshot already covers the whole move; nested ApplyConsequence calls made
+            // inside applyMove skip their own per-consequence snapshot (see EnterScope).
+            moveSucceeded = applyMove(transactionDeltas) && !transactionDeltas.Any(IsRejectedDelta);
+        }
+
+        if (moveSucceeded)
+        {
+            var afterValidation = StateValidator.Validate(state);
+            if (!beforeValidation.IsValid || afterValidation.IsValid)
+            {
+                deltas.AddRange(transactionDeltas);
+                return true;
+            }
+
+            snapshot.Restore(state);
+            deltas.Add(WorldTurnSkippedDelta(attemptedKind, attemptedSourceId, transactionDeltas.Count, Array.Empty<StateDelta>()));
+            return false;
         }
 
         if (transactionDeltas.Count > 0)
@@ -703,13 +720,24 @@ public sealed class WorldTurnSystem
             details: new Dictionary<string, object?>
             {
                 ["playerVisible"] = false,
-            }));
+            },
+            allowLargeDelta: true));
         if (deltas is not null)
         {
             deltas.AddRange(applied.Deltas);
         }
 
-        return applied.Applied ? actualDelta : 0;
+        if (!applied.Applied)
+        {
+            return 0;
+        }
+
+        // Trust the ledger's own report of what actually landed rather than the value we asked
+        // for -- the applier is entitled to clamp or otherwise adjust it, and callers such as
+        // SetFactionResource compare this return against their own expectation to detect success.
+        return applied.Details.TryGetValue("value", out var rawValue) && rawValue is not null
+            ? Convert.ToInt32(rawValue) - current
+            : actualDelta;
     }
 
     private static bool SetFactionResource(

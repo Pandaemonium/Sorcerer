@@ -2,6 +2,7 @@ using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Transactions;
+using Sorcerer.Core.Validation;
 
 namespace Sorcerer.Core.World;
 
@@ -178,43 +179,55 @@ public static class RumorSystem
             var message = RumorSpreadMessage(state, regionCarrier, newCarriers, rumor.Text);
             var nextSalience = SalienceAfterSpread(rumor);
             var nextStatus = StatusAfterSpread(rumor, nextSalience);
+            var beforeValidation = StateValidator.Validate(state);
             var snapshot = GameStateSnapshot.Capture(state);
             var localDeltas = new List<StateDelta>();
-            var applied = Apply(state, applyConsequence, WorldConsequence.UpdateRumor(
-                "world_turn",
-                rumor.Id,
-                currentRegionId: state.RegionId,
-                salience: nextSalience,
-                status: nextStatus,
-                carrierIds: carriers.OrderBy(id => id, StringComparer.OrdinalIgnoreCase).ToArray(),
-                appendDistortionHistory: new[] { historyEntry },
-                incrementHops: true,
-                visibility: announce ? WorldConsequenceVisibility.Message : WorldConsequenceVisibility.Hidden,
-                reason: reason,
-                operation: "rumorSpread",
-                message: message,
-                details: new Dictionary<string, object?>
-                {
-                    ["reason"] = reason,
-                    ["regionId"] = state.RegionId,
-                    ["newCarriers"] = newCarriers.ToArray(),
-                    ["salienceBefore"] = rumor.Salience,
-                    ["salienceAfter"] = nextSalience,
-                    ["statusBefore"] = rumor.Status,
-                    ["statusAfter"] = nextStatus,
-                    ["playerVisible"] = announce,
-                }));
-            localDeltas.AddRange(applied.Deltas);
-            if (applied.Applied)
+            WorldConsequenceApplyResult applied;
+            using (WorldConsequenceGuard.EnterScope())
             {
-                localDeltas.AddRange(RecordHeardMemories(state, rumor, reason, newCarriers, applyConsequence));
+                // The snapshot above already covers this rumor's whole spread attempt (the
+                // update plus any heard-memory writes), so nested ApplyConsequence calls skip
+                // their own per-consequence snapshot (see EnterScope).
+                applied = Apply(state, applyConsequence, WorldConsequence.UpdateRumor(
+                    "world_turn",
+                    rumor.Id,
+                    currentRegionId: state.RegionId,
+                    salience: nextSalience,
+                    status: nextStatus,
+                    carrierIds: carriers.OrderBy(id => id, StringComparer.OrdinalIgnoreCase).ToArray(),
+                    appendDistortionHistory: new[] { historyEntry },
+                    incrementHops: true,
+                    visibility: announce ? WorldConsequenceVisibility.Message : WorldConsequenceVisibility.Hidden,
+                    reason: reason,
+                    operation: "rumorSpread",
+                    message: message,
+                    details: new Dictionary<string, object?>
+                    {
+                        ["reason"] = reason,
+                        ["regionId"] = state.RegionId,
+                        ["newCarriers"] = newCarriers.ToArray(),
+                        ["salienceBefore"] = rumor.Salience,
+                        ["salienceAfter"] = nextSalience,
+                        ["statusBefore"] = rumor.Status,
+                        ["statusAfter"] = nextStatus,
+                        ["playerVisible"] = announce,
+                    }));
+                localDeltas.AddRange(applied.Deltas);
+                if (applied.Applied)
+                {
+                    localDeltas.AddRange(RecordHeardMemories(state, rumor, reason, newCarriers, applyConsequence));
+                }
             }
 
             if (applied.Applied && !localDeltas.Any(IsRejectedDelta))
             {
-                deltas.AddRange(localDeltas);
-                spreadCount++;
-                continue;
+                var afterValidation = StateValidator.Validate(state);
+                if (!beforeValidation.IsValid || afterValidation.IsValid)
+                {
+                    deltas.AddRange(localDeltas);
+                    spreadCount++;
+                    continue;
+                }
             }
 
             snapshot.Restore(state);

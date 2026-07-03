@@ -124,7 +124,11 @@ public sealed class OllamaBackgroundTextGenerator : IBackgroundTextGenerator
     public string Name => "ollama-background";
 
     public BackgroundTextGenerationResult Generate(BackgroundTextRequest request) =>
-        GenerateAsync(request).GetAwaiter().GetResult();
+        // Run on a thread-pool thread with no captured SynchronizationContext. Called
+        // synchronously from the turn pump, which on Godot runs on the main thread; awaiting
+        // in-place here would try to marshal continuations back onto that same blocked thread
+        // and deadlock the GUI permanently.
+        Task.Run(() => GenerateAsync(request)).GetAwaiter().GetResult();
 
     private async Task<BackgroundTextGenerationResult> GenerateAsync(BackgroundTextRequest request)
     {
@@ -224,7 +228,9 @@ public sealed class OpenAiCompatibleBackgroundTextGenerator : IBackgroundTextGen
     public string Name => "openai-compatible-background";
 
     public BackgroundTextGenerationResult Generate(BackgroundTextRequest request) =>
-        GenerateAsync(request).GetAwaiter().GetResult();
+        // See OllamaBackgroundTextGenerator.Generate: must not await in-place on the calling
+        // thread, or the turn pump deadlocks the Godot GUI's main thread.
+        Task.Run(() => GenerateAsync(request)).GetAwaiter().GetResult();
 
     private async Task<BackgroundTextGenerationResult> GenerateAsync(BackgroundTextRequest request)
     {

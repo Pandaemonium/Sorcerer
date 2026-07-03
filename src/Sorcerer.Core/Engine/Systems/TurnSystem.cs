@@ -515,12 +515,20 @@ public sealed class TurnSystem
             return null;
         }
 
-        if (raw is int intValue)
+        // Match WorldConsequenceApplier.ReadInt's numeric coverage. A scheduled/delayed
+        // consequence re-materializes this same payload later through this method, so a
+        // fractional or long numeric field (plausible from LLM-authored JSON) that an immediate
+        // consequence would round/clamp correctly must not silently drop here instead.
+        return raw switch
         {
-            return intValue;
-        }
-
-        return int.TryParse(Convert.ToString(raw), out var parsed) ? parsed : null;
+            int typed => typed,
+            long typed => typed > int.MaxValue ? int.MaxValue : typed < int.MinValue ? int.MinValue : (int)typed,
+            double typed => (int)Math.Round(typed),
+            float typed => (int)Math.Round(typed),
+            decimal typed => (int)Math.Round(typed),
+            string text when int.TryParse(text, out var parsed) => parsed,
+            _ => null,
+        };
     }
 
     private static bool? ReadPayloadBool(IReadOnlyDictionary<string, object?> payload, string key)

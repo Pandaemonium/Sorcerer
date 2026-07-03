@@ -1470,7 +1470,14 @@ public sealed record WorldConsequence(
         string? evidence = null,
         string? reason = null,
         string operation = "adjustFactionResource",
-        IReadOnlyDictionary<string, object?>? details = null) =>
+        IReadOnlyDictionary<string, object?>? details = null,
+        // The applier clamps an ordinary delta to +/-999 as a safety rail against a wild/
+        // hallucinated swing from untrusted magic or dialogue content. Engine-internal callers
+        // (e.g. WorldTurnSystem setting an absolute cooldown-until turn number) compute an
+        // already-bounded delta themselves and can legitimately need a larger one-step swing as
+        // a run's turn count grows; they opt out explicitly here rather than have the applier
+        // special-case a source string.
+        bool allowLargeDelta = false) =>
         new(
             WorldConsequenceTypes.AdjustFactionResource,
             source,
@@ -1486,7 +1493,8 @@ public sealed record WorldConsequence(
                 ("delta", delta),
                 ("min", min),
                 ("max", max),
-                ("operation", operation)));
+                ("operation", operation),
+                ("allowLargeDelta", allowLargeDelta)));
 
     public static WorldConsequence RecordSuspicion(
         string source,

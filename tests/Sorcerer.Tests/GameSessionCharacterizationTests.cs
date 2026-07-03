@@ -1265,10 +1265,27 @@ public sealed class GameSessionCharacterizationTests
             entity.Name == "debt collector"
             && entity.TryGet<PromiseAnchorComponent>(out var anchor)
             && anchor.PromiseIds.Contains(promise.Id));
-        Assert.Equal("empire", threat.Get<ActorComponent>().Faction);
+        // A private debt collector is not the Empire; spawning it under the empire faction would
+        // feed Censorate heat/warrant pressure for a threat that has nothing to do with it. It
+        // must still be a real, engine-recognized hostile toward the player, not just tagged so.
+        Assert.Equal("independent", threat.Get<ActorComponent>().Faction);
         Assert.Equal("hostile", threat.Get<AiComponent>().PolicyId);
+        Assert.True(session.Engine.IsHostile(threat, session.Engine.State.ControlledEntity));
         Assert.Contains("leverage", threat.Get<WantComponent>().Text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("generated_want", threat.Get<WantComponent>().Tags);
+
+        // The regression this guards: FactionLedger.IsHostile(actor, target) checks the ACTOR's
+        // own hostileRoles against the TARGET's role, so it is not automatically symmetric.
+        // Giving the threat's faction hostileRoles:["player"] makes it attack the player, but
+        // the player's own faction must separately list the threat's role as hostile too, or
+        // bumping into it reads as "blocks the way" instead of a bump-attack.
+        var hpBefore = threat.Get<ActorComponent>().HitPoints;
+        var threatPosition = threat.Get<PositionComponent>().Position;
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(threatPosition.Translate(-1, 0)));
+        var bump = await session.ExecuteAsync(new MoveCommand(Direction.East));
+
+        Assert.DoesNotContain(bump.Messages, message => message.Contains("blocks the way", StringComparison.OrdinalIgnoreCase));
+        Assert.True(threat.Get<ActorComponent>().HitPoints < hpBefore, string.Join(" | ", bump.Messages));
     }
 
     [Fact]
@@ -7435,8 +7452,44 @@ public sealed class GameSessionCharacterizationTests
             entity.Name == "debt collector"
             && entity.TryGet<PromiseAnchorComponent>(out var anchor)
             && anchor.PromiseIds.Contains(promise.Id));
-        Assert.Equal("empire", threat.Get<ActorComponent>().Faction);
+        // A private debt collector is not the Empire; spawning it under the empire faction would
+        // feed Censorate heat/warrant pressure for a threat that has nothing to do with it. It
+        // must still be a real, engine-recognized hostile toward the player, not just tagged so.
+        Assert.Equal("independent", threat.Get<ActorComponent>().Faction);
         Assert.Equal("hostile", threat.Get<AiComponent>().PolicyId);
+        Assert.True(session.Engine.IsHostile(threat, session.Engine.State.ControlledEntity));
+    }
+
+    [Fact]
+    public async Task TravelThreatPromiseNamingTheEmpireSpawnsUnderTheEmpireFaction()
+    {
+        // The other side of the fix: a threat promise whose own text names the Empire (a
+        // soldier, an imperial patrol) should still spawn as "empire", so Censorate heat and
+        // warrant pressure keep responding to threats that are actually the Empire's doing.
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+        var promise = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "An imperial soldier waits beyond the next road.",
+            playerVisible: true,
+            source: "test",
+            salience: 4,
+            subject: "imperial soldier",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        session.Engine.State.PromiseLedger.Bind(
+            promise.Id,
+            session.Engine.State.RegionId,
+            null,
+            triggerHint: "travel",
+            realizationKind: "threat");
+
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+
+        var threat = Assert.Single(session.Engine.State.Entities.Values, entity =>
+            entity.TryGet<PromiseAnchorComponent>(out var anchor)
+            && anchor.PromiseIds.Contains(promise.Id));
+        Assert.Equal("empire", threat.Get<ActorComponent>().Faction);
     }
 
     [Fact]
@@ -7792,6 +7845,42 @@ public sealed class GameSessionCharacterizationTests
         Assert.Equal("red tincture", sellTrade.Details["item"]);
         Assert.Equal(15, inventory.Items["gold"]);
         Assert.DoesNotContain(inventory.Items, pair => pair.Key.Equals("red tincture", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SellingUnderADifferentlyFormattedNameReusesTheExistingWareKey()
+    {
+        var session = CreateMockSession();
+        var lio = session.Engine.EntityById("prisoner_1")!;
+        lio.Set(new MerchantComponent(
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) { ["red_tincture"] = 2 },
+            Gold: 50));
+        var player = session.Engine.State.ControlledEntity;
+        player.Set(new InventoryComponent(
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["gold"] = 0,
+                ["Red Tincture"] = 1,
+            },
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
+
+        // A dialogue/LLM-authored sell can name the item differently than the merchant's own
+        // stock key ("Red Tincture" vs "red_tincture"). Selling must land on the existing ware
+        // entry, not fragment stock into a second, unreconciled key for the same item.
+        var result = session.Engine.ApplyConsequence(WorldConsequence.ExecuteTrade(
+            "test",
+            lio.Id.Value,
+            player.Id.Value,
+            "sell",
+            "Red Tincture",
+            "Red Tincture",
+            price: 5));
+
+        Assert.True(result.Applied, result.Error);
+        var wares = lio.Get<MerchantComponent>().Wares;
+        var ware = Assert.Single(wares);
+        Assert.Equal("red_tincture", ware.Key);
+        Assert.Equal(3, ware.Value);
     }
 
     [Fact]

@@ -437,6 +437,40 @@ public sealed class PromiseRealizationTests
     }
 
     [Fact]
+    public async Task BuyRealizesPromiseHintedForTheOppositeCommerceVerb()
+    {
+        // Commerce trigger hints (trade/buy/sell/wares/...) must be interchangeable in both
+        // directions: a promise hinted "sell" should still realize on a buy interaction, the
+        // same way a promise hinted "buy" already does on a sell interaction.
+        var session = GameSession.CreateImperialEncounter(seed: 7);
+        var lio = session.Engine.EntityById("prisoner_1")!;
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+        var create = session.Engine.ApplyConsequence(WorldConsequence.CreatePromise(
+            "test",
+            "rumor",
+            "Lio can sell you a fine blade.",
+            anchorEntityId: lio.Id.Value,
+            triggerHint: "sell",
+            realizationKind: "merchant_stock",
+            subject: "fine blade",
+            playerVisible: true,
+            salience: 4,
+            operation: "testCreatePromise",
+            emitMessage: false));
+        Assert.True(create.Applied, create.Error);
+
+        var result = await session.ExecuteAsync(new BuyCommand("promised blade", "Lio"));
+
+        var promise = session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == create.TargetId);
+        Assert.True(result.Success);
+        Assert.Equal("realized", promise.Status);
+        Assert.Equal("buy:prisoner_1", promise.RealizedIn);
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "executeTrade"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.ExecuteTrade));
+    }
+
+    [Fact]
     public async Task SellRealizesAnchoredMerchantPromiseBeforeExecutingTrade()
     {
         var session = GameSession.CreateImperialEncounter(seed: 7);

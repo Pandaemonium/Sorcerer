@@ -178,6 +178,10 @@ public sealed class WildMagicController : IWildMagicController
         var deltas = new List<StateDelta>();
         try
         {
+            // The transaction above already owns a whole-cast snapshot and this method rolls
+            // it back wholesale if any nested consequence rejects or the post-cast state is
+            // invalid (below), so nested consequence applications don't need their own.
+            using var scope = WorldConsequenceGuard.EnterScope();
             if (!string.IsNullOrWhiteSpace(resolution.OutcomeText))
             {
                 deltas.AddRange(ApplyMagicMessage(
@@ -187,6 +191,7 @@ public sealed class WildMagicController : IWildMagicController
                     "Accepted wild magic narration.").Deltas);
             }
 
+            var effectStart = deltas.Count;
             foreach (var effect in resolution.Effects)
             {
                 var operation = _registry.Resolve(effect.Type)
@@ -194,7 +199,9 @@ public sealed class WildMagicController : IWildMagicController
                 deltas.AddRange(operation.Apply(effectContext, effect));
             }
 
+            var effectEnd = deltas.Count;
             deltas.AddRange(SpellCostApplier.Apply(engine, resolution.Costs));
+            var costEnd = deltas.Count;
             var actor = engine.State.ControlledEntity;
             var actorPosition = actor.Get<PositionComponent>().Position;
             var effectPoint = FirstEffectPoint(engine, deltas);
@@ -214,17 +221,46 @@ public sealed class WildMagicController : IWildMagicController
             var rejectedDeltas = HiddenDiagnostics(RejectedDeltas(deltas));
             if (rejectedDeltas.Count > 0)
             {
-                var error = RejectedApplySummary(rejectedDeltas);
                 transaction.Rollback();
-                var failure = WithResolutionJson(
-                    TechnicalFailure(engine, providerResult.Provider, turnBefore, error),
-                    resolution);
-                failure = failure with
+
+                // Engine-authored consequences (narration before effectStart, deed after costEnd)
+                // should never reject; if one does, that is our bug, not the world refusing.
+                var engineSegmentRejected =
+                    AnyRejectedIn(deltas, 0, effectStart) || AnyRejectedIn(deltas, costEnd, deltas.Count);
+                if (engineSegmentRejected)
                 {
-                    Deltas = rejectedDeltas.Concat(failure.Deltas).ToArray(),
+                    var error = RejectedApplySummary(rejectedDeltas);
+                    var failure = WithResolutionJson(
+                        TechnicalFailure(engine, providerResult.Provider, turnBefore, error),
+                        resolution);
+                    failure = failure with
+                    {
+                        Deltas = rejectedDeltas.Concat(failure.Deltas).ToArray(),
+                    };
+                    Audit(providerResult, command, request.Context, failure, new[] { "apply_consequence_rejected" });
+                    return failure;
+                }
+
+                // A world-refused effect or cost is an in-world rejection, never a technical
+                // failure: the whole working collapses, nothing mutates, and the turn is spent.
+                var errors = RejectedApplyErrors(rejectedDeltas);
+                var reason = AnyRejectedIn(deltas, effectEnd, costEnd)
+                    ? $"The spell's price cannot be paid, and the working collapses. ({errors})"
+                    : $"The magic reaches for what is not there, and the working collapses. ({errors})";
+                var rejection = WithResolutionJson(
+                    Rejected(
+                        engine,
+                        providerResult.Provider,
+                        turnBefore,
+                        reason,
+                        resolution.Effects.Select(effect => effect.Type).ToArray()),
+                    resolution);
+                rejection = rejection with
+                {
+                    Deltas = rejectedDeltas.Concat(rejection.Deltas).ToArray(),
                 };
-                Audit(providerResult, command, request.Context, failure, new[] { "apply_consequence_rejected" });
-                return failure;
+                Audit(providerResult, command, request.Context, rejection, new[] { "apply_consequence_rejected" });
+                return rejection;
             }
 
             if (deltas.Count == 0)
@@ -282,25 +318,39 @@ public sealed class WildMagicController : IWildMagicController
         }
     }
 
+    private static bool IsRejectedDelta(StateDelta delta) =>
+        delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase);
+
     private static IReadOnlyList<StateDelta> RejectedDeltas(IEnumerable<StateDelta> deltas) =>
-        deltas
-            .Where(delta => delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        deltas.Where(IsRejectedDelta).ToArray();
+
+    private static bool AnyRejectedIn(IReadOnlyList<StateDelta> deltas, int start, int end)
+    {
+        for (var i = start; i < end && i < deltas.Count; i++)
+        {
+            if (IsRejectedDelta(deltas[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static StateDelta AsHiddenDiagnostic(StateDelta delta)
+    {
+        var details = new Dictionary<string, object?>(delta.Details, StringComparer.OrdinalIgnoreCase)
+        {
+            ["auditOnly"] = true,
+            ["playerVisible"] = false,
+        };
+        return delta with { Details = details };
+    }
 
     private static IReadOnlyList<StateDelta> HiddenDiagnostics(IReadOnlyList<StateDelta> deltas) =>
-        deltas
-            .Select(delta =>
-            {
-                var details = new Dictionary<string, object?>(delta.Details, StringComparer.OrdinalIgnoreCase)
-                {
-                    ["auditOnly"] = true,
-                    ["playerVisible"] = false,
-                };
-                return delta with { Details = details };
-            })
-            .ToArray();
+        deltas.Select(AsHiddenDiagnostic).ToArray();
 
-    private static string RejectedApplySummary(IReadOnlyList<StateDelta> rejectedDeltas)
+    private static string RejectedApplyErrors(IReadOnlyList<StateDelta> rejectedDeltas)
     {
         var errors = rejectedDeltas
             .Select(delta =>
@@ -315,9 +365,15 @@ public sealed class WildMagicController : IWildMagicController
             .Where(error => !string.IsNullOrWhiteSpace(error))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        return errors.Length == 0
+        return string.Join("; ", errors);
+    }
+
+    private static string RejectedApplySummary(IReadOnlyList<StateDelta> rejectedDeltas)
+    {
+        var errors = RejectedApplyErrors(rejectedDeltas);
+        return string.IsNullOrWhiteSpace(errors)
             ? "Accepted wild magic produced a rejected world consequence."
-            : $"Accepted wild magic produced a rejected world consequence: {string.Join("; ", errors)}";
+            : $"Accepted wild magic produced a rejected world consequence: {errors}";
     }
 
     public async Task<ActionResult> CastAsync(

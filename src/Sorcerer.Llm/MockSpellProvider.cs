@@ -278,7 +278,14 @@ public sealed class MockSpellProvider : ISpellProvider
         {
             return Accepted(
                 "moderate",
-                "The poison rushes to its conclusion all at once.",
+                "Venom answers the call and rushes to its conclusion all at once.",
+                Effect("addStatus", new Dictionary<string, object?>
+                {
+                    ["target"] = "nearest_enemy",
+                    ["status"] = "poisoned",
+                    ["displayName"] = "poisoned",
+                    ["duration"] = 5,
+                }),
                 Effect("accelerateStatus", new Dictionary<string, object?>
                 {
                     ["target"] = "nearest_enemy",
