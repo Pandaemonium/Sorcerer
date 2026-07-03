@@ -1232,6 +1232,61 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
+    public async Task CastingAtAGenericPromiseThreatByNameDoesNotTripThePromiseEffectGuard()
+    {
+        // Regression: WildMagicController.PromiseIntentNeedsLedger scans the player's raw spell
+        // text for words like "promise"/"promised" to require a real createPromise/scheduleEvent/
+        // createTrigger effect. The generic threat-promise fallback name used to be literally
+        // "promised threat", so any ordinary combat spell that named the entity back ("attack the
+        // promised threat") tripped that guard as a false positive -- the player was never trying
+        // to bind a new promise, just referring to the thing standing in front of them by name.
+        // The generated name is now region-flavored (ThreatArchetypeGenerator) rather than a
+        // single fixed fallback string, so target by selector -- the point under test is the
+        // guard token check, not any specific generated name.
+        var resolution = new SpellResolution(
+            Accepted: true,
+            Severity: "minor",
+            OutcomeText: "Boiling acid arcs through the air.",
+            Effects: new[]
+            {
+                new SpellEffect("damage", new Dictionary<string, object?> { ["target"] = "nearest_enemy", ["amount"] = 4 }),
+            },
+            Costs: Array.Empty<SpellCost>(),
+            RejectedReason: null);
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(resolution)));
+        DisableImperialAi(session);
+        var promise = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "Someone dangerous is coming to find you.",
+            playerVisible: true,
+            source: "test",
+            salience: 4,
+            subject: "old grudge",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        session.Engine.State.PromiseLedger.Bind(
+            promise.Id,
+            session.Engine.State.RegionId,
+            null,
+            triggerHint: "travel",
+            realizationKind: "threat");
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        var threat = Assert.Single(session.Engine.State.Entities.Values, entity =>
+            entity.TryGet<PromiseAnchorComponent>(out var anchor) && anchor.PromiseIds.Contains(promise.Id));
+        Assert.DoesNotContain(new[]
+            {
+                "promise", "promises", "promised", "prophecy", "prophecies", "omen", "omens", "oath", "oaths",
+            },
+            token => threat.Name.Contains(token, StringComparison.OrdinalIgnoreCase));
+
+        var result = await session.ExecuteAsync(new CastCommand($"I spew boiling acid onto the {threat.Name}"));
+
+        Assert.True(result.Success, string.Join(" | ", result.Messages));
+        Assert.False(result.TechnicalFailure);
+        Assert.Null(result.Magic?.Error);
+    }
+
+    [Fact]
     public async Task TravelThreatPromiseUsesGeneratedSpawnEntityConsequence()
     {
         var session = CreateMockSession();
@@ -1262,7 +1317,7 @@ public sealed class GameSessionCharacterizationTests
             && Equals(delta.Details["aiPolicyId"], "hostile")
             && Equals(delta.Details["wantGenerated"], true));
         var threat = Assert.Single(session.Engine.State.Entities.Values, entity =>
-            entity.Name == "debt collector"
+            entity.Name.Contains("debt collector", StringComparison.OrdinalIgnoreCase)
             && entity.TryGet<PromiseAnchorComponent>(out var anchor)
             && anchor.PromiseIds.Contains(promise.Id));
         // A private debt collector is not the Empire; spawning it under the empire faction would
@@ -7449,7 +7504,7 @@ public sealed class GameSessionCharacterizationTests
             && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.Message)
             && Equals(delta.Details["promiseId"], promise.Id));
         var threat = Assert.Single(session.Engine.State.Entities.Values, entity =>
-            entity.Name == "debt collector"
+            entity.Name.Contains("debt collector", StringComparison.OrdinalIgnoreCase)
             && entity.TryGet<PromiseAnchorComponent>(out var anchor)
             && anchor.PromiseIds.Contains(promise.Id));
         // A private debt collector is not the Empire; spawning it under the empire faction would
@@ -7490,6 +7545,189 @@ public sealed class GameSessionCharacterizationTests
             entity.TryGet<PromiseAnchorComponent>(out var anchor)
             && anchor.PromiseIds.Contains(promise.Id));
         Assert.Equal("empire", threat.Get<ActorComponent>().Faction);
+    }
+
+    [Fact]
+    public async Task TravelRealizesAtMostOneThreatPerBatchWhenAnotherKindIsEligible()
+    {
+        // Regression: SelectTravelPromises previously took the raw top-2 scored candidates with
+        // no kind restriction, so two "threat" promises could both realize in one travel. Give
+        // two threats a much higher salience than a competing "person" promise (so, without
+        // kind-diversity, both threats would win on raw score) and assert the batch still only
+        // ever contains one threat.
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+        var threatA = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "A debt collector waits beyond the next road.",
+            playerVisible: true,
+            source: "test",
+            salience: 5,
+            subject: "debt collector",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        session.Engine.State.PromiseLedger.Bind(threatA.Id, session.Engine.State.RegionId, null, triggerHint: "travel", realizationKind: "threat");
+        var threatB = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "Another debt collector waits too.",
+            playerVisible: true,
+            source: "test",
+            salience: 5,
+            subject: "second debt collector",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        session.Engine.State.PromiseLedger.Bind(threatB.Id, session.Engine.State.RegionId, null, triggerHint: "travel", realizationKind: "threat");
+        var person = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "A stranger waits beyond the next road.",
+            playerVisible: true,
+            source: "test",
+            salience: 1,
+            subject: "stranger",
+            triggerHint: "travel",
+            realizationKind: "person");
+        session.Engine.State.PromiseLedger.Bind(person.Id, session.Engine.State.RegionId, null, triggerHint: "travel", realizationKind: "person");
+
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+
+        var realizedKinds = new[] { threatA.Id, threatB.Id, person.Id }
+            .Select(id => session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == id))
+            .Where(item => item.Status.Equals("realized", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.RealizationKind)
+            .ToArray();
+        Assert.Equal(2, realizedKinds.Length);
+        Assert.Single(realizedKinds, kind => kind!.Equals("threat", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(realizedKinds, kind => kind!.Equals("person", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ThreatRealizationCooldownDelaysASecondThreatAcrossTravels()
+    {
+        // Regression: there was no pacing between separate travels either -- a threat could
+        // realize on every single travel that had one eligible. Realize one threat, confirm a
+        // second high-scoring bound threat does NOT realize on the very next travel, then confirm
+        // it does once the global cooldown window has passed.
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+        var first = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "A debt collector waits beyond the next road.",
+            playerVisible: true,
+            source: "test",
+            salience: 5,
+            subject: "debt collector",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        session.Engine.State.PromiseLedger.Bind(first.Id, session.Engine.State.RegionId, null, triggerHint: "travel", realizationKind: "threat");
+
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        Assert.Equal(
+            "realized",
+            session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == first.Id).Status);
+
+        var second = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "Another debt collector waits too.",
+            playerVisible: true,
+            source: "test",
+            salience: 5,
+            subject: "second debt collector",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        session.Engine.State.PromiseLedger.Bind(second.Id, session.Engine.State.RegionId, null, triggerHint: "travel", realizationKind: "threat");
+
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        Assert.Equal(
+            "bound",
+            session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == second.Id).Status);
+
+        for (var i = 0; i < 12; i++)
+        {
+            await session.ExecuteAsync(new WaitCommand());
+        }
+
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        Assert.Equal(
+            "realized",
+            session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == second.Id).Status);
+    }
+
+    [Fact]
+    public async Task ThreatStatsScaleWithPromiseSalience()
+    {
+        // Regression: every promise-realized threat spawned with the exact same fixed hp:8/
+        // attack:3 regardless of how dramatic the promise was. A salience-5 threat should hit
+        // harder and survive longer than a salience-1 one.
+        var lowSession = CreateMockSession();
+        DisableImperialAi(lowSession);
+        var lowPromise = lowSession.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "Someone minor is coming to find you.",
+            playerVisible: true,
+            source: "test",
+            salience: 1,
+            subject: "someone",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        lowSession.Engine.State.PromiseLedger.Bind(lowPromise.Id, lowSession.Engine.State.RegionId, null, triggerHint: "travel", realizationKind: "threat");
+        await lowSession.ExecuteAsync(new TravelCommand(Direction.East));
+        var lowThreat = Assert.Single(lowSession.Engine.State.Entities.Values, entity =>
+            entity.TryGet<PromiseAnchorComponent>(out var anchor) && anchor.PromiseIds.Contains(lowPromise.Id));
+
+        var highSession = CreateMockSession();
+        DisableImperialAi(highSession);
+        var highPromise = highSession.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "Someone dreadful is coming to find you.",
+            playerVisible: true,
+            source: "test",
+            salience: 5,
+            subject: "someone",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        highSession.Engine.State.PromiseLedger.Bind(highPromise.Id, highSession.Engine.State.RegionId, null, triggerHint: "travel", realizationKind: "threat");
+        await highSession.ExecuteAsync(new TravelCommand(Direction.East));
+        var highThreat = Assert.Single(highSession.Engine.State.Entities.Values, entity =>
+            entity.TryGet<PromiseAnchorComponent>(out var anchor) && anchor.PromiseIds.Contains(highPromise.Id));
+
+        Assert.True(
+            highThreat.Get<ActorComponent>().MaxHitPoints > lowThreat.Get<ActorComponent>().MaxHitPoints,
+            $"expected high-salience HP ({highThreat.Get<ActorComponent>().MaxHitPoints}) > low-salience HP ({lowThreat.Get<ActorComponent>().MaxHitPoints})");
+        Assert.True(
+            highThreat.Get<ActorComponent>().Attack > lowThreat.Get<ActorComponent>().Attack,
+            $"expected high-salience attack ({highThreat.Get<ActorComponent>().Attack}) > low-salience attack ({lowThreat.Get<ActorComponent>().Attack})");
+    }
+
+    [Fact]
+    public async Task GenericThreatPromiseRealizesWithARegionFlavoredNameNotTheBareFallback()
+    {
+        // Regression: any threat promise that didn't literally mention "collector" or an
+        // imperial keyword used to spawn under the single bland fallback name every time. That
+        // was the common case -- most threat promises don't name either -- so this is what
+        // actually fixes the "every threat looks the same" complaint.
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+        var promise = session.Engine.State.PromiseLedger.Add(
+            "rumor",
+            "Someone with an old grudge is coming to find you.",
+            playerVisible: true,
+            source: "test",
+            salience: 3,
+            subject: "old grudge",
+            triggerHint: "travel",
+            realizationKind: "threat");
+        session.Engine.State.PromiseLedger.Bind(promise.Id, session.Engine.State.RegionId, null, triggerHint: "travel", realizationKind: "threat");
+
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+
+        var threat = Assert.Single(session.Engine.State.Entities.Values, entity =>
+            entity.TryGet<PromiseAnchorComponent>(out var anchor) && anchor.PromiseIds.Contains(promise.Id));
+        Assert.NotEqual("unnamed claimant", threat.Name);
+        Assert.DoesNotContain(new[]
+            {
+                "promise", "promises", "promised", "prophecy", "prophecies", "omen", "omens", "oath", "oaths",
+            },
+            token => threat.Name.Contains(token, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

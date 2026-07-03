@@ -13,7 +13,16 @@ public sealed record EntityCard(
     string? Faction,
     int? HitPoints,
     int? MaxHitPoints,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<ContextActionCard>? Actions = null);
+
+public sealed record ContextActionCard(
+    string Id,
+    string Label,
+    string Command,
+    bool Enabled = true,
+    string? DisabledReason = null,
+    string Presentation = "execute");
 
 public sealed record MapTileCard(
     int X,

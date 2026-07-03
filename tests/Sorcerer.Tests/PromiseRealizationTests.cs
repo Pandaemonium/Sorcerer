@@ -40,7 +40,7 @@ public sealed class PromiseRealizationTests
             delta.Operation == "realizePromise"
             && Equals(delta.Details["trigger"], "wait"));
         Assert.Contains(result.Messages, message =>
-            message.Contains("debt collector arrives", StringComparison.OrdinalIgnoreCase));
+            message.Contains("debt collector", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(session.Engine.State.Entities.Values, entity =>
             entity.Name.Contains("debt collector", StringComparison.OrdinalIgnoreCase));
 

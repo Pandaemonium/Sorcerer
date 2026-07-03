@@ -39,11 +39,21 @@ public sealed record PromiseRealizationContext(
 
 public sealed class PromiseRealizationSystem
 {
+    // A bound "threat" promise never expires to control volume (always-honor), but it also
+    // doesn't need to realize the instant it's eligible. This cooldown paces threat
+    // realization globally across the whole world (not per-region) so threats don't cluster
+    // one travel after another; a threat promise on cooldown simply isn't selected this
+    // travel and remains fully bound/eligible until the cooldown lapses.
+    private const int ThreatRealizationCooldownTurns = 10;
+    private const string ThreatRealizationCooldownKind = "threat_realized";
+    private const string ThreatRealizationCooldownSourceId = "global";
+
     private readonly GameState _state;
     private readonly GameEngine? _engine;
     private readonly Func<WorldConsequence, WorldConsequenceApplyResult>? _applyConsequence;
     private readonly IReadOnlyDictionary<string, TravelPromiseHandler> _travelHandlers;
     private readonly IReadOnlyDictionary<string, AnchoredPromiseHandler> _anchoredHandlers;
+    private readonly RegionRegistry _regions = RegionRegistry.CreateMinimal();
 
     public PromiseRealizationSystem(
         GameState state,
@@ -72,8 +82,18 @@ public sealed class PromiseRealizationSystem
 
         var context = PromiseRealizationContext.Travel(zoneId, region.Id, direction, placementOrigin);
         RecordTravelEligibilityFailures(context, deltas);
+        var ranked = SelectTravelPromises(context);
+        var selected = DiversifyByKind(ranked, 2);
+        var selectedIds = new HashSet<string>(
+            selected.Select(candidate => candidate.Promise.Id),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var skipped in ranked.Where(candidate => !selectedIds.Contains(candidate.Promise.Id)))
+        {
+            RecordPromiseEligibilityFailure(skipped.Promise, context, "kind_diversity_budgeted_out", deltas);
+        }
+
         var realizedIds = new List<string>();
-        foreach (var candidate in SelectTravelPromises(context).Take(2).ToArray())
+        foreach (var candidate in selected)
         {
             var plan = BuildTravelPlan(candidate, context, zoneId);
             deltas.Add(PromiseRealizationPlanDelta(plan));
@@ -121,6 +141,55 @@ public sealed class PromiseRealizationSystem
             .OrderByDescending(candidate => candidate.Score)
             .ThenBy(candidate => candidate.Promise.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+    /// <summary>
+    /// Picks the top-scored candidate of each distinct realization kind first, so one travel
+    /// never realizes two of the same kind (e.g. two "threat" promises) just because both
+    /// happened to outscore everything else. Only falls back to a second candidate of an
+    /// already-picked kind if there aren't enough distinct kinds to fill the budget. A
+    /// same-kind candidate that loses out here is not dropped -- it stays bound and fully
+    /// eligible for a later travel; see the "kind_diversity_budgeted_out" eligibility record
+    /// this produces at the call site.
+    /// </summary>
+    private static IReadOnlyList<ScoredPromise> DiversifyByKind(IReadOnlyList<ScoredPromise> ranked, int budget)
+    {
+        var picked = new List<ScoredPromise>();
+        var pickedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var usedKinds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var candidate in ranked)
+        {
+            if (picked.Count >= budget)
+            {
+                break;
+            }
+
+            var kind = NormalizeToken(candidate.Promise.RealizationKind ?? candidate.Promise.Kind);
+            if (usedKinds.Add(kind))
+            {
+                picked.Add(candidate);
+                pickedIds.Add(candidate.Promise.Id);
+            }
+        }
+
+        if (picked.Count < budget)
+        {
+            foreach (var candidate in ranked)
+            {
+                if (picked.Count >= budget)
+                {
+                    break;
+                }
+
+                if (pickedIds.Add(candidate.Promise.Id))
+                {
+                    picked.Add(candidate);
+                }
+            }
+        }
+
+        return picked;
+    }
 
     public IReadOnlyList<StateDelta> RealizeAnchoredPromises(
         Entity anchor,
@@ -889,21 +958,24 @@ public sealed class PromiseRealizationSystem
         GridPoint placementOrigin)
     {
         var position = FindGeneratedOpenPointNear(entities, placementOrigin, 2, -1);
-        var tags = PromiseTags(promise, "threat", region);
-        var threatName = PromiseThreatName(promise);
+        var archetype = ResolveThreatArchetype(promise, region);
+        var tags = PromiseTags(promise, "threat", region)
+            .Concat(archetype.Tags)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         var threat = ApplyGeneratedSpawnEntity(
             WorldConsequence.SpawnEntity(
                 $"promise:{promise.Id}:travel",
-                threatName,
+                archetype.Name,
                 position.X,
                 position.Y,
                 prefix: "promise_threat",
-                glyph: 'D',
-                faction: PromiseThreatFaction(promise),
-                hp: 8,
-                attack: 3,
+                glyph: archetype.Glyph,
+                faction: archetype.Faction,
+                hp: archetype.Hp,
+                attack: archetype.Attack,
                 tags: tags,
-                material: "flesh",
+                material: archetype.Material,
                 roles: new[] { "promise", "threat" },
                 controllerKind: "ai",
                 aiPolicyId: "hostile",
@@ -917,7 +989,7 @@ public sealed class PromiseRealizationSystem
                 evidence: promise.Text,
                 operation: "promiseThreat",
                 emitMessage: false,
-                message: $"A promised threat steps into the road: {threatName}.",
+                message: $"{archetype.FlavorText} {archetype.Name}.",
                 details: new Dictionary<string, object?>
                 {
                     ["promiseId"] = promise.Id,
@@ -928,6 +1000,7 @@ public sealed class PromiseRealizationSystem
             entities,
             deltas);
         AppendPromiseCanon("threat", threat.Id.Value, promise, $"{threat.Name}: {promise.Text}", tags, "travel", deltas);
+        RecordThreatRealizationCooldown(promise, "travel", deltas);
     }
 
     private void RealizeTravelMerchantStockPromise(
@@ -1231,8 +1304,13 @@ public sealed class PromiseRealizationSystem
         var position = FindOpenAdjacent(origin)
             ?? FindOpenAdjacent(_state.ControlledEntity.Get<PositionComponent>().Position)
             ?? origin;
-        var threatName = PromiseThreatName(promise);
-        var message = $"{threatName} arrives to collect on the promise.";
+        var region = ResolveRegion(_state.RegionId);
+        var archetype = ResolveThreatArchetype(promise, region);
+        var tags = BasicPromiseTags(promise, "threat")
+            .Concat(archetype.Tags)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var message = $"{archetype.FlavorText} {archetype.Name}.";
         var messageDeltas = AddVisiblePromiseMessage(
             promise,
             anchor,
@@ -1245,16 +1323,16 @@ public sealed class PromiseRealizationSystem
             ("y", position.Y));
         var applied = ApplyConsequence(WorldConsequence.SpawnEntity(
             $"promise:{promise.Id}:{trigger}",
-            threatName,
+            archetype.Name,
             position.X,
             position.Y,
             prefix: "promise_threat",
-            glyph: 'D',
-            faction: PromiseThreatFaction(promise),
-            hp: 8,
-            attack: 3,
-            tags: BasicPromiseTags(promise, "threat"),
-            material: "flesh",
+            glyph: archetype.Glyph,
+            faction: archetype.Faction,
+            hp: archetype.Hp,
+            attack: archetype.Attack,
+            tags: tags,
+            material: archetype.Material,
             roles: new[] { "promise", "threat" },
             controllerKind: "ai",
             aiPolicyId: "hostile",
@@ -1278,16 +1356,20 @@ public sealed class PromiseRealizationSystem
             "threat",
             applied.TargetId ?? anchor.Id.Value,
             promise,
-            $"{threatName}: {promise.Text}",
-            BasicPromiseTags(promise, "threat"),
+            $"{archetype.Name}: {promise.Text}",
+            tags,
             trigger);
         if (!canon.Applied)
         {
             return applied.Deltas.Concat(canon.Deltas).ToArray();
         }
 
+        var cooldownDeltas = new List<StateDelta>();
+        RecordThreatRealizationCooldown(promise, trigger, cooldownDeltas);
+
         return applied.Deltas
             .Concat(canon.Deltas)
+            .Concat(cooldownDeltas)
             .Concat(messageDeltas)
             .ToArray();
     }
@@ -2354,8 +2436,39 @@ public sealed class PromiseRealizationSystem
             return false;
         }
 
+        if (IsThreatKind(promise) && IsThreatRealizationOnCooldown())
+        {
+            return false;
+        }
+
         return IsTravelBuildableKind(promise);
     }
+
+    private static bool IsThreatKind(WorldPromise promise) =>
+        NormalizeToken(promise.RealizationKind ?? promise.Kind) == "threat";
+
+    private bool IsThreatRealizationOnCooldown() =>
+        _state.WorldTurns.HasRecent(
+            ThreatRealizationCooldownKind,
+            ThreatRealizationCooldownSourceId,
+            _state.Turn,
+            ThreatRealizationCooldownTurns);
+
+    private void RecordThreatRealizationCooldown(WorldPromise promise, string trigger, List<StateDelta> deltas) =>
+        deltas.AddRange(ApplyConsequence(WorldConsequence.RecordWorldTurn(
+            $"promise:{promise.Id}:{trigger}",
+            "threat_realized",
+            ThreatRealizationCooldownKind,
+            ThreatRealizationCooldownSourceId,
+            $"A threat promise realized: {promise.Id}.",
+            operation: "threatRealizationCooldown",
+            details: new Dictionary<string, object?>
+            {
+                ["promiseId"] = promise.Id,
+                ["trigger"] = trigger,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            })).Deltas);
 
     private bool IsAmbientPromise(WorldPromise promise, PromiseRealizationContext context)
     {
@@ -2420,11 +2533,16 @@ public sealed class PromiseRealizationSystem
         };
     }
 
-    private static string? TravelEligibilityFailure(WorldPromise promise, PromiseRealizationContext context)
+    private string? TravelEligibilityFailure(WorldPromise promise, PromiseRealizationContext context)
     {
         if (!IsTravelBuildableKind(promise))
         {
             return "unsupported_realization_kind";
+        }
+
+        if (IsThreatKind(promise) && IsThreatRealizationOnCooldown())
+        {
+            return "threat_realization_cooldown";
         }
 
         if (PromiseHardTravelDirection(promise) is { } promisedDirection
@@ -2934,42 +3052,19 @@ public sealed class PromiseRealizationSystem
         return "promised merchant";
     }
 
-    /// <summary>
-    /// A threat promise only reads as imperial when its own text says so; otherwise it is a
-    /// private grudge (a debt collector, a rival, a personal enemy) and must not be spawned
-    /// under the Empire's faction, or killing it would feed Censorate heat and warrant pressure
-    /// for a threat that had nothing to do with the Empire.
-    /// </summary>
-    private static bool IsImperialThreat(WorldPromise promise)
-    {
-        var lower = $"{promise.Subject} {promise.Text}".ToLowerInvariant();
-        return lower.Contains("soldier") || lower.Contains("empire") || lower.Contains("imperial");
-    }
+    // Threat naming/faction/stats now live in ThreatArchetypeGenerator (see
+    // ResolveThreatArchetype below) rather than as separate helpers called independently at
+    // the travel and anchored realization call sites -- that duplication was the actual bug
+    // behind both the volume and blandness complaints this system was rebuilt to fix.
 
-    private static string PromiseThreatName(WorldPromise promise)
-    {
-        var lower = $"{promise.Subject} {promise.Text}".ToLowerInvariant();
-        if (lower.Contains("collector"))
-        {
-            return "debt collector";
-        }
+    private ThreatArchetype ResolveThreatArchetype(WorldPromise promise, RegionDefinition region) =>
+        ThreatArchetypeGenerator.Generate(promise, region, ResolveRealm(region), _state.Rng);
 
-        if (IsImperialThreat(promise))
-        {
-            return "promised imperial claimant";
-        }
+    private RegionDefinition ResolveRegion(string regionId) =>
+        _regions.Region(regionId) ?? _regions.Region("imperial_encounter")!;
 
-        return "promised threat";
-    }
-
-    /// <summary>
-    /// "empire" only for promises whose own text names the Empire; everything else spawns under
-    /// the "independent" faction (hostile to the player, but not in the empire_bloc role) so
-    /// WorldTurnSystem's empire-heat pressure (which reads FactionsByRole("empire_bloc")) is
-    /// never fed by a private threat like a debt collector.
-    /// </summary>
-    private static string PromiseThreatFaction(WorldPromise promise) =>
-        IsImperialThreat(promise) ? "empire" : "independent";
+    private RealmProfile ResolveRealm(RegionDefinition region) =>
+        WorldRoll.Create(_state.Seed).RealmFor(region.RealmId);
 
     private static string PromiseServiceName(WorldPromise promise)
     {

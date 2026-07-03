@@ -493,7 +493,120 @@ public sealed class EngineViewBuilder
             faction,
             actor?.HitPoints,
             actor?.MaxHitPoints,
-            tags.Distinct().OrderBy(tag => tag).ToArray());
+            tags.Distinct().OrderBy(tag => tag).ToArray(),
+            BuildContextActions(entity, position));
+    }
+
+    private IReadOnlyList<ContextActionCard> BuildContextActions(Entity entity, GridPoint position)
+    {
+        var actions = new List<ContextActionCard>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var actorPosition = _state.ControlledEntity.Get<PositionComponent>().Position;
+        var isControlled = entity.Id == _state.ControlledEntityId;
+
+        void Add(
+            string id,
+            string label,
+            string command,
+            int range,
+            string presentation = "execute")
+        {
+            if (!seen.Add(id))
+            {
+                return;
+            }
+
+            var reachable = GameEngine.Distance(actorPosition, position) <= range;
+            actions.Add(new ContextActionCard(
+                id,
+                label,
+                command,
+                reachable,
+                reachable ? null : $"Too far away; move within {range}.",
+                presentation));
+        }
+
+        if (!isControlled)
+        {
+            Add("target", "Target", $"target {position.X} {position.Y}", int.MaxValue);
+            Add("examine", "Inspect", $"examine {entity.Id.Value}", 2);
+        }
+
+        if (entity.TryGet<ActorComponent>(out var actor) && actor.Alive && !isControlled)
+        {
+            Add("talk", "Talk...", $"talk {entity.Name}, ", 2, presentation: "compose");
+            Add("bonds", "Bonds", $"bonds {entity.Id.Value}", 2);
+            Add("recruit", "Recruit", $"recruit {entity.Id.Value}", 2);
+            Add("give", "Give...", $"give  to {entity.Name}", 2, presentation: "compose");
+            Add("possess", "Possess", $"possess {entity.Id.Value}", 1);
+        }
+
+        if (entity.Has<DoorComponent>())
+        {
+            Add("open", "Open", $"open {entity.Id.Value}", 1);
+        }
+
+        if (entity.Has<ItemComponent>())
+        {
+            Add("pickup", "Pick Up", $"pickup {entity.Id.Value}", 1);
+        }
+
+        if (entity.Has<ReadableComponent>())
+        {
+            Add("read", "Read", $"read {entity.Id.Value}", 1);
+        }
+
+        if (entity.Has<MerchantComponent>())
+        {
+            Add("wares", "Wares", $"wares {entity.Id.Value}", 2);
+        }
+
+        if (entity.Has<ServiceComponent>())
+        {
+            Add("services", "Services", $"services {entity.Id.Value}", 2);
+        }
+
+        if (entity.TryGet<InteractableComponent>(out var interactable))
+        {
+            foreach (var verb in interactable.Verbs)
+            {
+                AddInteractableVerb(verb);
+            }
+        }
+
+        return actions;
+
+        void AddInteractableVerb(string verb)
+        {
+            var normalized = verb.Trim().ToLowerInvariant();
+            switch (normalized)
+            {
+                case "talk":
+                    Add("talk", "Talk...", $"talk {entity.Name}, ", 2, presentation: "compose");
+                    break;
+                case "open":
+                    Add("open", "Open", $"open {entity.Id.Value}", 1);
+                    break;
+                case "read":
+                    Add("read", "Read", $"read {entity.Id.Value}", 1);
+                    break;
+                case "pickup":
+                case "get":
+                    Add("pickup", "Pick Up", $"pickup {entity.Id.Value}", 1);
+                    break;
+                case "wares":
+                case "browse":
+                    Add("wares", "Wares", $"wares {entity.Id.Value}", 2);
+                    break;
+                case "services":
+                    Add("services", "Services", $"services {entity.Id.Value}", 2);
+                    break;
+                case "examine":
+                case "inspect":
+                    Add("examine", "Inspect", $"examine {entity.Id.Value}", 2);
+                    break;
+            }
+        }
     }
 
     public CharacterSheetCard BuildCharacterSheet()

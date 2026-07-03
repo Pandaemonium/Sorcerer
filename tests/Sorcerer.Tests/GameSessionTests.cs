@@ -5610,6 +5610,55 @@ public sealed class GameSessionTests
             && status.ExpiresTurn == 4);
     }
 
+    [Fact]
+    public void EntityCardsExposeContextActionsForNearbyItems()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(4, 5)));
+        var view = session.View();
+        var tincture = Assert.Single(view.Entities, entity => entity.Id == "loose_tincture_1");
+
+        var pickup = Assert.Single(ContextActions(tincture), action => action.Id == "pickup");
+        var inspect = Assert.Single(ContextActions(tincture), action => action.Id == "examine");
+
+        Assert.True(pickup.Enabled);
+        Assert.Equal("pickup loose_tincture_1", pickup.Command);
+        Assert.True(inspect.Enabled);
+        Assert.Equal("execute", inspect.Presentation);
+    }
+
+    [Fact]
+    public void EntityCardsExposeContextActionsForNearbyActors()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(10, 6)));
+        var view = session.View();
+        var captain = Assert.Single(view.Entities, entity => entity.Id == "soldier_2");
+
+        var talk = Assert.Single(ContextActions(captain), action => action.Id == "talk");
+        var bonds = Assert.Single(ContextActions(captain), action => action.Id == "bonds");
+
+        Assert.True(talk.Enabled);
+        Assert.Equal("compose", talk.Presentation);
+        Assert.Equal("talk imperial ward-captain, ", talk.Command);
+        Assert.True(bonds.Enabled);
+        Assert.Equal("bonds soldier_2", bonds.Command);
+    }
+
+    [Fact]
+    public void EntityCardsExposeContextActionsForNearbyDoors()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(12, 5)));
+        var view = session.View();
+        var door = Assert.Single(view.Entities, entity => entity.Id == "cell_door_1");
+
+        var open = Assert.Single(ContextActions(door), action => action.Id == "open");
+
+        Assert.True(open.Enabled);
+        Assert.Equal("open cell_door_1", open.Command);
+    }
+
     private static StateDelta ApplyStatus(
         GameSession session,
         Entity target,
@@ -5632,6 +5681,9 @@ public sealed class GameSessionTests
         Assert.True(applied.Applied, applied.Error ?? $"Status {status} was not applied.");
         return Assert.Single(applied.Deltas);
     }
+
+    private static IReadOnlyList<ContextActionCard> ContextActions(EntityCard entity) =>
+        entity.Actions ?? Array.Empty<ContextActionCard>();
 
     private static SpellResolution AcceptedSpell(string outcome, params SpellEffect[] effects) =>
         new(

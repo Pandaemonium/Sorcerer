@@ -43,6 +43,8 @@ public partial class Main : Control
     private LineEdit _host = null!;
     private LineEdit _model = null!;
     private Button _cast = null!;
+    private PanelContainer _contextMenu = null!;
+    private VBoxContainer _contextMenuItems = null!;
 
     private ActionResult? _lastResult;
     private string? _lastError;
@@ -177,6 +179,33 @@ public partial class Main : Control
         root.AddChild(BuildCommandPanel());
 
         AddChild(BuildEscMenu());
+        AddChild(BuildContextMenu());
+    }
+
+    private Control BuildContextMenu()
+    {
+        _contextMenu = new PanelContainer
+        {
+            Visible = false,
+            MouseFilter = MouseFilterEnum.Stop,
+            ZIndex = 40,
+            CustomMinimumSize = new Vector2(160, 0),
+        };
+        _contextMenu.AddThemeStyleboxOverride(
+            "panel",
+            UiTheme.Box(
+                UiTheme.Panel,
+                UiTheme.Empire,
+                borderWidth: 1,
+                radius: 4,
+                shadow: true,
+                marginX: UiTheme.SpaceXs,
+                marginY: UiTheme.SpaceXs));
+
+        _contextMenuItems = new VBoxContainer();
+        _contextMenuItems.AddThemeConstantOverride("separation", UiTheme.SpaceXs);
+        _contextMenu.AddChild(_contextMenuItems);
+        return _contextMenu;
     }
 
     private Control BuildEscMenu()
@@ -335,6 +364,7 @@ public partial class Main : Control
 
     private void ToggleEscMenu()
     {
+        HideContextMenu();
         _escMenu.Visible = !_escMenu.Visible;
         if (_escMenu.Visible)
         {
@@ -705,10 +735,11 @@ public partial class Main : Control
         await ExecuteAsync(TextCommandParser.Parse(text.Trim()));
     }
 
-    private void FocusCommandLine(string prefix)
+    private void FocusCommandLine(string prefix, int? caretColumn = null)
     {
+        HideContextMenu();
         _commandLine.Text = prefix;
-        _commandLine.CaretColumn = prefix.Length;
+        _commandLine.CaretColumn = Math.Clamp(caretColumn ?? prefix.Length, 0, prefix.Length);
         _commandLine.GrabFocus();
     }
 
@@ -719,6 +750,7 @@ public partial class Main : Control
             return;
         }
 
+        HideContextMenu();
         _busy = true;
         _busyStatusText = BusyStatusFor(command);
         SetBusy(true);
@@ -971,6 +1003,7 @@ public partial class Main : Control
                     ThemeTypeVariation = "MapCell",
                 };
                 cell.Pressed += () => _ = ExecuteAsync(new TargetCommand(point));
+                cell.GuiInput += @event => OnMapCellGuiInput(@event, point);
                 _mapGrid.AddChild(cell);
                 _cells[y, x] = cell;
             }
@@ -979,6 +1012,127 @@ public partial class Main : Control
         UpdateMapCellSizing();
         CallDeferred(nameof(UpdateMapCellSizing));
     }
+
+    private void OnMapCellGuiInput(InputEvent @event, GridPoint point)
+    {
+        if (@event is not InputEventMouseButton mouse
+            || !mouse.Pressed
+            || mouse.ButtonIndex != MouseButton.Right)
+        {
+            return;
+        }
+
+        if (_busy || _escMenu.Visible)
+        {
+            return;
+        }
+
+        ShowContextMenu(point, GetGlobalMousePosition());
+        GetViewport().SetInputAsHandled();
+    }
+
+    private void ShowContextMenu(GridPoint point, Vector2 globalPosition)
+    {
+        var view = _session.Observation().View;
+        var entity = EntityAtPoint(view, point);
+        if (entity is null)
+        {
+            HideContextMenu();
+            return;
+        }
+
+        var actions = (entity.Actions ?? Array.Empty<ContextActionCard>())
+            .Where(action => action.Enabled || !string.IsNullOrWhiteSpace(action.DisabledReason))
+            .ToArray();
+        if (actions.Length == 0)
+        {
+            HideContextMenu();
+            return;
+        }
+
+        foreach (var child in _contextMenuItems.GetChildren())
+        {
+            _contextMenuItems.RemoveChild(child);
+            child.QueueFree();
+        }
+
+        var title = new Label
+        {
+            Text = entity.Name,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            TooltipText = $"{entity.Id} at {entity.X},{entity.Y}",
+        };
+        title.AddThemeColorOverride("font_color", UiTheme.Empire);
+        title.AddThemeFontSizeOverride("font_size", 12);
+        _contextMenuItems.AddChild(title);
+
+        foreach (var action in actions)
+        {
+            var button = SmallButton(action.Label);
+            button.CustomMinimumSize = new Vector2(150, 30);
+            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            button.Disabled = !action.Enabled;
+            button.TooltipText = action.Enabled
+                ? action.Command
+                : action.DisabledReason ?? action.Command;
+            button.Pressed += () => InvokeContextAction(action);
+            _contextMenuItems.AddChild(button);
+        }
+
+        _contextMenu.Position = ContextMenuPosition(globalPosition);
+        _contextMenu.Visible = true;
+        _contextMenu.MoveToFront();
+    }
+
+    private void InvokeContextAction(ContextActionCard action)
+    {
+        HideContextMenu();
+        if (action.Presentation.Equals("compose", StringComparison.OrdinalIgnoreCase))
+        {
+            FocusCommandLine(action.Command, ComposeCaretColumn(action));
+            return;
+        }
+
+        _ = ExecuteAsync(TextCommandParser.Parse(action.Command));
+    }
+
+    private void HideContextMenu()
+    {
+        if (_contextMenu is not null)
+        {
+            _contextMenu.Visible = false;
+        }
+    }
+
+    private Vector2 ContextMenuPosition(Vector2 requested)
+    {
+        var viewport = GetViewportRect().Size;
+        const float approximateWidth = 180f;
+        const float approximateHeight = 240f;
+        return new Vector2(
+            Mathf.Clamp(requested.X + 6f, 0f, Math.Max(0f, viewport.X - approximateWidth)),
+            Mathf.Clamp(requested.Y + 6f, 0f, Math.Max(0f, viewport.Y - approximateHeight)));
+    }
+
+    private static int ComposeCaretColumn(ContextActionCard action)
+    {
+        if (action.Id.Equals("give", StringComparison.OrdinalIgnoreCase))
+        {
+            var marker = action.Command.IndexOf("  to ", StringComparison.Ordinal);
+            if (marker >= 0)
+            {
+                return marker + 1;
+            }
+        }
+
+        return action.Command.Length;
+    }
+
+    private static EntityCard? EntityAtPoint(GameView view, GridPoint point) =>
+        view.Entities
+            .Where(entity => entity.X == point.X && entity.Y == point.Y)
+            .OrderBy(entity => entity.Id == view.ControlledEntityId ? 1 : 0)
+            .LastOrDefault();
 
     private void UpdateMapCellSizing()
     {
