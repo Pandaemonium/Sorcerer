@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Dialogue;
 using Sorcerer.Llm.Configuration;
 
@@ -24,35 +25,14 @@ public static class DialogueProviderFactory
                 settings.Host ?? "http://127.0.0.1:11434",
                 settings.Model ?? "qwen3.5:9b",
                 timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
-            "api" or "openai" or "openai-compatible" => new TechnicalFailureDialogueProvider(
-                "openai-compatible-dialogue",
-                "OpenAI-compatible dialogue generation is not implemented yet."),
+            "api" or "openai" or "openai-compatible" => new OpenAiCompatibleDialogueProvider(
+                settings.Host ?? "https://api.openai.com/v1",
+                settings.Model ?? "default",
+                timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
+                apiKey: settings.ApiKey),
             _ => new MockDialogueProvider(),
         };
     }
-}
-
-public sealed class TechnicalFailureDialogueProvider : IDialogueProvider
-{
-    private readonly string _error;
-
-    public TechnicalFailureDialogueProvider(string name, string error)
-    {
-        Name = name;
-        _error = error;
-    }
-
-    public string Name { get; }
-
-    public Task<DialogueProviderResult> ResolveAsync(
-        DialogueRequest request,
-        CancellationToken cancellationToken) =>
-        Task.FromResult(new DialogueProviderResult(
-            Name,
-            "",
-            TechnicalFailure: true,
-            Error: _error,
-            Response: null));
 }
 
 public sealed class MockDialogueProvider : IDialogueProvider
@@ -167,6 +147,93 @@ public sealed class MockDialogueProvider : IDialogueProvider
             actions.Add(new DialogueActionProposal("call_help"));
         }
 
+        if (lower.Contains("attack me", StringComparison.Ordinal)
+            || lower.Contains("hit me", StringComparison.Ordinal)
+            || lower.Contains("fight me", StringComparison.Ordinal))
+        {
+            line = $"{speaker.Name} says, \"If that is what you want, then take the blow.\"";
+            actions.Add(new DialogueActionProposal("attack", TargetEntityId: request.Listener.EntityId));
+        }
+
+        if (lower.Contains("follow me", StringComparison.Ordinal)
+            || lower.Contains("join me", StringComparison.Ordinal)
+            || lower.Contains("come with me", StringComparison.Ordinal))
+        {
+            line = $"{speaker.Name} says, \"If the road has earned that much trust, I will come.\"";
+            actions.Add(new DialogueActionProposal("recruit", Reason: "The speaker agreed to follow in dialogue."));
+        }
+
+        if (lower.Contains("trade now", StringComparison.Ordinal)
+            || lower.Contains("offer trade", StringComparison.Ordinal)
+            || lower.Contains("show me your wares", StringComparison.Ordinal))
+        {
+            var firstInventoryItem = (request.Speaker.Inventory ?? Array.Empty<string>())
+                .Select(item => item.Split(" x", StringSplitOptions.None)[0])
+                .FirstOrDefault();
+            line = string.IsNullOrWhiteSpace(firstInventoryItem)
+                ? $"{speaker.Name} says, \"I can trade, if coin is what steadies your hand.\""
+                : $"{speaker.Name} says, \"I can trade you {firstInventoryItem}, if your coin is honest.\"";
+            actions.Add(new DialogueActionProposal(
+                "offer_trade",
+                ItemName: firstInventoryItem,
+                Quantity: string.IsNullOrWhiteSpace(firstInventoryItem) ? null : 1,
+                Gold: 12));
+        }
+
+        if (lower.Contains("mark this", StringComparison.Ordinal)
+            || lower.Contains("loose floorboard", StringComparison.Ordinal)
+            || lower.Contains("mark the place", StringComparison.Ordinal))
+        {
+            line = $"{speaker.Name} says, \"Here. This board remembers the knife.\"";
+            actions.Add(new DialogueActionProposal(
+                "mark_location",
+                Name: "loose floorboard",
+                Description: "A floorboard with fresh nail-scars.",
+                FixtureType: "marker",
+                Material: "wood",
+                Tags: new[] { "floorboard", "marked" },
+                InteractableVerbs: new[] { "examine" },
+                BlocksMovement: false));
+        }
+
+        if (lower.Contains("service", StringComparison.Ordinal)
+            || lower.Contains("ward-breaking", StringComparison.Ordinal)
+            || lower.Contains("break the ward", StringComparison.Ordinal))
+        {
+            line = $"{speaker.Name} says, \"I know a quiet way to worry a lock open, if you bring grave salt.\"";
+            actions.Add(new DialogueActionProposal(
+                "reveal_service",
+                Name: "ward-breaking",
+                Description: "A hush-hush folk charm that worries a lock open.",
+                Tags: new[] { "service", "folk_magic", "door" },
+                ServiceId: "ward_breaking",
+                EffectKind: "open_or_unlock",
+                TargetHint: "cell door",
+                ItemCost: "grave salt",
+                WantStatusOnComplete: "satisfied",
+                WantStakesOnComplete: "The ward service was performed; future danger now comes from who heard about it.",
+                WantAddTagsOnComplete: new[] { "service_completed", "satisfied_by_player" },
+                WantRemoveTagsOnComplete: new[] { "escape" }));
+        }
+
+        if (lower.Contains("promise me", StringComparison.Ordinal)
+            || lower.Contains("make a promise", StringComparison.Ordinal)
+            || lower.Contains("swear it", StringComparison.Ordinal))
+        {
+            line = $"{speaker.Name} says, \"I swear the north bell will answer when you travel toward it.\"";
+            actions.Add(new DialogueActionProposal(
+                "create_promise",
+                PromiseKind: "rumor",
+                PromiseText: "The north bell will answer when you travel toward it.",
+                TriggerHint: "travel",
+                RealizationKind: "site",
+                ClaimedPlace: "north of here",
+                Subject: "north bell",
+                PlayerVisible: true,
+                Salience: 4,
+                StackExisting: true));
+        }
+
         var requestedInventory = request.Speaker.Inventory ?? Array.Empty<string>();
         var firstRequestedItem = requestedInventory
             .Select(item => item.Split(" x", StringSplitOptions.None)[0])
@@ -206,10 +273,10 @@ public sealed class MockDialogueProvider : IDialogueProvider
             Delivery: speaker.Tags.Contains("prisoner", StringComparer.OrdinalIgnoreCase) ? "hushed" : "plain",
             Intent: claims.Count > 0 ? "inform" : "answer",
             Proposals: new DialogueProposalSet(
-                claims,
-                memories,
-                bond,
-                actions));
+                Claims: claims,
+                Memories: memories,
+                Bond: bond,
+                Actions: actions));
         return Task.FromResult(new DialogueProviderResult(
             Name,
             JsonSerializer.Serialize(response, JsonOptions),
@@ -222,6 +289,77 @@ public sealed class MockDialogueProvider : IDialogueProvider
     {
         WriteIndented = false,
     };
+}
+
+public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
+{
+    private readonly OpenAiCompatibleChatClient _chat;
+    private readonly TimeSpan _timeout;
+
+    public OpenAiCompatibleDialogueProvider(
+        string endpoint = "https://api.openai.com/v1",
+        string model = "default",
+        HttpClient? httpClient = null,
+        TimeSpan? timeout = null,
+        string? apiKey = null)
+    {
+        _chat = new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey);
+        _timeout = timeout ?? TimeSpan.FromSeconds(180);
+    }
+
+    public string Name => "openai-compatible-dialogue";
+
+    public async Task<DialogueProviderResult> ResolveAsync(
+        DialogueRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_timeout);
+
+        var first = await _chat.ChatAsync(
+            OllamaDialogueProvider.SystemPrompt(),
+            OllamaDialogueProvider.UserPrompt(request, retryNote: null),
+            temperature: 0.35,
+            maxTokens: 1000,
+            timeout.Token);
+        if (!first.Success)
+        {
+            return Failure(first.RawText, first.Error ?? "OpenAI-compatible dialogue provider failed.");
+        }
+
+        var parsedFirst = OllamaDialogueProvider.TryParseResponse(first.Content, request, out var response, out var parseError);
+        string? degeneration = null;
+        if (parsedFirst
+            && response is not null
+            && !OllamaDialogueProvider.Degenerate(response, request.PlayerText, out degeneration))
+        {
+            return Success(first.Content, response);
+        }
+
+        var retry = await _chat.ChatAsync(
+            OllamaDialogueProvider.SystemPrompt() + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
+            OllamaDialogueProvider.UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
+            temperature: 0.2,
+            maxTokens: 1000,
+            timeout.Token);
+        if (!retry.Success)
+        {
+            return Failure(retry.RawText, retry.Error ?? "OpenAI-compatible dialogue retry failed.");
+        }
+
+        if (OllamaDialogueProvider.TryParseResponse(retry.Content, request, out response, out parseError))
+        {
+            return Success(retry.Content, response!);
+        }
+
+        return Failure(retry.Content, parseError ?? "OpenAI-compatible dialogue provider returned invalid JSON.");
+    }
+
+    private DialogueProviderResult Success(string raw, DialogueResponse response) =>
+        new(Name, raw, TechnicalFailure: false, Error: null, Response: response);
+
+    private DialogueProviderResult Failure(string raw, string error) =>
+        new(Name, raw, TechnicalFailure: true, Error: error, Response: null);
 }
 
 public sealed class OllamaDialogueProvider : IDialogueProvider
@@ -244,7 +382,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
     {
         _host = host.TrimEnd('/');
         _model = model;
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? CreateHttpClient();
         _timeout = timeout ?? TimeSpan.FromSeconds(180);
     }
 
@@ -346,7 +484,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         }
     }
 
-    private static bool TryParseResponse(
+    internal static bool TryParseResponse(
         string content,
         DialogueRequest request,
         out DialogueResponse? response,
@@ -394,10 +532,16 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         var claims = ParseClaims(proposals, request, spokenText).ToArray();
         var memories = ParseMemories(proposals, request).ToArray();
         var bond = ParseBond(proposals, request);
+        var want = ParseWant(proposals, request);
         var actions = ParseActions(proposals).ToArray();
-        return claims.Length == 0 && memories.Length == 0 && bond is null && actions.Length == 0
+        return claims.Length == 0 && memories.Length == 0 && bond is null && want is null && actions.Length == 0
             ? null
-            : new DialogueProposalSet(claims, memories, bond, actions);
+            : new DialogueProposalSet(
+                Claims: claims,
+                Memories: memories,
+                Bond: bond,
+                Want: want,
+                Actions: actions);
     }
 
     private static IEnumerable<DialogueClaimProposal> ParseClaims(
@@ -544,6 +688,38 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             ReadString(bond, "reason"));
     }
 
+    private static DialogueWantProposal? ParseWant(JsonElement proposals, DialogueRequest request)
+    {
+        if (!proposals.TryGetProperty("want", out var want)
+            || want.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        if (want.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var entityId = ReadString(want, "entityId", "entity_id", "targetEntityId", "targetId")
+            ?? request.Speaker.EntityId;
+        if (entityId.Equals(request.Listener.EntityId, StringComparison.OrdinalIgnoreCase))
+        {
+            entityId = request.Speaker.EntityId;
+        }
+
+        return new DialogueWantProposal(
+            entityId,
+            ReadString(want, "text", "want"),
+            want.TryGetProperty("salience", out _) ? Clamp(ReadInt(want, 1, "salience"), 1, 5) : null,
+            ReadString(want, "status"),
+            ReadString(want, "stakes"),
+            ReadStringArray(want, "tags"),
+            ReadStringArray(want, "addTags") ?? ReadStringArray(want, "add_tags"),
+            ReadStringArray(want, "removeTags") ?? ReadStringArray(want, "remove_tags"),
+            ReadString(want, "reason"));
+    }
+
     private static IEnumerable<DialogueActionProposal> ParseActions(JsonElement proposals)
     {
         if (!proposals.TryGetProperty("actions", out var actions)
@@ -576,13 +752,114 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
                 continue;
             }
 
+            var payload = ReadActionConsequencePayload(action);
             yield return new DialogueActionProposal(
                 objectType.Trim(),
                 ReadString(action, "targetEntityId", "target_entity_id", "targetId", "target"),
                 ReadString(action, "itemName", "item_name", "item"),
-                ReadString(action, "reason"));
+                ReadString(action, "reason"),
+                ReadOptionalInt(action, "quantity", "count"),
+                ReadOptionalInt(action, "gold", "price", "cost"),
+                ReadString(action, "name", "fixtureName", "locationName"),
+                ReadString(action, "description", "text"),
+                ReadString(action, "fixtureType", "fixture_type", "kind"),
+                ReadString(action, "material"),
+                ReadStringArray(action, "tags"),
+                ReadStringArray(action, "interactableVerbs") ?? ReadStringArray(action, "verbs"),
+                ReadOptionalInt(action, "x"),
+                ReadOptionalInt(action, "y"),
+                ReadOptionalBool(action, "blocksMovement", "blocks_movement"),
+                ReadOptionalBool(action, "blocksSight", "blocks_sight"),
+                ReadString(action, "serviceId", "service_id", "service", "serviceName", "service_name"),
+                ReadString(action, "effectKind", "effect_kind", "effect"),
+                ReadString(action, "targetHint", "target_hint", "target"),
+                ReadString(action, "itemCost", "item_cost"),
+                ReadOptionalInt(action, "goldCost", "gold_cost"),
+                ReadString(action, "promiseKind", "promise_kind", "kind"),
+                ReadString(action, "promiseText", "promise_text", "text"),
+                ReadString(action, "triggerHint", "trigger_hint", "trigger"),
+                ReadString(action, "realizationKind", "realization_kind"),
+                ReadString(action, "claimedPlace", "claimed_place", "place"),
+                ReadString(action, "subject"),
+                ReadOptionalBool(action, "playerVisible", "player_visible", "visible"),
+                ReadOptionalInt(action, "salience"),
+                ReadOptionalBool(action, "autoBind", "auto_bind"),
+                ReadOptionalBool(action, "stackExisting", "stack_existing"),
+                ReadString(action, "wantStatusOnComplete", "want_status_on_complete"),
+                ReadString(action, "wantStakesOnComplete", "want_stakes_on_complete"),
+                ReadStringArray(action, "wantAddTagsOnComplete") ?? ReadStringArray(action, "want_add_tags_on_complete"),
+                ReadStringArray(action, "wantRemoveTagsOnComplete") ?? ReadStringArray(action, "want_remove_tags_on_complete"),
+                ReadString(action, "canonKind", "canon_kind", "kind"),
+                ReadString(action, "canonText", "canon_text", "fact", "text"),
+                ReadString(action, "canonSummary", "canon_summary", "summary", "title"),
+                ReadString(action, "consequenceType", "consequence_type", "worldConsequenceType", "world_consequence_type"),
+                ReadString(action, "consequenceTiming", "consequence_timing", "timing"),
+                ReadString(action, "consequenceVisibility", "consequence_visibility", "visibility"),
+                ReadOptionalInt(action, "consequenceConfidence", "consequence_confidence", "confidence"),
+                payload);
         }
     }
+
+    private static IReadOnlyDictionary<string, object?>? ReadActionConsequencePayload(JsonElement action)
+    {
+        var fields = action.EnumerateObject()
+            .ToDictionary(
+                property => property.Name,
+                property => ReadJsonValue(property.Value),
+                StringComparer.OrdinalIgnoreCase);
+        var payload = WorldConsequencePayloadBuilder.MergeNestedWithTopLevelFields(
+            fields,
+            ActionPayloadContainerKeys,
+            "consequencePayload",
+            "consequence_payload",
+            "payload");
+
+        return payload.Count == 0 ? null : payload;
+    }
+
+    private static readonly string[] ActionPayloadContainerKeys =
+    {
+        "consequencePayload",
+        "consequence_payload",
+        "payload",
+    };
+
+    private static IReadOnlyDictionary<string, object?>? ReadObjectMap(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!element.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            return value.EnumerateObject()
+                .ToDictionary(
+                    property => property.Name,
+                    property => ReadJsonValue(property.Value),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        return null;
+    }
+
+    private static object? ReadJsonValue(JsonElement value) =>
+        value.ValueKind switch
+        {
+            JsonValueKind.Object => value.EnumerateObject()
+                .ToDictionary(
+                    property => property.Name,
+                    property => ReadJsonValue(property.Value),
+                    StringComparer.OrdinalIgnoreCase),
+            JsonValueKind.Array => value.EnumerateArray().Select(ReadJsonValue).ToArray(),
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number when value.TryGetInt32(out var integer) => integer,
+            JsonValueKind.Number when value.TryGetInt64(out var longInteger) => longInteger,
+            JsonValueKind.Number when value.TryGetDouble(out var number) => number,
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null,
+        };
 
     private static string? ReadString(JsonElement element, params string[] names)
     {
@@ -645,6 +922,48 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         }
 
         return fallback;
+    }
+
+    private static int? ReadOptionalInt(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.TryGetProperty(name, out var value))
+            {
+                return ReadIntElement(value, 0);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool? ReadOptionalBool(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!element.TryGetProperty(name, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.True)
+            {
+                return true;
+            }
+
+            if (value.ValueKind == JsonValueKind.False)
+            {
+                return false;
+            }
+
+            if (value.ValueKind == JsonValueKind.String
+                && bool.TryParse(value.GetString(), out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return null;
     }
 
     private static int ReadIntElement(JsonElement value) => ReadIntElement(value, 0);
@@ -719,7 +1038,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         return player.Contains(claim, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool Degenerate(DialogueResponse response, string playerText, out string? reason)
+    internal static bool Degenerate(DialogueResponse response, string playerText, out string? reason)
     {
         reason = null;
         var spoken = response.SpokenText.Trim();
@@ -744,14 +1063,14 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
     private static string Normalize(string text) =>
         new(text.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
-    private static string SystemPrompt() =>
+    internal static string SystemPrompt() =>
         "You are Sorcerer's NPC dialogue provider. Return exactly one JSON object and no prose outside it. "
-        + "Shape: {\"spokenText\":\"NPC line\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\",\"proposals\":{\"claims\":[],\"memories\":[],\"bond\":null,\"actions\":[]}}. "
+        + "Shape: {\"spokenText\":\"NPC line\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\",\"proposals\":{\"claims\":[],\"memories\":[],\"bond\":null,\"want\":null,\"actions\":[]}}. "
         + "Speak as the speaker only. No narration, markdown, stage directions, or omniscient exposition. Answer the newest player message directly in 1-4 short sentences. "
-        + "Use the speaker card, scene, recent memories, and recent claims as context. Player-spoken claims are not binding; only claims in the NPC spokenText may be proposed. "
+        + "Use the speaker card, scene, recent memories, recent rumors, and recent claims as context. Player-spoken claims are not binding; only claims in the NPC spokenText may be proposed. "
         + "Claims are reported, possibly wrong assertions about places, people, items, threats, landmarks, stock, or events. Use salience 1-5 and confidence 0-100. "
         + "For generated claims, use the existing claim fields: text, category, subject, salience, confidence, playerVisible, bindAsPromise, promiseKind, realizationKind, triggerHint, claimedPlace, targetEntityId, merchantId, itemName, playerAuthored, tags, updateBond, loyaltyDelta, fearDelta, admirationDelta, resentmentDelta, bondPosture. "
-        + "Promise binding rule: if the NPC asserts a specific actionable place, person, landmark, item location, merchant stock, service, future threat, escape route, or prophecy that is not already resolved in the scene and would be useful later, include a claim with bindAsPromise true, playerVisible true, salience 3-5, promiseKind \"rumor\" unless another kind fits, realizationKind such as site, town, landmark, person, item, merchant_stock, service, threat, escape_route, door_rule, or quest, and a practical triggerHint such as travel, talk, buy, trade, open, wait, or inspect. "
+        + "Promise binding rule: if the NPC asserts a specific actionable place, person, landmark, item location, merchant stock, service, future threat, escape route, or prophecy that is not already resolved in the scene and would be useful later, include a claim with bindAsPromise true, playerVisible true, salience 3-5, promiseKind \"rumor\" unless another kind fits, realizationKind such as site, town, landmark, person, item, merchant_stock, service, threat, escape_route, door_rule, or quest, and a practical triggerHint such as travel, talk, buy, trade, services, request, open, wait, or inspect. "
         + "Keep claim category and realizationKind aligned: merchant_stock claims should use realizationKind merchant_stock and itemName for the stock; service claims should use service; escape route claims should use escape_route; door rules should use door_rule. Do not use realizationKind person for a merchant-stock claim unless the claim is only about meeting the person and not about their wares. "
         + "When in doubt, bind a concrete useful NPC-authored claim; the engine can keep it reported or later decide how to realize it. Do not skip binding merely because the NPC is cautious, refuses safety, speaks in rumor, or names their own service. "
         + "Always bind: named or role-specific people to find; family relationships that introduce a person; route landmarks; hidden exits; item locations; merchant stock; direct service offers; concrete trades; future patrols or threats; true-name door rules; omens with a concrete trigger. "
@@ -762,10 +1081,11 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         + "Do not bind denials, obvious jokes, imaginary or child-invented monsters, tiny ambient detail, ordinary weather, vague mood, insults, impossible boasts, or claims authored only by the player. "
         + "Set playerAuthored true only when noting that the player said something; those claims will be ignored by the engine. Prefer not to include player-authored claims at all. "
         + "Memories need ownerEntityId, text, provenance, salience, shareable. Bond must be null or an object with entityId, integer loyaltyDelta, fearDelta, admirationDelta, resentmentDelta, posture, and reason. "
-        + "Actions must be objects such as {\"type\":\"none\"}, {\"type\":\"step_aside\"}, {\"type\":\"give_item\",\"itemName\":\"brass key\"}, or {\"type\":\"open_door\",\"targetEntityId\":\"cell_door_1\"}. Supported action types are none, step_aside, flee, call_help, give_item, and open_door; only propose an action when the speaker can plausibly do it now. "
+        + "Want may be null or one object with entityId, optional text, salience 1-5, status such as active/satisfied/blocked/abandoned, stakes, tags/addTags/removeTags, and reason; use it only when the NPC's own active desire clearly changes in spokenText or because the conversation materially satisfies, blocks, or redirects that desire. "
+        + "Actions must be objects such as {\"type\":\"none\"}, {\"type\":\"step_aside\"}, {\"type\":\"give\",\"itemName\":\"brass key\"}, {\"type\":\"open\",\"targetEntityId\":\"cell_door_1\"}, {\"type\":\"attack\",\"targetEntityId\":\"player\"}, {\"type\":\"recruit\",\"reason\":\"The NPC agrees to follow.\"}, {\"type\":\"offer_trade\",\"itemName\":\"knife\",\"quantity\":1,\"gold\":12}, {\"type\":\"reveal_service\",\"name\":\"ward-breaking\",\"description\":\"I can whisper a lock loose.\",\"effectKind\":\"open_or_unlock\",\"targetHint\":\"cell door\",\"itemCost\":\"grave salt\",\"wantStatusOnComplete\":\"satisfied\",\"wantAddTagsOnComplete\":[\"service_completed\"]}, {\"type\":\"create_promise\",\"promiseKind\":\"rumor\",\"promiseText\":\"The tower north of here has a bell with no clapper.\",\"triggerHint\":\"travel\",\"realizationKind\":\"site\",\"claimedPlace\":\"north of here\",\"salience\":4}, {\"type\":\"canonize_fact\",\"canonKind\":\"local_law\",\"canonText\":\"Folk-magic practice is punishable by execution here.\",\"canonSummary\":\"Folk magic is a capital crime\",\"tags\":[\"folk_magic\",\"vigovia\"]}, {\"type\":\"mark_location\",\"name\":\"loose floorboard\",\"fixtureType\":\"marker\",\"description\":\"A board with fresh nail-scars.\",\"x\":5,\"y\":6,\"blocksMovement\":false}, or {\"type\":\"consequence\",\"consequenceType\":\"add_tags\",\"targetEntityId\":\"prisoner_1\",\"consequenceTiming\":\"deferred\",\"consequencePayload\":{\"tags\":[\"helpful\"],\"operation\":\"dialogueConsequence\",\"delay\":1}}. For reveal_service, use wantStatusOnComplete, wantStakesOnComplete, wantAddTagsOnComplete, or wantRemoveTagsOnComplete only when completing that service would materially satisfy, block, or redirect the provider's active want. Use canonize_fact/add_canon only for a durable local fact the NPC explicitly says in spokenText that should inform later context but is not a promise, trade, service, route, or immediate action. Generic consequence actions are for local effects that already fit a typed consequence, including local fixture/prop changes through transform_entity. You may either use {\"type\":\"consequence\",\"consequenceType\":\"...\"} or put a known consequence id directly in type, such as {\"type\":\"request_service\",\"serviceId\":\"ward_breaking\"}, {\"type\":\"add_tags\",\"targetEntityId\":\"prisoner_1\",\"tags\":[\"helpful\"]}, {\"type\":\"apply_status\",\"targetEntityId\":\"prisoner_1\",\"status\":\"oath-marked\",\"duration\":2}, {\"type\":\"transform_entity\",\"targetEntityId\":\"old_bridge_1\",\"name\":\"collapsed bridge\",\"blocksMovement\":true,\"fixtureType\":\"collapsed_bridge\",\"tags\":[\"collapsed\"]}, or the same fields nested under consequencePayload; extra top-level fields on generic/typed consequence actions are preserved as payload fields. Named dialogue actions such as create_promise, add_canon, offer_trade, and spawn_fixture keep their own fields. Use consequenceTiming immediate, after_turn, world_pump, or deferred; non-immediate timing schedules one typed consequence through the shared turn pump. Use schedule_event only for broad future events such as calling help or setting a patrol, not for a simple delayed local consequence. Supported action types are none, step_aside, flee, call_help, give, open, attack, recruit, create_promise, canonize_fact, add_canon, offer_trade, reveal_service, mark_location, spawn_fixture, consequence, and known typed consequence ids; aliases such as give_item, open_door, summon_help, run_away, strike, join_me, follow_me, promise, trade, offer_service, typed_consequence, and world_consequence are accepted. Only propose an action when the speaker can plausibly do it now in the current local scene; distant places should usually be claims/promises, and create_promise is only for explicit vows, prophecies, curses, or mechanically important commitments in spokenText. "
         + "If the speaker cannot or will not answer, still return a character refusal as spokenText with no proposals. Technical JSON mistakes are failures; character refusal is not.";
 
-    private static string UserPrompt(DialogueRequest request, string? retryNote) =>
+    internal static string UserPrompt(DialogueRequest request, string? retryNote) =>
         JsonSerializer.Serialize(new
         {
             retryNote,
@@ -776,6 +1096,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             scene = request.Scene,
             recentMemories = request.RecentMemories,
             recentClaims = request.RecentClaims,
+            recentRumors = request.RecentRumors ?? Array.Empty<string>(),
             capabilityCards = request.CapabilityCards,
         }, JsonOptions);
 
@@ -786,4 +1107,10 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         new(Name, raw, TechnicalFailure: true, Error: error, Response: null);
 
     private sealed record ChatResult(bool Success, string Content, string RawText, string? Error);
+
+    private static HttpClient CreateHttpClient() =>
+        new()
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Magic;
@@ -36,49 +37,109 @@ public sealed class WildMagicController : IWildMagicController
         _capabilities = capabilities ?? CapabilityRegistry.CreateDefault();
     }
 
-    public async Task<ActionResult> CastAsync(
+    public async Task<MaterializedMagicResolution> ResolveAsync(
         GameEngine engine,
         CastCommand command,
         CancellationToken cancellationToken)
     {
-        var turnBefore = engine.State.Turn;
-        var selectedCapabilities = _capabilities.Select(command.Text);
-        var operationIndex = _registry.ToNarrowedIndex(
-            selectedCapabilities.SelectMany(card => card.EffectTypes));
-        var contextView = engine.MagicContext(operationIndex);
-        var request = new SpellRequest(
-            command.Text,
-            contextView,
-            operationIndex.Names,
-            selectedCapabilities,
-            _capabilities.CapabilityIndex());
+        var request = BuildSpellRequest(engine, command.Text);
+        SpellProviderResult providerResult;
+        try
+        {
+            providerResult = await _provider.ResolveAsync(request, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new MaterializedMagicResolution(
+                _provider.Name,
+                command.Text,
+                command.Performance ?? CastPerformance.Neutral,
+                RawText: "",
+                Accepted: false,
+                TechnicalFailure: true,
+                Error: ex.Message,
+                EffectTypes: Array.Empty<string>(),
+                ResolvedMagicJson: null);
+        }
 
-        var providerResult = await _provider.ResolveAsync(request, cancellationToken);
         if (providerResult.TechnicalFailure || providerResult.Resolution is null)
         {
-            var error = providerResult.Error ?? "Spell provider failed.";
-            engine.AddMessage(error);
-            var result = new ActionResult
-            {
-                Action = "cast",
-                Success = false,
-                ConsumedTurn = false,
-                TurnBefore = turnBefore,
-                TurnAfter = engine.State.Turn,
-                Messages = new[] { error },
-                TechnicalFailure = true,
-                Magic = new MagicResolutionRecord(
-                    providerResult.Provider,
-                    Accepted: false,
-                    TechnicalFailure: true,
-                    EffectTypes: Array.Empty<string>(),
-                    Error: error),
-            };
-            Audit(providerResult, command, request.Context, result, Array.Empty<string>());
-            return result;
+            return new MaterializedMagicResolution(
+                providerResult.Provider,
+                command.Text,
+                command.Performance ?? CastPerformance.Neutral,
+                providerResult.RawText,
+                Accepted: false,
+                TechnicalFailure: true,
+                Error: providerResult.Error ?? "Spell provider failed.",
+                EffectTypes: Array.Empty<string>(),
+                ResolvedMagicJson: null);
         }
 
         var resolution = RepairNarration(command.Text, Normalize(providerResult.Resolution));
+        return new MaterializedMagicResolution(
+            providerResult.Provider,
+            command.Text,
+            command.Performance ?? CastPerformance.Neutral,
+            providerResult.RawText,
+            resolution.Accepted,
+            TechnicalFailure: false,
+            Error: resolution.Accepted ? null : resolution.RejectedReason ?? "The spell refuses to become real.",
+            resolution.Effects.Select(effect => effect.Type).ToArray(),
+            SerializeResolution(resolution));
+    }
+
+    public ActionResult ApplyResolved(GameEngine engine, MaterializedMagicResolution materialized)
+    {
+        var turnBefore = engine.State.Turn;
+        var command = new CastCommand(materialized.SpellText, materialized.Performance);
+        var request = BuildSpellRequest(engine, materialized.SpellText);
+
+        if (materialized.TechnicalFailure || string.IsNullOrWhiteSpace(materialized.ResolvedMagicJson))
+        {
+            var error = materialized.Error ?? "Spell provider failed.";
+            var technicalProviderResult = new SpellProviderResult(
+                materialized.Provider,
+                materialized.RawText,
+                Resolution: null,
+                TechnicalFailure: true,
+                Error: error);
+            var result = TechnicalFailure(engine, materialized.Provider, turnBefore, error);
+            Audit(technicalProviderResult, command, request.Context, result, Array.Empty<string>());
+            return result;
+        }
+
+        SpellResolution resolution;
+        SpellProviderResult providerResult;
+        try
+        {
+            resolution = RepairNarration(
+                materialized.SpellText,
+                Normalize(SpellResolutionJson.Parse(materialized.ResolvedMagicJson, _registry)));
+            providerResult = new SpellProviderResult(
+                materialized.Provider,
+                materialized.RawText,
+                resolution,
+                TechnicalFailure: false,
+                Error: null);
+        }
+        catch (Exception ex)
+        {
+            providerResult = new SpellProviderResult(
+                materialized.Provider,
+                materialized.RawText,
+                Resolution: null,
+                TechnicalFailure: true,
+                Error: ex.Message);
+            var result = TechnicalFailure(engine, materialized.Provider, turnBefore, ex.Message);
+            Audit(providerResult, command, request.Context, result, new[] { "materialized_parse_failed" });
+            return result;
+        }
+
         if (!resolution.Accepted)
         {
             var result = WithResolutionJson(Rejected(
@@ -114,14 +175,16 @@ public sealed class WildMagicController : IWildMagicController
         }
 
         var transaction = GameTransaction.Begin(engine.State);
-        var messages = new List<string>();
         var deltas = new List<StateDelta>();
         try
         {
             if (!string.IsNullOrWhiteSpace(resolution.OutcomeText))
             {
-                engine.AddMessage(resolution.OutcomeText);
-                messages.Add(resolution.OutcomeText);
+                deltas.AddRange(ApplyMagicMessage(
+                    engine,
+                    resolution.OutcomeText,
+                    "wildMagicOutcome",
+                    "Accepted wild magic narration.").Deltas);
             }
 
             foreach (var effect in resolution.Effects)
@@ -132,19 +195,46 @@ public sealed class WildMagicController : IWildMagicController
             }
 
             deltas.AddRange(SpellCostApplier.Apply(engine, resolution.Costs));
-            engine.RecordDeed(
-                engine.State.ControlledEntity,
+            var actor = engine.State.ControlledEntity;
+            var actorPosition = actor.Get<PositionComponent>().Position;
+            var effectPoint = FirstEffectPoint(engine, deltas);
+            var deed = engine.ApplyConsequence(WorldConsequence.RecordDeed(
+                "engine",
+                actor.Id.Value,
                 "wild_magic",
                 MagnitudeFor(resolution.Severity),
-                engine.State.ControlledEntity.Get<PositionComponent>().Position,
-                FirstEffectPoint(engine, deltas),
-                resolution.Effects.Select(effect => effect.Type).Concat(new[] { resolution.Severity }));
+                actorPosition.X,
+                actorPosition.Y,
+                effectPoint?.X,
+                effectPoint?.Y,
+                resolution.Effects.Select(effect => effect.Type).Concat(new[] { resolution.Severity }).ToArray(),
+                sourceEntityId: actor.Id.Value));
+            deltas.AddRange(deed.Deltas);
 
-            if (messages.Count == 0 && deltas.Count == 0)
+            var rejectedDeltas = HiddenDiagnostics(RejectedDeltas(deltas));
+            if (rejectedDeltas.Count > 0)
+            {
+                var error = RejectedApplySummary(rejectedDeltas);
+                transaction.Rollback();
+                var failure = WithResolutionJson(
+                    TechnicalFailure(engine, providerResult.Provider, turnBefore, error),
+                    resolution);
+                failure = failure with
+                {
+                    Deltas = rejectedDeltas.Concat(failure.Deltas).ToArray(),
+                };
+                Audit(providerResult, command, request.Context, failure, new[] { "apply_consequence_rejected" });
+                return failure;
+            }
+
+            if (deltas.Count == 0)
             {
                 var message = "The spell answers with a small blue spark.";
-                engine.AddMessage(message);
-                messages.Add(message);
+                deltas.AddRange(ApplyMagicMessage(
+                    engine,
+                    message,
+                    "wildMagicFallback",
+                    "Accepted wild magic produced no other visible effect.").Deltas);
             }
 
             var turnDeltas = engine.AdvanceTurn();
@@ -166,9 +256,8 @@ public sealed class WildMagicController : IWildMagicController
                 ConsumedTurn = true,
                 TurnBefore = turnBefore,
                 TurnAfter = engine.State.Turn,
-                Messages = messages
-                    .Concat(deltas.Select(delta => delta.Summary))
-                    .Concat(turnDeltas.Select(delta => delta.Summary))
+                Messages = deltas.PlayerMessages()
+                    .Concat(turnDeltas.PlayerMessages())
                     .ToArray(),
                 Deltas = deltas.Concat(turnDeltas).ToArray(),
                 Magic = new MagicResolutionRecord(
@@ -191,6 +280,67 @@ public sealed class WildMagicController : IWildMagicController
             Audit(providerResult, command, request.Context, result, new[] { "application_exception" });
             return result;
         }
+    }
+
+    private static IReadOnlyList<StateDelta> RejectedDeltas(IEnumerable<StateDelta> deltas) =>
+        deltas
+            .Where(delta => delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+    private static IReadOnlyList<StateDelta> HiddenDiagnostics(IReadOnlyList<StateDelta> deltas) =>
+        deltas
+            .Select(delta =>
+            {
+                var details = new Dictionary<string, object?>(delta.Details, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["auditOnly"] = true,
+                    ["playerVisible"] = false,
+                };
+                return delta with { Details = details };
+            })
+            .ToArray();
+
+    private static string RejectedApplySummary(IReadOnlyList<StateDelta> rejectedDeltas)
+    {
+        var errors = rejectedDeltas
+            .Select(delta =>
+            {
+                var error = delta.Details.TryGetValue("error", out var rawError) && rawError is not null
+                    ? rawError.ToString()
+                    : delta.Summary;
+                return string.IsNullOrWhiteSpace(delta.Target)
+                    ? error
+                    : $"{delta.Target}: {error}";
+            })
+            .Where(error => !string.IsNullOrWhiteSpace(error))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return errors.Length == 0
+            ? "Accepted wild magic produced a rejected world consequence."
+            : $"Accepted wild magic produced a rejected world consequence: {string.Join("; ", errors)}";
+    }
+
+    public async Task<ActionResult> CastAsync(
+        GameEngine engine,
+        CastCommand command,
+        CancellationToken cancellationToken)
+    {
+        var resolved = await ResolveAsync(engine, command, cancellationToken);
+        return ApplyResolved(engine, resolved);
+    }
+
+    private SpellRequest BuildSpellRequest(GameEngine engine, string spellText)
+    {
+        var selectedCapabilities = _capabilities.Select(spellText);
+        var operationIndex = _registry.ToNarrowedIndex(
+            selectedCapabilities.SelectMany(card => card.EffectTypes));
+        var contextView = engine.MagicContext(operationIndex);
+        return new SpellRequest(
+            spellText,
+            contextView,
+            operationIndex.Names,
+            selectedCapabilities,
+            _capabilities.CapabilityIndex());
     }
 
     private void Audit(
@@ -222,6 +372,7 @@ public sealed class WildMagicController : IWildMagicController
         var effectTypes = resolution.Effects
             .Select(effect => effect.Type)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var mechanicKinds = MechanicalKinds(resolution.Effects);
         var canClipSupplementalNarration = HasMechanicalBacking(effectTypes);
         if (!canClipSupplementalNarration)
         {
@@ -234,7 +385,7 @@ public sealed class WildMagicController : IWildMagicController
         var outcomeText = resolution.OutcomeText;
         if (NarrationClaimsPlayerCommand(outcomeText))
         {
-            outcomeText = RepairedOutcomeText(spellText, effectTypes);
+            outcomeText = RepairedOutcomeText(spellText, mechanicKinds);
         }
 
         return resolution with
@@ -335,10 +486,8 @@ public sealed class WildMagicController : IWildMagicController
         SpellResolution resolution,
         List<SpellValidationIssue> issues)
     {
-        var effectTypes = resolution.Effects
-            .Select(effect => effect.Type)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (PromiseIntentNeedsLedger(spellText) && !HasAnyEffect(effectTypes, "createPromise", "scheduleEvent", "createTrigger"))
+        var mechanicKinds = MechanicalKinds(resolution.Effects);
+        if (PromiseIntentNeedsLedger(spellText) && !HasAnyEffect(mechanicKinds, "createPromise", "scheduleEvent", "createTrigger"))
         {
             issues.Add(new SpellValidationIssue(
                 "promise_effect_missing",
@@ -346,7 +495,7 @@ public sealed class WildMagicController : IWildMagicController
                 TechnicalFailure: true));
         }
 
-        if (NarrationClaimsUnsupportedMechanics(resolution.OutcomeText, effectTypes, out var outcomeReason))
+        if (NarrationClaimsUnsupportedMechanics(resolution.OutcomeText, mechanicKinds, out var outcomeReason))
         {
             issues.Add(new SpellValidationIssue(
                 "outcome_claims_unsupported_mechanics",
@@ -357,7 +506,7 @@ public sealed class WildMagicController : IWildMagicController
         foreach (var effect in resolution.Effects.Where(effect => effect.Type.Equals("message", StringComparison.OrdinalIgnoreCase)))
         {
             var text = ReadString(effect.Fields, "text", ReadString(effect.Fields, "message", ""));
-            if (NarrationClaimsUnsupportedMechanics(text, effectTypes, out var reason))
+            if (NarrationClaimsUnsupportedMechanics(text, mechanicKinds, out var reason))
             {
                 issues.Add(new SpellValidationIssue(
                     "message_claims_unsupported_mechanics",
@@ -400,21 +549,21 @@ public sealed class WildMagicController : IWildMagicController
         }
 
         if (ClaimsRouteReveal(lower)
-            && !HasAnyEffect(effectTypes, "createPromise", "scheduleEvent", "createTrigger", "createTiles", "summon", "conjureCreature"))
+            && !HasAnyEffect(effectTypes, "createPromise", "scheduleEvent", "createTrigger", "createTiles", "summon", "conjureCreature", "createRoute", "spawnFixture", "spawnEntity", "spawnItem"))
         {
             reason = "A route, passage, or landmark reveal needs a backing promise, trigger, terrain change, or spawned site operation.";
             return true;
         }
 
         if (ClaimsDoorState(lower)
-            && !HasAnyEffect(effectTypes, "transformEntity", "createTiles", "createPromise", "scheduleEvent", "createTrigger"))
+            && !HasAnyEffect(effectTypes, "transformEntity", "createTiles", "createPromise", "scheduleEvent", "createTrigger", "openOrUnlock"))
         {
             reason = "Opening or unlocking a door must be represented by an engine operation, not only by narration.";
             return true;
         }
 
         if (ClaimsInventoryChange(lower)
-            && !HasAnyEffect(effectTypes, "modifyInventory", "conjureItem", "transformItem"))
+            && !HasAnyEffect(effectTypes, "modifyInventory", "conjureItem", "transformItem", "transferItem", "spawnItem", "addMerchantStock", "offerTrade", "executeTrade"))
         {
             reason = "Inventory gains, losses, purchases, or sales must be represented by inventory/item operations, not only by narration.";
             return true;
@@ -445,8 +594,48 @@ public sealed class WildMagicController : IWildMagicController
         return ContainsAny(lower, "you read ", "you read:", "you read the", "you travel ", "you move ", "you buy ", "you sell ", "you pick up ", "you take ");
     }
 
+    private static HashSet<string> MechanicalKinds(IEnumerable<SpellEffect> effects)
+    {
+        var kinds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var effect in effects)
+        {
+            AddMechanicalKind(kinds, effect.Type);
+            if (!effect.Type.Equals("consequence", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var consequenceType = FirstNonBlank(
+                ReadString(effect.Fields, "consequenceType", ""),
+                ReadString(effect.Fields, "consequence_type", ""),
+                ReadString(effect.Fields, "worldConsequenceType", ""),
+                ReadString(effect.Fields, "world_consequence_type", ""));
+            AddMechanicalKind(kinds, consequenceType);
+        }
+
+        return kinds;
+    }
+
+    private static void AddMechanicalKind(HashSet<string> kinds, string? kind)
+    {
+        if (string.IsNullOrWhiteSpace(kind))
+        {
+            return;
+        }
+
+        kinds.Add(kind);
+        var normalized = WorldConsequenceTypes.Normalize(kind);
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            kinds.Add(normalized);
+        }
+    }
+
+    private static string? FirstNonBlank(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
     private static bool HasAnyEffect(IReadOnlySet<string> effectTypes, params string[] names) =>
-        names.Any(effectTypes.Contains);
+        names.Any(name => effectTypes.Contains(name) || effectTypes.Contains(WorldConsequenceTypes.Normalize(name)));
 
     private static bool ContainsAny(string text, params string[] needles) =>
         needles.Any(needle => text.Contains(needle, StringComparison.OrdinalIgnoreCase));
@@ -527,7 +716,11 @@ public sealed class WildMagicController : IWildMagicController
         int turnBefore,
         string error)
     {
-        engine.AddMessage(error);
+        var message = ApplyMagicMessage(
+            engine,
+            error,
+            "wildMagicTechnicalFailure",
+            "Wild magic failed for a technical provider or validation reason.");
         return new ActionResult
         {
             Action = "cast",
@@ -535,7 +728,8 @@ public sealed class WildMagicController : IWildMagicController
             ConsumedTurn = false,
             TurnBefore = turnBefore,
             TurnAfter = engine.State.Turn,
-            Messages = new[] { error },
+            Messages = message.Messages.Count == 0 ? new[] { error } : message.Messages,
+            Deltas = message.Deltas,
             TechnicalFailure = true,
             Magic = new MagicResolutionRecord(
                 provider,
@@ -553,7 +747,11 @@ public sealed class WildMagicController : IWildMagicController
         string reason,
         IReadOnlyList<string> effectTypes)
     {
-        engine.AddMessage(reason);
+        var rejection = ApplyMagicMessage(
+            engine,
+            reason,
+            "wildMagicRejected",
+            "Wild magic produced an intentional in-world rejection.");
         var turnDeltas = engine.AdvanceTurn();
         return new ActionResult
         {
@@ -562,16 +760,35 @@ public sealed class WildMagicController : IWildMagicController
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = engine.State.Turn,
-            Messages = new[] { reason }.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = rejection.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
             Magic = new MagicResolutionRecord(
                 provider,
                 Accepted: false,
                 TechnicalFailure: false,
                 EffectTypes: effectTypes,
                 Error: reason),
-            Deltas = turnDeltas,
+            Deltas = rejection.Deltas.Concat(turnDeltas).ToArray(),
         };
     }
+
+    private static WorldConsequenceApplyResult ApplyMagicMessage(
+        GameEngine engine,
+        string message,
+        string operation,
+        string reason) =>
+        engine.ApplyConsequence(WorldConsequence.Message(
+            "wild_magic",
+            message,
+            targetEntityId: engine.State.ControlledEntityId.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: engine.State.ControlledEntityId.Value,
+            evidence: message,
+            reason: reason,
+            operation: operation,
+            details: new Dictionary<string, object?>
+            {
+                ["playerVisible"] = true,
+            }));
 
     private static string ReadString(IReadOnlyDictionary<string, object?> fields, string key, string fallback) =>
         fields.TryGetValue(key, out var value) && value is not null

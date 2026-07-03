@@ -47,6 +47,7 @@ for their own sake. It needs to respond organically to player action.
 Preferred state lanes:
 
 - deed ledger
+- rumor ledger
 - promise ledger
 - faction ledger
 - memory ledger
@@ -72,12 +73,37 @@ First implemented slice:
 - suspicious deeds can raise imperial suspicion without magically attributing the caster
 - witnessed/public/mythic deeds can become soul-bound legend tags and faction standing
   changes at the turn pump
+- non-secret witnessed deeds write hidden witness memories through `record_memory`, preserving
+  what local NPCs saw as ordinary dialogue context instead of a separate witness-knowledge lane
+- non-secret deeds mint durable rumor records through the shared `record_rumor` consequence, and
+  high-salience visible dialogue claims can become rumors through the same lane
+- each pending deed reaction is staged transactionally: rumor records, witness memories, legend
+  tags, faction shifts, heat/resource changes, visible narration, and the final `deedApplied`
+  marker commit together, or a rejected child consequence rolls the plan back and emits only a
+  hidden audit-only `worldReactionSkipped` delta
+- rumors propagate deterministically at bounded turn/travel pump points into region and NPC
+  carriers, spend budget only when a new carrier is reached, decay after early hops, become `stale`
+  below the active threshold, and stage each rumor update with its heard-memory child writes so
+  rejection rolls the whole hop back; successful rumors then appear in journal/debug views and
+  generated dialogue context
+- `WorldTurnSystem` audits bounded world initiative moves through `record_world_turn` consequences
+  for faction pressure, rumor spreading, and high-salience promise stirring, so the world can move a
+  little without becoming a full life sim
+- background rumor distortion jobs also audit their queue and apply moments as hidden
+  `record_world_turn` moves, so the rumor flywheel remains traceable through the same world-turn
+  ledger even when text retelling is handled by background generation
 - faction definitions carry roles, hostile roles, standing, and finite debug-only resources
-- empire-bloc heat spends patrol/warrant/defense resources into scheduled pressure; a patrol can
-  enter as a real hostile entity
+- empire-bloc heat spends patrol/warrant/defense resources through budgeted `faction_pressure`
+  world-turn moves into scheduled pressure; the resource, schedule, canon, and message changes
+  return typed consequence deltas beside the wrapper move; a patrol can enter as a real hostile entity
 - patrol pressure is bounded by active/pending patrol checks and response cooldown so escalation
   does not become a constant spawn ratchet
-- quiet turn pumps regenerate pressure resources and let heat ebb
+- quiet deed-free turn pumps run `WorldTurnSystem` recovery before budgeted pressure moves,
+  regenerating pressure resources and letting heat ebb through typed resource consequences; actual
+  recovery changes also leave a hidden `faction_recovery` world-turn audit
+- world-turn moves are transactional apply-point packets: faction pressure, recovery, rumor
+  spread, promise stirring, and want-stir memories restore staged state if any child consequence
+  or final `record_world_turn` audit rejects, leaving only hidden rejection diagnostics
 - `standing`, `journal`, and debug ledger/faction summaries expose the result to the CLI and tests
 
 This is deliberately not the full empire simulation yet. Richer regional faction rosters,

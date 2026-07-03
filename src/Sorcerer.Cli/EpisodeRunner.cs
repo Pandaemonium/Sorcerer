@@ -6,6 +6,7 @@ using Sorcerer.Core.Entities;
 using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Runtime;
 using Sorcerer.Core.Views;
 using Sorcerer.Magic;
 using Sorcerer.Magic.Auditing;
@@ -17,7 +18,8 @@ public sealed record EpisodeRunnerOptions(
     int Episodes,
     int MaxTurns,
     int Seed,
-    string? LogPath);
+    string? LogPath,
+    string? QuickstartScene);
 
 public static class EpisodeRunner
 {
@@ -42,6 +44,7 @@ public static class EpisodeRunner
         IDialogueClaimExtractor dialogueClaimExtractor,
         IDialogueAuditSink dialogueAudit,
         ISpellAuditSink audit,
+        IBackgroundTextGenerator? backgroundTextGenerator,
         EpisodeRunnerOptions options,
         bool json,
         CancellationToken cancellationToken = default)
@@ -69,13 +72,16 @@ public static class EpisodeRunner
                     seed: seed,
                     claimExtractor: dialogueClaimExtractor,
                     dialogueProvider: dialogueProvider,
-                    dialogueAudit: dialogueAudit);
+                    dialogueAudit: dialogueAudit,
+                    backgroundTextGenerator: backgroundTextGenerator);
+                Program.ApplyQuickstart(session, options.QuickstartScene);
 
                 var summary = await RunEpisodeAsync(
                     episode,
                     seed,
                     session,
                     Math.Max(1, options.MaxTurns),
+                    options.QuickstartScene,
                     writer,
                     cancellationToken);
                 summaries.Add(summary);
@@ -131,6 +137,7 @@ public static class EpisodeRunner
         int seed,
         GameSession session,
         int maxTurns,
+        string? quickstartScene,
         StreamWriter? writer,
         CancellationToken cancellationToken)
     {
@@ -139,6 +146,8 @@ public static class EpisodeRunner
             Episode: episode,
             Seed: seed,
             MaxTurns: maxTurns,
+            Quickstart: true,
+            QuickstartScene: quickstartScene,
             InitialObservation: session.Observation(debug: true)));
 
         var issues = new List<string>();
@@ -167,6 +176,7 @@ public static class EpisodeRunner
                 TechnicalFailure: result.TechnicalFailure,
                 TurnBefore: result.TurnBefore,
                 TurnAfter: result.TurnAfter,
+                Result: result,
                 Messages: result.Messages.Take(6).ToArray(),
                 MagicEffects: result.Magic?.EffectTypes ?? Array.Empty<string>(),
                 Issues: stepIssues,
@@ -247,6 +257,12 @@ public static class EpisodeRunner
             return new InspectCommand();
         }
 
+        var socialProbe = ChooseSocialProbe(session, view, player, step);
+        if (socialProbe is not null)
+        {
+            return socialProbe;
+        }
+
         var redTincture = FindInventory(view, "red tincture");
         if (player.HitPoints is { } hp
             && player.MaxHitPoints is { } maxHp
@@ -321,6 +337,58 @@ public static class EpisodeRunner
             : new MoveCommand(DirectionToward(player, destination));
     }
 
+    private static GameCommand? ChooseSocialProbe(GameSession session, GameView view, EntityCard player, int step)
+    {
+        if (Hostiles(view).Any(hostile => Distance(player, hostile) <= 2))
+        {
+            return null;
+        }
+
+        if (step % 17 == 5
+            && view.Promises.Any(promise => promise.PlayerVisible))
+        {
+            return new JournalCommand();
+        }
+
+        if (step % 19 == 7
+            && (view.Rumors?.Count ?? 0) > 0)
+        {
+            return new RumorsCommand();
+        }
+
+        var speaker = NearbyFriendlyTalker(view, player);
+        if (speaker is null)
+        {
+            return null;
+        }
+
+        if (FindInventory(view, "grave salt") is not null
+            && !HasGiftMemory(session, speaker.Id))
+        {
+            return new GiveCommand("grave salt", speaker.Name);
+        }
+
+        if (HasGiftMemory(session, speaker.Id)
+            && !HasBondWithPlayer(session, speaker.Id))
+        {
+            return new TalkCommand($"{speaker.Name}, I meant that kindly. Can you trust me with one useful thing?");
+        }
+
+        if (!HasClaimAbout(session, "Hollowmere")
+            && !HasPromiseAbout(view, "Hollowmere"))
+        {
+            return new TalkCommand($"{speaker.Name}, what road or town waits south of here?");
+        }
+
+        if (!HasClaimAbout(session, "fine blade")
+            && !HasPromiseAbout(view, "fine blade"))
+        {
+            return new TalkCommand($"{speaker.Name}, do you know anyone who can sell me a fine blade?");
+        }
+
+        return null;
+    }
+
     private static EntityCard? ChooseDestination(GameSession session, GameView view, EntityCard player)
     {
         if (FindInventory(view, "imperial cell key") is null)
@@ -369,6 +437,51 @@ public static class EpisodeRunner
             .OrderBy(entity => Distance(player, entity))
             .FirstOrDefault();
     }
+
+    private static EntityCard? NearbyFriendlyTalker(GameView view, EntityCard player) =>
+        view.Entities
+            .Where(entity => entity.Id != view.ControlledEntityId)
+            .Where(entity => TagsContain(entity, "npc") || TagsContain(entity, "resident") || TagsContain(entity, "prisoner"))
+            .Where(entity => !string.Equals(entity.Faction, "empire", StringComparison.OrdinalIgnoreCase))
+            .Where(entity => Distance(player, entity) <= 2)
+            .OrderByDescending(entity => TagsContain(entity, "prisoner"))
+            .ThenBy(entity => Distance(player, entity))
+            .ThenBy(entity => entity.Id, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+
+    private static bool HasGiftMemory(GameSession session, string entityId) =>
+        session.Engine.State.Memories.Records.Any(memory =>
+            memory.SubjectId.Equals(entityId, StringComparison.OrdinalIgnoreCase)
+            && (memory.Provenance.StartsWith("gift", StringComparison.OrdinalIgnoreCase)
+                || memory.Text.Contains("accepted", StringComparison.OrdinalIgnoreCase)));
+
+    private static bool HasBondWithPlayer(GameSession session, string entityId)
+    {
+        var entity = session.Engine.EntityById(entityId);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        var subjectSoulId = entity.TryGet<SoulComponent>(out var soul)
+            ? soul.SoulId
+            : entity.Id.Value;
+        var player = session.Engine.State.ControlledEntity;
+        var playerSoulId = player.TryGet<SoulComponent>(out var playerSoul)
+            ? playerSoul.SoulId
+            : player.Id.Value;
+        return session.Engine.State.Bonds.TryGet(subjectSoulId, playerSoulId, out _);
+    }
+
+    private static bool HasClaimAbout(GameSession session, string text) =>
+        session.Engine.State.Claims.Records.Any(claim =>
+            claim.Text.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || claim.Subject.Contains(text, StringComparison.OrdinalIgnoreCase));
+
+    private static bool HasPromiseAbout(GameView view, string text) =>
+        view.Promises.Any(promise =>
+            promise.Text.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || promise.Subject.Contains(text, StringComparison.OrdinalIgnoreCase));
 
     private static IReadOnlyList<string> CheckInvariants(
         ActionResult result,
@@ -571,6 +684,7 @@ public static class EpisodeRunner
             ServicesCommand services => $"services {services.Target}",
             RequestServiceCommand service => $"request {service.Service} from {service.Target}",
             JournalCommand => "journal",
+            RumorsCommand => "rumors",
             TalkCommand talk => $"talk {talk.Text}",
             GiveCommand give => $"give {give.Item} to {give.Target}",
             RecruitCommand recruit => $"recruit {recruit.Target}",
@@ -593,6 +707,8 @@ public static class EpisodeRunner
         int Episode,
         int Seed,
         int MaxTurns,
+        bool Quickstart,
+        string? QuickstartScene,
         AgentObservation InitialObservation);
 
     private sealed record EpisodeFinalRecord(
@@ -632,6 +748,7 @@ public static class EpisodeRunner
         bool TechnicalFailure,
         int TurnBefore,
         int TurnAfter,
+        ActionResult Result,
         IReadOnlyList<string> Messages,
         IReadOnlyList<string> MagicEffects,
         IReadOnlyList<string> Issues,

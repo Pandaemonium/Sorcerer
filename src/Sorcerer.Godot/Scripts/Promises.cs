@@ -79,8 +79,27 @@ public partial class Promises : Control
             ? "none"
             : string.Join(
                 "\n\n",
-                promises.Select(promise =>
-                    $"{UiTheme.Colorize(promise.Kind, UiTheme.Wild)}\n{UiTheme.Escape(promise.Text)}"));
+                promises.Select(FormatPromise));
+    }
+
+    private static string FormatPromise(PromiseCard promise)
+    {
+        var state = $"{promise.Status}"
+            + (string.IsNullOrWhiteSpace(promise.TriggerHint) ? "" : $" / {promise.TriggerHint}")
+            + (string.IsNullOrWhiteSpace(promise.RealizationKind) ? "" : $" / {promise.RealizationKind}");
+        var failure = string.IsNullOrWhiteSpace(promise.LastEligibilityFailure)
+            ? ""
+            : $"\n{UiTheme.Colorize("waiting", UiTheme.Muted)} {UiTheme.Escape(promise.LastEligibilityFailure)}"
+                + (string.IsNullOrWhiteSpace(promise.LastEligibilityContext)
+                    ? ""
+                    : $" {UiTheme.Colorize(promise.LastEligibilityContext, UiTheme.Muted)}");
+        var source = string.IsNullOrWhiteSpace(promise.SourceClaimId)
+            ? ""
+            : $"\n{UiTheme.Colorize("from", UiTheme.Muted)} {UiTheme.Escape(promise.SourceClaimId)}"
+                + (promise.SourceConfidence is null
+                    ? ""
+                    : $" {UiTheme.Colorize($"{promise.SourceConfidence}% confidence", UiTheme.Muted)}");
+        return $"{UiTheme.Colorize(promise.Kind, UiTheme.Wild)} {UiTheme.Colorize(state, UiTheme.Muted)}\n{UiTheme.Escape(promise.Text)}{source}{failure}";
     }
 
     private void GoBack() => GetTree().ChangeSceneToFile("res://Scenes/Main.tscn");

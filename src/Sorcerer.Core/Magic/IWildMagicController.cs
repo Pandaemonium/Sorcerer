@@ -1,11 +1,32 @@
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Results;
 
 namespace Sorcerer.Core.Magic;
 
+public sealed record MaterializedMagicResolution(
+    string Provider,
+    string SpellText,
+    CastPerformance Performance,
+    string RawText,
+    bool Accepted,
+    bool TechnicalFailure,
+    string? Error,
+    IReadOnlyList<string> EffectTypes,
+    string? ResolvedMagicJson);
+
 public interface IWildMagicController
 {
+    Task<MaterializedMagicResolution> ResolveAsync(
+        GameEngine engine,
+        CastCommand command,
+        CancellationToken cancellationToken);
+
+    ActionResult ApplyResolved(
+        GameEngine engine,
+        MaterializedMagicResolution resolution);
+
     Task<ActionResult> CastAsync(
         GameEngine engine,
         CastCommand command,
@@ -23,18 +44,62 @@ public sealed class NullWildMagicController : IWildMagicController
     public Task<ActionResult> CastAsync(
         GameEngine engine,
         CastCommand command,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) =>
+        Task.FromResult(ApplyResolved(
+            engine,
+            new MaterializedMagicResolution(
+                "none",
+                command.Text,
+                command.Performance ?? CastPerformance.Neutral,
+                "",
+                Accepted: false,
+                TechnicalFailure: true,
+                Error: "Wild magic has not been wired into this session.",
+                EffectTypes: Array.Empty<string>(),
+                ResolvedMagicJson: null)));
+
+    public Task<MaterializedMagicResolution> ResolveAsync(
+        GameEngine engine,
+        CastCommand command,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new MaterializedMagicResolution(
+            "none",
+            command.Text,
+            command.Performance ?? CastPerformance.Neutral,
+            "",
+            Accepted: false,
+            TechnicalFailure: true,
+            Error: "Wild magic has not been wired into this session.",
+            EffectTypes: Array.Empty<string>(),
+            ResolvedMagicJson: null));
+
+    public ActionResult ApplyResolved(
+        GameEngine engine,
+        MaterializedMagicResolution resolution)
     {
-        var message = "Wild magic has not been wired into this session.";
-        engine.AddMessage(message);
-        return Task.FromResult(new ActionResult
+        var message = resolution.Error ?? "Wild magic has not been wired into this session.";
+        var applied = engine.ApplyConsequence(WorldConsequence.Message(
+            "wild_magic",
+            message,
+            targetEntityId: engine.State.ControlledEntityId.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: engine.State.ControlledEntityId.Value,
+            evidence: message,
+            reason: "Wild magic controller is absent.",
+            operation: "wildMagicTechnicalFailure",
+            details: new Dictionary<string, object?>
+            {
+                ["playerVisible"] = true,
+            }));
+        return new ActionResult
         {
             Action = "cast",
             Success = false,
             ConsumedTurn = false,
             TurnBefore = engine.State.Turn,
             TurnAfter = engine.State.Turn,
-            Messages = new[] { message },
+            Messages = applied.Messages.Count == 0 ? new[] { message } : applied.Messages,
+            Deltas = applied.Deltas,
             TechnicalFailure = true,
             Magic = new MagicResolutionRecord(
                 "none",
@@ -42,7 +107,6 @@ public sealed class NullWildMagicController : IWildMagicController
                 TechnicalFailure: true,
                 EffectTypes: Array.Empty<string>(),
                 Error: message),
-        });
+        };
     }
 }
-

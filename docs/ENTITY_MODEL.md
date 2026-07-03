@@ -118,6 +118,22 @@ A prop can also be an item if it can be picked up or carried.
 - generation state
 - lore topics
 
+### Claim Source
+
+For readable records, signs, fixtures, props, books, or other authored objects that should
+surface future hooks:
+
+- one or more claim seeds
+- category, subject, salience, confidence, and tags
+- whether the claim is visible to the player
+- whether the claim should bind as a promise
+- optional promise kind, realization kind, trigger hint, and claimed place
+
+Reading or examining a claim source should not mutate ledgers directly. It should submit the
+same `record_claim`, `record_rumor`, `create_promise`, and `update_claim` consequences used by
+dialogue claim extraction. This lets documents and props participate in the rumor/promise
+flywheel without becoming bespoke opening-script code.
+
 ### Profile
 
 For actors and bodies:
@@ -151,6 +167,39 @@ For NPCs or sufficiently person-like entities:
 - salience
 
 Memory edits should be bounded operations, not free-form direct mutation by the model.
+
+### Want
+
+For notable NPCs:
+
+- one active desire
+- salience
+- stakes
+- tags
+- status
+
+Wants give dialogue and bond logic direction without becoming quests by themselves. Opening NPCs
+can use authored wants; generated NPCs should receive deterministic wants when instantiated. Typed
+`spawn_entity` supports explicit want fields and otherwise synthesizes a conservative default want
+for notable NPCs: social tags/roles, talk/give/recruit verbs, promise hooks, or memory-bearing
+spawns opt into that default. A non-summoned entity with no social signal should remain blank unless
+content supplies an explicit want. The same spawn path also supports explicit entity ids and richer
+profile metadata for rare canonical actors, so a named figure can stay addressable without leaving
+the shared spawn lifecycle. Pass `autoWant: false` only when an otherwise notable actor
+should intentionally remain blank. A want is not player-facing truth until an NPC says something
+that becomes a claim, promise, memory, or other typed consequence. If a want changes after
+instantiation, the change should apply through the shared `update_want` consequence so dialogue,
+magic, services, and world-turns get the same validation and audit deltas. `update_want` can
+optionally write a hidden `record_memory` child delta, letting dialogue, services, or rescue
+actions preserve why motivation changed without exposing the want as journal truth; that parent
+want update rolls back if the requested child memory rejects. Its deltas
+include prior and new want fields so transcripts can explain the motivational change without
+diffing entity state. Ordinary engine actions can also satisfy or redirect wants through that path:
+freeing Lio, for example, marks his escape want satisfied while leaving later Hollowmere
+trust, danger, or lead disclosure to dialogue, claims, bonds, and promises. Service offers may also
+carry explicit completion metadata such as `wantStatusOnComplete` or completion tags; after a
+successful `request`, those metadata fields submit `update_want` rather than mutating the provider
+directly.
 
 ### Promise Anchor
 
@@ -190,9 +239,13 @@ Current implementation:
 - Alert hostile bodies resist possession, consume the turn, and do not move the control
   pointer.
 - Incapacitated bodies can be possessed.
-- On success, the player soul moves into the new body, the displaced soul moves into the
-  old body, `ControlledEntityId` follows the new body, factions/controllers are swapped,
-  and inventory remains on whichever body carried it.
+- On success, the player soul moves into the new body and the displaced soul moves into
+  the old body through `swap_souls`; `ControlledEntityId` follows the new body through
+  `set_controlled_entity`; factions/controllers are swapped; and inventory remains on
+  whichever body carried it.
+- The successful possession packet is transactional: soul swap, controllers, factions,
+  statuses, controlled entity, target clear, deed, and narration commit together or roll
+  back with a hidden `possessionSkipped` audit.
 - `BodyStatsComponent` stays with the body, while `SoulLedger` records stay keyed to the
   moving soul. `ActorComponent` is synced from both: HP/attack/defense from body Vigor,
   mana from soul Attunement/current mana.

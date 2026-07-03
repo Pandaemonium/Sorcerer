@@ -49,6 +49,7 @@ Background calls enrich the world:
 - lore extraction
 - promise fleshing
 - post-dialogue claim extraction, when it is not part of the foreground dialogue call
+- rumor distortion after high-salience stories have travelled far enough to plausibly change
 - town/site details
 
 Background calls must be resource-aware.
@@ -67,6 +68,16 @@ Required controls:
 
 If a background job completes, its output should become durable only at an explicit apply
 point controlled by `GameSession`, not from an arbitrary worker thread mutating state.
+
+Implemented background jobs follow that rule now: `entity_detail`/`canon_detail` settle as canon
+only when the turn pump accepts an `add_canon` consequence, while `rumor_distortion` retells a
+high-hop rumor and applies the changed text, `distorted` tag, and `distortion:` history through the
+shared `update_rumor` consequence. `Completed` means a worker produced candidate text; `Applied`
+means the text survived the authoritative consequence lifecycle. Generic detail/canon applies now
+also leave a hidden `record_world_turn` receipt (`background_detail_applied`), so background
+enrichment has the same bounded audit trail as rumor distortion. Candidate text can come from a
+configured background provider or from the deterministic fallback; either way, durability still
+waits for the same typed consequence apply point.
 
 ## Post-Dialogue Claim Extraction
 
@@ -93,17 +104,19 @@ or manipulate, but only validated engine actions, wild magic, NPC/document claim
 world sources create durable commitments.
 
 Current implementation uses both `IDialogueProvider` and `IDialogueClaimExtractor` in
-`Sorcerer.Core`, with mock and Ollama implementations in `Sorcerer.Llm`. Provider-generated
-dialogue returns `spokenText` plus structured proposals and applies accepted claims immediately.
+`Sorcerer.Core`, with mock, Ollama, and OpenAI-compatible implementations in `Sorcerer.Llm`.
+Provider-generated dialogue returns `spokenText` plus structured proposals and applies accepted
+claims immediately.
 Fallback deterministic dialogue can still queue extraction after successful `talk` results and pump
-completed results on a later command. Proposals can create `ClaimLedger` entries, write memories,
-add existing merchant stock, bind promises, or request bounded bond deltas. Gift commands only
-create gift memories; if that gift changes a relationship, generated dialogue or claim extraction
-must propose the bond change during a later conversation.
+completed results on a later command. Proposals can record claims through `record_claim`, write
+memories, add existing merchant stock, bind promises, or request bounded bond deltas. Gift commands
+only create gift memories; if that gift changes a relationship, generated dialogue or claim
+extraction must propose the bond change during a later conversation.
 
-Current generated dialogue supports the first validated action proposals:
-`step_aside`, `flee`, `call_help`, `give_item`, and `open_door`. Unsupported actions are rejected
-with a diagnostic delta.
+Current generated dialogue supports validated action proposals such as
+`step_aside`, `flee`, `call_help`, `give`, `open`, `attack`, `recruit`,
+`create_promise`, `offer_trade`, `reveal_service`, `mark_location`, and
+`spawn_fixture`. Unsupported actions are rejected with a diagnostic delta.
 
 ## Ollama Concerns
 
@@ -176,26 +189,49 @@ Current implementation:
 - Background generation defaults on but low: one job per turn, with a small queue cap.
 - CLI playtests can disable or throttle this lane with `--disable-background`,
   `--max-background-jobs`, and `--background-jobs-per-turn`.
-- `read` and `examine` can enqueue deterministic background detail jobs for the target.
+- `read` and `examine` enqueue entity-detail jobs through the shared
+  `queue_background_job` consequence. High-hop, high-salience rumors enqueue
+  `rumor_distortion` jobs through the same consequence using a `rumor` target kind. The
+  consequence enforces disabled/max-queue/duplicate/canon guards where relevant and returns a typed
+  action-result delta. Queue visibility belongs to `jobs` and debug observations, not ordinary
+  player-facing action narration.
 - `AdvanceTurn` is the explicit apply point: it starts at most the configured number of
-  queued jobs, produces deterministic text enriched by routed lore when relevant, writes
-  durable canon, and marks the job `Applied`.
+  queued jobs, records `Running`/`Completed`/`Applied`/`Failed` transitions through
+  `update_background_job`, asks the optional `background` provider for candidate prose when one is
+  configured, falls back to deterministic routed-lore text on provider failure or absence, and then
+  applies candidate output through the narrow typed consequence for that job purpose.
+  `entity_detail`/`canon_detail` jobs become durable through `add_canon`; `rumor_distortion`
+  jobs become durable through `update_rumor`. Successful applies stage the job output, applied job
+  state, and a hidden `record_world_turn` audit together, so a rejected child restores state rather
+  than leaving half-applied enrichment.
+- Save/replay is explicit for intermediate states: a `Completed` job that has result text but has
+  not applied yet is picked up at the next turn pump before new queued work, while a stale
+  `Running` job is marked `Failed` with `stale_running_job` so it cannot block duplicate guards
+  after an interrupted worker.
+- Apply is transactional. If the typed consequence rejects, the staged state is restored, a hidden
+  audit-only `backgroundJobApplySkipped` delta is emitted, and the job is marked `Failed` instead
+  of partially applying. Obsolete detail jobs whose canon was already supplied fail with
+  `canon_already_exists` rather than duplicating ledger entries. Queue skips such as duplicate
+  active jobs return hidden audit-only typed deltas rather than player-facing narration.
 - Subsequent `examine` calls show attached canon as known detail, so background enrichment is
   visible through the shared CLI/Godot command path.
 - `jobs` exposes the queue through the shared CLI/Godot command path.
+- Provider materialization emits hidden `backgroundTextGenerated` audit deltas that record provider,
+  model, technical failure, and deterministic fallback use without adding player-facing narration.
+  CLI/Godot live runs also write provider prompts, raw responses, parsed text, errors, and timing to
+  `logs/background_audit.jsonl`.
 - Debug observations include background job cards so diagnostic episode transcripts can
   capture the queue without scraping text.
 
-This is intentionally not a real background LLM worker yet. It proves the state,
-throttling, visibility, and apply-boundary architecture before any provider call can
-consume user resources.
-
 `LlmConfiguration` separates purpose settings (`wild`, `dialogue`, `item`, `canon`,
-`background`, `agent`). The CLI uses the `wild` purpose for foreground spell resolution and keeps
-background provider/model/host settings separate for the future worker. Purpose-specific
-environment variables use names such as `SORCERER_WILD_PROVIDER`, `SORCERER_WILD_MODEL`,
+`background`, `agent`). The CLI uses the `wild` purpose for foreground spell resolution and can
+wire a separate `background` text generator for non-critical enrichment. Passing
+`--background-provider`, `--background-host`, or `--background-model` opts into that provider unless
+`--disable-background` is also supplied; otherwise the turn pump uses deterministic fallback text.
+Purpose-specific environment variables use names such as `SORCERER_WILD_PROVIDER`, `SORCERER_WILD_MODEL`,
 `SORCERER_BACKGROUND_PROVIDER`, `SORCERER_BACKGROUND_MODEL`, and
-`SORCERER_BACKGROUND_ENABLED`.
+`SORCERER_BACKGROUND_ENABLED`. OpenAI-compatible endpoints can also use purpose-specific
+`SORCERER_<PURPOSE>_API_KEY` values before falling back to shared OpenAI-compatible key variables.
 
 Current job record:
 
@@ -222,7 +258,7 @@ Queue should expose a read-only developer view:
 - queued jobs
 - completed waiting-to-apply jobs
 - failed jobs
-- current provider/model, once real background providers are wired in
+- current provider/model, when a provider-backed materializer is configured
 - elapsed time
 
 The GUI can render this as a hidden developer panel. The CLI already exposes it with

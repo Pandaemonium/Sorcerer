@@ -4,6 +4,7 @@ using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Transactions;
 using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Engine.Systems;
@@ -19,7 +20,7 @@ public sealed class InteractionSystem
     {
         _engine = engine;
         _itemSystem = itemSystem;
-        _promiseRealizationSystem = new PromiseRealizationSystem(engine.State);
+        _promiseRealizationSystem = new PromiseRealizationSystem(engine.State, engine);
         _turnSystem = turnSystem;
     }
 
@@ -44,18 +45,13 @@ public sealed class InteractionSystem
 
         var messages = new List<string>();
         var deltas = new List<StateDelta>();
-        ResolveDialogueIntent(target, text, messages, deltas);
+        ResolveDialogueIntent(target, turn.PlayerText, messages, deltas);
         return CompleteDialogue(turn, messages, deltas, generated: false, provider: "deterministic", rawText: null, delivery: null, intent: null);
     }
 
     public DialoguePreparation PrepareDialogue(string text)
     {
         var turnBefore = State.Turn;
-        if (TryRouteDialogueShortcut(text, out var shortcut))
-        {
-            return new DialoguePreparation(null, shortcut);
-        }
-
         var target = ResolveNearbyEntity(
             text,
             entity => entity.Id != State.ControlledEntityId && entity.Has<ActorComponent>(),
@@ -75,10 +71,13 @@ public sealed class InteractionSystem
         var bond = State.Bonds.TryGet(SoulIdFor(target), PlayerSoulId(), out var bondRecord)
             ? BondSummary(bondRecord)
             : null;
+        var want = target.TryGet<WantComponent>(out var wantComponent)
+            ? WantSummary(wantComponent)
+            : null;
         return new DialoguePreparation(
             new PreparedDialogueTurn(
                 turnBefore,
-                text,
+                NormalizeDialoguePlayerText(text, target),
                 target.Id.Value,
                 target.Name,
                 TagsFor(target).ToArray(),
@@ -86,7 +85,8 @@ public sealed class InteractionSystem
                 _engine.IsHostile(target, State.ControlledEntity),
                 profile,
                 actor?.Faction,
-                bond),
+                bond,
+                want),
             null);
     }
 
@@ -166,12 +166,76 @@ public sealed class InteractionSystem
                 ["rawText"] = rawText,
                 ["delivery"] = delivery,
                 ["intent"] = intent,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
             }));
-        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(target, "talk", messages));
-        foreach (var line in messages)
+        for (var index = 0; index < dialogueLines.Length; index++)
         {
-            State.AddMessage(line);
+            var line = dialogueLines[index];
+            var applied = _engine.ApplyConsequence(WorldConsequence.Message(
+                generated ? $"dialogue:{provider}" : "dialogue",
+                line,
+                targetEntityId: turn.SpeakerId,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: turn.SpeakerId,
+                evidence: turn.PlayerText,
+                reason: generated ? "Generated dialogue produced a spoken line." : "Deterministic dialogue produced a spoken line.",
+                operation: "dialogueMessage",
+                details: new Dictionary<string, object?>
+                {
+                    ["speakerId"] = turn.SpeakerId,
+                    ["speakerName"] = turn.SpeakerName,
+                    ["speakerTags"] = turn.SpeakerTags.ToArray(),
+                    ["listenerSoulId"] = turn.ListenerSoulId,
+                    ["playerText"] = turn.PlayerText,
+                    ["lineIndex"] = index,
+                    ["generated"] = generated,
+                    ["provider"] = provider,
+                    ["delivery"] = delivery,
+                    ["intent"] = intent,
+                }));
+            deltas.AddRange(applied.Deltas);
         }
+
+        if (!generated && dialogueLines.Length > 0)
+        {
+            var spokenText = string.Join(" ", dialogueLines);
+            var memoryText = $"{turn.SpeakerName} spoke with the sorcerer. Player: {turn.PlayerText} Reply: {spokenText}";
+            var memory = _engine.ApplyConsequence(WorldConsequence.RecordMemory(
+                "dialogue_exchange",
+                target.Id.Value,
+                memoryText,
+                "conversation",
+                2,
+                shareable: false,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: turn.PlayerText,
+                reason: "Deterministic dialogue exchange.",
+                operation: "dialogueExchangeMemory",
+                details: new Dictionary<string, object?>
+                {
+                    ["speakerId"] = turn.SpeakerId,
+                    ["playerText"] = turn.PlayerText,
+                    ["spokenText"] = spokenText,
+                }));
+            deltas.AddRange(memory.Deltas);
+        }
+
+        var alreadyPersistedMessages = messages.ToList();
+        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(target, "talk", messages, alreadyPersistedMessages));
+        deltas.AddRange(PersistUnwrittenMessages(
+            messages,
+            alreadyPersistedMessages,
+            "dialogue",
+            "dialogueFallbackMessage",
+            target.Id.Value,
+            new Dictionary<string, object?>
+            {
+                ["speakerId"] = turn.SpeakerId,
+                ["speakerName"] = turn.SpeakerName,
+                ["generated"] = generated,
+                ["provider"] = provider,
+            }));
 
         var turnDeltas = AdvanceTurn();
         return new ActionResult
@@ -181,7 +245,7 @@ public sealed class InteractionSystem
             ConsumedTurn = true,
             TurnBefore = turn.TurnBefore,
             TurnAfter = State.Turn,
-            Messages = messages.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = deltas.Concat(turnDeltas).ToArray(),
         };
     }
@@ -216,35 +280,71 @@ public sealed class InteractionSystem
             return ActionResult.Simple("give", false, false, turnBefore, State.Turn, $"{key} is protected; unprotect it before giving it away.");
         }
 
-        DecrementInventory(inventory, key);
-        AddEntityMemory(target, $"{target.Name} accepted {key} from the sorcerer.", "gift", 2);
-        State.Memories.Append(
-            target.Id.Value,
-            $"{target.Name} accepted {key} from the sorcerer.",
+        var transaction = GameTransaction.Begin(State);
+        var gift = _engine.ApplyConsequence(WorldConsequence.TransferItem(
             "gift",
-            2,
-            shareable: true);
-        var messages = new List<string>
+            State.ControlledEntityId.Value,
+            "give",
+            key,
+            quantity: 1,
+            recipientEntityId: target.Id.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: key,
+            operation: "giveItem",
+            message: $"{target.Name} accepts {key}. The gift becomes part of what they know about you."));
+        if (!gift.Applied)
         {
-            $"{target.Name} accepts {key}. The gift becomes part of what they know about you.",
-        };
-        var deltas = new List<StateDelta>
-        {
-            new(
-                "giveItem",
-                target.Id.Value,
-                $"{target.Name} receives {key}.",
-                new Dictionary<string, object?>
-                {
-                    ["item"] = key,
-                    ["memorySource"] = "gift",
-                }),
-        };
-        foreach (var line in messages)
-        {
-            State.AddMessage(line);
+            var failure = gift.Error ?? $"{target.Name} cannot receive {key}.";
+            var failureDeltas = gift.Deltas.ToList();
+            RollBackGiftTransaction(transaction, failureDeltas, 0, target, key, gift.Deltas, failure);
+            return new ActionResult
+            {
+                Action = "give",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = failureDeltas,
+            };
         }
 
+        var memoryText = $"{target.Name} accepted {key} from the sorcerer.";
+        var memory = _engine.ApplyConsequence(WorldConsequence.RecordMemory(
+            "gift",
+            target.Id.Value,
+            memoryText,
+            "gift",
+            2,
+            shareable: true,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: memoryText,
+            operation: "giftMemory",
+            details: new Dictionary<string, object?>
+            {
+                ["item"] = key,
+                ["giverId"] = State.ControlledEntityId.Value,
+            }));
+        var messages = gift.Messages.ToList();
+        var deltas = gift.Deltas.Concat(memory.Deltas).ToList();
+        if (!memory.Applied)
+        {
+            var failure = memory.Error ?? $"{target.Name}'s gift memory could not be recorded.";
+            RollBackGiftTransaction(transaction, deltas, 0, target, key, memory.Deltas, failure);
+            return new ActionResult
+            {
+                Action = "give",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
+        transaction.Commit();
         var turnDeltas = AdvanceTurn();
         return new ActionResult
         {
@@ -253,9 +353,37 @@ public sealed class InteractionSystem
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = State.Turn,
-            Messages = messages.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = deltas.Concat(turnDeltas).ToArray(),
         };
+    }
+
+    private static void RollBackGiftTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        Entity target,
+        string item,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
+    {
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        deltas.AddRange(FailureDiagnostics(failedDeltas));
+        var rejectedCount = FailureDiagnostics(failedDeltas).Count;
+        deltas.Add(new StateDelta(
+            "giftSkipped",
+            target.Id.Value,
+            $"Gift rolled back: {failure}.",
+            new Dictionary<string, object?>
+            {
+                ["targetEntityId"] = target.Id.Value,
+                ["item"] = item,
+                ["failure"] = failure,
+                ["rejectedCount"] = rejectedCount,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
     }
 
     public ActionResult Recruit(string? targetText)
@@ -271,66 +399,408 @@ public sealed class InteractionSystem
             return ActionResult.Simple("recruit", false, false, turnBefore, State.Turn, "No one nearby is ready to be asked.");
         }
 
+        return ApplyRecruitment(
+            target,
+            source: "recruit",
+            action: "recruit",
+            operationPrefix: "recruit",
+            messageOperation: "recruit",
+            evidence: $"{target.Name} chose to follow the sorcerer.",
+            consumeTurn: true,
+            turnBefore,
+            extraDetails: null);
+    }
+
+    public ActionResult RecruitFromDialogue(string actorId, string provider, string? reason)
+    {
+        var turnBefore = State.Turn;
+        var target = _engine.EntityById(actorId);
+        if (target is null)
+        {
+            return ActionResult.Simple(
+                "dialogue_recruit",
+                false,
+                false,
+                turnBefore,
+                State.Turn,
+                "Dialogue recruit action skipped because the speaker no longer exists.");
+        }
+
+        return ApplyRecruitment(
+            target,
+            source: $"dialogue:{provider}",
+            action: "dialogue_recruit",
+            operationPrefix: "dialogueRecruit",
+            messageOperation: "dialogueRecruit",
+            evidence: reason ?? $"{target.Name} chose to follow the sorcerer in dialogue.",
+            consumeTurn: false,
+            turnBefore,
+            extraDetails: new Dictionary<string, object?>
+            {
+                ["provider"] = provider,
+                ["proposalType"] = "recruit",
+                ["providerReason"] = reason,
+            });
+    }
+
+    private ActionResult ApplyRecruitment(
+        Entity target,
+        string source,
+        string action,
+        string operationPrefix,
+        string messageOperation,
+        string evidence,
+        bool consumeTurn,
+        int turnBefore,
+        IReadOnlyDictionary<string, object?>? extraDetails)
+    {
         var playerSoulId = PlayerSoulId();
         var subjectSoulId = SoulIdFor(target);
-        var bond = State.Bonds.GetOrCreate(subjectSoulId, playerSoulId);
+        var bond = State.Bonds.TryGet(subjectSoulId, playerSoulId, out var existingBond)
+            ? existingBond
+            : NeutralBond(subjectSoulId, playerSoulId);
         var recruitScore = bond.Loyalty + bond.Admiration - bond.Resentment;
         var messages = new List<string>();
         var deltas = new List<StateDelta>();
         if (recruitScore < 5 && !bond.Posture.Equals("grateful", StringComparison.OrdinalIgnoreCase))
         {
+            var refusalTransaction = GameTransaction.Begin(State);
+            var refusalDeltaStart = deltas.Count;
+            var refusalMessageStart = messages.Count;
             var refusal = $"{target.Name} listens, but the bond is not strong enough to make a life out of it.";
-            messages.Add(refusal);
-            State.AddMessage(refusal);
-            AdjustBond(target, resentment: 1, posture: bond.Posture);
-            var refusalTurnDeltas = AdvanceTurn();
+            var refusalMessage = _engine.ApplyConsequence(WorldConsequence.Message(
+                source,
+                refusal,
+                targetEntityId: target.Id.Value,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: refusal,
+                operation: $"{operationPrefix}Refused",
+                details: MergeRecruitDetails(extraDetails, ("recruitScore", recruitScore), ("posture", bond.Posture))));
+            if (!refusalMessage.Applied)
+            {
+                var failure = refusalMessage.Error ?? $"{target.Name}'s recruitment refusal could not be recorded.";
+                RollBackRecruitmentTransaction(
+                    refusalTransaction,
+                    deltas,
+                    refusalDeltaStart,
+                    messages,
+                    refusalMessageStart,
+                    target,
+                    operationPrefix,
+                    refusalMessage.Deltas,
+                    failure);
+                return new ActionResult
+                {
+                    Action = action,
+                    Success = false,
+                    ConsumedTurn = false,
+                    TurnBefore = turnBefore,
+                    TurnAfter = State.Turn,
+                    Messages = new[] { failure },
+                    Deltas = deltas,
+                };
+            }
+
+            messages.AddRange(refusalMessage.Messages);
+            deltas.AddRange(refusalMessage.Deltas);
+            var refusalBond = ApplyBondUpdate(
+                target,
+                source,
+                resentment: 1,
+                posture: bond.Posture,
+                operation: $"{operationPrefix}Bond");
+            if (!refusalBond.Applied)
+            {
+                var failure = refusalBond.Error ?? $"{target.Name}'s refusal bond could not be recorded.";
+                RollBackRecruitmentTransaction(
+                    refusalTransaction,
+                    deltas,
+                    refusalDeltaStart,
+                    messages,
+                    refusalMessageStart,
+                    target,
+                    operationPrefix,
+                    refusalBond.Deltas,
+                    failure);
+                return new ActionResult
+                {
+                    Action = action,
+                    Success = false,
+                    ConsumedTurn = false,
+                    TurnBefore = turnBefore,
+                    TurnAfter = State.Turn,
+                    Messages = new[] { failure },
+                    Deltas = deltas,
+                };
+            }
+
+            deltas.AddRange(refusalBond.Deltas);
+            refusalTransaction.Commit();
+            var refusalTurnDeltas = consumeTurn ? AdvanceTurn() : Array.Empty<StateDelta>();
             return new ActionResult
             {
-                Action = "recruit",
+                Action = action,
                 Success = false,
-                ConsumedTurn = true,
+                ConsumedTurn = consumeTurn,
                 TurnBefore = turnBefore,
                 TurnAfter = State.Turn,
-                Messages = messages.Concat(refusalTurnDeltas.Select(delta => delta.Summary)).ToArray(),
-                Deltas = refusalTurnDeltas,
+                Messages = messages.Concat(refusalTurnDeltas.PlayerMessages()).ToArray(),
+                Deltas = deltas.Concat(refusalTurnDeltas).ToArray(),
             };
         }
 
-        var actor = target.Get<ActorComponent>();
-        target.Set(actor with { Faction = "player" });
-        target.Set(new ControllerComponent(ControllerKind.Ai));
-        target.Set(new AiComponent("follower"));
-        PreserveMembershipAndAddRole(target, "follower");
-        var updatedBond = State.Bonds.Adjust(subjectSoulId, playerSoulId, loyalty: 1, admiration: 1, posture: "follower");
-        AddEntityMemory(target, $"{target.Name} chose to follow the sorcerer.", "recruit", 3);
-        var message = $"{target.Name} chooses to follow you, carrying old loyalties separately from the new bond.";
-        messages.Add(message);
-        deltas.Add(new StateDelta(
-            "recruit",
+        var transaction = GameTransaction.Begin(State);
+        var deltaStart = deltas.Count;
+        var messageStart = messages.Count;
+
+        var faction = _engine.ApplyConsequence(WorldConsequence.ChangeFaction(
+            source,
             target.Id.Value,
-            message,
-            new Dictionary<string, object?>
-            {
-                ["posture"] = updatedBond.Posture,
-                ["combatFaction"] = "player",
-                ["membership"] = target.TryGet<FactionComponent>(out var membership) ? membership.FactionId : "",
-            }));
-        foreach (var line in messages)
+            "player",
+            roles: new[] { "follower" },
+            preserveMembership: true,
+            visibility: WorldConsequenceVisibility.Hidden,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: evidence,
+            operation: $"{operationPrefix}Faction",
+            details: extraDetails));
+        if (!faction.Applied)
         {
-            State.AddMessage(line);
+            var failure = faction.Error ?? $"{target.Name} cannot change allegiance right now.";
+            RollBackRecruitmentTransaction(
+                transaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                target,
+                operationPrefix,
+                faction.Deltas,
+                failure);
+            return new ActionResult
+            {
+                Action = action,
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
         }
 
-        var turnDeltas = AdvanceTurn();
+        deltas.AddRange(faction.Deltas);
+        var control = _engine.ApplyConsequence(WorldConsequence.UpdateControl(
+            source,
+            target.Id.Value,
+            "ai",
+            aiPolicyId: "follower",
+            visibility: WorldConsequenceVisibility.Hidden,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: evidence,
+            operation: $"{operationPrefix}Control",
+            details: extraDetails));
+        if (!control.Applied)
+        {
+            var failure = control.Error ?? $"{target.Name} cannot follow right now.";
+            RollBackRecruitmentTransaction(
+                transaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                target,
+                operationPrefix,
+                control.Deltas,
+                failure);
+            return new ActionResult
+            {
+                Action = action,
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
+        deltas.AddRange(control.Deltas);
+        var recruitBond = ApplyBondUpdate(
+            target,
+            source,
+            loyalty: 1,
+            admiration: 1,
+            posture: "follower",
+            operation: $"{operationPrefix}Bond");
+        if (!recruitBond.Applied)
+        {
+            var failure = recruitBond.Error ?? $"{target.Name}'s bond could not become follower-shaped.";
+            RollBackRecruitmentTransaction(
+                transaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                target,
+                operationPrefix,
+                recruitBond.Deltas,
+                failure);
+            return new ActionResult
+            {
+                Action = action,
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
+        deltas.AddRange(recruitBond.Deltas);
+        var updatedBond = State.Bonds.TryGet(subjectSoulId, playerSoulId, out var recruitedBond)
+            ? recruitedBond
+            : NeutralBond(subjectSoulId, playerSoulId);
+        var memoryText = $"{target.Name} chose to follow the sorcerer.";
+        var memory = _engine.ApplyConsequence(WorldConsequence.RecordMemory(
+            source,
+            target.Id.Value,
+            memoryText,
+            source,
+            3,
+            shareable: true,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: evidence,
+            operation: $"{operationPrefix}Memory",
+            details: extraDetails));
+        if (!memory.Applied)
+        {
+            var failure = memory.Error ?? $"{target.Name}'s recruitment memory could not be recorded.";
+            RollBackRecruitmentTransaction(
+                transaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                target,
+                operationPrefix,
+                memory.Deltas,
+                failure);
+            return new ActionResult
+            {
+                Action = action,
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
+        deltas.AddRange(memory.Deltas);
+        var message = $"{target.Name} chooses to follow you, carrying old loyalties separately from the new bond.";
+        var recruitMessage = _engine.ApplyConsequence(WorldConsequence.Message(
+            source,
+            message,
+            targetEntityId: target.Id.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: evidence,
+            operation: messageOperation,
+            details: MergeRecruitDetails(
+                extraDetails,
+                ("posture", updatedBond.Posture),
+                ("combatFaction", "player"),
+                ("membership", target.TryGet<FactionComponent>(out var membership) ? membership.FactionId : ""))));
+        if (!recruitMessage.Applied)
+        {
+            var failure = recruitMessage.Error ?? $"{target.Name}'s recruitment message could not be recorded.";
+            RollBackRecruitmentTransaction(
+                transaction,
+                deltas,
+                deltaStart,
+                messages,
+                messageStart,
+                target,
+                operationPrefix,
+                recruitMessage.Deltas,
+                failure);
+            return new ActionResult
+            {
+                Action = action,
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
+        messages.AddRange(recruitMessage.Messages);
+        deltas.AddRange(recruitMessage.Deltas);
+
+        transaction.Commit();
+        var turnDeltas = consumeTurn ? AdvanceTurn() : Array.Empty<StateDelta>();
         return new ActionResult
         {
-            Action = "recruit",
+            Action = action,
             Success = true,
-            ConsumedTurn = true,
+            ConsumedTurn = consumeTurn,
             TurnBefore = turnBefore,
             TurnAfter = State.Turn,
-            Messages = messages.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = deltas.Concat(turnDeltas).ToArray(),
         };
+    }
+
+    private static void RollBackRecruitmentTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        List<string> messages,
+        int messageStart,
+        Entity target,
+        string operationPrefix,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
+    {
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        RemoveRangeFrom(messages, messageStart);
+        deltas.AddRange(FailureDiagnostics(failedDeltas));
+        var rejectedCount = FailureDiagnostics(failedDeltas).Count;
+        deltas.Add(new StateDelta(
+            "recruitmentSkipped",
+            target.Id.Value,
+            $"Recruitment rolled back: {failure}.",
+            new Dictionary<string, object?>
+            {
+                ["targetEntityId"] = target.Id.Value,
+                ["operationPrefix"] = operationPrefix,
+                ["failure"] = failure,
+                ["rejectedCount"] = rejectedCount,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
+    }
+
+    private static IReadOnlyDictionary<string, object?> MergeRecruitDetails(
+        IReadOnlyDictionary<string, object?>? baseDetails,
+        params (string Key, object? Value)[] fields)
+    {
+        var details = baseDetails is null
+            ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, object?>(baseDetails, StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in fields)
+        {
+            details[key] = value;
+        }
+
+        return details;
     }
 
     public ActionResult Bonds(string? targetText)
@@ -354,23 +824,38 @@ public sealed class InteractionSystem
     public ActionResult Services(string? targetText)
     {
         var turn = State.Turn;
-        var providers = NearbyServiceProviders(targetText).ToArray();
+        var providers = NearbyServiceProviders(targetText, "services").ToArray();
         if (providers.Length == 0)
         {
             return ActionResult.Simple("services", false, false, turn, turn, "No nearby services are being offered.");
+        }
+
+        var messages = new List<string>();
+        var deltas = new List<StateDelta>();
+        foreach (var provider in providers)
+        {
+            deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(
+                provider,
+                "services",
+                messages,
+                alreadyPersistedMessages: messages.ToList()));
         }
 
         var lines = providers
             .SelectMany(provider => VisibleServices(provider)
                 .Select(service => FormatServiceLine(provider, service)))
             .ToArray();
-        return ActionResult.Simple(
-            "services",
-            true,
-            false,
-            turn,
-            turn,
-            lines.Length == 0 ? new[] { "No nearby services are being offered." } : lines);
+        messages.AddRange(lines.Length == 0 ? new[] { "No nearby services are being offered." } : lines);
+        return new ActionResult
+        {
+            Action = "services",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = turn,
+            TurnAfter = turn,
+            Messages = messages.ToArray(),
+            Deltas = deltas,
+        };
     }
 
     public ActionResult RequestService(string serviceText, string? targetText)
@@ -381,29 +866,21 @@ public sealed class InteractionSystem
             return ActionResult.Simple("request", false, false, turnBefore, State.Turn, "Name the service you want.");
         }
 
-        var provider = ResolveServiceProvider(targetText, serviceText);
+        var provider = ResolveServiceProvider(targetText, serviceText, "request");
         if (provider is null)
         {
             return ActionResult.Simple("request", false, false, turnBefore, State.Turn, "No nearby provider offers that service.");
         }
 
+        var messages = new List<string>();
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(
+            provider,
+            "request",
+            messages,
+            alreadyPersistedMessages: messages.ToList()).ToList();
         var service = FindService(VisibleServices(provider), serviceText);
         if (service is null)
         {
-            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, $"{provider.Name} is not offering {serviceText}.");
-        }
-
-        var inventory = State.ControlledEntity.Get<InventoryComponent>();
-        var costProblem = ServiceCostProblem(inventory, service);
-        if (costProblem is not null)
-        {
-            return ActionResult.Simple("request", false, false, turnBefore, State.Turn, costProblem);
-        }
-
-        var applied = ApplyServiceEffect(provider, service);
-        if (!applied.Applied)
-        {
-            var failure = applied.Error ?? $"{provider.Name} cannot complete that service here.";
             return new ActionResult
             {
                 Action = "request",
@@ -411,30 +888,42 @@ public sealed class InteractionSystem
                 ConsumedTurn = false,
                 TurnBefore = turnBefore,
                 TurnAfter = State.Turn,
-                Messages = new[] { failure },
-                Deltas = applied.Deltas,
+                Messages = messages.Concat(new[] { $"{provider.Name} is not offering {serviceText}." }).ToArray(),
+                Deltas = deltas,
             };
         }
 
-        PayServiceCost(inventory, service);
-        var serviceMessage = $"{provider.Name} provides {service.Name}.";
-        State.AddMessage(serviceMessage);
-        var deltas = new List<StateDelta>
+        var applied = _engine.ApplyConsequence(WorldConsequence.RequestService(
+            "service",
+            provider.Id.Value,
+            serviceText,
+            State.ControlledEntityId.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: provider.Id.Value,
+            evidence: service.Description,
+            operation: "requestService",
+            message: $"{provider.Name} provides {service.Name}.",
+            details: new Dictionary<string, object?>
+            {
+                ["serviceId"] = service.Id,
+                ["serviceName"] = service.Name,
+                ["effectKind"] = service.EffectKind,
+                ["providerId"] = provider.Id.Value,
+            }));
+        if (!applied.Applied)
         {
-            new(
-                "requestService",
-                provider.Id.Value,
-                serviceMessage,
-                new Dictionary<string, object?>
-                {
-                    ["serviceId"] = service.Id,
-                    ["serviceName"] = service.Name,
-                    ["effectKind"] = service.EffectKind,
-                    ["goldCost"] = service.GoldCost,
-                    ["itemCost"] = service.ItemCost,
-                }),
-        };
-        deltas.AddRange(applied.Deltas);
+            var failure = applied.Error ?? $"{provider.Name} cannot complete {service.Name}.";
+            return new ActionResult
+            {
+                Action = "request",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = messages.Concat(new[] { failure }).ToArray(),
+                Deltas = deltas.Concat(applied.Deltas).ToArray(),
+            };
+        }
 
         var turnDeltas = AdvanceTurn();
         return new ActionResult
@@ -444,8 +933,11 @@ public sealed class InteractionSystem
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = State.Turn,
-            Messages = new[] { serviceMessage }.Concat(applied.Messages).Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
-            Deltas = deltas.Concat(turnDeltas).ToArray(),
+            Messages = messages
+                .Concat(applied.Messages)
+                .Concat(turnDeltas.PlayerMessages())
+                .ToArray(),
+            Deltas = deltas.Concat(applied.Deltas).Concat(turnDeltas).ToArray(),
         };
     }
 
@@ -462,21 +954,50 @@ public sealed class InteractionSystem
         var body = string.IsNullOrWhiteSpace(readable.TextKey)
             ? $"{readable.Title}: the words hold still just long enough to be understood."
             : readable.TextKey;
-        State.Canon.Add(
+        var canon = _engine.ApplyConsequence(WorldConsequence.AddCanon(
+            "read",
             "readable",
             entity.Id.Value,
             body,
             readable.Title,
             TagsFor(entity),
+            evidence: body,
+            operation: "readCanon"));
+        var readMessage = _engine.ApplyConsequence(WorldConsequence.Message(
             "read",
-            State.Turn);
-        _turnSystem.EnqueueBackgroundJob("canon_detail", entity, priority: 3);
-        var messages = new List<string> { body };
-        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(entity, "read", messages);
-        foreach (var line in messages)
-        {
-            State.AddMessage(line);
-        }
+            body,
+            targetEntityId: entity.Id.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: body,
+            reason: "The player read a nearby readable entity.",
+            operation: "readMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["readableId"] = entity.Id.Value,
+                ["title"] = readable.Title,
+            }));
+        var queuedJob = _turnSystem.EnqueueBackgroundJob("canon_detail", entity, priority: 3);
+        var messages = readMessage.Messages.ToList();
+        var alreadyPersistedMessages = readMessage.Messages.Concat(queuedJob.Messages).ToList();
+        messages.AddRange(queuedJob.Messages);
+        var deltas = readMessage.Deltas
+            .Concat(canon.Deltas)
+            .Concat(queuedJob.Deltas)
+            .Concat(ApplyClaimSeeds(entity, "read"))
+            .Concat(_promiseRealizationSystem.RealizeAnchoredPromises(entity, "read", messages, alreadyPersistedMessages))
+            .ToList();
+        deltas.AddRange(PersistUnwrittenMessages(
+            messages,
+            alreadyPersistedMessages,
+            "read",
+            "readFallbackMessage",
+            entity.Id.Value,
+            new Dictionary<string, object?>
+            {
+                ["readableId"] = entity.Id.Value,
+                ["title"] = readable.Title,
+            }));
 
         var turnDeltas = AdvanceTurn();
         return new ActionResult
@@ -486,7 +1007,7 @@ public sealed class InteractionSystem
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = State.Turn,
-            Messages = messages.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = deltas.Concat(turnDeltas).ToArray(),
         };
     }
@@ -501,13 +1022,25 @@ public sealed class InteractionSystem
 
         var messages = DescribeEntity(entity).ToList();
         var originalMessageCount = messages.Count;
-        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(entity, "inspect", messages);
-        foreach (var line in messages.Skip(originalMessageCount))
-        {
-            State.AddMessage(line);
-        }
+        var alreadyPersistedMessages = new List<string>();
+        var deltas = ApplyClaimSeeds(entity, "inspect").ToList();
+        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(entity, "inspect", messages, alreadyPersistedMessages));
+        deltas.AddRange(PersistUnwrittenMessages(
+            messages.Skip(originalMessageCount),
+            alreadyPersistedMessages,
+            "examine",
+            "examineFallbackMessage",
+            entity.Id.Value,
+            new Dictionary<string, object?>
+            {
+                ["examinedId"] = entity.Id.Value,
+                ["examinedName"] = entity.Name,
+            }));
 
-        _turnSystem.EnqueueBackgroundJob("entity_detail", entity, priority: 2);
+        var queuedJob = _turnSystem.EnqueueBackgroundJob("entity_detail", entity, priority: 2);
+        messages.AddRange(queuedJob.Messages);
+        alreadyPersistedMessages.AddRange(queuedJob.Messages);
+
         return new ActionResult
         {
             Action = "examine",
@@ -516,7 +1049,7 @@ public sealed class InteractionSystem
             TurnBefore = State.Turn,
             TurnAfter = State.Turn,
             Messages = messages.ToArray(),
-            Deltas = deltas,
+            Deltas = deltas.Concat(queuedJob.Deltas).ToArray(),
         };
     }
 
@@ -557,38 +1090,61 @@ public sealed class InteractionSystem
                 $"{door.Name} is not something that opens like a door.");
         }
 
+        var messages = new List<string>();
+        var alreadyPersistedMessages = new List<string>();
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(
+            door,
+            "open",
+            messages,
+            alreadyPersistedMessages).ToList();
+        doorComponent = door.Get<DoorComponent>();
+
         if (doorComponent.IsOpen)
         {
-            return ActionResult.Simple(
-                context.ResultAction,
-                false,
-                false,
-                turnBefore,
-                State.Turn,
-                $"{door.Name} is already open.");
+            if (deltas.Count > 0)
+            {
+                ResolveDoorConsequences(door, messages, deltas, alreadyPersistedMessages);
+                deltas.AddRange(PersistUnwrittenMessages(
+                    messages,
+                    alreadyPersistedMessages,
+                    "open",
+                    "openFallbackMessage",
+                    door.Id.Value,
+                    new Dictionary<string, object?>
+                    {
+                        ["doorId"] = door.Id.Value,
+                        ["actorId"] = actor.Id.Value,
+                    }));
+
+                var earlyTurnDeltas = context.ConsumeTurn ? AdvanceTurn() : Array.Empty<StateDelta>();
+                return new ActionResult
+                {
+                    Action = context.ResultAction,
+                    Success = true,
+                    ConsumedTurn = context.ConsumeTurn,
+                    TurnBefore = turnBefore,
+                    TurnAfter = State.Turn,
+                    Messages = messages.Concat(earlyTurnDeltas.PlayerMessages()).ToArray(),
+                    Deltas = deltas.Concat(earlyTurnDeltas).ToArray(),
+                };
+            }
+
+            return ActionResult.Simple(context.ResultAction, false, false, turnBefore, State.Turn, $"{door.Name} is already open.");
         }
 
         if (!string.IsNullOrWhiteSpace(doorComponent.KeyId)
             && !_itemSystem.IsCarrying(actor, doorComponent.KeyId))
         {
-            return ActionResult.Simple(
-                context.ResultAction,
-                false,
-                false,
-                turnBefore,
-                State.Turn,
-                $"{door.Name} is locked.");
-        }
-
-        door.Set(doorComponent with { IsOpen = true });
-        if (door.TryGet<PhysicalComponent>(out var physical))
-        {
-            door.Set(physical with { BlocksMovement = false, BlocksSight = false });
-        }
-
-        if (door.TryGet<RenderableComponent>(out var renderable))
-        {
-            door.Set(renderable with { Glyph = '/', Palette = "open" });
+            return new ActionResult
+            {
+                Action = context.ResultAction,
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = messages.Concat(new[] { $"{door.Name} is locked." }).ToArray(),
+                Deltas = deltas,
+            };
         }
 
         var summary = actor.Id == State.ControlledEntityId
@@ -596,30 +1152,59 @@ public sealed class InteractionSystem
             : $"{actor.Name} opens {door.Name}.";
         var details = new Dictionary<string, object?>
         {
-            ["open"] = true,
             ["source"] = context.Source,
             ["actorId"] = actor.Id.Value,
+            ["beneficiaryId"] = State.ControlledEntityId.Value,
         };
         if (!string.IsNullOrWhiteSpace(context.Provider))
         {
             details["provider"] = context.Provider;
         }
 
-        var messages = new List<string> { summary };
-        var deltas = new List<StateDelta>
+        var opened = _engine.ApplyConsequence(WorldConsequence.OpenOrUnlock(
+            context.Source,
+            door.Id.Value,
+            actor.Id.Value,
+            unlock: true,
+            open: true,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: actor.Id.Value,
+            evidence: summary,
+            operation: context.DeltaOperation,
+            emitMessage: true,
+            message: summary,
+            details: details));
+        if (!opened.Applied)
         {
-            new(
-                context.DeltaOperation,
-                door.Id.Value,
-                messages[0],
-                details),
-        };
-
-        ResolveDoorConsequences(door, messages, deltas);
-        foreach (var message in messages)
-        {
-            State.AddMessage(message);
+            var failure = opened.Error ?? $"{door.Name} does not open.";
+            return new ActionResult
+            {
+                Action = context.ResultAction,
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = State.Turn,
+                Messages = messages.Concat(new[] { failure }).ToArray(),
+                Deltas = deltas.Concat(opened.Deltas).ToArray(),
+            };
         }
+
+        messages.AddRange(opened.Messages);
+        deltas.AddRange(opened.Deltas);
+
+        alreadyPersistedMessages.AddRange(opened.Messages);
+        ResolveDoorConsequences(door, messages, deltas, alreadyPersistedMessages);
+        deltas.AddRange(PersistUnwrittenMessages(
+            messages,
+            alreadyPersistedMessages,
+            "open",
+            "openFallbackMessage",
+            door.Id.Value,
+            new Dictionary<string, object?>
+            {
+                ["doorId"] = door.Id.Value,
+                ["actorId"] = actor.Id.Value,
+            }));
 
         var turnDeltas = context.ConsumeTurn ? AdvanceTurn() : Array.Empty<StateDelta>();
         return new ActionResult
@@ -629,48 +1214,9 @@ public sealed class InteractionSystem
             ConsumedTurn = context.ConsumeTurn,
             TurnBefore = turnBefore,
             TurnAfter = State.Turn,
-            Messages = messages.Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = deltas.Concat(turnDeltas).ToArray(),
         };
-    }
-
-    public StateDelta AddPromise(string kind, string text, Entity? anchor = null, string triggerHint = "", string source = "wild_magic")
-    {
-        var subject = State.ControlledEntity.TryGet<SoulComponent>(out var soul)
-            ? soul.SoulId
-            : State.ControlledEntityId.Value;
-        var promise = State.PromiseLedger.Add(
-            kind,
-            text,
-            playerVisible: true,
-            source: source,
-            salience: 2,
-            subject: subject,
-            claimedPlace: State.RegionId,
-            triggerHint: triggerHint,
-            realizationKind: InferRealizationKind(kind, text));
-
-        var bound = BindPromiseIfPossible(promise, anchor, triggerHint);
-        var finalPromise = bound ?? promise;
-        var promiseNoun = finalPromise.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase) ? "curse" : "promise";
-        var message = finalPromise.Status == "bound"
-            ? $"A {promiseNoun} binds to {finalPromise.BoundTargetId ?? finalPromise.BoundPlace}: {finalPromise.Text}"
-            : $"A {promiseNoun} enters the world: {finalPromise.Text}";
-        State.AddMessage(message);
-        return new StateDelta(
-            "createPromise",
-            finalPromise.Id,
-            message,
-            new Dictionary<string, object?>
-            {
-                ["kind"] = finalPromise.Kind,
-                ["status"] = finalPromise.Status,
-                ["subject"] = finalPromise.Subject,
-                ["boundPlace"] = finalPromise.BoundPlace,
-                ["boundTargetId"] = finalPromise.BoundTargetId,
-                ["triggerHint"] = finalPromise.TriggerHint,
-                ["realizationKind"] = finalPromise.RealizationKind,
-            });
     }
 
     private Entity? ResolveNearbyEntity(
@@ -722,33 +1268,6 @@ public sealed class InteractionSystem
         && target.TryGet<PositionComponent>(out var targetPosition)
         && InteractionDistance(actorPosition.Position, targetPosition.Position) <= range;
 
-    private bool TryRouteDialogueShortcut(string text, out ActionResult result)
-    {
-        var lower = text.ToLowerInvariant();
-        if (lower.Contains("give ", StringComparison.OrdinalIgnoreCase))
-        {
-            var afterGive = text[(lower.IndexOf("give ", StringComparison.OrdinalIgnoreCase) + 5)..].Trim();
-            var marker = afterGive.IndexOf(" to ", StringComparison.OrdinalIgnoreCase);
-            if (marker >= 0)
-            {
-                result = Give(afterGive[..marker].Trim(), afterGive[(marker + 4)..].Trim());
-                return true;
-            }
-        }
-
-        if (lower.Contains("recruit", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("join me", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("follow me", StringComparison.OrdinalIgnoreCase)
-            || lower.Contains("come with", StringComparison.OrdinalIgnoreCase))
-        {
-            result = Recruit(text);
-            return true;
-        }
-
-        result = null!;
-        return false;
-    }
-
     private Entity? ResolveNearbyActorMention(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -767,6 +1286,37 @@ public sealed class InteractionSystem
                 && tags.Tags.Any(tag => normalized.Contains(NormalizeSearchText(tag), StringComparison.OrdinalIgnoreCase))));
     }
 
+    private static string NormalizeDialoguePlayerText(string text, Entity target) =>
+        IsTargetOnlyDialogueText(text, target)
+            ? "I approach and wait for you to speak."
+            : text.Trim();
+
+    private static bool IsTargetOnlyDialogueText(string text, Entity target)
+    {
+        var normalized = NormalizeDialogueMatchText(text);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return true;
+        }
+
+        IEnumerable<string> candidates = new[] { target.Id.Value, target.Name }
+            .Concat(EntityNameTokens(target));
+        if (target.TryGet<ProfileComponent>(out var profile))
+        {
+            candidates = candidates.Append(profile.PublicName);
+        }
+
+        if (target.TryGet<TagsComponent>(out var tags))
+        {
+            candidates = candidates.Concat(tags.Tags);
+        }
+
+        return candidates
+            .Select(NormalizeDialogueMatchText)
+            .Any(candidate => candidate.Length > 0
+                && candidate.Equals(normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static IEnumerable<string> EntityNameTokens(Entity entity) =>
         entity.Name
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -779,6 +1329,9 @@ public sealed class InteractionSystem
             .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
             .ToArray());
 
+    private static string NormalizeDialogueMatchText(string text) =>
+        string.Join(' ', NormalizeSearchText(text).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
     private void ResolveDialogueIntent(
         Entity target,
         string text,
@@ -790,38 +1343,116 @@ public sealed class InteractionSystem
             || lower.Contains("obey", StringComparison.OrdinalIgnoreCase)
             || lower.Contains("fear", StringComparison.OrdinalIgnoreCase))
         {
-            var bond = AdjustBond(target, fear: 2, resentment: 1, posture: "afraid");
+            var transaction = GameTransaction.Begin(State);
+            var deltaStart = deltas.Count;
+            var messageStart = messages.Count;
+            var bond = ApplyBondUpdate(
+                target,
+                "dialogue:threat",
+                fear: 2,
+                resentment: 1,
+                posture: "afraid",
+                operation: "bondShift");
+            if (!bond.Applied)
+            {
+                RollBackThreatDialogueTransaction(
+                    transaction,
+                    deltas,
+                    deltaStart,
+                    messages,
+                    messageStart,
+                    target,
+                    bond.Deltas,
+                    bond.Error ?? "threat_bond_rejected");
+                return;
+            }
+
             var message = $"{target.Name} hears the threat and remembers the shape of it.";
-            messages.Add(message);
-            deltas.Add(new StateDelta(
-                "bondShift",
+            deltas.AddRange(bond.Deltas);
+            var memory = _engine.ApplyConsequence(WorldConsequence.RecordMemory(
+                "dialogue:threat",
                 target.Id.Value,
                 message,
-                new Dictionary<string, object?>
+                "dialogue:threat",
+                2,
+                shareable: true,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: text,
+                operation: "threatMemory",
+                details: new Dictionary<string, object?>
                 {
-                    ["posture"] = bond.Posture,
-                    ["fear"] = bond.Fear,
-                    ["resentment"] = bond.Resentment,
+                    ["requireOwnerEntity"] = true,
                 }));
-            AddEntityMemory(target, message, "dialogue:threat", 2);
+            if (!memory.Applied)
+            {
+                RollBackThreatDialogueTransaction(
+                    transaction,
+                    deltas,
+                    deltaStart,
+                    messages,
+                    messageStart,
+                    target,
+                    memory.Deltas,
+                    memory.Error ?? "threat_memory_rejected");
+                return;
+            }
+
+            messages.Add(message);
+            deltas.AddRange(memory.Deltas);
+            transaction.Commit();
             return;
         }
 
-        var line = DialogueLine(target);
+        var line = DialogueLine(target, deltas);
         messages.Add(line);
     }
 
-    private IEnumerable<Entity> NearbyServiceProviders(string? targetText)
+    private static void RollBackThreatDialogueTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        List<string> messages,
+        int messageStart,
+        Entity target,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
+    {
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        RemoveRangeFrom(messages, messageStart);
+        var diagnostics = FailureDiagnostics(failedDeltas);
+        deltas.AddRange(diagnostics);
+        deltas.Add(new StateDelta(
+            "threatDialogueSkipped",
+            target.Id.Value,
+            $"Threat dialogue rolled back: {failure}.",
+            new Dictionary<string, object?>
+            {
+                ["targetEntityId"] = target.Id.Value,
+                ["failure"] = failure,
+                ["rejectedCount"] = diagnostics.Count,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
+    }
+
+    private IEnumerable<Entity> NearbyServiceProviders(
+        string? targetText,
+        string trigger,
+        string? serviceText = null)
     {
         if (!string.IsNullOrWhiteSpace(targetText))
         {
-            var provider = ResolveNearbyEntity(targetText, entity => entity.Has<ServiceComponent>(), range: 2);
+            var provider = ResolveNearbyEntity(
+                targetText,
+                entity => entity.Has<ServiceComponent>() || HasServicePromise(entity, trigger, serviceText),
+                range: 2);
             return provider is null ? Array.Empty<Entity>() : new[] { provider };
         }
 
         var origin = State.ControlledEntity.Get<PositionComponent>().Position;
         return State.Entities.Values
-            .Where(entity => entity.Has<ServiceComponent>())
+            .Where(entity => entity.Has<ServiceComponent>() || HasServicePromise(entity, trigger, serviceText))
             .Where(entity => entity.TryGet<PositionComponent>(out var position)
                 && GameEngine.Distance(origin, position.Position) <= 2)
             .OrderBy(entity => entity.TryGet<PositionComponent>(out var position)
@@ -831,15 +1462,89 @@ public sealed class InteractionSystem
             .ToArray();
     }
 
-    private Entity? ResolveServiceProvider(string? targetText, string serviceText)
+    private Entity? ResolveServiceProvider(string? targetText, string serviceText, string trigger)
     {
-        var providers = NearbyServiceProviders(targetText);
+        var providers = NearbyServiceProviders(targetText, trigger, serviceText).ToArray();
         if (!string.IsNullOrWhiteSpace(targetText))
         {
             return providers.FirstOrDefault();
         }
 
-        return providers.FirstOrDefault(provider => FindService(VisibleServices(provider), serviceText) is not null);
+        return providers.FirstOrDefault(provider => FindService(VisibleServices(provider), serviceText) is not null)
+            ?? providers.FirstOrDefault(provider => HasServicePromise(provider, trigger, serviceText));
+    }
+
+    private bool HasServicePromise(Entity entity, string trigger, string? serviceText = null)
+    {
+        if (!entity.TryGet<PromiseAnchorComponent>(out var anchor))
+        {
+            return false;
+        }
+
+        return anchor.PromiseIds.Any(promiseId =>
+            State.PromiseLedger.Promises.Any(promise =>
+                promise.Id.Equals(promiseId, StringComparison.OrdinalIgnoreCase)
+                && promise.Status.Equals("bound", StringComparison.OrdinalIgnoreCase)
+                && ServiceRealizationKind(promise)
+                && ServiceTriggerMatches(promise.TriggerHint, trigger)
+                && ServiceTextMatches(promise, serviceText)));
+    }
+
+    private static bool ServiceRealizationKind(WorldPromise promise)
+    {
+        var text = NormalizeToken(promise.RealizationKind ?? promise.Kind, "");
+        return text is "service" or "folk_magic" or "folk_magic_service";
+    }
+
+    private static bool ServiceTriggerMatches(string? triggerHint, string trigger)
+    {
+        if (string.IsNullOrWhiteSpace(triggerHint))
+        {
+            return true;
+        }
+
+        var normalizedTrigger = NormalizeToken(trigger, "");
+        var parts = triggerHint
+            .Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => NormalizeToken(part, ""))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return parts.Contains(normalizedTrigger)
+            || parts.Contains("encounter")
+            || (normalizedTrigger is "services" or "request" or "service"
+                && parts.Overlaps(new[] { "service", "services", "request", "offer", "folk_magic", "door", "lock", "ward", "mend", "heal", "guide" }));
+    }
+
+    private static bool ServiceTextMatches(WorldPromise promise, string? serviceText)
+    {
+        if (string.IsNullOrWhiteSpace(serviceText))
+        {
+            return true;
+        }
+
+        var normalized = serviceText.Trim();
+        var subject = promise.Subject?.Trim();
+        return (!string.IsNullOrWhiteSpace(subject)
+                && (subject.Contains(normalized, StringComparison.OrdinalIgnoreCase)
+                    || normalized.Contains(subject, StringComparison.OrdinalIgnoreCase)))
+            || promise.Text.Contains(normalized, StringComparison.OrdinalIgnoreCase)
+            || PromiseServiceNameForMatch(promise).Contains(normalized, StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains(PromiseServiceNameForMatch(promise), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string PromiseServiceNameForMatch(WorldPromise promise)
+    {
+        var lower = promise.Text.ToLowerInvariant();
+        if (lower.Contains("door") || lower.Contains("lock") || lower.Contains("ward"))
+        {
+            return "ward-breaking";
+        }
+
+        if (lower.Contains("route") || lower.Contains("drain") || lower.Contains("tunnel") || lower.Contains("escape"))
+        {
+            return "hidden-route finding";
+        }
+
+        return string.IsNullOrWhiteSpace(promise.Subject) ? "service" : promise.Subject;
     }
 
     private static IEnumerable<ServiceOffer> VisibleServices(Entity provider) =>
@@ -875,130 +1580,219 @@ public sealed class InteractionSystem
         return $"{provider.Name} offers {service.Name}: {service.Description} ({cost}).";
     }
 
-    private string? ServiceCostProblem(InventoryComponent inventory, ServiceOffer service)
+    private IReadOnlyList<StateDelta> ApplyClaimSeeds(Entity source, string trigger)
     {
-        if (service.GoldCost > 0)
+        if (!source.TryGet<ClaimSourceComponent>(out var claimSource))
         {
-            inventory.Items.TryGetValue("gold", out var gold);
-            if (gold < service.GoldCost)
-            {
-                return $"You need {service.GoldCost} gold for {service.Name}.";
-            }
+            return Array.Empty<StateDelta>();
         }
 
-        if (!string.IsNullOrWhiteSpace(service.ItemCost))
+        var deltas = new List<StateDelta>();
+        for (var index = 0; index < claimSource.Claims.Count; index++)
         {
-            var itemKey = FindInventoryKey(inventory, service.ItemCost);
-            if (itemKey is null)
+            var seed = claimSource.Claims[index];
+            if (string.IsNullOrWhiteSpace(seed.Text))
             {
-                return $"You need {service.ItemCost} for {service.Name}.";
+                continue;
             }
 
-            if (inventory.TreasuredItems.Contains(itemKey))
+            var sourceKey = $"{trigger}:{source.Id.Value}:{index}";
+            var tags = new[] { "claim_source", trigger, source.Id.Value }
+                .Concat(seed.Tags ?? Array.Empty<string>())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var transaction = GameTransaction.Begin(State);
+            var deltaStart = deltas.Count;
+            var claim = _engine.ApplyConsequence(WorldConsequence.RecordClaim(
+                sourceKey,
+                source.Id.Value,
+                PlayerSoulId(),
+                seed.Text,
+                seed.Category,
+                seed.Subject,
+                seed.Salience,
+                seed.Confidence,
+                seed.PlayerVisible,
+                tags,
+                visibility: WorldConsequenceVisibility.Hidden,
+                sourceEntityId: source.Id.Value,
+                evidence: seed.Text,
+                reason: $"A {trigger} interaction surfaced an authored claim seed.",
+                operation: $"{trigger}Claim",
+                details: new Dictionary<string, object?>
+                {
+                    ["claimSeedIndex"] = index,
+                    ["sourceTrigger"] = trigger,
+                    ["sourceEntityId"] = source.Id.Value,
+                    ["playerVisible"] = seed.PlayerVisible,
+                    ["consequenceVisibility"] = WorldConsequenceVisibility.Hidden,
+                }));
+            deltas.AddRange(claim.Deltas);
+            var duplicateClaim = claim.Details.TryGetValue("duplicate", out var duplicate) && duplicate is true;
+            if (!claim.Applied)
             {
-                return $"{itemKey} is protected; unprotect it before offering it.";
+                transaction.Rollback();
+                continue;
             }
+
+            if (duplicateClaim)
+            {
+                transaction.Commit();
+                continue;
+            }
+
+            if (claim.Applied
+                && !string.IsNullOrWhiteSpace(claim.TargetId)
+                && State.Claims.Records.FirstOrDefault(record =>
+                    record.Id.Equals(claim.TargetId, StringComparison.OrdinalIgnoreCase)) is { } claimRecord
+                && RumorSystem.ConsequenceFromClaim(State, claimRecord, "claim_source") is { } rumor)
+            {
+                var rumorApplied = _engine.ApplyConsequence(rumor);
+                deltas.AddRange(rumorApplied.Deltas);
+                if (!rumorApplied.Applied)
+                {
+                    RollBackClaimSeedTransaction(
+                        transaction,
+                        deltas,
+                        deltaStart,
+                        source,
+                        trigger,
+                        index,
+                        rumorApplied.Deltas,
+                        rumorApplied.Error ?? "rumor_mint_rejected");
+                    continue;
+                }
+            }
+
+            if (!seed.BindAsPromise)
+            {
+                transaction.Commit();
+                continue;
+            }
+
+            var promise = _engine.ApplyConsequence(WorldConsequence.CreatePromise(
+                sourceKey,
+                string.IsNullOrWhiteSpace(seed.PromiseKind) ? "rumor" : seed.PromiseKind,
+                seed.Text,
+                triggerHint: string.IsNullOrWhiteSpace(seed.TriggerHint) ? trigger : seed.TriggerHint,
+                visibility: WorldConsequenceVisibility.Hidden,
+                sourceEntityId: source.Id.Value,
+                evidence: seed.Text,
+                reason: $"A {trigger} interaction bound an authored claim seed as a promise.",
+                operation: $"{trigger}ClaimPromise",
+                playerVisible: seed.PlayerVisible,
+                salience: seed.Salience,
+                subject: seed.Subject,
+                claimedPlace: seed.ClaimedPlace,
+                realizationKind: seed.RealizationKind,
+                sourceClaimId: claim.TargetId,
+                sourceSpeakerId: source.Id.Value,
+                sourceListenerSoulId: PlayerSoulId(),
+                sourceConfidence: seed.Confidence,
+                useCurrentRegionAsClaimedPlace: string.IsNullOrWhiteSpace(seed.ClaimedPlace),
+                emitMessage: false,
+                details: new Dictionary<string, object?>
+                {
+                    ["claimId"] = claim.TargetId,
+                    ["claimSeedIndex"] = index,
+                    ["sourceTrigger"] = trigger,
+                    ["sourceEntityId"] = source.Id.Value,
+                    ["playerVisible"] = seed.PlayerVisible,
+                    ["consequenceVisibility"] = WorldConsequenceVisibility.Hidden,
+                }));
+            deltas.AddRange(promise.Deltas);
+            if (!promise.Applied)
+            {
+                RollBackClaimSeedTransaction(
+                    transaction,
+                    deltas,
+                    deltaStart,
+                    source,
+                    trigger,
+                    index,
+                    promise.Deltas,
+                    promise.Error ?? "promise_create_rejected");
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(claim.TargetId))
+            {
+                var claimBound = _engine.ApplyConsequence(WorldConsequence.UpdateClaim(
+                    sourceKey,
+                    claim.TargetId!,
+                    status: "bound",
+                    boundPromiseId: promise.TargetId,
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    sourceEntityId: source.Id.Value,
+                    evidence: seed.Text,
+                    reason: "The authored claim seed bound a promise.",
+                    operation: $"{trigger}ClaimBound",
+                    details: new Dictionary<string, object?>
+                    {
+                        ["claimSeedIndex"] = index,
+                        ["promiseId"] = promise.TargetId,
+                        ["sourceTrigger"] = trigger,
+                        ["sourceEntityId"] = source.Id.Value,
+                        ["playerVisible"] = seed.PlayerVisible,
+                        ["consequenceVisibility"] = WorldConsequenceVisibility.Hidden,
+                    }));
+                deltas.AddRange(claimBound.Deltas);
+                if (!claimBound.Applied)
+                {
+                    RollBackClaimSeedTransaction(
+                        transaction,
+                        deltas,
+                        deltaStart,
+                        source,
+                        trigger,
+                        index,
+                        claimBound.Deltas,
+                        claimBound.Error ?? "claim_status_rejected");
+                    continue;
+                }
+            }
+
+            transaction.Commit();
         }
 
-        return null;
+        return deltas;
     }
 
-    private void PayServiceCost(InventoryComponent inventory, ServiceOffer service)
+    private static void RollBackClaimSeedTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        Entity source,
+        string trigger,
+        int claimSeedIndex,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
     {
-        if (service.GoldCost > 0)
-        {
-            inventory.Items.TryGetValue("gold", out var gold);
-            var remaining = gold - service.GoldCost;
-            if (remaining <= 0)
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        var diagnostics = FailureDiagnostics(failedDeltas);
+        deltas.AddRange(diagnostics);
+        deltas.Add(new StateDelta(
+            "claimSeedSkipped",
+            source.Id.Value,
+            $"Claim seed rolled back: {failure}.",
+            new Dictionary<string, object?>
             {
-                inventory.Items.Remove("gold");
-                inventory.TreasuredItems.Remove("gold");
-            }
-            else
-            {
-                inventory.Items["gold"] = remaining;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(service.ItemCost))
-        {
-            var itemKey = FindInventoryKey(inventory, service.ItemCost);
-            if (itemKey is not null)
-            {
-                DecrementInventory(inventory, itemKey);
-            }
-        }
-    }
-
-    private WorldConsequenceApplyResult ApplyServiceEffect(Entity provider, ServiceOffer service)
-    {
-        var effect = NormalizeServiceEffect(service.EffectKind);
-        if (effect is "open_or_unlock" or "unlock_or_open" or "ward_breaking")
-        {
-            var door = ResolveServiceDoor(service);
-            if (door is null)
-            {
-                return WorldConsequenceApplyResult.Empty("There is no nearby door for that service.");
-            }
-
-            return _engine.ApplyConsequence(WorldConsequence.OpenOrUnlock(
-                "service",
-                door.Id.Value,
-                actorId: provider.Id.Value,
-                unlock: true,
-                open: true,
-                visibility: WorldConsequenceVisibility.Message,
-                sourceEntityId: provider.Id.Value,
-                evidence: service.Description,
-                operation: "serviceOpenOrUnlock"));
-        }
-
-        if (effect is "create_route" or "escape_route" or "reveal_route")
-        {
-            return _engine.ApplyConsequence(WorldConsequence.CreateRoute(
-                "service",
-                provider.Id.Value,
-                string.IsNullOrWhiteSpace(service.TargetHint) ? service.Name : service.TargetHint,
-                service.Description,
-                effect,
-                visibility: WorldConsequenceVisibility.Message,
-                sourceEntityId: provider.Id.Value,
-                evidence: service.Description,
-                operation: "serviceCreateRoute"));
-        }
-
-        return _engine.ApplyConsequence(WorldConsequence.RecordMemory(
-            "service",
-            provider.Id.Value,
-            $"{provider.Name} provided {service.Name}: {service.Description}",
-            "service",
-            2,
-            shareable: true,
-            visibility: WorldConsequenceVisibility.Message,
-            sourceEntityId: provider.Id.Value,
-            operation: "serviceMemory"));
-    }
-
-    private Entity? ResolveServiceDoor(ServiceOffer service)
-    {
-        var target = FirstNonBlank(service.TargetHint, service.Name);
-        return ResolveNearbyEntity(target, entity => entity.Has<DoorComponent>(), range: 2)
-            ?? ResolveNearbyEntity(null, entity => entity.Has<DoorComponent>(), range: 2);
-    }
-
-    private static string NormalizeServiceEffect(string effect)
-    {
-        var normalized = string.Join(
-            "_",
-            effect.Trim().ToLowerInvariant()
-                .Split(new[] { ' ', '-', '.', ',', ':', ';', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries));
-        return string.IsNullOrWhiteSpace(normalized) ? "record_memory" : normalized;
+                ["sourceEntityId"] = source.Id.Value,
+                ["sourceTrigger"] = trigger,
+                ["claimSeedIndex"] = claimSeedIndex,
+                ["failure"] = failure,
+                ["rejectedCount"] = diagnostics.Count,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
     }
 
     private static string? FirstNonBlank(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
-    private string DialogueLine(Entity target)
+    private string DialogueLine(Entity target, List<StateDelta> deltas)
     {
         if (_engine.IsHostile(target, State.ControlledEntity))
         {
@@ -1008,13 +1802,11 @@ public sealed class InteractionSystem
         if (target.TryGet<TagsComponent>(out var tags)
             && tags.Tags.Contains("prisoner", StringComparer.OrdinalIgnoreCase))
         {
-            var bond = State.Bonds.Adjust(
-                SoulIdFor(target),
-                PlayerSoulId(),
-                loyalty: 2,
-                fear: 1,
-                admiration: 1,
-                posture: "grateful");
+            var targetSoulId = SoulIdFor(target);
+            var playerSoulId = PlayerSoulId();
+            var bond = State.Bonds.TryGet(targetSoulId, playerSoulId, out var existingBond)
+                ? existingBond
+                : NeutralBond(targetSoulId, playerSoulId);
             var legend = PlayerLegendSummary();
             return string.IsNullOrWhiteSpace(legend)
                 ? $"{target.Name} whispers, \"If you get me out, Hollowmere will remember the color of your magic.\" {BondMoodLine(target, bond)}"
@@ -1029,21 +1821,35 @@ public sealed class InteractionSystem
         return $"{target.Name} has nothing urgent to say.";
     }
 
-    private BondRecord AdjustBond(
+    private WorldConsequenceApplyResult ApplyBondUpdate(
         Entity subject,
+        string source,
         int loyalty = 0,
         int fear = 0,
         int admiration = 0,
         int resentment = 0,
-        string? posture = null) =>
-        State.Bonds.Adjust(
-            SoulIdFor(subject),
+        string? posture = null,
+        string operation = "updateBond",
+        int maxDelta = 2) =>
+        _engine.ApplyConsequence(WorldConsequence.UpdateBond(
+            source,
+            subject.Id.Value,
             PlayerSoulId(),
             loyalty,
             fear,
             admiration,
             resentment,
-            posture);
+            posture,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: source,
+            operation: operation,
+            maxDelta: maxDelta,
+            details: new Dictionary<string, object?>
+            {
+                ["subjectSoulId"] = SoulIdFor(subject),
+                ["targetSoulId"] = PlayerSoulId(),
+                ["interaction"] = source,
+            }));
 
     private string PlayerSoulId() => SoulIdFor(State.ControlledEntity);
 
@@ -1057,40 +1863,11 @@ public sealed class InteractionSystem
                 key.Equals(item.Trim(), StringComparison.OrdinalIgnoreCase)
                 || key.Contains(item.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    private static void DecrementInventory(InventoryComponent inventory, string key)
-    {
-        inventory.Items[key] -= 1;
-        if (inventory.Items[key] <= 0)
-        {
-            inventory.Items.Remove(key);
-            inventory.TreasuredItems.Remove(key);
-        }
-    }
-
-    private static int GiftValue(string item, Entity target)
-    {
-        var lower = item.ToLowerInvariant();
-        var value = lower switch
-        {
-            var text when text.Contains("pearl", StringComparison.OrdinalIgnoreCase) => 4,
-            var text when text.Contains("wand", StringComparison.OrdinalIgnoreCase) => 3,
-            var text when text.Contains("salt", StringComparison.OrdinalIgnoreCase) => 3,
-            var text when text.Contains("tincture", StringComparison.OrdinalIgnoreCase) => 2,
-            var text when text.Contains("key", StringComparison.OrdinalIgnoreCase) => 2,
-            var text when text.Contains("gold", StringComparison.OrdinalIgnoreCase) => 1,
-            _ => 1,
-        };
-        if (target.TryGet<TagsComponent>(out var tags)
-            && tags.Tags.Any(tag => lower.Contains(tag, StringComparison.OrdinalIgnoreCase)))
-        {
-            value += 1;
-        }
-
-        return Math.Clamp(value, 1, 5);
-    }
-
     private static string BondMoodLine(Entity target, BondRecord bond) =>
         $"{target.Name}'s posture is {BondSummary(bond)}.";
+
+    private static BondRecord NeutralBond(string subjectSoulId, string targetSoulId) =>
+        new(subjectSoulId, targetSoulId, Loyalty: 0, Fear: 0, Admiration: 0, Resentment: 0, Posture: "neutral");
 
     private static string BondSummary(BondRecord bond)
     {
@@ -1117,35 +1894,16 @@ public sealed class InteractionSystem
         return bond.Posture;
     }
 
-    private void AddEntityMemory(Entity target, string text, string source, int salience)
+    private static string? WantSummary(WantComponent want)
     {
-        var memories = target.TryGet<MemoryComponent>(out var existing)
-            ? existing.Records.ToList()
-            : new List<EntityMemoryRecord>();
-        memories.Add(new EntityMemoryRecord(
-            $"memory_{memories.Count + 1}",
-            text,
-            source,
-            "dialogue",
-            salience,
-            Shareable: true));
-        target.Set(new MemoryComponent(memories));
-    }
-
-    private void PreserveMembershipAndAddRole(Entity target, string role)
-    {
-        if (target.TryGet<FactionComponent>(out var faction))
+        if (!want.Status.Equals("active", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(want.Text))
         {
-            var roles = faction.Roles
-                .Concat(new[] { role })
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            target.Set(new FactionComponent(faction.FactionId, roles));
-            return;
+            return null;
         }
 
-        var actor = target.Get<ActorComponent>();
-        target.Set(new FactionComponent(actor.Faction, new[] { role }));
+        var stakes = string.IsNullOrWhiteSpace(want.Stakes) ? "" : $" Stakes: {want.Stakes}";
+        return $"{want.Text} (salience {want.Salience}).{stakes}";
     }
 
     private string PlayerLegendSummary()
@@ -1213,235 +1971,76 @@ public sealed class InteractionSystem
         return lines;
     }
 
-    private void ResolveDoorConsequences(Entity door, List<string> messages, List<StateDelta> deltas)
+    private void ResolveDoorConsequences(
+        Entity door,
+        List<string> messages,
+        List<StateDelta> deltas,
+        List<string> alreadyPersistedMessages)
     {
-        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(door, "open", messages));
+        deltas.AddRange(_promiseRealizationSystem.RealizeAnchoredPromises(door, "open", messages, alreadyPersistedMessages));
+    }
 
-        if (!door.Name.Contains("cell", StringComparison.OrdinalIgnoreCase)
-            && !door.Id.Value.Contains("cell", StringComparison.OrdinalIgnoreCase))
+    private static IReadOnlyList<StateDelta> FailureDiagnostics(IReadOnlyList<StateDelta> deltas) =>
+        deltas
+            .Where(delta => delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+    private static void RemoveRangeFrom<T>(List<T> values, int start)
+    {
+        if (values.Count > start)
         {
-            return;
+            values.RemoveRange(start, values.Count - start);
+        }
+    }
+
+    private static bool RemovePersistedMessage(List<string> alreadyPersistedMessages, string message)
+    {
+        var index = alreadyPersistedMessages.FindIndex(item => string.Equals(item, message, StringComparison.Ordinal));
+        if (index < 0)
+        {
+            return false;
         }
 
-        var doorPosition = door.Get<PositionComponent>().Position;
-        var prisoner = State.Entities.Values.FirstOrDefault(entity =>
-            entity.TryGet<TagsComponent>(out var tags)
-            && tags.Tags.Contains("prisoner", StringComparer.OrdinalIgnoreCase)
-            && entity.TryGet<PositionComponent>(out var position)
-            && GameEngine.Distance(position.Position, doorPosition) <= 2);
-        if (prisoner is null || !prisoner.TryGet<ActorComponent>(out var actor))
+        alreadyPersistedMessages.RemoveAt(index);
+        return true;
+    }
+
+    private IReadOnlyList<StateDelta> PersistUnwrittenMessages(
+        IEnumerable<string> messages,
+        List<string> alreadyPersistedMessages,
+        string source,
+        string operation,
+        string targetEntityId,
+        IReadOnlyDictionary<string, object?>? details = null)
+    {
+        var deltas = new List<StateDelta>();
+        foreach (var message in messages)
         {
-            return;
-        }
-
-        prisoner.Set(actor with { Faction = "player" });
-        prisoner.Set(new ControllerComponent(ControllerKind.Ai));
-        prisoner.Set(new AiComponent("follower"));
-        PreserveMembershipAndAddRole(prisoner, "rescued");
-        PreserveMembershipAndAddRole(prisoner, "follower");
-        State.Bonds.Adjust(
-            SoulIdFor(prisoner),
-            PlayerSoulId(),
-            loyalty: 4,
-            admiration: 2,
-            posture: "follower");
-        _engine.RecordDeed(
-            State.ControlledEntity,
-            "freed_prisoner",
-            3,
-            State.ControlledEntity.Get<PositionComponent>().Position,
-            prisoner.Get<PositionComponent>().Position,
-            new[] { "mercy", "anti_empire", "hollowmere" });
-
-        var rescue = $"{prisoner.Name} is free enough to choose you, for now.";
-        messages.Add(rescue);
-        deltas.Add(new StateDelta(
-            "freePrisoner",
-            prisoner.Id.Value,
-            rescue,
-            new Dictionary<string, object?>
+            if (RemovePersistedMessage(alreadyPersistedMessages, message))
             {
-                ["faction"] = "player",
-                ["deed"] = "freed_prisoner",
-            }));
-    }
-
-    private WorldPromise? BindPromiseIfPossible(WorldPromise promise, Entity? anchor, string triggerHint)
-    {
-        anchor ??= ResolvePromiseAnchorFromSelectionOrText(promise.Text);
-        if (anchor is not null)
-        {
-            AttachPromiseAnchor(anchor, promise.Id);
-            return State.PromiseLedger.Bind(
-                promise.Id,
-                boundPlace: State.RegionId,
-                boundTargetId: anchor.Id.Value,
-                triggerHint: string.IsNullOrWhiteSpace(triggerHint) ? InferTriggerHint(promise.Text, anchor) : triggerHint,
-                realizationKind: promise.RealizationKind);
-        }
-
-        if (CanBindToRegion(promise))
-        {
-            return State.PromiseLedger.Bind(
-                promise.Id,
-                boundPlace: State.RegionId,
-                boundTargetId: null,
-                triggerHint: string.IsNullOrWhiteSpace(triggerHint) ? InferTriggerHint(promise.Text, null) : triggerHint,
-                realizationKind: promise.RealizationKind);
-        }
-
-        return null;
-    }
-
-    private void AttachPromiseAnchor(Entity anchor, string promiseId)
-    {
-        var ids = anchor.TryGet<PromiseAnchorComponent>(out var existing)
-            ? existing.PromiseIds.ToList()
-            : new List<string>();
-        if (!ids.Contains(promiseId, StringComparer.OrdinalIgnoreCase))
-        {
-            ids.Add(promiseId);
-        }
-
-        anchor.Set(new PromiseAnchorComponent(ids));
-    }
-
-    private Entity? ResolvePromiseAnchorFromSelectionOrText(string text)
-    {
-        if (State.SelectedTarget is { } selected)
-        {
-            var selectedEntity = _engine.EntityAt(selected);
-            if (selectedEntity is not null)
-            {
-                return selectedEntity;
+                continue;
             }
+
+            var payload = details is null
+                ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                : details.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            payload["fallback"] = true;
+            payload["playerVisible"] = true;
+
+            var applied = _engine.ApplyConsequence(WorldConsequence.Message(
+                source,
+                message,
+                targetEntityId: targetEntityId,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: message,
+                reason: "An interaction system message was not already persisted by a narrower typed consequence.",
+                operation: operation,
+                details: payload));
+            deltas.AddRange(applied.Deltas);
         }
 
-        var tokens = text.ToLowerInvariant()
-            .Split(new[] { ' ', '-', '.', ',', ':', ';', '/', '\\', '\'' }, StringSplitOptions.RemoveEmptyEntries)
-            .Where(token => token.Length >= 3)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return State.Entities.Values
-            .Where(entity => entity.Id != State.ControlledEntityId)
-            .Where(entity => entity.TryGet<PositionComponent>(out _))
-            .Select(entity => new
-            {
-                Entity = entity,
-                Score = PromiseAnchorScore(entity, tokens),
-                Distance = entity.TryGet<PositionComponent>(out var position)
-                    ? GameEngine.Distance(State.ControlledEntity.Get<PositionComponent>().Position, position.Position)
-                    : int.MaxValue,
-            })
-            .Where(candidate => candidate.Score > 0)
-            .OrderByDescending(candidate => candidate.Score)
-            .ThenBy(candidate => candidate.Distance)
-            .ThenBy(candidate => candidate.Entity.Id.Value)
-            .Select(candidate => candidate.Entity)
-            .FirstOrDefault();
-    }
-
-    private static int PromiseAnchorScore(Entity entity, HashSet<string> tokens)
-    {
-        var score = 0;
-        foreach (var token in entity.Name.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (tokens.Contains(token))
-            {
-                score += 3;
-            }
-        }
-
-        if (entity.TryGet<TagsComponent>(out var tags))
-        {
-            score += tags.Tags.Count(tag => tokens.Contains(tag));
-        }
-
-        if (entity.TryGet<FixtureComponent>(out var fixture))
-        {
-            score += fixture.Tags.Count(tag => tokens.Contains(tag));
-            if (tokens.Contains(fixture.FixtureType))
-            {
-                score += 2;
-            }
-        }
-
-        if (entity.TryGet<ReadableComponent>(out var readable))
-        {
-            foreach (var token in readable.Title.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (tokens.Contains(token))
-                {
-                    score += 2;
-                }
-            }
-        }
-
-        return score;
-    }
-
-    private static bool CanBindToRegion(WorldPromise promise) =>
-        promise.Kind.Equals("prophecy", StringComparison.OrdinalIgnoreCase)
-        || promise.Kind.Equals("quest", StringComparison.OrdinalIgnoreCase)
-        || promise.Kind.Equals("threat", StringComparison.OrdinalIgnoreCase)
-        || promise.Kind.Equals("debt", StringComparison.OrdinalIgnoreCase);
-
-    private static string InferTriggerHint(string text, Entity? anchor)
-    {
-        var lower = text.ToLowerInvariant();
-        if (lower.Contains("read") || anchor?.Has<ReadableComponent>() == true)
-        {
-            return "read";
-        }
-
-        if (lower.Contains("open") || lower.Contains("door") || anchor?.Has<DoorComponent>() == true)
-        {
-            return "open";
-        }
-
-        if (lower.Contains("speak") || lower.Contains("talk") || lower.Contains("name"))
-        {
-            return "talk";
-        }
-
-        return "encounter";
-    }
-
-    private static string InferRealizationKind(string kind, string text)
-    {
-        var lower = $"{kind} {text}".ToLowerInvariant();
-        if (lower.Contains("route")
-            || lower.Contains("passage")
-            || lower.Contains("hidden path")
-            || lower.Contains("escape")
-            || lower.Contains("drain")
-            || lower.Contains("tunnel")
-            || lower.Contains("grate")
-            || lower.Contains("hidden exit"))
-        {
-            return "escape_route";
-        }
-
-        if (lower.Contains("item") || lower.Contains("blade") || lower.Contains("key"))
-        {
-            return "item";
-        }
-
-        if (lower.Contains("enemy") || lower.Contains("collector") || lower.Contains("threat"))
-        {
-            return "threat";
-        }
-
-        if (lower.Contains("quest") || lower.Contains("reward"))
-        {
-            return "quest";
-        }
-
-        if (lower.Contains("remember") || lower.Contains("name"))
-        {
-            return "memory";
-        }
-
-        return kind.Equals("debt", StringComparison.OrdinalIgnoreCase) ? "threat" : "omen";
+        return deltas;
     }
 
     private static IReadOnlyList<string> TagsFor(Entity entity)
@@ -1484,6 +2083,9 @@ public sealed class InteractionSystem
                 .Split(new[] { ' ', '-', '.', ',', ':', ';', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries));
         return string.IsNullOrWhiteSpace(cleaned) ? fallback : cleaned;
     }
+
+    private static string NormalizeToken(string value, string fallback) =>
+        NormalizeId(value, fallback);
 
     private static int InteractionDistance(GridPoint a, GridPoint b) =>
         Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));

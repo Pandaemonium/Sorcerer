@@ -24,35 +24,14 @@ public static class DialogueClaimExtractorFactory
                 settings.Host ?? "http://127.0.0.1:11434",
                 settings.Model ?? "qwen3.5:9b",
                 timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
-            "api" or "openai" or "openai-compatible" => new TechnicalFailureDialogueClaimExtractor(
-                "openai-compatible-dialogue-claims",
-                "OpenAI-compatible dialogue claim extraction is not implemented yet."),
+            "api" or "openai" or "openai-compatible" => new OpenAiCompatibleDialogueClaimExtractor(
+                settings.Host ?? "https://api.openai.com/v1",
+                settings.Model ?? "default",
+                timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
+                apiKey: settings.ApiKey),
             _ => new MockDialogueClaimExtractor(),
         };
     }
-}
-
-public sealed class TechnicalFailureDialogueClaimExtractor : IDialogueClaimExtractor
-{
-    private readonly string _error;
-
-    public TechnicalFailureDialogueClaimExtractor(string name, string error)
-    {
-        Name = name;
-        _error = error;
-    }
-
-    public string Name { get; }
-
-    public Task<DialogueClaimExtractionResult> ExtractAsync(
-        DialogueClaimRequest request,
-        CancellationToken cancellationToken) =>
-        Task.FromResult(new DialogueClaimExtractionResult(
-            Name,
-            "",
-            TechnicalFailure: true,
-            Error: _error,
-            Claims: Array.Empty<DialogueClaimProposal>()));
 }
 
 public sealed class MockDialogueClaimExtractor : IDialogueClaimExtractor
@@ -142,6 +121,22 @@ public sealed class MockDialogueClaimExtractor : IDialogueClaimExtractor
                 Tags: new[] { "town", "south", "place" }));
         }
 
+        if ((lower.Contains("folk-magic", StringComparison.Ordinal)
+                || lower.Contains("folk magic", StringComparison.Ordinal))
+            && lower.Contains("execution", StringComparison.Ordinal))
+        {
+            claims.Add(new DialogueClaimProposal(
+                "Folk-magic practice is punishable by execution here.",
+                "local_law",
+                "folk magic law",
+                Salience: 2,
+                Confidence: 80,
+                BindAsCanon: true,
+                CanonKind: "local_law",
+                CanonSummary: "Folk magic is a capital crime",
+                Tags: new[] { "folk_magic", "vigovia", "law" }));
+        }
+
         return Task.FromResult(new DialogueClaimExtractionResult(
             Name,
             "",
@@ -149,6 +144,87 @@ public sealed class MockDialogueClaimExtractor : IDialogueClaimExtractor
             Error: null,
             Claims: claims));
     }
+}
+
+public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtractor
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = false,
+    };
+
+    private readonly OpenAiCompatibleChatClient _chat;
+    private readonly TimeSpan _timeout;
+
+    public OpenAiCompatibleDialogueClaimExtractor(
+        string endpoint = "https://api.openai.com/v1",
+        string model = "default",
+        HttpClient? httpClient = null,
+        TimeSpan? timeout = null,
+        string? apiKey = null)
+    {
+        _chat = new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey);
+        _timeout = timeout ?? TimeSpan.FromSeconds(180);
+    }
+
+    public string Name => "openai-compatible-dialogue-claims";
+
+    public async Task<DialogueClaimExtractionResult> ExtractAsync(
+        DialogueClaimRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_timeout);
+        var router = await _chat.ChatAsync(
+            OllamaDialogueClaimExtractor.RouterSystemPrompt(),
+            OllamaDialogueClaimExtractor.RouterUserPrompt(request),
+            temperature: 0.0,
+            maxTokens: 180,
+            timeout.Token);
+        if (!router.Success)
+        {
+            return Failure(router.RawText, router.Error ?? "OpenAI-compatible dialogue claim router failed.");
+        }
+
+        if (!OllamaDialogueClaimExtractor.RouterFoundClaim(router.Content))
+        {
+            return Success(router.Content, Array.Empty<DialogueClaimProposal>());
+        }
+
+        var detail = await _chat.ChatAsync(
+            OllamaDialogueClaimExtractor.DetailSystemPrompt(),
+            OllamaDialogueClaimExtractor.DetailUserPrompt(request),
+            temperature: 0.1,
+            maxTokens: 900,
+            timeout.Token);
+        if (!detail.Success)
+        {
+            return Failure(detail.RawText, detail.Error ?? "OpenAI-compatible dialogue claim detail extraction failed.");
+        }
+
+        try
+        {
+            var envelope = JsonSerializer.Deserialize<ClaimEnvelope>(detail.Content, JsonOptions);
+            var claims = (envelope?.Claims ?? Array.Empty<DialogueClaimProposal>())
+                .Where(claim => !claim.PlayerAuthored && !string.IsNullOrWhiteSpace(claim.Text))
+                .ToArray();
+            return Success(detail.Content, claims);
+        }
+        catch (JsonException ex)
+        {
+            return Failure(detail.Content, ex.Message);
+        }
+    }
+
+    private DialogueClaimExtractionResult Success(
+        string raw,
+        IReadOnlyList<DialogueClaimProposal> claims) =>
+        new(Name, raw, TechnicalFailure: false, Error: null, Claims: claims);
+
+    private DialogueClaimExtractionResult Failure(string raw, string error) =>
+        new(Name, raw, TechnicalFailure: true, Error: error, Claims: Array.Empty<DialogueClaimProposal>());
+
+    private sealed record ClaimEnvelope(IReadOnlyList<DialogueClaimProposal>? Claims);
 }
 
 public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
@@ -171,7 +247,7 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
     {
         _host = host.TrimEnd('/');
         _model = model;
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? CreateHttpClient();
         _timeout = timeout ?? TimeSpan.FromSeconds(180);
     }
 
@@ -274,7 +350,7 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
         }
     }
 
-    private static bool RouterFoundClaim(string content)
+    internal static bool RouterFoundClaim(string content)
     {
         try
         {
@@ -296,13 +372,13 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
         root.TryGetProperty(property, out var value)
         && value.ValueKind == JsonValueKind.True;
 
-    private static string RouterSystemPrompt() =>
+    internal static string RouterSystemPrompt() =>
         "You are Sorcerer's dialogue claim router. Return exactly JSON: "
-        + "{\"hasClaim\":true|false,\"capabilities\":[\"memory|promise|merchant_stock|person|item|place\"],\"reason\":\"short\"}. "
+        + "{\"hasClaim\":true|false,\"capabilities\":[\"memory|promise|merchant_stock|person|item|place|canon\"],\"reason\":\"short\"}. "
         + "A claim is an NPC-authored or NPC-reported assertion that could matter later: a place exists, a person exists, a merchant has stock, a secret is true, a danger is coming, or a relationship/fact should be remembered. "
         + "Player-spoken assertions are not binding. Report false if only the player claimed it. Err toward yes for plausible NPC claims, but ignore jokes, greetings, and pure mood.";
 
-    private static string RouterUserPrompt(DialogueClaimRequest request) =>
+    internal static string RouterUserPrompt(DialogueClaimRequest request) =>
         JsonSerializer.Serialize(new
         {
             request.SpeakerId,
@@ -312,18 +388,19 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
             npcDialogue = request.DialogueLines,
         }, JsonOptions);
 
-    private static string DetailSystemPrompt() =>
+    internal static string DetailSystemPrompt() =>
         "You are Sorcerer's dialogue claim extractor. Return exactly JSON with shape {\"claims\":[...]}. "
         + "Extract only NPC-authored or NPC-reported claims, never player-invented claims. Reported claims may be uncertain; use confidence. "
         + "Use salience 1-5. Only salience 3+ will be shown to the player, so reserve 3+ for claims that open a route, stock, person, secret, place, threat, or tactical opportunity. "
         + "Set bindAsPromise true when the world should later deliver the claim organically through ordinary systems, especially places, landmarks, towns, items, people, or threats not already present. "
-        + "Use category values such as memory, town, landmark, person, item, merchant_stock, threat, rumor. "
+        + "Set bindAsCanon true for durable lore or local facts that should become world knowledge but do not need later delivery, such as local law, custom, lineage, taboo, public history, or a known relationship. "
+        + "Use category values such as memory, town, landmark, person, item, merchant_stock, threat, rumor, local_law, custom, history, relationship. "
         + "If an existing merchant says they can sell something, use category merchant_stock, merchantId as speakerId, itemName, and bindAsPromise false. "
-        + "Each claim object may include text, category, subject, salience, confidence, playerVisible, bindAsPromise, promiseKind, realizationKind, triggerHint, claimedPlace, targetEntityId, merchantId, itemName, playerAuthored, tags. "
+        + "Each claim object may include text, category, subject, salience, confidence, playerVisible, bindAsPromise, bindAsCanon, promiseKind, realizationKind, triggerHint, claimedPlace, targetEntityId, merchantId, itemName, playerAuthored, tags, canonKind, canonSummary. "
         + "When the NPC's dialogue implies their personal feeling toward the listener changed, include updateBond true plus loyaltyDelta, fearDelta, admirationDelta, resentmentDelta, and bondPosture. Recent gift memories are relevant context, but the bond shift must come from the NPC's dialogue rather than the gift action alone. "
         + "For travel-delivered promises, prefer triggerHint travel and realizationKind site, item, person, or threat. Keep text concise and concrete.";
 
-    private static string DetailUserPrompt(DialogueClaimRequest request) =>
+    internal static string DetailUserPrompt(DialogueClaimRequest request) =>
         JsonSerializer.Serialize(new
         {
             request.Turn,
@@ -363,4 +440,10 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
     private sealed record ClaimEnvelope(IReadOnlyList<DialogueClaimProposal>? Claims);
 
     private sealed record ChatResult(bool Success, string Content, string RawText, string? Error);
+
+    private static HttpClient CreateHttpClient() =>
+        new()
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
 }

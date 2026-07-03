@@ -1,4 +1,5 @@
 using Sorcerer.Core.Characters;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Runtime;
@@ -71,7 +72,23 @@ public static class TestScenarios
             .Set(new PhysicalComponent(BlocksMovement: true, Material: "brass"))
             .Set(new FixtureComponent(
                 "brazier",
-                new[] { "fire", "brass", "law", "imperial", "ritual" })));
+                new[] { "fire", "brass", "law", "imperial", "ritual" }))
+            .Set(new ClaimSourceComponent(new[]
+            {
+                new ClaimSeed(
+                    "The brazier remembers Vara Nine-Names, whose oath was sealed beneath the walking stone north of here.",
+                    "landmark",
+                    "walking stone",
+                    Salience: 3,
+                    Confidence: 70,
+                    PlayerVisible: true,
+                    BindAsPromise: true,
+                    PromiseKind: "rumor",
+                    RealizationKind: "site",
+                    TriggerHint: "travel",
+                    ClaimedPlace: "north of the containment yard",
+                    Tags: new[] { "prop", "brazier", "oath", "walking_stone", "north" }),
+            })));
 
         Add(state, new Entity(EntityId.Create("notice_1"), "posted containment notice")
             .Set(new PositionComponent(new GridPoint(5, 7)))
@@ -83,15 +100,37 @@ public static class TestScenarios
                 new[] { "paper", "law", "contract", "imperial", "readable" }))
             .Set(new ReadableComponent(
                 "Thaumic Containment Order 7-112",
-                "By marble authority: unauthorized color, oath, dream, bone, rain, name, or prophecy is to be contained until it consents to empire.")));
+                "By marble authority: unauthorized color, oath, dream, bone, rain, name, or prophecy is to be contained until it consents to empire. Confiscated colors and wastewater depart by the southern drainage culvert at dusk."))
+            .Set(new ClaimSourceComponent(new[]
+            {
+                new ClaimSeed(
+                    "Confiscated colors and wastewater depart by the southern drainage culvert at dusk.",
+                    "escape_route",
+                    "southern drainage culvert",
+                    Salience: 3,
+                    Confidence: 85,
+                    PlayerVisible: true,
+                    BindAsPromise: true,
+                    PromiseKind: "rumor",
+                    RealizationKind: "escape_route",
+                    TriggerHint: "travel",
+                    ClaimedPlace: "south of the containment yard",
+                    Tags: new[] { "document", "escape_route", "drainage", "south" }),
+            })));
 
         Add(state, Item("loose_tincture_1", "red tincture", new GridPoint(4, 6), '!', "glass", "red_tincture", 12, new[] { "item", "healing", "blood" }, "heal:6"));
         Add(state, Item("cell_key_1", "imperial cell key", new GridPoint(7, 7), 'k', "iron", "imperial_cell_key", 5, new[] { "item", "key", "imperial" }, "key"));
 
-        var rescuePromise = state.PromiseLedger.Add(
+        var rescuePromiseResult = WorldConsequenceGuard.ApplyWithNewApplier(state, WorldConsequence.CreatePromise(
+            "scenario",
             "promise",
             "If the cell door opens, Lio of Hollowmere will owe a dangerous gratitude.",
-            playerVisible: true);
+            playerVisible: true,
+            useCurrentRegionAsClaimedPlace: false,
+            autoBind: false,
+            emitMessage: false,
+            operation: "seedPromise"));
+        var rescuePromiseId = rescuePromiseResult.TargetId ?? rescuePromiseResult.Deltas.First().Target;
         Add(state, new Entity(EntityId.Create("cell_door_1"), "locked imperial cell door")
             .Set(new PositionComponent(new GridPoint(13, 5)))
             .Set(new RenderableComponent('+', "imperial"))
@@ -99,7 +138,7 @@ public static class TestScenarios
             .Set(new PhysicalComponent(BlocksMovement: true, BlocksSight: true, Material: "iron"))
             .Set(new FixtureComponent("door", new[] { "door", "cell", "iron", "imperial" }))
             .Set(new DoorComponent(IsOpen: false, KeyId: "imperial cell key"))
-            .Set(new PromiseAnchorComponent(rescuePromise.Id)));
+            .Set(new PromiseAnchorComponent(rescuePromiseId)));
 
         Add(state, new Entity(EntityId.Create("prisoner_1"), "Lio of Hollowmere")
             .Set(new PositionComponent(new GridPoint(14, 5)))
@@ -118,10 +157,27 @@ public static class TestScenarios
                 Origin: "Hollowmere",
                 MagicalSignature: "a name hidden under water",
                 Backstory: "Lio is scared, observant, and not a formal quest giver. If trust, gratitude, a gift, or imminent escape loosens his tongue, he tends to disclose concrete leads: a Hollowmere refuge south of the yard, Jimmer the quiet blade-seller, Old Maren's niece Nannerl, a burned oak that marks a hidden road, or an imperial drainage route. He knows folk-magic services exist but treats them as dangerous secrets because Vigovia can execute people for practicing them."))
+            .Set(new WantComponent(
+                "want_lio_escape",
+                "Escape the containment yard and get word to Hollowmere without naming folk-magic helpers too loudly.",
+                salience: 5,
+                stakes: "If trust or leverage appears, Lio may trade concrete leads for a plausible escape.",
+                tags: new[] { "escape", "hollowmere", "promise_source" }))
             .Set(StatusContainerComponent.Empty()));
 
         AddMemorial(state, memorials);
-        state.AddMessage("Imperial soldiers move to contain you.");
+        WorldConsequenceGuard.ApplyWithNewApplier(state, WorldConsequence.Message(
+            "scenario",
+            "Imperial soldiers move to contain you.",
+            targetEntityId: state.ControlledEntityId.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: state.ControlledEntityId.Value,
+            evidence: "Imperial encounter setup.",
+            operation: "scenarioMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["scenario"] = "imperial_encounter",
+            }));
         return state;
     }
 
@@ -164,7 +220,8 @@ public static class TestScenarios
                 SoldierAppearance(name),
                 Origin: "Vigovia",
                 MagicalSignature: "law spoken as if it were weather",
-                Backstory: SoldierBackstory(name)));
+                Backstory: SoldierBackstory(name)))
+            .Set(SoldierWant(id, name));
 
     private static string SoldierAppearance(string name) =>
         name.Contains("captain", StringComparison.OrdinalIgnoreCase)
@@ -175,6 +232,21 @@ public static class TestScenarios
         name.Contains("captain", StringComparison.OrdinalIgnoreCase)
             ? "The ward-captain is loyal to Vigovia but practical under pressure. In dialogue, they may reveal lawful procedures, warrant routes, patrol timing, an office ledger, or a weakness in the containment-yard schedule. They should treat folk magic as contraband and speak of practitioners carefully, because execution for hidden practice is plausible."
             : "This soldier knows more logistics than doctrine: which clerk counted the confiscated charms, where a blade was sealed, which road leads toward Hollowmere, and which landmark patrols avoid after dusk. They are not friendly, but fear, bargaining, or magical leverage can make them let a concrete lead slip.";
+
+    private static WantComponent SoldierWant(string id, string name) =>
+        name.Contains("captain", StringComparison.OrdinalIgnoreCase)
+            ? new WantComponent(
+                $"want_{id}_order",
+                "End the containment incident with the paperwork intact and no public proof that folk-magic practice slipped through imperial hands.",
+                salience: 4,
+                stakes: "The captain may disclose procedures, schedules, doors, or ledger facts if that seems to preserve order.",
+                tags: new[] { "order", "procedure", "empire", "promise_source" })
+            : new WantComponent(
+                $"want_{id}_shift",
+                "Survive the shift without being blamed for missing confiscated goods or a loose prisoner.",
+                salience: 3,
+                stakes: "Fear, bargaining, or evidence can make the soldier mention routes, stock, clerks, or landmarks.",
+                tags: new[] { "survival", "goods", "routes", "promise_source" });
 
     private static Entity Item(
         string id,

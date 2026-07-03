@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.References;
@@ -24,10 +25,12 @@ public sealed class DamageOperation : OperationBase
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
         ResolveTargets(context, effect, "nearest_enemy")
             .Where(target => target.TryGet<ActorComponent>(out var actor) && actor.Alive)
-            .Select(target => context.Engine.DamageEntity(
-                target,
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.Damage(
+                "wild_magic",
+                target.Id.Value,
                 Int(effect, "amount", 4, min: 1, max: 40),
-                Text(effect, "damageType", Text(effect, "damage_type", "arcane"))))
+                Text(effect, "damageType", Text(effect, "damage_type", "arcane")),
+                sourceEntityId: context.Caster.Id.Value)).Deltas)
             .ToArray();
 }
 
@@ -60,7 +63,12 @@ public sealed class AreaDamageOperation : OperationBase
                 && GameEngineDistance(position.Position, origin) <= radius)
             .Where(entity => AffectsTarget(context, entity, affects))
             .Take(context.GroupTargetCap)
-            .Select(entity => context.Engine.DamageEntity(entity, amount, damageType))
+            .SelectMany(entity => context.Engine.ApplyConsequence(WorldConsequence.Damage(
+                "wild_magic",
+                entity.Id.Value,
+                amount,
+                damageType,
+                sourceEntityId: context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -82,7 +90,11 @@ public sealed class HealOperation : OperationBase
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
         ResolveTargets(context, effect, "self")
             .Where(target => target.TryGet<ActorComponent>(out _))
-            .Select(target => context.Engine.HealEntity(target, Int(effect, "amount", 4, min: 1, max: 30)))
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.Heal(
+                "wild_magic",
+                target.Id.Value,
+                Int(effect, "amount", 4, min: 1, max: 30),
+                sourceEntityId: context.Caster.Id.Value)).Deltas)
             .ToArray();
 }
 
@@ -103,7 +115,11 @@ public sealed class RestoreManaOperation : OperationBase
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
         ResolveTargets(context, effect, "self")
             .Where(target => target.TryGet<ActorComponent>(out _))
-            .Select(target => context.Engine.RestoreMana(target, Int(effect, "amount", 4, min: 1, max: 30)))
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.RestoreMana(
+                "wild_magic",
+                target.Id.Value,
+                Int(effect, "amount", 4, min: 1, max: 30),
+                sourceEntityId: context.Caster.Id.Value)).Deltas)
             .ToArray();
 }
 
@@ -162,12 +178,18 @@ public sealed class TeleportOperation : OperationBase
         var destination = Destination(context, effect);
         if (destination is null)
         {
-            return new[] { Message(context, "teleport", "", "The teleport curls up without a destination.") };
+            return Messages(context, "teleport", "", "The teleport curls up without a destination.");
         }
 
         return ResolveTargets(context, effect, "self")
             .Where(target => target.TryGet<PositionComponent>(out _))
-            .Select(target => context.Engine.MoveEntity(target, destination.Value, "teleport"))
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.MoveEntity(
+                $"magic:{Name}",
+                target.Id.Value,
+                destination.Value.X,
+                destination.Value.Y,
+                operation: "teleport",
+                sourceEntityId: context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -191,13 +213,13 @@ public sealed class CreateTileOperation : OperationBase
         var point = ResolveOrigin(context, effect, "selected_target");
         return point is null
             ? Array.Empty<StateDelta>()
-            : new[]
-            {
-                context.Engine.SetTerrain(
-                    point.Value,
-                    NormalizeTerrain(Text(effect, "terrain", Text(effect, "tile", "wild_growth"))),
-                    Int(effect, "duration", 0, min: 0, max: 99) is var duration && duration > 0 ? duration : null),
-            };
+            : context.Engine.ApplyConsequence(WorldConsequence.SetTerrain(
+                "wild_magic",
+                point.Value.X,
+                point.Value.Y,
+                NormalizeTerrain(Text(effect, "terrain", Text(effect, "tile", "wild_growth"))),
+                Int(effect, "duration", 0, min: 0, max: 99),
+                sourceEntityId: context.Caster.Id.Value)).Deltas;
     }
 }
 
@@ -236,7 +258,13 @@ public sealed class CreateTilesOperation : OperationBase
                     && GameEngineDistance(origin.Value, point) <= radius
                     && !context.Engine.State.BlockingTerrain.Contains(point))
                 {
-                    deltas.Add(context.Engine.SetTerrain(point, terrain, duration > 0 ? duration : null));
+                    deltas.AddRange(context.Engine.ApplyConsequence(WorldConsequence.SetTerrain(
+                        "wild_magic",
+                        point.X,
+                        point.Y,
+                        terrain,
+                        duration,
+                        sourceEntityId: context.Caster.Id.Value)).Deltas);
                 }
             }
         }
@@ -265,7 +293,13 @@ public sealed class AddStatusOperation : OperationBase
         var displayName = Text(effect, "displayName", Text(effect, "display_name", status));
         var duration = Int(effect, "duration", 0, min: 0, max: 99);
         return ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target => context.Engine.ApplyStatus(target, status, duration, displayName))
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.ApplyStatus(
+                "wild_magic",
+                target.Id.Value,
+                status,
+                duration,
+                displayName,
+                sourceEntityId: context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -288,7 +322,11 @@ public sealed class RemoveStatusOperation : OperationBase
     {
         var status = NormalizeToken(Text(effect, "status", "marked"));
         return ResolveTargets(context, effect, "self")
-            .Select(target => context.Engine.RemoveStatus(target, status))
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.RemoveStatus(
+                "wild_magic",
+                target.Id.Value,
+                status,
+                sourceEntityId: context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 }
@@ -316,43 +354,168 @@ public sealed class SummonOperation : OperationBase
         var position = FindOpenAdjacent(context, origin);
         if (position is null)
         {
-            return new[] { Message(context, "summon", "", "The summoning has nowhere to stand.") };
+            return Messages(context, "summon", "", "The summoning has nowhere to stand.");
         }
 
         var name = SummonName(effect, "summoned wonder");
         var faction = Text(effect, "faction", "player");
         var glyphText = Text(effect, "glyph", "*");
         var tags = Tags(effect, "tags", new[] { "summoned", "wild_magic" });
-        var entity = context.Engine.SpawnEntity(
-            NormalizeToken(name, "summon"),
+        return context.Engine.ApplyConsequence(WorldConsequence.SpawnEntity(
+            "wild_magic",
             name,
+            position.Value.X,
+            position.Value.Y,
+            NormalizeToken(name, "summon"),
             string.IsNullOrEmpty(glyphText) ? '*' : glyphText[0],
-            position.Value,
             faction,
             Int(effect, "hp", 5, min: 1, max: 20),
             Int(effect, "attack", 2, min: 0, max: 10),
-            tags);
-        entity.Set(new SummonedComponent(context.Caster.Id.Value));
-        var summary = $"{name} appears at {position.Value.X},{position.Value.Y}.";
-        context.Engine.AddMessage(summary);
-        return new[]
-        {
-            new StateDelta(
-                "summon",
-                entity.Id.Value,
-                summary,
-                new Dictionary<string, object?>
-                {
-                    ["x"] = position.Value.X,
-                    ["y"] = position.Value.Y,
-                    ["faction"] = faction,
-                    ["tags"] = tags,
-            }),
-        };
+            tags,
+            sourceEntityId: context.Caster.Id.Value)).Deltas;
     }
 
     private static string SummonName(SpellEffect effect, string fallback) =>
         Text(effect, "name", Text(effect, "entityName", Text(effect, "entity_name", fallback)));
+}
+
+internal static class TransformPayloadFields
+{
+    public static IReadOnlyDictionary<string, object?> FromEffect(SpellEffect effect)
+    {
+        var fields = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        AddText(fields, effect, "fixtureType", "fixtureType", "fixture_type");
+        AddText(fields, effect, "palette", "palette", "renderPalette", "render_palette");
+        AddText(fields, effect, "glyph", "glyph");
+        AddText(fields, effect, "newMaterial", "newMaterial", "new_material");
+        AddBool(fields, effect, "blocksMovement", "blocksMovement", "blocks_movement");
+        AddBool(fields, effect, "blocksSight", "blocksSight", "blocks_sight");
+        AddBool(fields, effect, "canAnchorMagic", "canAnchorMagic", "can_anchor_magic");
+        AddInt(fields, effect, "size", "size");
+        AddInt(fields, effect, "durability", "durability");
+        AddList(fields, effect, "addTags", "addTags", "add_tags", "tags", "tag");
+        AddList(fields, effect, "removeTags", "removeTags", "remove_tags", "withoutTags", "without_tags");
+        AddList(fields, effect, "interactableVerbs", "interactableVerbs", "interactable_verbs", "verbs");
+        return fields;
+    }
+
+    public static bool HasTransformChange(SpellEffect effect) =>
+        HasText(effect, "name", "newName", "new_name", "material", "newMaterial", "new_material", "description", "detail", "fixtureType", "fixture_type", "palette", "renderPalette", "render_palette", "glyph")
+        || HasKey(effect, "blocksMovement", "blocks_movement", "blocksSight", "blocks_sight", "canAnchorMagic", "can_anchor_magic", "size", "durability")
+        || HasList(effect, "tags", "addTags", "add_tags", "tag", "removeTags", "remove_tags", "withoutTags", "without_tags", "interactableVerbs", "interactable_verbs", "verbs");
+
+    private static void AddText(Dictionary<string, object?> fields, SpellEffect effect, string outputKey, params string[] inputKeys)
+    {
+        foreach (var key in inputKeys)
+        {
+            if (!effect.Fields.TryGetValue(key, out var raw) || raw is null)
+            {
+                continue;
+            }
+
+            var text = Convert.ToString(raw);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                fields[outputKey] = text.Trim();
+                return;
+            }
+        }
+    }
+
+    private static void AddBool(Dictionary<string, object?> fields, SpellEffect effect, string outputKey, params string[] inputKeys)
+    {
+        foreach (var key in inputKeys)
+        {
+            if (!effect.Fields.TryGetValue(key, out var raw) || raw is null)
+            {
+                continue;
+            }
+
+            if (raw is bool typed)
+            {
+                fields[outputKey] = typed;
+                return;
+            }
+
+            if (bool.TryParse(Convert.ToString(raw), out var parsed))
+            {
+                fields[outputKey] = parsed;
+                return;
+            }
+        }
+    }
+
+    private static void AddInt(Dictionary<string, object?> fields, SpellEffect effect, string outputKey, params string[] inputKeys)
+    {
+        foreach (var key in inputKeys)
+        {
+            if (!effect.Fields.TryGetValue(key, out var raw) || raw is null)
+            {
+                continue;
+            }
+
+            if (int.TryParse(Convert.ToString(raw), out var parsed))
+            {
+                fields[outputKey] = parsed;
+                return;
+            }
+        }
+    }
+
+    private static void AddList(Dictionary<string, object?> fields, SpellEffect effect, string outputKey, params string[] inputKeys)
+    {
+        foreach (var key in inputKeys)
+        {
+            if (!effect.Fields.TryGetValue(key, out var raw) || raw is null)
+            {
+                continue;
+            }
+
+            string[] values;
+            if (raw is System.Collections.IEnumerable enumerable && raw is not string)
+            {
+                values = enumerable.Cast<object?>()
+                    .Select(value => Convert.ToString(value))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value!.Trim())
+                    .ToArray();
+            }
+            else
+            {
+                values = (Convert.ToString(raw) ?? "")
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+
+            if (values.Length > 0)
+            {
+                fields[outputKey] = values;
+                return;
+            }
+        }
+    }
+
+    private static bool HasText(SpellEffect effect, params string[] keys) =>
+        keys.Any(key => effect.Fields.TryGetValue(key, out var raw) && !string.IsNullOrWhiteSpace(Convert.ToString(raw)));
+
+    private static bool HasKey(SpellEffect effect, params string[] keys) =>
+        keys.Any(key => effect.Fields.TryGetValue(key, out var raw) && raw is not null);
+
+    private static bool HasList(SpellEffect effect, params string[] keys) =>
+        keys.Any(key =>
+        {
+            if (!effect.Fields.TryGetValue(key, out var raw) || raw is null)
+            {
+                return false;
+            }
+
+            if (raw is string text)
+            {
+                return !string.IsNullOrWhiteSpace(text);
+            }
+
+            return raw is System.Collections.IEnumerable enumerable
+                && enumerable.Cast<object?>().Any(value => !string.IsNullOrWhiteSpace(Convert.ToString(value)));
+        });
 }
 
 public sealed class TransformEntityOperation : OperationBase
@@ -361,8 +524,8 @@ public sealed class TransformEntityOperation : OperationBase
         : base(
             "transformEntity",
             new[] { "transfigure", "alterEntity" },
-            "Change an entity's name, material, tags, or description.",
-            "Use for open-ended physical transformations. Fields: target, name, material, addTags, description.")
+            "Change an entity's name, material, tags, description, physical properties, rendering, or fixture affordances.",
+            "Use for open-ended physical transformations. Fields: target, name, material, addTags/removeTags, description, blocksMovement, blocksSight, glyph, palette, fixtureType, interactableVerbs.")
     {
     }
 
@@ -371,47 +534,16 @@ public sealed class TransformEntityOperation : OperationBase
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
         ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target =>
-            {
-                var before = target.Name;
-                var newName = Text(effect, "name", Text(effect, "newName", ""));
-                if (!string.IsNullOrWhiteSpace(newName))
-                {
-                    target.Name = newName;
-                }
-
-                if (!string.IsNullOrWhiteSpace(Text(effect, "material", "")))
-                {
-                    var physical = target.TryGet<PhysicalComponent>(out var existing)
-                        ? existing
-                        : new PhysicalComponent();
-                    target.Set(physical with { Material = NormalizeToken(Text(effect, "material", "changed")) });
-                }
-
-                AddTags(target, Tags(effect, "addTags", Tags(effect, "tags", Array.Empty<string>())));
-
-                var description = Text(effect, "description", Text(effect, "detail", ""));
-                if (!string.IsNullOrWhiteSpace(description))
-                {
-                    target.Set(new DescriptionComponent(description));
-                }
-
-                var summary = target.Name.Equals(before, StringComparison.OrdinalIgnoreCase)
-                    && target.TryGet<PhysicalComponent>(out var transformedPhysical)
-                    ? $"{before} becomes {transformedPhysical.Material.Replace('_', ' ')}."
-                    : $"{before} becomes {target.Name}.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "transformEntity",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?>
-                    {
-                        ["before"] = before,
-                        ["after"] = target.Name,
-                        ["material"] = target.TryGet<PhysicalComponent>(out var phys) ? phys.Material : null,
-                    });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.TransformEntity(
+                "wild_magic",
+                target.Id.Value,
+                Text(effect, "name", Text(effect, "newName", "")),
+                Text(effect, "material", ""),
+                Text(effect, "description", Text(effect, "detail", "")),
+                Tags(effect, "addTags", Tags(effect, "tags", Array.Empty<string>())),
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value,
+                details: TransformPayloadFields.FromEffect(effect))).Deltas)
             .ToArray();
 }
 
@@ -422,7 +554,7 @@ public sealed class TransformItemOperation : OperationBase
             "transformItem",
             new[] { "transformFixture", "alterItem" },
             "Change an item, fixture, or object-like entity.",
-            "Use for magic acting on reagents, fixtures, doors, signs, props. Fields: target, material, addTags, name.")
+            "Use for magic acting on reagents, fixtures, doors, signs, props. Fields: target, material, addTags/removeTags, name, description, blocksMovement, blocksSight, glyph, palette, fixtureType, interactableVerbs.")
     {
     }
 
@@ -434,11 +566,9 @@ public sealed class TransformItemOperation : OperationBase
             return targets;
         }
 
-        if (string.IsNullOrWhiteSpace(Text(effect, "name", Text(effect, "newName", "")))
-            && string.IsNullOrWhiteSpace(Text(effect, "material", ""))
-            && Tags(effect, "addTags", Tags(effect, "tags", Array.Empty<string>())).Count == 0)
+        if (!TransformPayloadFields.HasTransformChange(effect))
         {
-            return ValidationOutcome.Reject("transformItem needs a name, material, or tag change.");
+            return ValidationOutcome.Reject("transformItem needs a name, material, tag, physical, render, fixture, or interaction change.");
         }
 
         return ValidationOutcome.Pass;
@@ -446,44 +576,17 @@ public sealed class TransformItemOperation : OperationBase
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
         ResolveTargets(context, effect, "selected_target")
-            .Select(target =>
-            {
-                var before = target.Name;
-                var name = Text(effect, "name", Text(effect, "newName", ""));
-                if (!string.IsNullOrWhiteSpace(name))
-                {
-                    target.Name = name;
-                }
-
-                var materialText = Text(effect, "material", "");
-                var material = string.IsNullOrWhiteSpace(materialText) ? "" : NormalizeToken(materialText);
-                if (!string.IsNullOrWhiteSpace(material))
-                {
-                    if (target.TryGet<PhysicalComponent>(out var physical))
-                    {
-                        target.Set(physical with { Material = material });
-                    }
-
-                    if (target.TryGet<ItemComponent>(out var item))
-                    {
-                        target.Set(item with { Material = material });
-                    }
-                }
-
-                AddTags(target, Tags(effect, "addTags", Tags(effect, "tags", Array.Empty<string>())));
-                var summary = $"{before} changes into {target.Name}.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "transformItem",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?>
-                    {
-                        ["before"] = before,
-                        ["after"] = target.Name,
-                        ["material"] = material,
-                    });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.TransformEntity(
+                "wild_magic",
+                target.Id.Value,
+                Text(effect, "name", Text(effect, "newName", "")),
+                Text(effect, "material", ""),
+                Text(effect, "description", Text(effect, "detail", "")),
+                tags: Tags(effect, "addTags", Tags(effect, "tags", Array.Empty<string>())),
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: context.Caster.Id.Value,
+                operation: "transformItem",
+                details: TransformPayloadFields.FromEffect(effect))).Deltas)
             .ToArray();
 }
 
@@ -551,19 +654,12 @@ public sealed class ChangeFactionOperation : OperationBase
         var faction = Text(effect, "faction", "player");
         return ResolveTargets(context, effect, "nearest_enemy")
             .Where(target => target.TryGet<ActorComponent>(out _))
-            .Select(target =>
-            {
-                var actor = target.Get<ActorComponent>();
-                target.Set(actor with { Faction = faction });
-                target.Set(new FactionComponent(faction, new[] { faction }));
-                var summary = $"{target.Name} now answers to {faction}.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "changeFaction",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["faction"] = faction });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.ChangeFaction(
+                "wild_magic",
+                target.Id.Value,
+                faction,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: context.Caster.Id.Value)).Deltas)
             .ToArray();
     }
 
@@ -593,17 +689,14 @@ public sealed class AddTraitOperation : OperationBase
         }
 
         return ResolveTargets(context, effect, "nearest_enemy")
-            .Select(target =>
-            {
-                AddTags(target, traits);
-                var summary = $"{target.Name} gains {string.Join(", ", traits)}.";
-                context.Engine.AddMessage(summary);
-                return new StateDelta(
-                    "addTrait",
-                    target.Id.Value,
-                    summary,
-                    new Dictionary<string, object?> { ["traits"] = traits.ToArray() });
-            })
+            .SelectMany(target => context.Engine.ApplyConsequence(WorldConsequence.AddTags(
+                "wild_magic",
+                target.Id.Value,
+                traits,
+                WorldConsequenceVisibility.Message,
+                context.Caster.Id.Value,
+                operation: "addTrait",
+                details: new Dictionary<string, object?> { ["traits"] = traits.ToArray() })).Deltas)
             .ToArray();
     }
 }
@@ -628,21 +721,13 @@ public sealed class ScheduleEventOperation : OperationBase
     {
         var turns = Int(effect, "turns", 3, min: 1, max: 99);
         var eventType = Text(effect, "eventType", Text(effect, "event_type", "wild_magic"));
-        var scheduled = context.Engine.State.ScheduledEvents.Schedule(
-            context.Engine.State.Turn + turns,
+        return context.Engine.ApplyConsequence(WorldConsequence.ScheduleEvent(
+            "wild_magic",
             eventType,
-            context.Caster.Id,
-            effect.Fields);
-        var summary = $"Something is scheduled for turn {scheduled.DueTurn}: {eventType}.";
-        context.Engine.AddMessage(summary);
-        return new[]
-        {
-            new StateDelta(
-                "scheduleEvent",
-                scheduled.Id,
-                summary,
-                effect.Fields),
-        };
+            turns,
+            effect.Fields,
+            WorldConsequenceVisibility.Message,
+            context.Caster.Id.Value)).Deltas;
     }
 }
 
@@ -682,6 +767,9 @@ public sealed class CreateTriggerOperation : OperationBase
                 ? ValidationOutcome.Pass
                 : ValidationOutcome.Reject("Status triggers need status."),
             "damage" or "harm" or "heal" or "restorehealth" => ValidationOutcome.Pass,
+            "consequence" or "worldconsequence" or "world_consequence" => !string.IsNullOrWhiteSpace(EffectText(effect, "consequenceType", EffectText(effect, "consequence_type", "")))
+                ? ValidationOutcome.Pass
+                : ValidationOutcome.Reject("Consequence triggers need consequenceType."),
             _ => ValidationOutcome.Reject($"Unsupported trigger effect {effectType}."),
         };
     }
@@ -707,25 +795,24 @@ public sealed class CreateTriggerOperation : OperationBase
                 ? "The aura pulses."
                 : "The delayed magic comes due."));
 
-        return new[]
-        {
-            context.Engine.CreateTrigger(
-                Text(effect, "name", kind),
-                kind,
-                delay,
-                interval,
-                uses,
-                duration,
-                context.Caster.Id,
-                anchor.AnchorEntityId,
-                anchor.AnchorPoint,
-                Int(effect, "radius", kind.Equals("aura", StringComparison.OrdinalIgnoreCase) ? 2 : 0, min: 0, max: 8),
-                Text(effect, "targetFilter", Text(effect, "affects", "all")),
-                effectType,
-                effectFields,
-                description,
-                Bool(effect, "playerVisible", true)),
-        };
+        return context.Engine.ApplyConsequence(WorldConsequence.CreateTrigger(
+            "wild_magic",
+            Text(effect, "name", kind),
+            kind,
+            delay,
+            interval,
+            uses,
+            duration,
+            effectType,
+            effectFields,
+            description,
+            anchor.AnchorEntityId,
+            anchor.AnchorPoint?.X,
+            anchor.AnchorPoint?.Y,
+            Int(effect, "radius", kind.Equals("aura", StringComparison.OrdinalIgnoreCase) ? 2 : 0, min: 0, max: 8),
+            Text(effect, "targetFilter", Text(effect, "affects", "all")),
+            Bool(effect, "playerVisible", true),
+            sourceEntityId: context.Caster.Id.Value)).Deltas;
     }
 
     private static TriggerAnchor ResolveAnchor(EffectContext context, SpellEffect effect)
@@ -851,19 +938,16 @@ public sealed class AddCurseOperation : OperationBase
         var text = Text(effect, "description", Text(effect, "name", "Wild Debt"));
         var anchor = ResolveTargets(context, effect, "selected_target").FirstOrDefault();
         var template = CurseTemplate(effect, text);
-        var existing = context.Engine.State.PromiseLedger.FindActive("curse", text, anchor?.Id.Value);
-        if (existing is not null)
-        {
-            var stacked = context.Engine.State.PromiseLedger.Stack(existing.Id);
-            var message = $"{text} deepens ({stacked.Stacks} stacks).";
-            context.Engine.AddMessage(message);
-            return new[]
-            {
-                new StateDelta("addCurse", stacked.Id, message, new Dictionary<string, object?> { ["stacks"] = stacked.Stacks }),
-            };
-        }
-
-        return new[] { context.Engine.AddPromise("curse", text, anchor, template) };
+        return context.Engine.ApplyConsequence(WorldConsequence.CreatePromise(
+            "wild_magic",
+            "curse",
+            text,
+            anchor?.Id.Value,
+            template,
+            WorldConsequenceVisibility.Message,
+            context.Caster.Id.Value,
+            operation: "addCurse",
+            stackExisting: true)).Deltas;
     }
 
     private static string CurseTemplate(SpellEffect effect, string text)
@@ -912,14 +996,13 @@ public sealed class CreatePromiseOperation : OperationBase
     {
         var anchor = ResolveTargets(context, effect, "selected_target").FirstOrDefault();
         var triggerHint = Text(effect, "trigger", Text(effect, "triggerHint", Text(effect, "trigger_hint", "")));
-        return new[]
-        {
-            context.Engine.AddPromise(
-                Text(effect, "kind", "omen"),
-                Text(effect, "text", "Something has been promised."),
-                anchor,
-                triggerHint),
-        };
+        return context.Engine.ApplyConsequence(WorldConsequence.CreatePromise(
+            "wild_magic",
+            Text(effect, "kind", "omen"),
+            Text(effect, "text", "Something has been promised."),
+            anchor?.Id.Value,
+            triggerHint,
+            sourceEntityId: context.Caster.Id.Value)).Deltas;
     }
 }
 
@@ -943,7 +1026,228 @@ public sealed class MessageOperation : OperationBase
             : ValidationOutcome.Reject("Message effects need text.");
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
-        new[] { Message(context, "message", "", Text(effect, "text", "")) };
+        context.Engine.ApplyConsequence(WorldConsequence.Message(
+            "wild_magic",
+            Text(effect, "text", ""),
+            sourceEntityId: context.Caster.Id.Value)).Deltas;
+}
+
+public sealed class ConsequenceOperation : OperationBase
+{
+    public ConsequenceOperation()
+        : base(
+            "consequence",
+            new[] { "worldConsequence", "world_consequence", "typedConsequence", "applyConsequence" },
+            "Submit a typed world consequence directly.",
+            "Use for effects already owned by the shared consequence grammar. Fields: consequenceType, target/targetEntityId, timing, consequencePayload.",
+            new Dictionary<string, string>
+            {
+                ["consequenceType"] = "typed consequence kind such as add_tags, apply_status, message, update_want, offer_service, request_service",
+                ["target"] = "ordinary spell target reference such as self, nearest_enemy, selected_target, or an entity id",
+                ["targetEntityId"] = "explicit entity id when not using target resolution",
+                ["timing"] = "immediate, after_turn, world_pump, or deferred; non-immediate consequences are scheduled by the shared engine apply point",
+                ["consequencePayload"] = "typed fields for the selected consequence; top-level typed fields also fill missing payload fields",
+            })
+    {
+    }
+
+    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect)
+    {
+        if (string.IsNullOrWhiteSpace(ConsequenceType(effect)))
+        {
+            return ValidationOutcome.Reject("Generic consequence effects need consequenceType.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(ExplicitTargetEntityId(effect)) || !HasTargetReference(effect))
+        {
+            return ValidationOutcome.Pass;
+        }
+
+        var resolved = ResolveTargetSet(context, effect, "");
+        return IsMalformedTarget(resolved)
+            ? ValidationOutcome.Technical(resolved.Error ?? "Malformed target reference.")
+            : ValidationOutcome.Pass;
+    }
+
+    public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
+    {
+        var explicitTargetEntityId = ExplicitTargetEntityId(effect);
+        var resolvedTargets = string.IsNullOrWhiteSpace(explicitTargetEntityId) && HasTargetReference(effect)
+            ? ResolveTargets(context, effect, "")
+            : Array.Empty<Entity>();
+        if (resolvedTargets.Count == 0)
+        {
+            return ApplyForTarget(context, effect, explicitTargetEntityId);
+        }
+
+        return resolvedTargets
+            .SelectMany(target => ApplyForTarget(context, effect, target.Id.Value))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<StateDelta> ApplyForTarget(
+        EffectContext context,
+        SpellEffect effect,
+        string? targetEntityId)
+    {
+        var payload = ConsequencePayload(effect);
+        payload["operation"] = PayloadOperation(effect, payload);
+        payload["effectType"] = effect.Type;
+        payload["source"] = "wild_magic";
+        if (!string.IsNullOrWhiteSpace(targetEntityId))
+        {
+            payload.TryAdd("targetEntityId", targetEntityId);
+        }
+
+        var consequence = new WorldConsequence(
+            ConsequenceType(effect),
+            "wild_magic",
+            SourceEntityId: FirstNonBlank(
+                Text(effect, "sourceEntityId", ""),
+                Text(effect, "source_entity_id", ""),
+                TextFromMap(payload, "sourceEntityId"),
+                TextFromMap(payload, "source_entity_id"),
+                context.Caster.Id.Value),
+            TargetEntityId: targetEntityId,
+            Salience: Int(effect, "salience", 1, min: 1, max: 5),
+            Confidence: Int(effect, "confidence", 100, min: 0, max: 100),
+            Visibility: FirstNonBlank(
+                Text(effect, "visibility", ""),
+                Text(effect, "consequenceVisibility", ""),
+                Text(effect, "consequence_visibility", ""),
+                TextFromMap(payload, "visibility"),
+                TextFromMap(payload, "consequenceVisibility"),
+                TextFromMap(payload, "consequence_visibility"),
+                WorldConsequenceVisibility.Message)!,
+            Evidence: FirstNonBlank(
+                Text(effect, "evidence", ""),
+                TextFromMap(payload, "evidence"),
+                Text(effect, "reason", ""),
+                TextFromMap(payload, "reason")),
+            Reason: FirstNonBlank(
+                Text(effect, "reason", ""),
+                TextFromMap(payload, "reason"),
+                $"Wild magic submitted {ConsequenceType(effect)}."),
+            Payload: payload,
+            Timing: WorldConsequenceTiming.Normalize(FirstNonBlank(
+                Text(effect, "timing", ""),
+                Text(effect, "consequenceTiming", ""),
+                Text(effect, "consequence_timing", ""),
+                TextFromMap(payload, "timing"),
+                TextFromMap(payload, "consequenceTiming"),
+                TextFromMap(payload, "consequence_timing"),
+                WorldConsequenceTiming.Immediate)));
+        return context.Engine.ApplyConsequence(consequence).Deltas;
+    }
+
+    private static string PayloadOperation(
+        SpellEffect effect,
+        IReadOnlyDictionary<string, object?> payload) =>
+        FirstNonBlank(
+            TextFromMap(payload, "operation"),
+            Text(effect, "operationName", ""),
+            Text(effect, "operation_name", ""),
+            NonConsequenceAlias(Text(effect, "operation", "")),
+            NonConsequenceAlias(Text(effect, "op", "")),
+            "wildMagicConsequence")!;
+
+    private static string? NonConsequenceAlias(string value) =>
+        IsConsequenceAlias(value) ? null : value;
+
+    private static bool IsConsequenceAlias(string value) =>
+        value.Equals("consequence", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("worldConsequence", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("world_consequence", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("typedConsequence", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("applyConsequence", StringComparison.OrdinalIgnoreCase);
+
+    private static string ConsequenceType(SpellEffect effect)
+    {
+        var payload = ConsequencePayload(effect);
+        return FirstNonBlank(
+            Text(effect, "consequenceType", ""),
+            Text(effect, "consequence_type", ""),
+            Text(effect, "worldConsequenceType", ""),
+            Text(effect, "world_consequence_type", ""),
+            TextFromMap(payload, "consequenceType"),
+            TextFromMap(payload, "consequence_type"),
+            TextFromMap(payload, "worldConsequenceType"),
+            TextFromMap(payload, "world_consequence_type"),
+            "")!.Trim();
+    }
+
+    private static string? ExplicitTargetEntityId(SpellEffect effect)
+    {
+        var payload = ConsequencePayload(effect);
+        return FirstNonBlank(
+            Text(effect, "targetEntityId", ""),
+            Text(effect, "target_entity_id", ""),
+            Text(effect, "targetId", ""),
+            Text(effect, "target_id", ""),
+            Text(effect, "entityId", ""),
+            Text(effect, "entity_id", ""),
+            TextFromMap(payload, "targetEntityId"),
+            TextFromMap(payload, "target_entity_id"),
+            TextFromMap(payload, "targetId"),
+            TextFromMap(payload, "target_id"),
+            TextFromMap(payload, "entityId"),
+            TextFromMap(payload, "entity_id"));
+    }
+
+    private static bool HasTargetReference(SpellEffect effect) =>
+        effect.Fields.ContainsKey("target")
+        || effect.Fields.ContainsKey("targetId")
+        || effect.Fields.ContainsKey("target_id");
+
+    private static Dictionary<string, object?> ConsequencePayload(SpellEffect effect)
+        => WorldConsequencePayloadBuilder.MergeNestedWithTopLevelFields(
+            effect.Fields,
+            EnvelopeKeys,
+            "consequencePayload",
+            "consequence_payload",
+            "payload");
+
+    private static string? TextFromMap(IReadOnlyDictionary<string, object?> fields, string key) =>
+        fields.TryGetValue(key, out var raw) && raw is not null ? Convert.ToString(raw) : null;
+
+    private static string? FirstNonBlank(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private static readonly string[] EnvelopeKeys =
+    {
+        "type",
+        "effect",
+        "effectType",
+        "effect_type",
+        "operation",
+        "op",
+        "operationName",
+        "operation_name",
+        "consequenceType",
+        "consequence_type",
+        "worldConsequenceType",
+        "world_consequence_type",
+        "consequencePayload",
+        "consequence_payload",
+        "payload",
+        "target",
+        "targetEntityId",
+        "target_entity_id",
+        "entityId",
+        "entity_id",
+        "sourceEntityId",
+        "source_entity_id",
+        "timing",
+        "consequenceTiming",
+        "consequence_timing",
+        "visibility",
+        "consequenceVisibility",
+        "consequence_visibility",
+        "confidence",
+        "salience",
+        "evidence",
+        "reason",
+    };
 }
 
 internal static class OperationHelpers
@@ -1051,7 +1355,7 @@ internal static class OperationHelpers
         var distance = OperationBaseAccess.Int(effect, "distance", 1, min: 1, max: 5);
         return ResolveTargets(context, effect, "nearest_enemy")
             .Where(target => target.TryGet<PositionComponent>(out _))
-            .Select(target =>
+            .SelectMany(target =>
             {
                 var current = target.Get<PositionComponent>().Position;
                 var dx = Math.Sign(current.X - origin.X);
@@ -1068,16 +1372,25 @@ internal static class OperationHelpers
                 }
 
                 var destination = current.Translate(dx * distance, dy * distance);
-                return context.Engine.MoveEntity(target, destination, away ? "push" : "pull");
+                return context.Engine.ApplyConsequence(WorldConsequence.MoveEntity(
+                    $"magic:{(away ? "push" : "pull")}",
+                    target.Id.Value,
+                    destination.X,
+                    destination.Y,
+                    operation: away ? "push" : "pull",
+                    sourceEntityId: context.Caster.Id.Value)).Deltas;
             })
             .ToArray();
     }
 
-    public static StateDelta Message(EffectContext context, string operation, string target, string text)
-    {
-        context.Engine.AddMessage(text);
-        return new StateDelta(operation, target, text, new Dictionary<string, object?>());
-    }
+    public static IReadOnlyList<StateDelta> Messages(EffectContext context, string operation, string target, string text) =>
+        context.Engine.ApplyConsequence(WorldConsequence.Message(
+            "wild_magic",
+            text,
+            target,
+            WorldConsequenceVisibility.Message,
+            context.Caster.Id.Value,
+            operation: operation)).Deltas;
 
     public static GridPoint? FindOpenAdjacent(EffectContext context, GridPoint origin)
     {
@@ -1143,32 +1456,11 @@ internal static class OperationHelpers
             .ToArray();
     }
 
-    public static void AddTags(Entity target, IReadOnlyList<string> tags)
-    {
-        if (tags.Count == 0)
-        {
-            return;
-        }
-
-        var current = target.TryGet<TagsComponent>(out var existing)
-            ? existing.Tags.ToList()
-            : new List<string>();
-        foreach (var tag in tags)
-        {
-            if (!current.Contains(tag, StringComparer.OrdinalIgnoreCase))
-            {
-                current.Add(tag);
-            }
-        }
-
-        target.Set(new TagsComponent(current));
-    }
-
     public static int GameEngineDistance(GridPoint a, GridPoint b) =>
         Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
 
-    /// <summary>Second-person-aware subject for a message, matching the convention already used
-    /// by CombatSystem/EffectSystem: "You" for the controlled entity, its name otherwise.</summary>
+    /// <summary>Second-person-aware subject for a message, matching the engine/consequence
+    /// convention: "You" for the controlled entity, its name otherwise.</summary>
     public static string Subject(EffectContext context, Entity entity) =>
         entity.Id == context.Engine.State.ControlledEntityId ? "You" : entity.Name;
 

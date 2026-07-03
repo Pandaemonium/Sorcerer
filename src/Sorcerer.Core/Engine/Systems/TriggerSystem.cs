@@ -1,6 +1,8 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Transactions;
 using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Engine.Systems;
@@ -19,32 +21,43 @@ public sealed class TriggerSystem
     public IReadOnlyList<StateDelta> ApplyDue()
     {
         var deltas = new List<StateDelta>();
-        _state.Triggers.RemoveExpired(_state.Turn);
-        foreach (var record in _state.Triggers.Due(_state.Turn))
+        ApplyExpired(deltas);
+        foreach (var record in _state.Triggers.Due(_state.Turn).ToArray())
         {
-            deltas.AddRange(Apply(record));
+            var snapshot = GameStateSnapshot.Capture(_state);
+            var triggerDeltas = new List<StateDelta>();
+            triggerDeltas.AddRange(Apply(record));
             var remaining = record.RemainingUses - 1;
             if (remaining <= 0)
             {
-                _state.Triggers.Remove(record.Id);
+                triggerDeltas.AddRange(UpdateTrigger(record, "complete"));
+            }
+            else
+            {
+                var next = record.NextTurn + Math.Max(1, record.Interval);
+                if (record.ExpiresTurn is not null && next > record.ExpiresTurn)
+                {
+                    triggerDeltas.AddRange(UpdateTrigger(record, "expire"));
+                }
+                else
+                {
+                    triggerDeltas.AddRange(UpdateTrigger(record, "advance", next, remaining));
+                }
+            }
+
+            if (HasRejected(triggerDeltas))
+            {
+                snapshot.Restore(_state);
+                deltas.AddRange(triggerDeltas.Where(IsRejectedDelta));
+                deltas.Add(TriggerSkippedDelta(record, triggerDeltas));
+                deltas.AddRange(UpdateTrigger(record, "expire"));
                 continue;
             }
 
-            var next = record.NextTurn + Math.Max(1, record.Interval);
-            if (record.ExpiresTurn is not null && next > record.ExpiresTurn)
-            {
-                _state.Triggers.Remove(record.Id);
-                continue;
-            }
-
-            _state.Triggers.Replace(record with
-            {
-                NextTurn = next,
-                RemainingUses = remaining,
-            });
+            deltas.AddRange(triggerDeltas);
         }
 
-        _state.Triggers.RemoveExpired(_state.Turn);
+        ApplyExpired(deltas);
         return deltas;
     }
 
@@ -53,27 +66,32 @@ public sealed class TriggerSystem
         var deltas = new List<StateDelta>();
         if (!string.IsNullOrWhiteSpace(record.Description))
         {
-            _state.AddMessage(record.Description);
-            deltas.Add(new StateDelta(
-                "trigger",
-                record.Id,
-                record.Description,
-                new Dictionary<string, object?>
-                {
-                    ["effectType"] = record.EffectType,
-                    ["turn"] = _state.Turn,
-                }));
+            deltas.AddRange(ApplyMessage(record, record.Description, "trigger"));
         }
 
         switch (record.EffectType.Trim().ToLowerInvariant())
         {
+            case "consequence":
+            case "worldconsequence":
+            case "world_consequence":
+                {
+                    if (!TryBuildTriggerConsequence(record, out var consequence))
+                    {
+                        deltas.Add(TriggerConsequenceRejectedDelta(
+                            record,
+                            "Generic trigger consequence did not include consequenceType."));
+                        return deltas;
+                    }
+
+                    deltas.AddRange(_engine.ApplyConsequence(consequence).Deltas);
+                    return deltas;
+                }
             case "message":
                 {
                     var text = Text(record.EffectFields, "text", record.Description);
                     if (!string.IsNullOrWhiteSpace(text) && !text.Equals(record.Description, StringComparison.Ordinal))
                     {
-                        _state.AddMessage(text);
-                        deltas.Add(new StateDelta("message", record.Id, text, new Dictionary<string, object?>()));
+                        deltas.AddRange(ApplyMessage(record, text, "message"));
                     }
 
                     return deltas;
@@ -87,7 +105,17 @@ public sealed class TriggerSystem
                     var duration = Int(record.EffectFields, "duration", 0, min: 0, max: 99);
                     deltas.AddRange(ResolveTargets(record)
                         .Where(target => target.TryGet<ActorComponent>(out var actor) && actor.Alive)
-                        .Select(target => _engine.ApplyStatus(target, status, duration, displayName)));
+                        .SelectMany(target => _engine.ApplyConsequence(WorldConsequence.ApplyStatus(
+                            "trigger",
+                            target.Id.Value,
+                            status,
+                            duration,
+                            displayName,
+                            sourceEntityId: record.SourceEntityId?.Value,
+                            evidence: record.Description,
+                            reason: $"Trigger {record.Id} fired.",
+                            operation: "triggerApplyStatus",
+                            details: TriggerDetails(record))).Deltas));
                     return deltas;
                 }
             case "damage":
@@ -97,7 +125,16 @@ public sealed class TriggerSystem
                     var damageType = Text(record.EffectFields, "damageType", Text(record.EffectFields, "damage_type", "trigger"));
                     deltas.AddRange(ResolveTargets(record)
                         .Where(target => target.TryGet<ActorComponent>(out var actor) && actor.Alive)
-                        .Select(target => _engine.DamageEntity(target, amount, damageType)));
+                        .SelectMany(target => _engine.ApplyConsequence(WorldConsequence.Damage(
+                            "trigger",
+                            target.Id.Value,
+                            amount,
+                            damageType,
+                            sourceEntityId: record.SourceEntityId?.Value,
+                            evidence: record.Description,
+                            reason: $"Trigger {record.Id} fired.",
+                            operation: "triggerDamage",
+                            details: TriggerDetails(record))).Deltas));
                     return deltas;
                 }
             case "heal":
@@ -106,13 +143,77 @@ public sealed class TriggerSystem
                     var amount = Int(record.EffectFields, "amount", 3, min: 1, max: 40);
                     deltas.AddRange(ResolveTargets(record)
                         .Where(target => target.TryGet<ActorComponent>(out var actor) && actor.Alive)
-                        .Select(target => _engine.HealEntity(target, amount)));
+                        .SelectMany(target => _engine.ApplyConsequence(WorldConsequence.Heal(
+                            "trigger",
+                            target.Id.Value,
+                            amount,
+                            sourceEntityId: record.SourceEntityId?.Value,
+                            evidence: record.Description,
+                            reason: $"Trigger {record.Id} fired.",
+                            operation: "triggerHeal",
+                            details: TriggerDetails(record))).Deltas));
                     return deltas;
                 }
             default:
-                _state.AddMessage($"{record.Name} fails to find an engine effect named {record.EffectType}.");
+                deltas.Add(TriggerConsequenceRejectedDelta(
+                    record,
+                    $"Unsupported trigger effect type '{record.EffectType}'."));
                 return deltas;
         }
+    }
+
+    private IReadOnlyList<StateDelta> ApplyMessage(TriggerRecord record, string text, string operation) =>
+        _engine.ApplyConsequence(WorldConsequence.Message(
+            "trigger",
+            text,
+            targetEntityId: record.Id,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: record.SourceEntityId?.Value,
+            evidence: record.Description,
+            reason: $"Trigger {record.Id} fired.",
+            operation: operation,
+            details: TriggerDetails(record))).Deltas;
+
+    private void ApplyExpired(List<StateDelta> deltas)
+    {
+        foreach (var record in _state.Triggers.Records
+            .Where(record => record.RemainingUses <= 0
+                || (record.ExpiresTurn is not null && record.ExpiresTurn < _state.Turn))
+            .ToArray())
+        {
+            deltas.AddRange(UpdateTrigger(record, "expire"));
+        }
+    }
+
+    private IReadOnlyList<StateDelta> UpdateTrigger(
+        TriggerRecord record,
+        string action,
+        int? nextTurn = null,
+        int? remainingUses = null) =>
+        _engine.ApplyConsequence(WorldConsequence.UpdateTrigger(
+            "trigger",
+            record.Id,
+            action,
+            nextTurn,
+            remainingUses,
+            evidence: record.Description,
+            reason: $"Trigger {record.Id} lifecycle changed.",
+            details: TriggerLifecycleDetails(record))).Deltas;
+
+    private static IReadOnlyDictionary<string, object?> TriggerDetails(TriggerRecord record) =>
+        new Dictionary<string, object?>
+        {
+            ["triggerId"] = record.Id,
+            ["triggerName"] = record.Name,
+            ["effectType"] = record.EffectType,
+            ["playerVisible"] = record.PlayerVisible,
+        };
+
+    private static IReadOnlyDictionary<string, object?> TriggerLifecycleDetails(TriggerRecord record)
+    {
+        var details = new Dictionary<string, object?>(TriggerDetails(record), StringComparer.OrdinalIgnoreCase);
+        details["playerVisible"] = false;
+        return details;
     }
 
     private IReadOnlyList<Entity> ResolveTargets(TriggerRecord record)
@@ -132,9 +233,14 @@ public sealed class TriggerSystem
         }
 
         var explicitTarget = Text(record.EffectFields, "target", "");
-        var target = ResolveExplicitTarget(record, explicitTarget)
-            ?? ResolveAnchorEntity(record)
-            ?? _state.ControlledEntity;
+        var target = string.IsNullOrWhiteSpace(explicitTarget)
+            ? ResolveAnchorEntity(record) ?? _state.ControlledEntity
+            : ResolveExplicitTarget(record, explicitTarget);
+        if (target is null)
+        {
+            return Array.Empty<Entity>();
+        }
+
         return MatchesFilter(record, target) ? new[] { target } : Array.Empty<Entity>();
     }
 
@@ -160,6 +266,128 @@ public sealed class TriggerSystem
 
         return _engine.EntityById(target);
     }
+
+    private static bool HasRejected(IEnumerable<StateDelta> deltas) =>
+        deltas.Any(IsRejectedDelta);
+
+    private static bool IsRejectedDelta(StateDelta delta) =>
+        delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase);
+
+    private static StateDelta TriggerConsequenceRejectedDelta(TriggerRecord record, string error) =>
+        new(
+            "worldConsequenceRejected",
+            record.Id,
+            error,
+            new Dictionary<string, object?>
+            {
+                ["consequenceType"] = "trigger_consequence",
+                ["triggerId"] = record.Id,
+                ["triggerName"] = record.Name,
+                ["effectType"] = record.EffectType,
+                ["error"] = error,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            });
+
+    private static StateDelta TriggerSkippedDelta(TriggerRecord record, IReadOnlyList<StateDelta> rejectedDeltas)
+    {
+        var errors = rejectedDeltas
+            .Where(IsRejectedDelta)
+            .Select(delta => delta.Summary)
+            .Where(summary => !string.IsNullOrWhiteSpace(summary))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new StateDelta(
+            "triggerSkipped",
+            record.Id,
+            $"Trigger {record.Id} was rolled back after a rejected consequence.",
+            new Dictionary<string, object?>
+            {
+                ["triggerId"] = record.Id,
+                ["triggerName"] = record.Name,
+                ["effectType"] = record.EffectType,
+                ["rejectedCount"] = errors.Length,
+                ["errors"] = errors,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            });
+    }
+
+    private static bool TryBuildTriggerConsequence(TriggerRecord record, out WorldConsequence consequence)
+    {
+        var consequenceType = TextOrNull(record.EffectFields, "consequenceType")
+            ?? TextOrNull(record.EffectFields, "consequence_type");
+        if (string.IsNullOrWhiteSpace(consequenceType))
+        {
+            consequence = default!;
+            return false;
+        }
+
+        var payload = TriggerConsequencePayload(record);
+        var target = TextOrNull(record.EffectFields, "targetEntityId")
+            ?? TextOrNull(record.EffectFields, "target_entity_id")
+            ?? TextOrNull(record.EffectFields, "target")
+            ?? record.AnchorEntityId;
+        consequence = new WorldConsequence(
+            consequenceType,
+            TextOrNull(record.EffectFields, "source") ?? "trigger",
+            SourceEntityId: TextOrNull(record.EffectFields, "sourceEntityId")
+                ?? TextOrNull(record.EffectFields, "source_entity_id")
+                ?? record.SourceEntityId?.Value,
+            TargetEntityId: target,
+            Salience: IntOrNull(record.EffectFields, "salience") ?? 1,
+            Confidence: IntOrNull(record.EffectFields, "confidence") ?? 100,
+            Visibility: TextOrNull(record.EffectFields, "visibility") ?? WorldConsequenceVisibility.Hidden,
+            Evidence: TextOrNull(record.EffectFields, "evidence") ?? record.Description,
+            Reason: TextOrNull(record.EffectFields, "reason") ?? $"Trigger {record.Id} delivered {consequenceType}.",
+            Payload: payload,
+            Timing: TextOrNull(record.EffectFields, "timing") ?? WorldConsequenceTiming.Immediate);
+        return true;
+    }
+
+    private static IReadOnlyDictionary<string, object?> TriggerConsequencePayload(TriggerRecord record)
+    {
+        var fields = record.EffectFields;
+        var result = WorldConsequencePayloadBuilder.MergeNestedWithTopLevelFields(
+            fields,
+            TriggerConsequenceMetadataKeys,
+            "consequencePayload",
+            "consequence_payload",
+            "payload");
+        AddTriggerPayloadDetails(result, record);
+        return result;
+    }
+
+    private static void AddTriggerPayloadDetails(Dictionary<string, object?> payload, TriggerRecord record)
+    {
+        payload.TryAdd("triggerId", record.Id);
+        payload.TryAdd("triggerName", record.Name);
+        payload.TryAdd("triggerKind", record.Kind);
+        payload.TryAdd("triggerEffectType", record.EffectType);
+        payload.TryAdd("playerVisible", record.PlayerVisible);
+    }
+
+    private static readonly HashSet<string> TriggerConsequenceMetadataKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "consequenceType",
+        "consequence_type",
+        "source",
+        "sourceEntityId",
+        "source_entity_id",
+        "targetEntityId",
+        "target_entity_id",
+        "target",
+        "salience",
+        "confidence",
+        "visibility",
+        "evidence",
+        "reason",
+        "timing",
+        "consequencePayload",
+        "consequence_payload",
+        "payload",
+    };
 
     private Entity? ResolveAnchorEntity(TriggerRecord record)
     {
@@ -220,6 +448,12 @@ public sealed class TriggerSystem
         return Convert.ToString(raw) ?? fallback;
     }
 
+    private static string? TextOrNull(IReadOnlyDictionary<string, object?> fields, string key)
+    {
+        var text = Text(fields, key, "");
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
+
     private static int Int(IReadOnlyDictionary<string, object?> fields, string key, int fallback, int min, int max)
     {
         var value = fields.TryGetValue(key, out var raw) && int.TryParse(Convert.ToString(raw), out var parsed)
@@ -227,4 +461,20 @@ public sealed class TriggerSystem
             : fallback;
         return Math.Clamp(value, min, max);
     }
+
+    private static int? IntOrNull(IReadOnlyDictionary<string, object?> fields, string key)
+    {
+        if (!fields.TryGetValue(key, out var raw) || raw is null)
+        {
+            return null;
+        }
+
+        if (raw is int value)
+        {
+            return value;
+        }
+
+        return int.TryParse(Convert.ToString(raw), out var parsed) ? parsed : null;
+    }
+
 }

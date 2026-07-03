@@ -12,6 +12,8 @@ The LLM proposes. The engine decides.
 - Malformed LLM output must not partially mutate state.
 - Failed effect application must roll back the whole spell.
 - Costs are normally revealed after casting.
+- Outcome text, fallback sparks, technical failure notices, and rejection reasons are
+  player-visible `message` consequences with wild-magic-specific operations.
 
 Technical failures include:
 
@@ -91,10 +93,41 @@ Recommended first effects:
 - `createTrigger`
 - `addCurse`
 - `message`
+- `consequence`
 
 `scheduleEvent` is for broad future world events. `createTrigger` is for tactical turn-pump effects:
-delays, aura pulses, and ward-shaped records that currently apply `addStatus`, `damage`, `heal`, or
-`message` when their cadence comes due.
+delays, aura pulses, and ward-shaped records. It can use shorthand embedded effects (`addStatus`,
+`damage`, `heal`, `message`) or `effectType: consequence` with `consequenceType` plus payload
+fields when the delayed trigger should deliver another typed world consequence.
+For `scheduleEvent`, use `text` or `description` for a delayed message, or provide
+`consequenceType` when the due event should deliver a typed consequence. Do not emit a
+generic consequence-shaped scheduled payload without `consequenceType`; the engine treats that as
+malformed hidden content rather than delayed narration.
+For delayed typed consequences from triggers, persistent hooks, or scheduled events, nested payload
+fields win on conflicts and top-level typed fields fill missing payload values.
+
+`consequence` is the generic bridge into the shared world-consequence grammar. Use it
+when wild magic needs a local effect that is already owned by a typed consequence handler, such as
+`add_tags`, `update_want`, `record_memory`, `offer_service`, `request_service`, or `message`, without adding a new
+spell-only operation. It accepts `consequenceType`, an optional `target` or `targetEntityId`,
+`consequencePayload`, and `timing`. `immediate` is the default; `after_turn`, `world_pump`, and
+`deferred` schedule the same
+typed consequence through the shared scheduled-event pump. Keep using `scheduleEvent` for broader
+future world events and `createTrigger` for repeating, anchored, aura, ward, or pulse-shaped
+effects.
+When a nested `consequencePayload` exists, it wins on explicit fields, but top-level typed fields
+such as `status`, `duration`, `amount`, `resource`, or `tags` fill missing payload values through
+the shared world-consequence payload merge helper. This matches generated dialogue's generic
+consequence repair lane and keeps provider output tolerant without giving up engine validation.
+The engine canonicalizes common source spellings such as `addTags`, `requestService`,
+or hyphenated ids to snake_case at the world-consequence applier boundary, but
+prompts should still prefer the canonical ids for clarity.
+
+`transformEntity` / `transformItem` are the general prop-and-body alteration lane. They can rename,
+rematerialize, add/remove tags, change descriptions, alter `blocksMovement` / `blocksSight`, set
+glyph/palette, retag `fixtureType`, and add interactable verbs. A bridge collapsing, a shrine
+becoming climbable, or a sign becoming a door should use this general transformation payload or
+`consequenceType: transform_entity`, not a one-off spell operation.
 
 `addCurse` may be semantic or mechanical. Mechanical curses should name a template (`close`, `far`,
 `narrow`, `straight-path`, `anchored`) so the engine can reject later accepted resolutions that break
@@ -193,7 +226,9 @@ Spell application should be transactional:
 9. commit
 
 If any application step fails, roll back to the pre-cast state and report a technical
-failure without consuming the turn.
+failure without consuming the turn. This includes accepted resolutions whose operation, cost, or
+deed children return `worldConsequenceRejected`: the cast keeps hidden rejection diagnostics for
+agents/audits, but no earlier effect from the same cast remains committed.
 
 Full engine-side spell-budget pricing is deferred. Early builds should validate costs and
 targets, but let the model propose most cost magnitude. Add engine auto-pricing only after

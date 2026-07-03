@@ -80,7 +80,11 @@ public sealed record ServiceOffer(
     string? ItemCost = null,
     string? TargetHint = null,
     bool Revealed = true,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    string? WantStatusOnComplete = null,
+    string? WantStakesOnComplete = null,
+    IReadOnlyList<string>? WantAddTagsOnComplete = null,
+    IReadOnlyList<string>? WantRemoveTagsOnComplete = null);
 
 public sealed record ServiceComponent(IReadOnlyList<ServiceOffer> Offers) : IEntityComponent
 {
@@ -94,6 +98,22 @@ public sealed record FixtureComponent(
 
 public sealed record ReadableComponent(string Title, string TextKey = "") : IEntityComponent;
 
+public sealed record ClaimSeed(
+    string Text,
+    string Category,
+    string Subject,
+    int Salience = 3,
+    int Confidence = 75,
+    bool PlayerVisible = true,
+    bool BindAsPromise = false,
+    string PromiseKind = "rumor",
+    string? RealizationKind = null,
+    string? TriggerHint = null,
+    string? ClaimedPlace = null,
+    IReadOnlyList<string>? Tags = null);
+
+public sealed record ClaimSourceComponent(IReadOnlyList<ClaimSeed> Claims) : IEntityComponent;
+
 public sealed record InteractableComponent(IReadOnlyList<string> Verbs) : IEntityComponent;
 
 public sealed record SoulComponent(string SoulId) : IEntityComponent;
@@ -104,6 +124,37 @@ public sealed record ProfileComponent(
     string Origin = "",
     string MagicalSignature = "",
     string Backstory = "") : IEntityComponent;
+
+public sealed record WantComponent : IEntityComponent
+{
+    public WantComponent(
+        string id,
+        string text,
+        int salience = 2,
+        string status = "active",
+        string stakes = "",
+        IReadOnlyList<string>? tags = null)
+    {
+        Id = id;
+        Text = text;
+        Salience = salience;
+        Status = status;
+        Stakes = stakes;
+        Tags = tags?.ToArray() ?? Array.Empty<string>();
+    }
+
+    public string Id { get; init; }
+
+    public string Text { get; init; }
+
+    public int Salience { get; init; }
+
+    public string Status { get; init; }
+
+    public string Stakes { get; init; }
+
+    public IReadOnlyList<string> Tags { get; init; }
+}
 
 public sealed record StatusInstance(
     string Id,
@@ -150,8 +201,8 @@ public sealed record PromiseAnchorComponent(IReadOnlyList<string> PromiseIds) : 
 
 /// <summary>
 /// Damage-type-keyed resistance (0-95, percent reduction) and weakness (0-200, percent
-/// amplification) bands, read by <see cref="Sorcerer.Core.Engine.Systems.CombatSystem"/> before
-/// the flat Defense reduction already applied to every hit.
+/// amplification) bands, read by the damage consequence applier before the flat Defense
+/// reduction already applied to every hit.
 /// </summary>
 public sealed record ResistanceComponent(
     Dictionary<string, int> Resistances,

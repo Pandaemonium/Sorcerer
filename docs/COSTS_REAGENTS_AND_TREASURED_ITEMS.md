@@ -155,6 +155,16 @@ cards) with tier vocabulary and examples; the engine validates that proposed cos
 cost families and enforces the existing bite/treasured rules. A deterministic fallback prices by
 tier when the model omits costs on a high-magnitude resolution.
 
+Implemented discipline: spell costs do not mutate their target state through a private
+cost-side path. Mana, HP, max HP, and max mana costs submit `adjust_actor_resource`
+consequences; item costs submit `modify_inventory`; status costs submit `apply_status`;
+curse/debt costs submit `create_promise` with `operation: cost:curse`. Cost-specific messages
+and the full `cost:*` consequence delta stream are preserved while the actual mutation uses the
+same validation and audit lifecycle as dialogue, magic operations, services, promises, and world
+turns. `modify_inventory` rejects insufficient `consume`/`remove`/`subtract` requests at apply
+time, so costs and service payments remain authoritative even when an earlier preflight was too
+permissive.
+
 ## Focus Versus Sacrifice
 
 Focus and reagent sacrifice are different choices:

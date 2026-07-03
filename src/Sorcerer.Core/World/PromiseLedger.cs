@@ -15,7 +15,14 @@ public sealed record WorldPromise(
     string? TriggerHint = null,
     string? RealizationKind = null,
     string? RealizedIn = null,
-    int Stacks = 1);
+    int Stacks = 1,
+    string? LastEligibilityFailure = null,
+    string? LastEligibilityContext = null,
+    int? LastEligibilityTurn = null,
+    string? SourceClaimId = null,
+    string? SourceSpeakerId = null,
+    string? SourceListenerSoulId = null,
+    int? SourceConfidence = null);
 
 public sealed class PromiseLedger
 {
@@ -32,7 +39,11 @@ public sealed class PromiseLedger
         string subject = "",
         string? claimedPlace = null,
         string? triggerHint = null,
-        string? realizationKind = null)
+        string? realizationKind = null,
+        string? sourceClaimId = null,
+        string? sourceSpeakerId = null,
+        string? sourceListenerSoulId = null,
+        int? sourceConfidence = null)
     {
         var promise = new WorldPromise(
             Id: $"promise_{_promises.Count + 1}",
@@ -45,7 +56,11 @@ public sealed class PromiseLedger
             Subject: subject.Trim(),
             ClaimedPlace: string.IsNullOrWhiteSpace(claimedPlace) ? null : claimedPlace.Trim(),
             TriggerHint: string.IsNullOrWhiteSpace(triggerHint) ? null : triggerHint.Trim(),
-            RealizationKind: string.IsNullOrWhiteSpace(realizationKind) ? null : realizationKind.Trim());
+            RealizationKind: string.IsNullOrWhiteSpace(realizationKind) ? null : realizationKind.Trim(),
+            SourceClaimId: string.IsNullOrWhiteSpace(sourceClaimId) ? null : sourceClaimId.Trim(),
+            SourceSpeakerId: string.IsNullOrWhiteSpace(sourceSpeakerId) ? null : sourceSpeakerId.Trim(),
+            SourceListenerSoulId: string.IsNullOrWhiteSpace(sourceListenerSoulId) ? null : sourceListenerSoulId.Trim(),
+            SourceConfidence: sourceConfidence is null ? null : Math.Clamp(sourceConfidence.Value, 0, 100));
 
         _promises.Add(promise);
         return promise;
@@ -89,6 +104,28 @@ public sealed class PromiseLedger
         {
             Status = status,
             RealizedIn = realizedIn ?? _promises[index].RealizedIn,
+        };
+        _promises[index] = updated;
+        return updated;
+    }
+
+    public WorldPromise? SetEligibilityFailure(
+        string id,
+        string? failure,
+        string? context,
+        int? turn)
+    {
+        var index = _promises.FindIndex(promise => promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var updated = _promises[index] with
+        {
+            LastEligibilityFailure = string.IsNullOrWhiteSpace(failure) ? null : failure.Trim(),
+            LastEligibilityContext = string.IsNullOrWhiteSpace(context) ? null : context.Trim(),
+            LastEligibilityTurn = string.IsNullOrWhiteSpace(failure) ? null : turn,
         };
         _promises[index] = updated;
         return updated;

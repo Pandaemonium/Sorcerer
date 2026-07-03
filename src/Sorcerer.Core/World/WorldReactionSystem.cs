@@ -1,5 +1,8 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Results;
+using Sorcerer.Core.Transactions;
 
 namespace Sorcerer.Core.World;
 
@@ -8,9 +11,27 @@ public sealed record WorldReactionSummary(
     IReadOnlyList<string> NewPromises,
     IReadOnlyList<string> NarrationHooks);
 
+public sealed record WorldReactionApplication(
+    IReadOnlyList<string> Messages,
+    IReadOnlyList<StateDelta> Deltas,
+    bool AppliedAny);
+
+public sealed record DeedCapturePlan(
+    int Turn,
+    string ActorSoulId,
+    string Kind,
+    int Magnitude,
+    string PlaceKey,
+    string Visibility,
+    IReadOnlyList<string> Witnesses,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> EffectWitnesses,
+    string? AttributedSoulId,
+    string AttributionStatus);
+
 public sealed class WorldReactionSystem
 {
-    public DeedRecord CaptureDeed(
+    public DeedCapturePlan PlanDeed(
         GameState state,
         Entity actor,
         string kind,
@@ -37,7 +58,7 @@ public sealed class WorldReactionSystem
             ? "unattributed"
             : actorWitnessIds.Length > 0 ? "attributed" : "secret";
 
-        return state.Deeds.Append(
+        return new DeedCapturePlan(
             state.Turn,
             actorSoulId,
             kind,
@@ -51,27 +72,49 @@ public sealed class WorldReactionSystem
             attributionStatus);
     }
 
-    public IReadOnlyList<string> ApplyPending(GameState state)
+    public WorldReactionApplication ApplyPending(
+        GameState state,
+        Func<WorldConsequence, WorldConsequenceApplyResult>? applyConsequence = null)
     {
+        var apply = applyConsequence ?? (consequence => WorldConsequenceGuard.ApplyWithNewApplier(state, consequence));
         var messages = new List<string>();
+        var deltas = new List<StateDelta>();
         var appliedAny = false;
         foreach (var deed in state.Deeds.Records
             .Where(deed => !state.Deeds.IsApplied(deed.Id))
             .OrderBy(deed => deed.Turn)
-            .ThenBy(deed => deed.Id))
+            .ThenBy(deed => deed.Id)
+            .ToArray())
         {
-            ApplyDeed(state, deed, messages);
-            state.Deeds.MarkApplied(deed.Id);
+            var snapshot = GameStateSnapshot.Capture(state);
+            var deedMessages = new List<string>();
+            var deedDeltas = new List<StateDelta>();
+            ApplyDeed(state, deed, deedMessages, deedDeltas, apply);
+            if (!HasRejected(deedDeltas))
+            {
+                ApplyConsequence(deedMessages, deedDeltas, apply, WorldConsequence.UpdateDeed(
+                "world_reaction",
+                deed.Id,
+                action: "mark_applied",
+                evidence: $"World reactions were applied for deed {deed.Id}.",
+                reason: "World reaction processing marks each deed once its consequences have been submitted.",
+                operation: "deedApplied"));
+            }
+
+            if (HasRejected(deedDeltas))
+            {
+                snapshot.Restore(state);
+                deltas.AddRange(deedDeltas.Where(IsRejectedDelta));
+                deltas.Add(WorldReactionSkippedDelta(deed, deedDeltas));
+                continue;
+            }
+
+            messages.AddRange(deedMessages);
+            deltas.AddRange(deedDeltas);
             appliedAny = true;
         }
 
-        if (!appliedAny)
-        {
-            RegenerateFactionPressure(state);
-        }
-
-        ApplyFactionPressure(state, messages);
-        return messages;
+        return new WorldReactionApplication(messages, deltas, appliedAny);
     }
 
     public WorldReactionSummary PreviewDailyTick(GameState state)
@@ -87,199 +130,183 @@ public sealed class WorldReactionSystem
             Array.Empty<string>());
     }
 
-    private static void ApplyDeed(GameState state, DeedRecord deed, List<string> messages)
+    private static void ApplyDeed(
+        GameState state,
+        DeedRecord deed,
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
     {
         if (deed.Visibility.Equals("secret", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
+        if (RumorSystem.ConsequenceFromDeed(state, deed) is { } rumor)
+        {
+            ApplyConsequence(messages, deltas, applyConsequence, rumor);
+        }
+
+        RecordWitnessMemories(state, deed, messages, deltas, applyConsequence);
+
         switch (deed.Kind)
         {
             case "freed_prisoner":
-                AddLegend(state, deed, "merciful", 2);
-                AddLegend(state, deed, "defiant", 1);
-                state.Factions.AdjustStanding("hollowmere", "gratitude", 2);
-                AdjustEmpireBloc(state, "suspicion", 1);
-                RaiseEmpireHeat(state, 1);
-                AddMessage(state, messages, "Word of the prisoner's rescue finds a road.");
+                AddLegend(messages, deltas, applyConsequence, deed, "merciful", 2);
+                AddLegend(messages, deltas, applyConsequence, deed, "defiant", 1);
+                AdjustFactionStanding(messages, deltas, applyConsequence, "hollowmere", "gratitude", 2);
+                AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
+                RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
+                AddMessage(messages, deltas, applyConsequence, deed, "freed_prisoner", "Word of the prisoner's rescue finds a road.");
                 break;
             case "body_swap":
-                AddLegend(state, deed, "uncanny", 2);
-                AdjustEmpireBloc(state, "suspicion", deed.Magnitude);
-                RaiseEmpireHeat(state, Math.Max(1, deed.Magnitude - 1));
-                AddMessage(state, messages, "The story of stolen eyes starts looking for listeners.");
+                AddLegend(messages, deltas, applyConsequence, deed, "uncanny", 2);
+                AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", deed.Magnitude);
+                RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude - 1));
+                AddMessage(messages, deltas, applyConsequence, deed, "body_swap", "The story of stolen eyes starts looking for listeners.");
                 break;
             case "kill":
-                AddLegend(state, deed, "butcher", Math.Max(1, deed.Magnitude));
-                AdjustEmpireBloc(state, "fear", deed.Magnitude);
-                AdjustEmpireBloc(state, "notoriety", deed.Magnitude);
-                RaiseEmpireHeat(state, Math.Max(1, deed.Magnitude));
-                AddMessage(state, messages, "The killing will travel farther than the body.");
+                AddLegend(messages, deltas, applyConsequence, deed, "butcher", Math.Max(1, deed.Magnitude));
+                AdjustEmpireBloc(state, messages, deltas, applyConsequence, "fear", deed.Magnitude);
+                AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", deed.Magnitude);
+                RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
+                AddMessage(messages, deltas, applyConsequence, deed, "kill", "The killing will travel farther than the body.");
                 break;
             case "attack":
-                AdjustEmpireBloc(state, "fear", Math.Max(1, deed.Magnitude - 1));
-                RaiseEmpireHeat(state, 1);
-                AddLegend(state, deed, "dangerous", 1);
+                AdjustEmpireBloc(state, messages, deltas, applyConsequence, "fear", Math.Max(1, deed.Magnitude - 1));
+                RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
+                AddLegend(messages, deltas, applyConsequence, deed, "dangerous", 1);
                 break;
             case "wild_magic":
-                ApplyWildMagic(state, deed, messages);
+                ApplyWildMagic(state, deed, messages, deltas, applyConsequence);
                 break;
         }
     }
 
-    private static void ApplyWildMagic(GameState state, DeedRecord deed, List<string> messages)
+    private static void RecordWitnessMemories(
+        GameState state,
+        DeedRecord deed,
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
+    {
+        foreach (var witnessId in deed.Witnesses
+            .Concat(deed.EffectWitnesses ?? Array.Empty<string>())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var witness = ResolveWitnessEntity(state, witnessId);
+            if (witness is null || witness.Id == state.ControlledEntityId)
+            {
+                continue;
+            }
+
+            var memoryText = $"{witness.Name} witnessed {DeedMemoryText(deed)}";
+            ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.RecordMemory(
+                "world_reaction",
+                witness.Id.Value,
+                memoryText,
+                $"deed:{deed.Id}",
+                Math.Clamp(deed.Magnitude, 1, 5),
+                shareable: true,
+                visibility: WorldConsequenceVisibility.Hidden,
+                sourceEntityId: witness.Id.Value,
+                evidence: deed.Id,
+                reason: "A witnessed deed left durable NPC context through the shared memory lifecycle.",
+                operation: "deedWitnessMemory",
+                details: new Dictionary<string, object?>
+                {
+                    ["deedId"] = deed.Id,
+                    ["deedKind"] = deed.Kind,
+                    ["deedVisibility"] = deed.Visibility,
+                    ["attributionStatus"] = deed.AttributionStatus,
+                    ["actorSoulId"] = deed.ActorSoulId,
+                    ["witnessSoulId"] = witnessId,
+                    ["placeKey"] = deed.PlaceKey,
+                    ["summary"] = $"{witness.Name} remembers witnessing {CleanKind(deed.Kind)}.",
+                    ["playerVisible"] = false,
+                }));
+        }
+    }
+
+    private static Entity? ResolveWitnessEntity(GameState state, string witnessId) =>
+        state.Entities.Values.FirstOrDefault(entity =>
+            entity.Id.Value.Equals(witnessId, StringComparison.OrdinalIgnoreCase)
+            || (entity.TryGet<SoulComponent>(out var soul)
+                && soul.SoulId.Equals(witnessId, StringComparison.OrdinalIgnoreCase)));
+
+    private static string DeedMemoryText(DeedRecord deed)
+    {
+        var actor = deed.AttributionStatus.Equals("attributed", StringComparison.OrdinalIgnoreCase)
+            ? deed.ActorSoulId
+            : "someone unnamed";
+        return $"{CleanKind(deed.Kind)} near {deed.PlaceKey} by {actor}.";
+    }
+
+    private static string CleanKind(string kind) => kind.Replace('_', ' ');
+
+    private static void ApplyWildMagic(
+        GameState state,
+        DeedRecord deed,
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
     {
         if (deed.Visibility.Equals("suspicious", StringComparison.OrdinalIgnoreCase))
         {
-            AdjustEmpireBloc(state, "suspicion", Math.Max(1, deed.Magnitude));
-            RaiseEmpireHeat(state, 1);
-            AddMessage(state, messages, "Someone saw the magic, but not the hand that loosed it.");
+            AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", Math.Max(1, deed.Magnitude));
+            RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
+            AddMessage(messages, deltas, applyConsequence, deed, "suspicious_wild_magic", "Someone saw the magic, but not the hand that loosed it.");
             return;
         }
 
-        AddLegend(state, deed, "uncanny", Math.Max(1, deed.Magnitude));
+        AddLegend(messages, deltas, applyConsequence, deed, "uncanny", Math.Max(1, deed.Magnitude));
         if (deed.Tags.Any(tag => tag.Contains("damage", StringComparison.OrdinalIgnoreCase)))
         {
-            AddLegend(state, deed, "dangerous", 1);
-            AdjustEmpireBloc(state, "fear", 1);
+            AddLegend(messages, deltas, applyConsequence, deed, "dangerous", 1);
+            AdjustEmpireBloc(state, messages, deltas, applyConsequence, "fear", 1);
         }
 
-        AdjustEmpireBloc(state, "imperial-threat", Math.Max(1, deed.Magnitude));
-        AdjustEmpireBloc(state, "notoriety", 1);
-        RaiseEmpireHeat(state, Math.Max(1, deed.Magnitude));
-        AddMessage(state, messages, "Word of your wild magic takes on a sharper color.");
+        AdjustEmpireBloc(state, messages, deltas, applyConsequence, "imperial-threat", Math.Max(1, deed.Magnitude));
+        AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", 1);
+        RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
+        AddMessage(messages, deltas, applyConsequence, deed, "public_wild_magic", "Word of your wild magic takes on a sharper color.");
     }
 
-    private static void ApplyFactionPressure(GameState state, List<string> messages)
+    private static void AdjustEmpireBloc(
+        GameState state,
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
+        string axis,
+        int delta) =>
+        ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.AdjustFactionStanding(
+            "world_reaction",
+            "empire_bloc",
+            axis,
+            delta,
+            targetIsRole: true));
+
+    private static void RaiseEmpireHeat(
+        GameState state,
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
+        int amount)
     {
         foreach (var faction in state.Factions.FactionsByRole("empire_bloc"))
         {
-            var heat = state.Factions.ResourceValue(faction.Id, "heat");
-            if (heat < 3)
-            {
-                continue;
-            }
-
-            if (state.Turn < state.Factions.ResourceValue(faction.Id, "response_cooldown_until"))
-            {
-                continue;
-            }
-
-            var spentResponse = false;
-            if (heat >= 5 && state.Factions.TrySpendResource(faction.Id, "warrants", 1))
-            {
-                state.Factions.TrySpendResource(faction.Id, "defenses", 1);
-                state.ScheduledEvents.Schedule(
-                    state.Turn + 3,
-                    "empire_warrant",
-                    null,
-                    new Dictionary<string, object?>
-                    {
-                        ["factionId"] = faction.Id,
-                        ["text"] = "A wanted poster learns your outline before the ink dries.",
-                    });
-                state.Canon.Add(
-                    "censorate_memo",
-                    faction.Id,
-                    "Censorate memorandum: the fugitive's legend is to be named, copied, and pinned where color gathers.",
-                    "Censorate prepares a wanted poster.",
-                    new[] { "empire", "warrant", "legend" },
-                    "world_reaction",
-                    state.Turn);
-                AddMessage(state, messages, "A Censorate clerk starts drafting a wanted poster in your shape.");
-                state.Factions.AdjustResource(faction.Id, "heat", -2);
-                spentResponse = true;
-            }
-
-            heat = state.Factions.ResourceValue(faction.Id, "heat");
-            if (heat >= 3
-                && !HasActiveOrPendingPatrol(state, faction.Id)
-                && state.Factions.TrySpendResource(faction.Id, "patrols", 1))
-            {
-                state.ScheduledEvents.Schedule(
-                    state.Turn + 2,
-                    "empire_patrol",
-                    null,
-                    new Dictionary<string, object?>
-                    {
-                        ["factionId"] = faction.Id,
-                        ["text"] = "An imperial patrol follows the color of your last working.",
-                    });
-                AddMessage(state, messages, "The Empire spends a patrol to answer your legend.");
-                state.Factions.AdjustResource(faction.Id, "heat", -2);
-                spentResponse = true;
-            }
-
-            if (spentResponse)
-            {
-                faction.Resources["response_cooldown_until"] = state.Turn + 8;
-            }
-
-            if (!spentResponse)
-            {
-                state.Canon.Add(
-                    "censorate_memo",
-                    faction.Id,
-                    "Censorate memorandum: no patrol is currently free; keep the file warm.",
-                    "Censorate lacks a free patrol.",
-                    new[] { "empire", "resource_shortage" },
-                    "world_reaction",
-                    state.Turn);
-            }
+            AdjustFactionResource(messages, deltas, applyConsequence, faction.Id, "heat", Math.Max(0, amount));
         }
     }
 
-    private static void RegenerateFactionPressure(GameState state)
-    {
-        foreach (var faction in state.Factions.FactionsByRole("empire_bloc"))
-        {
-            RegenerateOne(state, faction.Id, "patrols");
-            RegenerateOne(state, faction.Id, "informants");
-            RegenerateOne(state, faction.Id, "warrants");
-            state.Factions.AdjustResource(faction.Id, "heat", -1);
-        }
-    }
-
-    private static bool HasActiveOrPendingPatrol(GameState state, string factionId) =>
-        state.ScheduledEvents.Events.Any(item =>
-            item.Kind.Equals("empire_patrol", StringComparison.OrdinalIgnoreCase)
-            && (!item.Payload.TryGetValue("factionId", out var rawFactionId)
-                || string.Equals(Convert.ToString(rawFactionId), factionId, StringComparison.OrdinalIgnoreCase)))
-        || state.Entities.Values.Any(entity =>
-            entity.TryGet<ActorComponent>(out var actor)
-            && actor.Alive
-            && actor.Faction.Equals(factionId, StringComparison.OrdinalIgnoreCase)
-            && entity.TryGet<AiComponent>(out var ai)
-            && ai.PolicyId.Equals("imperial_patrol", StringComparison.OrdinalIgnoreCase));
-
-    private static void RegenerateOne(GameState state, string factionId, string resource)
-    {
-        var max = state.Factions.ResourceValue(factionId, $"max_{resource}");
-        if (max <= 0)
-        {
-            return;
-        }
-
-        var current = state.Factions.ResourceValue(factionId, resource);
-        if (current < max)
-        {
-            state.Factions.AdjustResource(factionId, resource, 1, max: max);
-        }
-    }
-
-    private static void AdjustEmpireBloc(GameState state, string axis, int delta) =>
-        state.Factions.AdjustStandingByRole("empire_bloc", axis, delta);
-
-    private static void RaiseEmpireHeat(GameState state, int amount)
-    {
-        foreach (var faction in state.Factions.FactionsByRole("empire_bloc"))
-        {
-            state.Factions.AdjustResource(faction.Id, "heat", Math.Max(0, amount));
-        }
-    }
-
-    private static void AddLegend(GameState state, DeedRecord deed, string tag, int weight)
+    private static void AddLegend(
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
+        DeedRecord deed,
+        string tag,
+        int weight)
     {
         if (!deed.AttributionStatus.Equals("attributed", StringComparison.OrdinalIgnoreCase)
             && !deed.Visibility.Equals("witnessed", StringComparison.OrdinalIgnoreCase)
@@ -289,13 +316,120 @@ public sealed class WorldReactionSystem
             return;
         }
 
-        state.Legend.Add(deed.ActorSoulId, tag, weight, deed.Id);
+        ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.AddLegend(
+            "world_reaction",
+            deed.ActorSoulId,
+            tag,
+            weight,
+            deed.Id));
     }
 
-    private static void AddMessage(GameState state, List<string> messages, string message)
+    private static void AddMessage(
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
+        DeedRecord deed,
+        string reactionKind,
+        string message)
     {
-        state.AddMessage(message);
-        messages.Add(message);
+        ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.Message(
+            "world_reaction",
+            message,
+            targetEntityId: deed.Id,
+            visibility: WorldConsequenceVisibility.Message,
+            evidence: $"{deed.Kind} deed {deed.Id} became {deed.Visibility}.",
+            reason: "A deed became visible enough for world-reaction narration.",
+            operation: "worldReactionMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["deedId"] = deed.Id,
+                ["deedKind"] = deed.Kind,
+                ["actorSoulId"] = deed.ActorSoulId,
+                ["deedVisibility"] = deed.Visibility,
+                ["attributionStatus"] = deed.AttributionStatus,
+                ["reactionKind"] = reactionKind,
+                ["playerVisible"] = true,
+            }));
+    }
+
+    private static void AdjustFactionStanding(
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
+        string factionId,
+        string axis,
+        int delta) =>
+        ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.AdjustFactionStanding(
+            "world_reaction",
+            factionId,
+            axis,
+            delta));
+
+    private static void AdjustFactionResource(
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
+        string factionId,
+        string resource,
+        int delta,
+        int min = 0,
+        int? max = null)
+    {
+        if (delta == 0)
+        {
+            return;
+        }
+
+        ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.AdjustFactionResource(
+            "world_reaction",
+            factionId,
+            resource,
+            delta,
+            min,
+            max));
+    }
+
+    private static void ApplyConsequence(
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
+        WorldConsequence consequence)
+    {
+        var applied = applyConsequence(consequence);
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+    }
+
+    private static bool HasRejected(IEnumerable<StateDelta> deltas) =>
+        deltas.Any(IsRejectedDelta);
+
+    private static bool IsRejectedDelta(StateDelta delta) =>
+        delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase);
+
+    private static StateDelta WorldReactionSkippedDelta(DeedRecord deed, IReadOnlyList<StateDelta> rejectedDeltas)
+    {
+        var errors = rejectedDeltas
+            .Where(IsRejectedDelta)
+            .Select(delta => delta.Summary)
+            .Where(summary => !string.IsNullOrWhiteSpace(summary))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new StateDelta(
+            "worldReactionSkipped",
+            deed.Id,
+            $"World reaction for {deed.Id} was rolled back after a rejected consequence.",
+            new Dictionary<string, object?>
+            {
+                ["deedId"] = deed.Id,
+                ["deedKind"] = deed.Kind,
+                ["deedVisibility"] = deed.Visibility,
+                ["attributionStatus"] = deed.AttributionStatus,
+                ["rejectedCount"] = errors.Length,
+                ["errors"] = errors,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            });
     }
 
     private static string ClassifyVisibility(

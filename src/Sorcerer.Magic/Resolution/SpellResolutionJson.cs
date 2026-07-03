@@ -72,7 +72,12 @@ public static class SpellResolutionJson
         MergeSummonTraitFollowups(effectFields);
 
         var effects = effectFields
-            .Select(fields => new SpellEffect(registry.Canonicalize(ReadType(fields)), fields))
+            .Select(fields =>
+            {
+                var type = registry.Canonicalize(ReadType(fields));
+                fields.Remove("type");
+                return new SpellEffect(type, fields);
+            })
             .ToArray();
 
         var costs = rawCosts
@@ -80,6 +85,7 @@ public static class SpellResolutionJson
             .Select(fields =>
             {
                 var type = ReadCostType(fields);
+                fields.Remove("type");
                 return new SpellCost(type, fields);
             })
             .ToArray();
@@ -259,10 +265,13 @@ public static class SpellResolutionJson
     {
         var normalized = new Dictionary<string, object?>(fields, StringComparer.OrdinalIgnoreCase);
         ExpandKeyedOperation(normalized, registry);
+        MergeNestedFields(normalized, "fields");
+        normalized.Remove("fields");
         MergeNestedFields(normalized, "details");
         MergeNestedFields(normalized, "data");
         MergeNestedFields(normalized, "toState");
         MergeNestedFields(normalized, "to_state");
+        NormalizeGenericConsequenceType(normalized, registry);
 
         if (normalized.TryGetValue("target/x/y", out var compactPoint)
             && TryReadPointPair(compactPoint, out var pointX, out var pointY))
@@ -324,10 +333,33 @@ public static class SpellResolutionJson
         return normalized;
     }
 
+    private static void NormalizeGenericConsequenceType(
+        Dictionary<string, object?> fields,
+        OperationRegistry registry)
+    {
+        if (!HasAny(fields, "consequenceType", "consequence_type", "worldConsequenceType", "world_consequence_type"))
+        {
+            return;
+        }
+
+        var explicitType = ReadExplicitType(fields);
+        if (string.IsNullOrWhiteSpace(explicitType)
+            || !registry.Supports(explicitType)
+            || explicitType.Equals("worldConsequence", StringComparison.OrdinalIgnoreCase)
+            || explicitType.Equals("world_consequence", StringComparison.OrdinalIgnoreCase)
+            || explicitType.Equals("typedConsequence", StringComparison.OrdinalIgnoreCase)
+            || explicitType.Equals("applyConsequence", StringComparison.OrdinalIgnoreCase))
+        {
+            fields["type"] = "consequence";
+        }
+    }
+
     private static Dictionary<string, object?> NormalizeCostFields(
         IReadOnlyDictionary<string, object?> fields)
     {
         var normalized = new Dictionary<string, object?>(fields, StringComparer.OrdinalIgnoreCase);
+        MergeNestedFields(normalized, "fields");
+        normalized.Remove("fields");
         MergeNestedFields(normalized, "details");
         MergeNestedFields(normalized, "data");
 
@@ -405,6 +437,9 @@ public static class SpellResolutionJson
         fields.TryGetValue(key, out var value) && value is not null
             ? Convert.ToString(value)
             : null;
+
+    private static bool HasAny(IReadOnlyDictionary<string, object?> fields, params string[] keys) =>
+        keys.Any(fields.ContainsKey);
 
     private static void ExpandKeyedOperation(
         Dictionary<string, object?> fields,

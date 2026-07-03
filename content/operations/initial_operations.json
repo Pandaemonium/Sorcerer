@@ -42,14 +42,59 @@
       "aliases": ["createEntity"]
     },
     {
+      "name": "conjureFixture",
+      "summary": "Create a discrete fixture, prop, shrine, marker, or place feature.",
+      "aliases": ["createFixture", "createObject", "manifestFixture", "markLocation"],
+      "promptGuidance": "Use conjureFixture for a single non-actor object or place feature such as a shrine, marker, sign, statue, brazier, plant, hazard, or landmark. Use createTiles for terrain areas, walls, bridges, and large shapes.",
+      "fields": {
+        "template": "generic_feature, shrine, marker, plant, hazard, or barrier_object",
+        "name": "visible name of the fixture",
+        "fixtureType": "feature, shrine, marker, plant, hazard, barrier, or another compact noun",
+        "material": "stone, wood, thorn, glass, ash, etc.",
+        "blocksMovement": "true for solid props, false for markers or hazards",
+        "glyph": "optional one-character display glyph",
+        "tags": "semantic tags"
+      }
+    },
+    {
       "name": "transformEntity",
       "summary": "Transform an entity.",
-      "aliases": []
+      "aliases": [],
+      "promptGuidance": "Use transformEntity for open-ended changes to a creature, prop, item, or fixture. Fields: target, name, material, addTags/removeTags, description, blocksMovement, blocksSight, glyph, palette, fixtureType, interactableVerbs. Use this for collapse/repair/retune-style prop changes instead of inventing a one-off operation.",
+      "fields": {
+        "target": "entity reference or id",
+        "name": "optional new visible name",
+        "material": "optional new material",
+        "addTags": "semantic tags to add",
+        "removeTags": "semantic tags to remove",
+        "description": "optional new inspect text",
+        "blocksMovement": "optional passability change",
+        "blocksSight": "optional sight-blocking change",
+        "glyph": "optional one-character display glyph",
+        "palette": "optional render palette",
+        "fixtureType": "optional fixture category for props/features",
+        "interactableVerbs": "verbs to add, such as examine, climb, cross, open"
+      }
     },
     {
       "name": "transformItem",
       "summary": "Transform an item or fixture.",
-      "aliases": ["transformFixture"]
+      "aliases": ["transformFixture"],
+      "promptGuidance": "Use transformItem for magic acting on reagents, fixtures, doors, signs, bridges, shrines, and props. It can rename, change material, add/remove tags, alter passability/sight blocking, set glyph/palette, retag fixtureType, and add interactable verbs.",
+      "fields": {
+        "target": "selected item, fixture, prop, or explicit entity id",
+        "name": "optional new visible name",
+        "material": "optional new material",
+        "addTags": "semantic tags to add",
+        "removeTags": "semantic tags to remove",
+        "description": "optional new inspect text",
+        "blocksMovement": "optional passability change",
+        "blocksSight": "optional sight-blocking change",
+        "glyph": "optional one-character display glyph",
+        "palette": "optional render palette",
+        "fixtureType": "optional fixture category for props/features",
+        "interactableVerbs": "verbs to add, such as examine, climb, cross, open"
+      }
     },
     {
       "name": "possess",
@@ -65,7 +110,7 @@
       "name": "createTrigger",
       "summary": "Create a turn-pump trigger for delayed effects, wards, and auras.",
       "aliases": ["trigger", "ward", "aura", "delayedEffect"],
-      "promptGuidance": "Use one createTrigger shape for delayed tactical effects, auras, and ward-like pulses. Fields: kind, delay, interval, uses, anchor, radius, targetFilter, effectType, effect/status/amount/text.",
+      "promptGuidance": "Use one createTrigger shape for delayed tactical effects, auras, and ward-like pulses. Fields: kind, delay, interval, uses, anchor, radius, targetFilter, effectType, effect/status/amount/text. Use effectType consequence with consequenceType plus payload fields when a trigger should deliver a typed world consequence.",
       "fields": {
         "kind": "delay, aura, or ward",
         "delay": "turns before first firing",
@@ -74,14 +119,27 @@
         "anchor": "entity or point the trigger is attached to",
         "radius": "radius for aura/ward targeting",
         "targetFilter": "all, enemies, allies, self",
-        "effectType": "addStatus, damage, heal, or message",
-        "effect": "optional nested effect object with type and fields"
+        "effectType": "addStatus, damage, heal, message, or consequence",
+        "effect": "optional nested effect object with type and fields; for type consequence include consequenceType and payload fields"
       }
     },
     {
       "name": "message",
       "summary": "Add a message.",
       "aliases": []
+    },
+    {
+      "name": "consequence",
+      "summary": "Submit one typed world consequence through the shared applier.",
+      "aliases": ["worldConsequence", "world_consequence", "typedConsequence", "applyConsequence"],
+      "promptGuidance": "Use consequence for local effects already owned by the shared consequence grammar. Fields: consequenceType, target or targetEntityId, consequencePayload, and optional timing. Use timing after_turn, world_pump, or deferred for one delayed consequence; use scheduleEvent/createTrigger for broad future events, repeating triggers, auras, wards, or hooks.",
+      "fields": {
+        "consequenceType": "typed consequence kind such as add_tags, apply_status, message, update_want, offer_service, request_service",
+        "target": "ordinary spell target reference such as self, nearest_enemy, selected_target, or an entity id",
+        "targetEntityId": "explicit entity id when not using target resolution",
+        "timing": "immediate, after_turn, world_pump, or deferred",
+        "consequencePayload": "typed fields for the selected consequence"
+      }
     }
   ]
 }

@@ -20,6 +20,16 @@
       "promptBlock": "Directional terrain (wall, line, barrier, between me and X, path, bridge, cone, beam) should be a single createTiles effect covering the whole shape, never a player-centered radius disc and never a list of individual coordinate effects.",
       "examples": [],
       "commonCombos": ["terrain_shape"]
+    },
+    {
+      "id": "fixture_manifestation",
+      "triggers": ["shrine", "altar", "statue", "marker", "sign", "brazier", "well", "landmark", "totem", "idol", "prop", "fixture", "object", "monument", "plant", "tree", "hazard"],
+      "indexLine": "fixture_manifestation - create a single non-actor prop, shrine, marker, hazard, or place feature",
+      "effectTypes": ["conjureFixture"],
+      "requiredContext": [],
+      "promptBlock": "Use conjureFixture for one discrete world feature: shrines, altars, markers, signs, statues, braziers, wells, plants, hazards, props, or landmarks. Use summon for creatures and createTiles for terrain areas or shaped barriers.",
+      "examples": [],
+      "commonCombos": []
     }
   ]
 }

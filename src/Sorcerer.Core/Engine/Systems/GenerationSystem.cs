@@ -1,3 +1,4 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Items;
 using Sorcerer.Core.Lore;
@@ -12,15 +13,25 @@ public sealed class GenerationSystem
     private readonly ItemCatalog _itemCatalog;
     private readonly LoreCatalog _loreCatalog;
     private readonly PromiseRealizationSystem _promiseRealizationSystem;
+    private readonly WorldTurnSystem _worldTurnSystem = new();
+    private readonly Func<WorldConsequence, WorldConsequenceApplyResult> _applyConsequence;
+    private readonly Func<GameState, WorldConsequence, WorldConsequenceApplyResult> _applyGeneratedConsequence;
     private readonly GameState _state;
     private readonly RegionRegistry _regions = RegionRegistry.CreateMinimal();
 
-    public GenerationSystem(GameState state, ItemCatalog itemCatalog, LoreCatalog loreCatalog)
+    public GenerationSystem(
+        GameState state,
+        ItemCatalog itemCatalog,
+        LoreCatalog loreCatalog,
+        Func<WorldConsequence, WorldConsequenceApplyResult>? applyConsequence = null,
+        Func<GameState, WorldConsequence, WorldConsequenceApplyResult>? applyGeneratedConsequence = null)
     {
         _itemCatalog = itemCatalog;
         _loreCatalog = loreCatalog;
         _state = state;
-        _promiseRealizationSystem = new PromiseRealizationSystem(state);
+        _applyConsequence = applyConsequence ?? (consequence => WorldConsequenceGuard.ApplyWithNewApplier(state, consequence));
+        _applyGeneratedConsequence = applyGeneratedConsequence ?? ApplyGeneratedConsequenceToDetached;
+        _promiseRealizationSystem = new PromiseRealizationSystem(state, applyConsequence: _applyConsequence);
     }
 
     public RegionDefinition CurrentRegion =>
@@ -47,10 +58,9 @@ public sealed class GenerationSystem
         var target = _state.Zones.TryGetValue(targetZone, out var saved)
             ? CloneZone(saved)
             : GenerateZone(targetZone, direction, generatedDeltas);
-        LoadZone(target, travelers, direction);
+        var loadDeltas = LoadZone(target, travelers, direction);
 
         var message = $"You travel {direction.ToString().ToLowerInvariant()} into {CurrentRegion.Name}.";
-        _state.AddMessage(message);
         var deltas = new List<StateDelta>
         {
             new(
@@ -62,25 +72,122 @@ public sealed class GenerationSystem
                 ["fromZone"] = fromZone,
                 ["toZone"] = targetZone,
                 ["regionId"] = _state.RegionId,
+                ["direction"] = direction.ToString(),
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
             }),
         };
+        deltas.AddRange(loadDeltas);
+        var travelMessage = _applyConsequence(WorldConsequence.Message(
+            "travel",
+            message,
+            targetEntityId: CurrentRegion.Id,
+            visibility: WorldConsequenceVisibility.Message,
+            evidence: "The controlled soul crossed a zone boundary.",
+            reason: "Travel loaded a destination zone and region.",
+            operation: "travelMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["fromZone"] = fromZone,
+                ["toZone"] = targetZone,
+                ["regionId"] = _state.RegionId,
+                ["direction"] = direction.ToString(),
+                ["playerVisible"] = true,
+            }));
+        deltas.AddRange(travelMessage.Deltas);
         foreach (var delta in generatedDeltas)
         {
-            _state.AddMessage(delta.Summary);
-            deltas.Add(delta);
+            deltas.AddRange(PersistVisibleDeltaMessage(delta, "generated_zone"));
+            deltas.Add(SuppressGeneratedPlayerMessage(delta));
+        }
+
+        foreach (var delta in _worldTurnSystem.Apply(
+            _state,
+            "travel",
+            budget: 2,
+            announce: false,
+            applyConsequence: _applyConsequence))
+        {
+            deltas.AddRange(PersistVisibleDeltaMessage(delta, "world_turn"));
+            deltas.Add(SuppressGeneratedPlayerMessage(delta));
         }
 
         foreach (var rumor in NarrationSystem.ZoneEntryRumors(_state, CurrentRegion, CurrentRealm))
         {
-            _state.AddMessage(rumor.Text);
-            deltas.Add(new StateDelta(
-                rumor.Kind,
-                CurrentRegion.Id,
+            var applied = _applyConsequence(WorldConsequence.Message(
+                "zone_entry",
                 rumor.Text,
-                rumor.Details));
+                targetEntityId: CurrentRegion.Id,
+                visibility: WorldConsequenceVisibility.Message,
+                evidence: "Zone-entry narration derived from legend and faction standing.",
+                operation: rumor.Kind,
+                details: rumor.Details));
+            deltas.AddRange(applied.Deltas);
         }
 
         return deltas;
+    }
+
+    private IReadOnlyList<StateDelta> PersistVisibleDeltaMessage(StateDelta delta, string source)
+    {
+        if (IsAuditFailureDelta(delta)
+            || !delta.IsPlayerVisible()
+            || !DeltaVisibilityIsVisible(delta)
+            || (delta.Details.TryGetValue("consequenceType", out var consequenceType)
+                && string.Equals(Convert.ToString(consequenceType), WorldConsequenceTypes.Message, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Array.Empty<StateDelta>();
+        }
+
+        var applied = _applyConsequence(WorldConsequence.Message(
+            source,
+            delta.Summary,
+            targetEntityId: delta.Target,
+            visibility: WorldConsequenceVisibility.Message,
+            evidence: delta.Summary,
+            reason: "A generated or world-turn delta was player-visible but not itself a message consequence.",
+            operation: "generatedDeltaMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["sourceOperation"] = delta.Operation,
+            }));
+        return applied.Deltas;
+    }
+
+    private static bool IsAuditFailureDelta(StateDelta delta) =>
+        delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase)
+        || delta.Operation.Equals("generationConsequenceSkipped", StringComparison.OrdinalIgnoreCase);
+
+    private static StateDelta SuppressGeneratedPlayerMessage(StateDelta delta)
+    {
+        if (delta.Details.TryGetValue("consequenceType", out var consequenceType)
+            && string.Equals(Convert.ToString(consequenceType), WorldConsequenceTypes.Message, StringComparison.OrdinalIgnoreCase))
+        {
+            return delta;
+        }
+
+        var details = new Dictionary<string, object?>(delta.Details, StringComparer.OrdinalIgnoreCase)
+        {
+            ["playerVisible"] = false,
+        };
+        return new StateDelta(delta.Operation, delta.Target, delta.Summary, details);
+    }
+
+    private static bool DeltaVisibilityIsVisible(StateDelta delta)
+    {
+        if (!delta.Details.TryGetValue("visibility", out var raw))
+        {
+            return true;
+        }
+
+        var visibility = NormalizeToken(Convert.ToString(raw) ?? "");
+        if (string.IsNullOrWhiteSpace(visibility))
+        {
+            visibility = WorldConsequenceVisibility.Hidden;
+        }
+
+        return visibility is
+            WorldConsequenceVisibility.Message or WorldConsequenceVisibility.Journal or WorldConsequenceVisibility.Lead or "visible";
     }
 
     public IReadOnlyList<string> AtlasLines()
@@ -97,7 +204,7 @@ public sealed class GenerationSystem
             .Select(lore => $"Local lore - {lore.Title}: {OneLine(lore.Body)}"));
         var capitalDefenses = _state.Factions.FactionsByRole("empire_bloc")
             .Sum(faction => _state.Factions.ResourceValue(faction.Id, "defenses"));
-        lines.Add($"Capital reach: thin-slice reachable east of Hollowmere; imperial defenses tracked at {capitalDefenses}.");
+        lines.Add($"Capital reach: reachable east of Hollowmere; imperial defenses tracked at {capitalDefenses}.");
         var known = _state.Zones.Keys
             .Concat(new[] { _state.CurrentZoneId })
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -131,58 +238,102 @@ public sealed class GenerationSystem
     private ZoneSnapshot GenerateZone(string zoneId, Direction entryDirection, List<StateDelta> deltas)
     {
         var region = RegionFor(zoneId);
-        var terrain = new Dictionary<GridPoint, string>();
-        var blocking = new HashSet<GridPoint>();
-        for (var y = 0; y < _state.Height; y++)
-        {
-            for (var x = 0; x < _state.Width; x++)
-            {
-                terrain[new GridPoint(x, y)] = region.FloorTerrain;
-            }
-        }
-
-        var entities = new Dictionary<EntityId, Entity>();
+        var generatedState = DetachedGeneratedZoneState(zoneId, region);
         var realm = CurrentWorld.RealmFor(region.RealmId);
+        InitializeGeneratedTerrain(generatedState, region);
+        ApplyGeneratedTerrainDetails(generatedState, region, realm, entryDirection, deltas);
         var texture = TextureGrammar.ZoneFeature(region, realm, _state.Rng);
-        var propId = _state.NextEntityId("zone_prop");
         var propTags = region.TerrainTags
             .Concat(region.VoiceTags)
             .Concat(texture.Subjects)
             .Append("generated")
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var prop = new Entity(propId, texture.Name)
-            .Set(new PositionComponent(new GridPoint(_state.Width / 2, _state.Height / 2)))
-            .Set(new RenderableComponent('&', "fixture"))
-            .Set(new TagsComponent(propTags))
-            .Set(new PhysicalComponent(BlocksMovement: true, Material: region.TerrainTags.FirstOrDefault() ?? "stone"))
-            .Set(new DescriptionComponent(texture.Description))
-            .Set(new FixtureComponent("zone_feature", propTags));
-        entities[propId] = prop;
+        TryApplyGeneratedZoneConsequence(
+            generatedState,
+            WorldConsequence.SpawnFixture(
+                "generation",
+                texture.Name,
+                _state.Width / 2,
+                _state.Height / 2,
+                prefix: "zone_prop",
+                glyph: '&',
+                palette: "fixture",
+                fixtureType: "zone_feature",
+                material: region.TerrainTags.FirstOrDefault() ?? "stone",
+                tags: propTags,
+                blocksMovement: true,
+                description: texture.Description,
+                visibility: WorldConsequenceVisibility.Hidden,
+                evidence: texture.Description,
+                reason: "Procedural zone generation created an ordinary fixture through the shared spawn lifecycle.",
+                operation: "generateZoneFeature",
+                emitMessage: false,
+                details: new Dictionary<string, object?>
+                {
+                    ["zoneId"] = zoneId,
+                    ["regionId"] = region.Id,
+                    ["realmId"] = region.RealmId,
+                }),
+            deltas,
+            "zone feature");
 
         var curio = CurioGenerator.Generate(region, realm, _state.Rng);
-        _itemCatalog.Add(curio.ToDefinition());
-        var itemId = _state.NextEntityId("zone_item");
-        var item = new Entity(itemId, curio.Name)
-            .Set(new PositionComponent(new GridPoint((_state.Width / 2) + 2, _state.Height / 2)))
-            .Set(new RenderableComponent('*', "item"))
-            .Set(new TagsComponent(curio.Tags))
-            .Set(new PhysicalComponent(BlocksMovement: false, Material: curio.Material))
-            .Set(new DescriptionComponent(curio.Description))
-            .Set(new ItemComponent(curio.Id, curio.Value, curio.Material, curio.Tags, StackPolicy: "unique"))
-            .Set(new StackComponent(1));
-        entities[itemId] = item;
-
-        var resident = BuildResident(region, CurrentWorld.RealmFor(region.RealmId), entities, entryDirection);
-        entities[resident.Id] = resident;
-        if (region.Id.Equals("vigovian_capital", StringComparison.OrdinalIgnoreCase))
+        var curioDefinition = curio.ToDefinition();
+        var curioApplied = TryApplyGeneratedZoneConsequence(
+            generatedState,
+            WorldConsequence.SpawnItem(
+                "generation",
+                curio.Name,
+                (_state.Width / 2) + 2,
+                _state.Height / 2,
+                prefix: "zone_item",
+                glyph: curioDefinition.Glyph,
+                itemType: curio.Id,
+                material: curio.Material,
+                tags: curio.Tags,
+                quantity: 1,
+                value: curio.Value,
+                stackPolicy: curioDefinition.StackPolicy,
+                useProfile: curioDefinition.UseProfile,
+                equipmentSlot: curioDefinition.EquipmentSlot,
+                description: curio.Description,
+                visibility: WorldConsequenceVisibility.Hidden,
+                evidence: curio.Description,
+                reason: "Procedural zone generation created an ordinary item through the shared spawn lifecycle.",
+                operation: "generateZoneItem",
+                emitMessage: false,
+                details: new Dictionary<string, object?>
+                {
+                    ["zoneId"] = zoneId,
+                    ["regionId"] = region.Id,
+                    ["realmId"] = region.RealmId,
+                }),
+            deltas,
+            "zone item");
+        if (curioApplied.Applied)
         {
-            var emperor = BuildEmperor(region, entities);
-            entities[emperor.Id] = emperor;
+            _itemCatalog.Add(curioDefinition);
         }
 
+        SpawnGeneratedResident(generatedState, region, realm, entryDirection, deltas);
+        if (region.Id.Equals("vigovian_capital", StringComparison.OrdinalIgnoreCase))
+        {
+            SpawnGeneratedEmperor(generatedState, region, deltas);
+        }
+
+        CommitGeneratedZoneState(generatedState);
+        var entities = generatedState.Entities.ToDictionary(pair => pair.Key, pair => pair.Value.Clone());
+        var terrain = new Dictionary<GridPoint, string>(generatedState.Terrain);
+        var blocking = new HashSet<GridPoint>(generatedState.BlockingTerrain);
         var promiseHooks = new List<string>();
-        promiseHooks.AddRange(_promiseRealizationSystem.RealizeTravelPromises(zoneId, region, entities, deltas, EntryPoint(entryDirection)));
+        promiseHooks.AddRange(_promiseRealizationSystem.RealizeTravelPromises(
+            zoneId,
+            region,
+            entities,
+            deltas,
+            EntryPoint(entryDirection),
+            entryDirection));
 
         return new ZoneSnapshot(
             zoneId,
@@ -191,8 +342,8 @@ public sealed class GenerationSystem
             entities,
             blocking,
             terrain,
-            new Dictionary<GridPoint, int>(),
-            new Dictionary<GridPoint, TileFlow>(),
+            new Dictionary<GridPoint, int>(generatedState.TerrainExpirations),
+            new Dictionary<GridPoint, TileFlow>(generatedState.TileFlows),
             new Dictionary<string, IReadOnlySet<GridPoint>>(StringComparer.OrdinalIgnoreCase),
             new[] { region.Id },
             (region.Affordances ?? Array.Empty<RegionAffordanceCard>())
@@ -201,89 +352,370 @@ public sealed class GenerationSystem
                 .ToArray());
     }
 
-    private Entity BuildResident(
+    private GameState DetachedGeneratedZoneState(string zoneId, RegionDefinition region) =>
+        new(_state.Width, _state.Height)
+        {
+            Turn = _state.Turn,
+            Seed = _state.Seed,
+            Rng = new DeterministicRng(_state.Rng.State),
+            RegionId = region.Id,
+            CurrentZoneId = zoneId,
+            RunStatus = _state.RunStatus,
+            RunConclusion = _state.RunConclusion,
+            NextEntitySerial = _state.NextEntitySerial,
+            ControlledEntityId = _state.ControlledEntityId,
+            BackgroundSettings = _state.BackgroundSettings,
+        };
+
+    private void CommitGeneratedZoneState(GameState generatedState)
+    {
+        _state.NextEntitySerial = generatedState.NextEntitySerial;
+        _state.Rng = new DeterministicRng(generatedState.Rng.State);
+    }
+
+    private void InitializeGeneratedTerrain(GameState generatedState, RegionDefinition region)
+    {
+        for (var y = 0; y < generatedState.Height; y++)
+        {
+            for (var x = 0; x < generatedState.Width; x++)
+            {
+                generatedState.Terrain[new GridPoint(x, y)] = region.FloorTerrain;
+            }
+        }
+    }
+
+    private void ApplyGeneratedTerrainDetails(
+        GameState generatedState,
         RegionDefinition region,
         RealmProfile realm,
-        IReadOnlyDictionary<EntityId, Entity> entities,
-        Direction entryDirection)
+        Direction entryDirection,
+        List<StateDelta> deltas)
     {
-        var residentId = _state.NextEntityId("resident");
+        var terrain = TerrainDetailFor(region, realm);
+        foreach (var point in TerrainDetailPoints(
+            new GridPoint(generatedState.Width / 2, generatedState.Height / 2),
+            entryDirection,
+            generatedState.Width,
+            generatedState.Height))
+        {
+            TryApplyGeneratedZoneConsequence(
+                generatedState,
+                WorldConsequence.SetTerrain(
+                    "generation",
+                    point.X,
+                    point.Y,
+                    terrain,
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    evidence: $"Region {region.Id} laid down {terrain} during zone generation.",
+                    reason: "Procedural zone generation created ordinary terrain texture through the shared terrain lifecycle.",
+                    operation: "generateZoneTerrain",
+                    emitMessage: false,
+                    details: new Dictionary<string, object?>
+                    {
+                        ["zoneId"] = generatedState.CurrentZoneId,
+                        ["regionId"] = region.Id,
+                        ["realmId"] = region.RealmId,
+                        ["terrainSource"] = "region_generation",
+                    }),
+                deltas,
+                "zone terrain");
+        }
+    }
+
+    private static IReadOnlyList<GridPoint> TerrainDetailPoints(
+        GridPoint center,
+        Direction entryDirection,
+        int width,
+        int height)
+    {
+        var forward = entryDirection.Offset();
+        var side = new GridPoint(-forward.Y, forward.X);
+        if (forward.X == 0 && forward.Y == 0)
+        {
+            forward = new GridPoint(1, 0);
+            side = new GridPoint(0, 1);
+        }
+
+        return new[]
+            {
+                center.Translate(side.X * 3, side.Y * 3),
+                center.Translate((side.X * 2) + forward.X, (side.Y * 2) + forward.Y),
+                center.Translate(side.X * -2, side.Y * -2),
+                center.Translate((side.X * -3) + forward.X, (side.Y * -3) + forward.Y),
+                center.Translate(forward.X * -3, forward.Y * -3),
+            }
+            .Where(point => point.X > 0 && point.Y > 0 && point.X < width - 1 && point.Y < height - 1)
+            .Distinct()
+            .ToArray();
+    }
+
+    private static string TerrainDetailFor(RegionDefinition region, RealmProfile realm) =>
+        region.Id switch
+        {
+            "hollowmere_margin" => "shallow_water",
+            "vigovian_capital" => "petition_marble",
+            "wild_border" => realm.Status.Equals("wild", StringComparison.OrdinalIgnoreCase)
+                ? "flowering_grass"
+                : "bright_moss",
+            _ => region.TerrainTags.Contains("marble", StringComparer.OrdinalIgnoreCase)
+                ? "law_chalk"
+                : "trodden_mud",
+        };
+
+    private Entity? TryApplyGeneratedZoneEntityConsequence(
+        GameState generatedState,
+        WorldConsequence consequence,
+        List<StateDelta> deltas,
+        string label)
+    {
+        var applied = TryApplyGeneratedZoneConsequence(generatedState, consequence, deltas, label);
+        if (!string.IsNullOrWhiteSpace(applied.TargetId)
+            && generatedState.Entities.TryGetValue(EntityId.Create(applied.TargetId), out var entity))
+        {
+            return entity;
+        }
+
+        if (applied.Applied)
+        {
+            AddGeneratedConsequenceSkipped(consequence, deltas, label, $"Generated {label} consequence did not produce an entity.");
+        }
+
+        return null;
+    }
+
+    private WorldConsequenceApplyResult TryApplyGeneratedZoneConsequence(
+        GameState generatedState,
+        WorldConsequence consequence,
+        List<StateDelta> deltas,
+        string label)
+    {
+        WorldConsequenceApplyResult applied;
+        try
+        {
+            applied = _applyGeneratedConsequence(generatedState, consequence);
+        }
+        catch (Exception ex)
+        {
+            AddGeneratedConsequenceSkipped(consequence, deltas, label, ex.Message);
+            return WorldConsequenceApplyResult.Empty(ex.Message);
+        }
+
+        deltas.AddRange(applied.Deltas);
+        if (!applied.Applied)
+        {
+            AddGeneratedConsequenceSkipped(consequence, deltas, label, applied.Error ?? $"Generated {label} consequence was rejected.");
+        }
+
+        return applied;
+    }
+
+    private static WorldConsequenceApplyResult ApplyGeneratedConsequenceToDetached(
+        GameState generatedState,
+        WorldConsequence consequence) =>
+        WorldConsequenceGuard.ApplyWithNewApplier(generatedState, consequence);
+
+    private static void AddGeneratedConsequenceSkipped(
+        WorldConsequence consequence,
+        List<StateDelta> deltas,
+        string label,
+        string reason)
+    {
+        deltas.Add(new StateDelta(
+            "generationConsequenceSkipped",
+            consequence.TargetEntityId ?? consequence.Source,
+            $"Generated {label} skipped: {reason}",
+            new Dictionary<string, object?>
+            {
+                ["consequenceType"] = consequence.Type,
+                ["source"] = consequence.Source,
+                ["skipReason"] = reason,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
+    }
+
+    private void SpawnGeneratedResident(
+        GameState generatedState,
+        RegionDefinition region,
+        RealmProfile realm,
+        Direction entryDirection,
+        List<StateDelta> deltas)
+    {
         var faction = ResidentFaction(region);
         var tags = new[] { "resident", "generated", NormalizeToken(region.RealmId), NormalizeToken(realm.Status) }
             .Concat(region.TerrainTags)
             .Concat(region.VoiceTags)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var position = FindGeneratedOpenPoint(entities, ResidentEntryPoint(entryDirection));
-        return new Entity(residentId, ResidentName(region))
-            .Set(new PositionComponent(position))
-            .Set(new RenderableComponent('p', faction))
-            .Set(new TagsComponent(tags))
-            .Set(new DescriptionComponent($"{realm.Name} is {realm.Status} under {realm.Ruler}. {ResidentDescription(region)}"))
-            .Set(new PhysicalComponent(BlocksMovement: true, Material: "flesh"))
-            .Set(new ActorComponent(8, 8, 0, 0, 1, 0, faction))
-            .Set(new ControllerComponent(ControllerKind.Ai))
-            .Set(new AiComponent("resident"))
-            .Set(new SoulComponent($"{residentId.Value}_soul"))
-            .Set(new BodyStatsComponent(3))
-            .Set(StatusContainerComponent.Empty())
-            .Set(MemoryComponent.Empty())
-            .Set(new FactionComponent(faction, new[] { "resident" }))
-            .Set(new MerchantComponent(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["red tincture"] = 1,
-                ["grave salt"] = 2,
-            }, Gold: 35))
-            .Set(new InteractableComponent(new[] { "talk", "give", "recruit", "wares", "buy", "sell" }))
-            .Set(new ProfileComponent(ResidentName(region), ResidentDescription(region)));
+        var position = FindGeneratedOpenPoint(generatedState, ResidentEntryPoint(entryDirection));
+        var residentName = ResidentName(region);
+        var residentDescription = ResidentDescription(region);
+        var residentWant = ResidentWant(region);
+        var resident = TryApplyGeneratedZoneEntityConsequence(
+            generatedState,
+            WorldConsequence.SpawnEntity(
+                "generation",
+                residentName,
+                position.X,
+                position.Y,
+                prefix: "resident",
+                glyph: 'p',
+                faction: faction,
+                hp: 8,
+                attack: 1,
+                tags: tags,
+                material: "flesh",
+                roles: new[] { "resident" },
+                controllerKind: "ai",
+                aiPolicyId: "resident",
+                summoned: false,
+                description: $"{realm.Name} is {realm.Status} under {realm.Ruler}. {residentDescription}",
+                interactableVerbs: new[] { "talk", "give", "recruit", "wares", "buy", "sell" },
+                bodyVigor: 3,
+                includeMemory: true,
+                visibility: WorldConsequenceVisibility.Hidden,
+                evidence: residentDescription,
+                reason: "Procedural zone generation created an ordinary resident through the shared spawn lifecycle.",
+                operation: "generateResident",
+                emitMessage: false,
+                autoWant: false,
+                wantText: residentWant.Text,
+                wantId: residentWant.Id,
+                wantStatus: residentWant.Status,
+                wantStakes: residentWant.Stakes,
+                wantSalience: residentWant.Salience,
+                wantTags: residentWant.Tags,
+                details: new Dictionary<string, object?>
+                {
+                    ["zoneId"] = generatedState.CurrentZoneId,
+                    ["regionId"] = region.Id,
+                    ["realmId"] = region.RealmId,
+                    ["profileName"] = residentName,
+                    ["profileAppearance"] = residentDescription,
+                    ["profileOrigin"] = region.Name,
+                }),
+            deltas,
+            "resident");
+        if (resident is null)
+        {
+            return;
+        }
+
+        TryApplyGeneratedZoneConsequence(
+            generatedState,
+            WorldConsequence.OfferTrade(
+                "generation",
+                resident.Id.Value,
+                "red tincture",
+                quantity: 1,
+                gold: 35,
+                visibility: WorldConsequenceVisibility.Hidden,
+                evidence: "Generated residents carry ordinary stock through the trade consequence lifecycle.",
+                reason: "Procedural resident generation attached stock through offer_trade.",
+                operation: "generateResidentWares",
+                details: new Dictionary<string, object?>
+                {
+                    ["zoneId"] = generatedState.CurrentZoneId,
+                    ["regionId"] = region.Id,
+                    ["stockSource"] = "resident_generation",
+                }),
+            deltas,
+            "resident red tincture");
+        TryApplyGeneratedZoneConsequence(
+            generatedState,
+            WorldConsequence.OfferTrade(
+                "generation",
+                resident.Id.Value,
+                "grave salt",
+                quantity: 2,
+                gold: 35,
+                visibility: WorldConsequenceVisibility.Hidden,
+                evidence: "Generated residents carry ordinary stock through the trade consequence lifecycle.",
+                reason: "Procedural resident generation attached stock through offer_trade.",
+                operation: "generateResidentWares",
+                details: new Dictionary<string, object?>
+                {
+                    ["zoneId"] = generatedState.CurrentZoneId,
+                    ["regionId"] = region.Id,
+                    ["stockSource"] = "resident_generation",
+                }),
+            deltas,
+            "resident grave salt");
     }
 
-    private Entity BuildEmperor(
+    private void SpawnGeneratedEmperor(
+        GameState generatedState,
         RegionDefinition region,
-        IReadOnlyDictionary<EntityId, Entity> entities)
+        List<StateDelta> deltas)
     {
-        var emperorId = EntityId.Create("emperor_odran");
         var tags = new[] { "emperor", "odran", "vigovia", "imperial", "ruler", "win_condition" }
             .Concat(region.TerrainTags)
             .Concat(region.VoiceTags)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var position = FindGeneratedOpenPoint(entities, new GridPoint(_state.Width / 2, (_state.Height / 2) - 2));
-        return new Entity(emperorId, "Emperor Odran of Vigovia")
-            .Set(new PositionComponent(position))
-            .Set(new RenderableComponent('E', "imperial"))
-            .Set(new TagsComponent(tags))
-            .Set(new DescriptionComponent("The reasonable marble center of the empire, very mortal despite the room's opinion."))
-            .Set(new PhysicalComponent(BlocksMovement: true, Material: "body"))
-            .Set(new BodyStatsComponent(2))
-            .Set(new ActorComponent(12, 12, 0, 0, 2, 0, "empire"))
-            .Set(new FactionComponent("empire", new[] { "empire", "ruler", "emperor" }))
-            .Set(new ControllerComponent(ControllerKind.None))
-            .Set(new AiComponent("emperor"))
-            .Set(new SoulComponent("emperor_odran_soul"))
-            .Set(new ProfileComponent(
+        var position = FindGeneratedOpenPoint(generatedState, new GridPoint(_state.Width / 2, (_state.Height / 2) - 2));
+        TryApplyGeneratedZoneEntityConsequence(
+            generatedState,
+            WorldConsequence.SpawnEntity(
+                "generation",
                 "Emperor Odran of Vigovia",
-                "a calm human sovereign under too much marble",
-                Origin: "Vigovia",
-                MagicalSignature: "law polished until it believes itself kind"))
-            .Set(StatusContainerComponent.Empty())
-            .Set(MemoryComponent.Empty())
-            .Set(new InteractableComponent(new[] { "talk", "examine" }));
+                position.X,
+                position.Y,
+                prefix: "emperor",
+                glyph: 'E',
+                faction: "empire",
+                hp: 12,
+                attack: 2,
+                tags: tags,
+                material: "body",
+                roles: new[] { "empire", "ruler", "emperor" },
+                controllerKind: "none",
+                aiPolicyId: "emperor",
+                summoned: false,
+                description: "The reasonable marble center of the empire, very mortal despite the room's opinion.",
+                interactableVerbs: new[] { "talk", "examine" },
+                bodyVigor: 2,
+                includeMemory: true,
+                visibility: WorldConsequenceVisibility.Hidden,
+                evidence: "The capital generated its ordinary win-condition actor.",
+                reason: "The capital population generator spawned the emperor through the shared entity lifecycle.",
+                operation: "generateEmperor",
+                emitMessage: false,
+                autoWant: false,
+                entityId: "emperor_odran",
+                wantText: "Preserve Vigovia's marble peace by proving wild magic can be named, filed, contained, and made unnecessary.",
+                wantId: "want_emperor_odran_order",
+                wantStatus: "active",
+                wantStakes: "Threats, bargains, or impossible mercy can reveal containment doctrine, faction fractures, imperial procedures, or the private cost of keeping the empire reasonable.",
+                wantSalience: 5,
+                wantTags: new[] { "empire", "order", "containment", "late_game", "promise_source" },
+                details: new Dictionary<string, object?>
+                {
+                    ["zoneId"] = generatedState.CurrentZoneId,
+                    ["regionId"] = region.Id,
+                    ["profileName"] = "Emperor Odran of Vigovia",
+                    ["profileAppearance"] = "a calm human sovereign under too much marble",
+                    ["profileOrigin"] = "Vigovia",
+                    ["profileMagicalSignature"] = "law polished until it believes itself kind",
+                }),
+            deltas,
+            "emperor");
     }
 
-    private GridPoint FindGeneratedOpenPoint(IReadOnlyDictionary<EntityId, Entity> entities, GridPoint origin)
+    private GridPoint FindGeneratedOpenPoint(GameState generatedState, GridPoint origin)
     {
-        var occupied = entities.Values
+        var occupied = generatedState.Entities.Values
             .Where(entity => entity.TryGet<PositionComponent>(out _)
                 && entity.TryGet<PhysicalComponent>(out var physical)
                 && physical.BlocksMovement)
             .Select(entity => entity.Get<PositionComponent>().Position)
             .ToHashSet();
-        return FindOpenNear(origin, occupied) ?? origin;
+        return FindOpenNear(origin, occupied, generatedState.BlockingTerrain) ?? origin;
     }
 
-    private void LoadZone(ZoneSnapshot snapshot, IReadOnlyList<Entity> travelers, Direction entryDirection)
+    private IReadOnlyList<StateDelta> LoadZone(ZoneSnapshot snapshot, IReadOnlyList<Entity> travelers, Direction entryDirection)
     {
+        var deltas = new List<StateDelta>();
         _state.CurrentZoneId = snapshot.ZoneId;
         _state.RegionId = snapshot.RegionId;
         _state.Entities.Clear();
@@ -327,14 +759,93 @@ public sealed class GenerationSystem
         for (var index = 0; index < travelers.Count; index++)
         {
             var traveler = travelers[index].Clone();
-            var point = FindOpenNear(entry, occupied) ?? entry;
+            var point = FindOpenNear(entry, occupied, _state.BlockingTerrain) ?? entry;
             traveler.Set(new PositionComponent(point));
-            occupied.Add(point);
             _state.Entities[traveler.Id] = traveler;
+            var placement = WorldConsequence.MoveEntity(
+                "travel",
+                traveler.Id.Value,
+                point.X,
+                point.Y,
+                operation: "travelPlaceTraveler",
+                visibility: WorldConsequenceVisibility.Hidden,
+                sourceEntityId: traveler.Id.Value,
+                evidence: $"Traveler entered zone {snapshot.ZoneId} from {entryDirection}.",
+                reason: "Zone travel places carried bodies at the destination entry edge.",
+                emitMessage: false,
+                message: EntryMessage(traveler),
+                details: new Dictionary<string, object?>
+                {
+                    ["zoneId"] = snapshot.ZoneId,
+                    ["regionId"] = snapshot.RegionId,
+                    ["direction"] = entryDirection.ToString(),
+                    ["travelerIndex"] = index,
+                    ["playerVisible"] = false,
+                });
+            TryApplyTravelPlacementConsequence(placement, deltas);
+            occupied.Add(point);
         }
 
-        _state.SelectedTarget = null;
+        var selectedTarget = _applyConsequence(WorldConsequence.SetSelectedTarget(
+            "travel",
+            clear: true,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: "Zone loading clears selected tactical coordinates from the previous zone.",
+            operation: "travelClearTarget"));
+        deltas.AddRange(selectedTarget.Deltas);
+        return deltas;
     }
+
+    private WorldConsequenceApplyResult TryApplyTravelPlacementConsequence(
+        WorldConsequence consequence,
+        List<StateDelta> deltas)
+    {
+        WorldConsequenceApplyResult applied;
+        try
+        {
+            applied = _applyConsequence(consequence);
+        }
+        catch (Exception ex)
+        {
+            AddTravelPlacementSkipped(consequence, deltas, ex.Message);
+            return WorldConsequenceApplyResult.Empty(ex.Message);
+        }
+
+        deltas.AddRange(applied.Deltas);
+        if (!applied.Applied)
+        {
+            AddTravelPlacementSkipped(
+                consequence,
+                deltas,
+                applied.Error ?? "Travel placement consequence was rejected.");
+        }
+
+        return applied;
+    }
+
+    private static void AddTravelPlacementSkipped(
+        WorldConsequence consequence,
+        List<StateDelta> deltas,
+        string reason)
+    {
+        deltas.Add(new StateDelta(
+            "travelPlacementSkipped",
+            consequence.TargetEntityId ?? consequence.Source,
+            $"Travel placement skipped: {reason}",
+            new Dictionary<string, object?>
+            {
+                ["consequenceType"] = consequence.Type,
+                ["source"] = consequence.Source,
+                ["skipReason"] = reason,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
+    }
+
+    private string EntryMessage(Entity traveler) =>
+        traveler.Id == _state.ControlledEntityId
+            ? "You enter the destination zone."
+            : $"{traveler.Name} enters the destination zone.";
 
     private IReadOnlyList<Entity> TravelingEntities()
     {
@@ -398,7 +909,7 @@ public sealed class GenerationSystem
             .Select(entity => entity.Get<PositionComponent>().Position)
             .ToHashSet();
 
-    private GridPoint? FindOpenNear(GridPoint origin, HashSet<GridPoint> occupied)
+    private GridPoint? FindOpenNear(GridPoint origin, HashSet<GridPoint> occupied, IReadOnlySet<GridPoint> blockingTerrain)
     {
         foreach (var offset in new[]
         {
@@ -414,7 +925,7 @@ public sealed class GenerationSystem
         })
         {
             var point = origin.Translate(offset.X, offset.Y);
-            if (CanEnter(point, occupied))
+            if (CanEnter(point, occupied, blockingTerrain))
             {
                 return point;
             }
@@ -432,7 +943,7 @@ public sealed class GenerationSystem
                     }
 
                     var point = origin.Translate(dx, dy);
-                    if (CanEnter(point, occupied))
+                    if (CanEnter(point, occupied, blockingTerrain))
                     {
                         return point;
                     }
@@ -443,12 +954,12 @@ public sealed class GenerationSystem
         return null;
     }
 
-    private bool CanEnter(GridPoint point, HashSet<GridPoint> occupied) =>
+    private bool CanEnter(GridPoint point, HashSet<GridPoint> occupied, IReadOnlySet<GridPoint> blockingTerrain) =>
         point.X > 0
         && point.Y > 0
         && point.X < _state.Width - 1
         && point.Y < _state.Height - 1
-        && !_state.BlockingTerrain.Contains(point)
+        && !blockingTerrain.Contains(point)
         && !occupied.Contains(point);
 
     private static string NeighborZoneId(string zoneId, Direction direction)
@@ -534,6 +1045,35 @@ public sealed class GenerationSystem
             "vigovian_capital" => "A careful palace functionary who can explain why every cruelty was procedurally necessary.",
             "wild_border" => "A border wanderer who treats impossible flowers as weather.",
             _ => "A clerk of marble roads and numbered trespasses.",
+        };
+
+    private static WantComponent ResidentWant(RegionDefinition region) =>
+        region.Id switch
+        {
+            "hollowmere_margin" => new WantComponent(
+                $"want_{NormalizeToken(region.Id)}_shelter",
+                "Keep Hollowmere's quiet shelters unburned while deciding whether this fugitive sorcerer is worth the risk.",
+                salience: 4,
+                stakes: "Trust, gifts, or shared enemies can draw out refuge, route, healer, or kinship leads.",
+                tags: new[] { "shelter", "hollowmere", "refuge", "promise_source" }),
+            "vigovian_capital" => new WantComponent(
+                $"want_{NormalizeToken(region.Id)}_procedure",
+                "Protect their office and reputation by making the empire's machinery look inevitable.",
+                salience: 3,
+                stakes: "Pressure or procedural curiosity can reveal ledgers, offices, warrants, or guarded routes.",
+                tags: new[] { "procedure", "office", "empire", "promise_source" }),
+            "wild_border" => new WantComponent(
+                $"want_{NormalizeToken(region.Id)}_crossing",
+                "Guide dangerous travelers toward crossings that anger the land least.",
+                salience: 4,
+                stakes: "Respectful questions can reveal landmarks, hazards, folk services, or strange costs.",
+                tags: new[] { "crossing", "landmark", "folk_magic", "promise_source" }),
+            _ => new WantComponent(
+                $"want_{NormalizeToken(region.Id)}_survive",
+                "Finish their local duty without becoming the next example in an imperial notice.",
+                salience: 2,
+                stakes: "Practical negotiation can reveal small routes, stock, or local names.",
+                tags: new[] { "duty", "survival", "promise_source" }),
         };
 
     private static string ResidentFaction(RegionDefinition region) =>

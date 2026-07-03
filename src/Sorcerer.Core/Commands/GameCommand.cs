@@ -60,6 +60,8 @@ public sealed record RequestServiceCommand(string Service, string? Target = null
 
 public sealed record JournalCommand() : GameCommand;
 
+public sealed record RumorsCommand() : GameCommand;
+
 public sealed record CharacterCommand() : GameCommand;
 
 public sealed record TalkCommand(string Text) : GameCommand;

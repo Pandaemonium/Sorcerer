@@ -1,7 +1,8 @@
-using Sorcerer.Core.Characters;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Status;
+using Sorcerer.Core.Transactions;
 using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Engine.Systems;
@@ -42,7 +43,19 @@ public sealed class BodySwapSystem
         if (!CanPossess(newBody, out var reason))
         {
             var resisted = reason ?? $"{newBody.Name} braces against your soul and refuses the door.";
-            _state.AddMessage(resisted);
+            var resistedMessage = ApplyRequired(WorldConsequence.Message(
+                "body_swap",
+                resisted,
+                targetEntityId: newBody.Id.Value,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: _state.ControlledEntityId.Value,
+                evidence: $"{newBody.Name} resisted possession.",
+                operation: "possessResisted",
+                details: new Dictionary<string, object?>
+                {
+                    ["oldBody"] = _state.ControlledEntityId.Value,
+                    ["newBody"] = newBody.Id.Value,
+                }));
             var resistedTurnDeltas = _engine.AdvanceTurn();
             return new ActionResult
             {
@@ -51,12 +64,31 @@ public sealed class BodySwapSystem
                 ConsumedTurn = true,
                 TurnBefore = turnBefore,
                 TurnAfter = _state.Turn,
-                Messages = new[] { resisted }.Concat(resistedTurnDeltas.Select(delta => delta.Summary)).ToArray(),
-                Deltas = resistedTurnDeltas,
+                Messages = resistedMessage.Messages.Concat(resistedTurnDeltas.PlayerMessages()).ToArray(),
+                Deltas = resistedMessage.Deltas.Concat(resistedTurnDeltas).ToArray(),
             };
         }
 
         var deltas = PossessEntity(newBody);
+        var skipped = deltas.FirstOrDefault(delta =>
+            delta.Operation.Equals("possessionSkipped", StringComparison.OrdinalIgnoreCase));
+        if (skipped is not null)
+        {
+            var failure = skipped.Details.TryGetValue("failure", out var value) && value is not null
+                ? value.ToString() ?? "Possession could not be completed."
+                : "Possession could not be completed.";
+            return new ActionResult
+            {
+                Action = "possess",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
         var turnDeltas = _engine.AdvanceTurn();
         return new ActionResult
         {
@@ -65,7 +97,7 @@ public sealed class BodySwapSystem
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = _state.Turn,
-            Messages = deltas.Select(delta => delta.Summary).Concat(turnDeltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = VisiblePossessionMessages(deltas).Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = deltas.Concat(turnDeltas).ToArray(),
         };
     }
@@ -111,54 +143,348 @@ public sealed class BodySwapSystem
         var newSoul = newBody.TryGet<SoulComponent>(out var newSoulComponent)
             ? newSoulComponent
             : new SoulComponent($"{newBody.Id.Value}_soul");
-        var oldSoulRecord = CharacterMath.EnsureSoulRecord(_state, oldBody);
-        var newSoulRecord = CharacterMath.EnsureSoulRecord(_state, newBody);
-
-        oldBody.Set(newSoul);
-        newBody.Set(oldSoul);
-        oldBody.Set(new ControllerComponent(ControllerKind.Ai));
-        newBody.Set(new ControllerComponent(ControllerKind.Player));
-        oldBody.Set(new AiComponent(targetIsHostile ? "displaced_hostile_soul" : "displaced_soul"));
-        newBody.Set(new AiComponent("player_controlled"));
-        oldBody.Set(ActorWithSoulMana(oldActor with { Faction = newActor.Faction }, newSoulRecord));
-        newBody.Set(ActorWithSoulMana(newActor with { Faction = oldActor.Faction }, oldSoulRecord));
-        CharacterMath.SyncActorFromBodyAndSoul(oldBody, newSoulRecord);
-        CharacterMath.SyncActorFromBodyAndSoul(newBody, oldSoulRecord);
-        oldBody.Set(new FactionComponent(newActor.Faction, new[] { newActor.Faction, "displaced" }));
-        newBody.Set(new FactionComponent(oldActor.Faction, new[] { oldActor.Faction, "possessed_body" }));
-
-        var statusDeltas = new[]
-        {
-            _engine.ApplyStatus(oldBody, "disoriented", duration: 2, displayName: "disoriented soul"),
-            _engine.ApplyStatus(newBody, "soul_swapped", duration: 8, displayName: "borrowed body"),
-        };
-        _state.ControlledEntityId = newBody.Id;
-        _state.SelectedTarget = null;
-        _engine.RecordDeed(
-            newBody,
+        var transaction = GameTransaction.Begin(_state);
+        var deltas = new List<StateDelta>();
+        var deltaStart = deltas.Count;
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.SwapSouls(
             "body_swap",
-            targetIsHostile ? 5 : 3,
-            oldBody.Get<PositionComponent>().Position,
-            newBody.Get<PositionComponent>().Position,
-            new[] { "wild_magic", "body_swap", targetIsHostile ? "violation" : "consent" });
+            oldBody.Id.Value,
+            newBody.Id.Value,
+            sourceEntityId: oldBody.Id.Value,
+            evidence: $"{oldBody.Name} and {newBody.Name} exchange souls.",
+            operation: "possessSoulSwap",
+            details: PossessionDetails(oldBody, newBody, oldSoul.SoulId, newSoul.SoulId)),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.UpdateControl(
+            "body_swap",
+            oldBody.Id.Value,
+            "ai",
+            aiPolicyId: targetIsHostile ? "displaced_hostile_soul" : "displaced_soul",
+            sourceEntityId: newBody.Id.Value,
+            evidence: $"{oldBody.Name} now carries the displaced soul.",
+            operation: "possessOldBodyControl"),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.UpdateControl(
+            "body_swap",
+            newBody.Id.Value,
+            "player",
+            aiPolicyId: "player_controlled",
+            sourceEntityId: oldBody.Id.Value,
+            evidence: $"{newBody.Name} now carries the player soul.",
+            operation: "possessNewBodyControl"),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.ChangeFaction(
+            "body_swap",
+            oldBody.Id.Value,
+            newActor.Faction,
+            roles: new[] { newActor.Faction, "displaced" },
+            sourceEntityId: newBody.Id.Value,
+            evidence: $"{oldBody.Name} inherits the displaced soul's allegiance.",
+            operation: "possessOldBodyFaction"),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.ChangeFaction(
+            "body_swap",
+            newBody.Id.Value,
+            oldActor.Faction,
+            roles: new[] { oldActor.Faction, "possessed_body" },
+            sourceEntityId: oldBody.Id.Value,
+            evidence: $"{newBody.Name} inherits the player soul's allegiance.",
+            operation: "possessNewBodyFaction"),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.ApplyStatus(
+            "body_swap",
+            oldBody.Id.Value,
+            "disoriented",
+            duration: 2,
+            displayName: "disoriented soul",
+            sourceEntityId: newBody.Id.Value,
+            evidence: $"{oldBody.Name} carries the displaced soul after possession.",
+            operation: "possessOldBodyStatus",
+            details: PossessionDetails(oldBody, newBody, oldSoul.SoulId, newSoul.SoulId)),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.ApplyStatus(
+            "body_swap",
+            newBody.Id.Value,
+            "soul_swapped",
+            duration: 8,
+            displayName: "borrowed body",
+            sourceEntityId: oldBody.Id.Value,
+            evidence: $"{newBody.Name} carries the player soul after possession.",
+            operation: "possessNewBodyStatus",
+            details: PossessionDetails(oldBody, newBody, oldSoul.SoulId, newSoul.SoulId)),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.SetControlledEntity(
+            "body_swap",
+            newBody.Id.Value,
+            sourceEntityId: oldBody.Id.Value,
+            evidence: $"{newBody.Name} carries the player soul after possession.",
+            operation: "possessControlledEntity",
+            details: PossessionDetails(oldBody, newBody, oldSoul.SoulId, newSoul.SoulId)),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.SetSelectedTarget(
+            "body_swap",
+            clear: true,
+            sourceEntityId: newBody.Id.Value,
+            evidence: "Possession changes the controlled body, so the old selected target is cleared.",
+            operation: "possessClearTarget",
+            details: PossessionDetails(oldBody, newBody, oldSoul.SoulId, newSoul.SoulId)),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.RecordDeed(
+                "engine",
+                newBody.Id.Value,
+                "body_swap",
+                targetIsHostile ? 5 : 3,
+                oldBody.Get<PositionComponent>().Position.X,
+                oldBody.Get<PositionComponent>().Position.Y,
+                newBody.Get<PositionComponent>().Position.X,
+                newBody.Get<PositionComponent>().Position.Y,
+                new[] { "wild_magic", "body_swap", targetIsHostile ? "violation" : "consent" },
+                sourceEntityId: newBody.Id.Value),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
 
         var message = $"Your soul crosses into {newBody.Name}; {oldBody.Name} staggers with someone else behind the eyes.";
-        _state.AddMessage(message);
-        return statusDeltas.Concat(new[]
-            {
-                new StateDelta(
-                    "possess",
-                    newBody.Id.Value,
-                    message,
-                    new Dictionary<string, object?>
-                    {
-                        ["oldBody"] = oldBody.Id.Value,
-                        ["newBody"] = newBody.Id.Value,
-                        ["playerSoul"] = oldSoul.SoulId,
-                        ["displacedSoul"] = newSoul.SoulId,
-                    }),
-            }).ToArray();
+        if (!TryApplyPossessionConsequence(
+            WorldConsequence.Message(
+            "body_swap",
+            message,
+            targetEntityId: newBody.Id.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: oldBody.Id.Value,
+            evidence: $"{newBody.Name} carries the player soul after possession.",
+            operation: "possess",
+            details: PossessionDetails(oldBody, newBody, oldSoul.SoulId, newSoul.SoulId)),
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            oldSoul.SoulId,
+            newSoul.SoulId))
+        {
+            return deltas;
+        }
+
+        transaction.Commit();
+        return deltas;
     }
+
+    private bool TryApplyPossessionConsequence(
+        WorldConsequence consequence,
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        Entity oldBody,
+        Entity newBody,
+        string playerSoul,
+        string displacedSoul)
+    {
+        var applied = _engine.ApplyConsequence(consequence);
+        if (applied.Applied)
+        {
+            deltas.AddRange(applied.Deltas);
+            return true;
+        }
+
+        RollBackPossessionTransaction(
+            transaction,
+            deltas,
+            deltaStart,
+            oldBody,
+            newBody,
+            playerSoul,
+            displacedSoul,
+            consequence.Type,
+            applied.Deltas,
+            applied.Error ?? $"Failed to apply {consequence.Type} during possession.");
+        return false;
+    }
+
+    private static void RollBackPossessionTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        Entity oldBody,
+        Entity newBody,
+        string playerSoul,
+        string displacedSoul,
+        string consequenceType,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
+    {
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        deltas.AddRange(FailureDiagnostics(failedDeltas));
+        var rejectedCount = FailureDiagnostics(failedDeltas).Count;
+        deltas.Add(new StateDelta(
+            "possessionSkipped",
+            newBody.Id.Value,
+            $"Possession rolled back: {failure}.",
+            new Dictionary<string, object?>
+            {
+                ["oldBody"] = oldBody.Id.Value,
+                ["newBody"] = newBody.Id.Value,
+                ["playerSoul"] = playerSoul,
+                ["displacedSoul"] = displacedSoul,
+                ["consequenceType"] = consequenceType,
+                ["failure"] = failure,
+                ["rejectedCount"] = rejectedCount,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
+    }
+
+    private static IReadOnlyList<StateDelta> FailureDiagnostics(IReadOnlyList<StateDelta> deltas) =>
+        deltas
+            .Where(delta => delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+    private static void RemoveRangeFrom<T>(List<T> values, int start)
+    {
+        if (values.Count > start)
+        {
+            values.RemoveRange(start, values.Count - start);
+        }
+    }
+
+    private static IReadOnlyDictionary<string, object?> PossessionDetails(
+        Entity oldBody,
+        Entity newBody,
+        string playerSoul,
+        string displacedSoul) =>
+        new Dictionary<string, object?>
+        {
+            ["oldBody"] = oldBody.Id.Value,
+            ["newBody"] = newBody.Id.Value,
+            ["playerSoul"] = playerSoul,
+            ["displacedSoul"] = displacedSoul,
+        };
+
+    private WorldConsequenceApplyResult ApplyRequired(WorldConsequence consequence)
+    {
+        var applied = _engine.ApplyConsequence(consequence);
+        if (!applied.Applied)
+        {
+            throw new InvalidOperationException(applied.Error ?? $"Failed to apply {consequence.Type} during possession.");
+        }
+
+        return applied;
+    }
+
+    private static IEnumerable<string> VisiblePossessionMessages(IEnumerable<StateDelta> deltas) =>
+        deltas
+            .Where(delta => !delta.Details.TryGetValue("consequenceType", out _)
+                || !delta.Details.TryGetValue("visibility", out var visibility)
+                || !string.Equals(visibility?.ToString(), WorldConsequenceVisibility.Hidden, StringComparison.OrdinalIgnoreCase))
+            .PlayerMessages();
 
     private Entity? ResolveNearbyEntity(
         string? target,
@@ -213,11 +539,4 @@ public sealed class BodySwapSystem
 
     private bool IsStatusActive(StatusInstance status) =>
         status.ExpiresTurn is null || status.ExpiresTurn > _state.Turn;
-
-    private static ActorComponent ActorWithSoulMana(ActorComponent actor, SoulRecord soul) =>
-        actor with
-        {
-            Mana = Math.Min(soul.Mana, soul.MaxMana),
-            MaxMana = soul.MaxMana,
-        };
 }

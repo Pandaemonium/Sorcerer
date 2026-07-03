@@ -1,7 +1,9 @@
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Items;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Transactions;
 using Sorcerer.Core.Views;
 using Sorcerer.Core.World;
 
@@ -12,6 +14,7 @@ public sealed class ItemSystem
     private readonly GameEngine _engine;
     private readonly InventoryService _inventoryService;
     private readonly ItemCatalog _itemCatalog;
+    private readonly PromiseRealizationSystem _promiseRealizationSystem;
     private readonly GameState _state;
 
     public ItemSystem(
@@ -22,6 +25,7 @@ public sealed class ItemSystem
         _engine = engine;
         _itemCatalog = itemCatalog;
         _inventoryService = inventoryService;
+        _promiseRealizationSystem = new PromiseRealizationSystem(engine.State, engine);
         _state = engine.State;
     }
 
@@ -43,17 +47,47 @@ public sealed class ItemSystem
         var itemComponent = item.Get<ItemComponent>();
         var quantity = item.TryGet<StackComponent>(out var stack) ? Math.Max(1, stack.Quantity) : 1;
         var key = InventoryKey(item, itemComponent);
-        var inventory = EnsureInventory(_state.ControlledEntity);
-        inventory.Items.TryGetValue(key, out var current);
-        inventory.Items[key] = current + quantity;
-        _state.Entities.Remove(item.Id);
-
         var message = quantity == 1
             ? $"You pick up {key}."
             : $"You pick up {quantity} {key}.";
-        _state.AddMessage(message);
-        _engine.AdvanceTurn();
-        return ActionResult.Simple("pickup", true, true, turnBefore, _state.Turn, message);
+        var applied = _engine.ApplyConsequence(WorldConsequence.TransferItem(
+            "item",
+            _state.ControlledEntityId.Value,
+            "pickup",
+            key,
+            quantity,
+            itemEntityId: item.Id.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: item.Name,
+            operation: "pickup",
+            message: message));
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"You cannot pick up {key}.";
+            return new ActionResult
+            {
+                Action = "pickup",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = applied.Deltas,
+            };
+        }
+
+        var turnDeltas = _engine.AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "pickup",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = applied.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = applied.Deltas.Concat(turnDeltas).ToArray(),
+        };
     }
 
     public ActionResult DropItem(string item)
@@ -72,14 +106,47 @@ public sealed class ItemSystem
                 $"You are not carrying {item}.");
         }
 
-        ChangeInventory(inventory, key, -1);
         var position = _state.ControlledEntity.Get<PositionComponent>().Position;
-        var dropped = BuildItemEntity(key, position, quantity: 1);
-        _state.Entities[dropped.Id] = dropped;
-
+        var definition = _itemCatalog.Find(key);
         var message = $"You drop {key}.";
-        _state.AddMessage(message);
-        _engine.AdvanceTurn();
+        var applied = _engine.ApplyConsequence(WorldConsequence.TransferItem(
+            "item",
+            _state.ControlledEntityId.Value,
+            "drop",
+            key,
+            quantity: 1,
+            x: position.X,
+            y: position.Y,
+            prefix: NormalizeId(definition?.Id ?? key, "item"),
+            glyph: definition?.Glyph ?? '*',
+            itemType: definition?.Id ?? NormalizeId(key, "item"),
+            material: definition?.Material ?? "unknown",
+            tags: definition?.Tags ?? new[] { "item" },
+            value: definition?.Value ?? 1,
+            stackPolicy: definition?.StackPolicy ?? "commodity",
+            useProfile: definition?.UseProfile ?? "inert",
+            equipmentSlot: definition?.EquipmentSlot,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: key,
+            operation: "drop",
+            message: message));
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"You cannot drop {key}.";
+            return new ActionResult
+            {
+                Action = "drop",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = applied.Deltas,
+            };
+        }
+
+        var turnDeltas = _engine.AdvanceTurn();
         return new ActionResult
         {
             Action = "drop",
@@ -87,20 +154,8 @@ public sealed class ItemSystem
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = _state.Turn,
-            Messages = new[] { message },
-            Deltas = new[]
-            {
-                new StateDelta(
-                    "drop",
-                    dropped.Id.Value,
-                    message,
-                    new Dictionary<string, object?>
-                    {
-                        ["item"] = key,
-                        ["x"] = position.X,
-                        ["y"] = position.Y,
-                    }),
-            },
+            Messages = applied.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = applied.Deltas.Concat(turnDeltas).ToArray(),
         };
     }
 
@@ -136,17 +191,26 @@ public sealed class ItemSystem
         }
 
         var useMessage = $"You use {key}.";
-        _state.AddMessage(useMessage);
-        var deltas = new List<StateDelta>();
-        if (profile.StartsWith("heal:", StringComparison.OrdinalIgnoreCase))
-        {
-            deltas.Add(_engine.HealEntity(actor, ParseProfileAmount(profile, fallback: 4)));
-        }
-        else if (profile.StartsWith("mana:", StringComparison.OrdinalIgnoreCase))
-        {
-            deltas.Add(_engine.RestoreMana(actor, ParseProfileAmount(profile, fallback: 4)));
-        }
-        else
+        var effect = profile.StartsWith("heal:", StringComparison.OrdinalIgnoreCase)
+            ? WorldConsequence.Heal(
+                "use",
+                actor.Id.Value,
+                ParseProfileAmount(profile, fallback: 4),
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: actor.Id.Value,
+                evidence: key,
+                operation: "useHeal")
+            : profile.StartsWith("mana:", StringComparison.OrdinalIgnoreCase)
+                ? WorldConsequence.RestoreMana(
+                    "use",
+                    actor.Id.Value,
+                    ParseProfileAmount(profile, fallback: 4),
+                    visibility: WorldConsequenceVisibility.Message,
+                    sourceEntityId: actor.Id.Value,
+                    evidence: key,
+                    operation: "useRestoreMana")
+                : null;
+        if (effect is null)
         {
             return ActionResult.Simple(
                 "use",
@@ -157,8 +221,91 @@ public sealed class ItemSystem
                 $"{key} resists ordinary use.");
         }
 
-        ChangeInventory(inventory, key, -1);
-        _engine.AdvanceTurn();
+        var transaction = GameTransaction.Begin(_state);
+        var deltas = new List<StateDelta>();
+        var narration = _engine.ApplyConsequence(WorldConsequence.Message(
+            "use",
+            useMessage,
+            targetEntityId: actor.Id.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: actor.Id.Value,
+            evidence: key,
+            reason: "A carried item was intentionally used.",
+            operation: "useItemMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["item"] = key,
+                ["useProfile"] = profile,
+                ["playerVisible"] = true,
+            }));
+        if (!narration.Applied)
+        {
+            var failure = narration.Error ?? $"{key} could not be used.";
+            RollBackUseItemTransaction(transaction, deltas, 0, actor, key, narration.Deltas, failure);
+            return new ActionResult
+            {
+                Action = "use",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
+        deltas.AddRange(narration.Deltas);
+        var effectResult = _engine.ApplyConsequence(effect);
+        if (!effectResult.Applied)
+        {
+            var failure = effectResult.Error ?? $"{key} failed to take effect.";
+            RollBackUseItemTransaction(transaction, deltas, 0, actor, key, effectResult.Deltas, failure);
+            return new ActionResult
+            {
+                Action = "use",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
+        deltas.AddRange(effectResult.Deltas);
+        var consume = _engine.ApplyConsequence(WorldConsequence.ModifyInventory(
+            "use",
+            actor.Id.Value,
+            key,
+            op: "consume",
+            amount: 1,
+            sourceEntityId: actor.Id.Value,
+            evidence: key,
+            operation: "useItemSpent",
+            details: new Dictionary<string, object?>
+            {
+                ["item"] = key,
+            }));
+        if (!consume.Applied)
+        {
+            var failure = consume.Error ?? $"{key} could not be consumed.";
+            RollBackUseItemTransaction(transaction, deltas, 0, actor, key, consume.Deltas, failure);
+            return new ActionResult
+            {
+                Action = "use",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = deltas,
+            };
+        }
+
+        deltas.AddRange(consume.Deltas);
+        transaction.Commit();
+        var turnDeltas = _engine.AdvanceTurn();
+        deltas.AddRange(turnDeltas);
         return new ActionResult
         {
             Action = "use",
@@ -166,9 +313,50 @@ public sealed class ItemSystem
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = _state.Turn,
-            Messages = new[] { useMessage }.Concat(deltas.Select(delta => delta.Summary)).ToArray(),
+            Messages = deltas.PlayerMessages().ToArray(),
             Deltas = deltas,
         };
+    }
+
+    private static void RollBackUseItemTransaction(
+        GameTransaction transaction,
+        List<StateDelta> deltas,
+        int deltaStart,
+        Entity actor,
+        string item,
+        IReadOnlyList<StateDelta> failedDeltas,
+        string failure)
+    {
+        transaction.Rollback();
+        RemoveRangeFrom(deltas, deltaStart);
+        deltas.AddRange(FailureDiagnostics(failedDeltas));
+        var rejectedCount = FailureDiagnostics(failedDeltas).Count;
+        deltas.Add(new StateDelta(
+            "useItemSkipped",
+            actor.Id.Value,
+            $"Item use rolled back: {failure}.",
+            new Dictionary<string, object?>
+            {
+                ["actorEntityId"] = actor.Id.Value,
+                ["item"] = item,
+                ["failure"] = failure,
+                ["rejectedCount"] = rejectedCount,
+                ["auditOnly"] = true,
+                ["playerVisible"] = false,
+            }));
+    }
+
+    private static IReadOnlyList<StateDelta> FailureDiagnostics(IReadOnlyList<StateDelta> deltas) =>
+        deltas
+            .Where(delta => delta.Operation.Equals("worldConsequenceRejected", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+    private static void RemoveRangeFrom<T>(List<T> values, int start)
+    {
+        if (values.Count > start)
+        {
+            values.RemoveRange(start, values.Count - start);
+        }
     }
 
     public ActionResult EquipItem(string item)
@@ -189,12 +377,44 @@ public sealed class ItemSystem
             return ActionResult.Simple("equip", false, false, turnBefore, _state.Turn, $"{key} cannot be equipped.");
         }
 
-        var equipment = EnsureEquipment(actor);
-        equipment.Slots[slot] = key;
         var message = $"You equip {key} in your {slot}.";
-        _state.AddMessage(message);
-        _engine.AdvanceTurn();
-        return ActionResult.Simple("equip", true, true, turnBefore, _state.Turn, message);
+        var applied = _engine.ApplyConsequence(WorldConsequence.UpdateEquipment(
+            "item",
+            actor.Id.Value,
+            "equip",
+            item: key,
+            slot: slot,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: actor.Id.Value,
+            evidence: key,
+            operation: "equip",
+            message: message));
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"You cannot equip {key}.";
+            return new ActionResult
+            {
+                Action = "equip",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = applied.Deltas,
+            };
+        }
+
+        var turnDeltas = _engine.AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "equip",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = applied.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = applied.Deltas.Concat(turnDeltas).ToArray(),
+        };
     }
 
     public ActionResult UnequipItem(string slotOrItem)
@@ -210,12 +430,44 @@ public sealed class ItemSystem
         }
 
         var item = equipment.Slots[slot];
-        equipment.Slots.Remove(slot);
-        equipment.FocusSlots.Remove(slot);
         var message = $"You unequip {item}.";
-        _state.AddMessage(message);
-        _engine.AdvanceTurn();
-        return ActionResult.Simple("unequip", true, true, turnBefore, _state.Turn, message);
+        var applied = _engine.ApplyConsequence(WorldConsequence.UpdateEquipment(
+            "item",
+            _state.ControlledEntityId.Value,
+            "unequip",
+            item: item,
+            slot: slot,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: slotOrItem,
+            operation: "unequip",
+            message: message));
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"You cannot unequip {item}.";
+            return new ActionResult
+            {
+                Action = "unequip",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = applied.Deltas,
+            };
+        }
+
+        var turnDeltas = _engine.AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "unequip",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = applied.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = applied.Deltas.Concat(turnDeltas).ToArray(),
+        };
     }
 
     public ActionResult FocusItem(string slotOrItem)
@@ -230,11 +482,44 @@ public sealed class ItemSystem
             return ActionResult.Simple("focus", false, false, turnBefore, _state.Turn, $"{slotOrItem} is not equipped.");
         }
 
-        equipment.FocusSlots.Add(slot);
         var message = $"{equipment.Slots[slot]} is now your magical focus.";
-        _state.AddMessage(message);
-        _engine.AdvanceTurn();
-        return ActionResult.Simple("focus", true, true, turnBefore, _state.Turn, message);
+        var applied = _engine.ApplyConsequence(WorldConsequence.UpdateEquipment(
+            "item",
+            _state.ControlledEntityId.Value,
+            "focus",
+            item: equipment.Slots[slot],
+            slot: slot,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: slotOrItem,
+            operation: "focus",
+            message: message));
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"You cannot focus {slotOrItem}.";
+            return new ActionResult
+            {
+                Action = "focus",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = applied.Deltas,
+            };
+        }
+
+        var turnDeltas = _engine.AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "focus",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = applied.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = applied.Deltas.Concat(turnDeltas).ToArray(),
+        };
     }
 
     public ActionResult UnfocusItem(string? slotOrItem)
@@ -243,23 +528,87 @@ public sealed class ItemSystem
         var equipment = EnsureEquipment(_state.ControlledEntity);
         if (string.IsNullOrWhiteSpace(slotOrItem))
         {
-            equipment.FocusSlots.Clear();
             var cleared = "You release your magical focus.";
-            _state.AddMessage(cleared);
-            return ActionResult.Simple("unfocus", true, false, turnBefore, _state.Turn, cleared);
+            var applied = _engine.ApplyConsequence(WorldConsequence.UpdateEquipment(
+                "item",
+                _state.ControlledEntityId.Value,
+                "unfocus",
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: _state.ControlledEntityId.Value,
+                operation: "unfocus",
+                message: cleared));
+            if (!applied.Applied)
+            {
+                var failure = applied.Error ?? "You cannot release your magical focus.";
+                return new ActionResult
+                {
+                    Action = "unfocus",
+                    Success = false,
+                    ConsumedTurn = false,
+                    TurnBefore = turnBefore,
+                    TurnAfter = _state.Turn,
+                    Messages = new[] { failure },
+                    Deltas = applied.Deltas,
+                };
+            }
+
+            return new ActionResult
+            {
+                Action = "unfocus",
+                Success = true,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = applied.Messages.ToArray(),
+                Deltas = applied.Deltas,
+            };
         }
 
         var slot = equipment.Slots.Keys.FirstOrDefault(key =>
             key.Equals(slotOrItem, StringComparison.OrdinalIgnoreCase)
             || equipment.Slots[key].Equals(slotOrItem, StringComparison.OrdinalIgnoreCase));
-        if (slot is null || !equipment.FocusSlots.Remove(slot))
+        if (slot is null || !equipment.FocusSlots.Contains(slot))
         {
             return ActionResult.Simple("unfocus", false, false, turnBefore, _state.Turn, $"{slotOrItem} is not focused.");
         }
 
         var message = $"{equipment.Slots[slot]} is no longer your focus.";
-        _state.AddMessage(message);
-        return ActionResult.Simple("unfocus", true, false, turnBefore, _state.Turn, message);
+        var appliedUnfocus = _engine.ApplyConsequence(WorldConsequence.UpdateEquipment(
+            "item",
+            _state.ControlledEntityId.Value,
+            "unfocus",
+            item: equipment.Slots[slot],
+            slot: slot,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: slotOrItem,
+            operation: "unfocus",
+            message: message));
+        if (!appliedUnfocus.Applied)
+        {
+            var failure = appliedUnfocus.Error ?? $"You cannot unfocus {slotOrItem}.";
+            return new ActionResult
+            {
+                Action = "unfocus",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = new[] { failure },
+                Deltas = appliedUnfocus.Deltas,
+            };
+        }
+
+        return new ActionResult
+        {
+            Action = "unfocus",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = appliedUnfocus.Messages.ToArray(),
+            Deltas = appliedUnfocus.Deltas,
+        };
     }
 
     public ActionResult Reagents()
@@ -273,13 +622,34 @@ public sealed class ItemSystem
 
     public ActionResult Wares(string? target)
     {
-        var merchant = ResolveNearbyMerchant(target);
+        var turn = _state.Turn;
+        var merchant = ResolveNearbyCommerceProvider(target, "wares");
         if (merchant is null)
         {
-            return ActionResult.Simple("wares", false, false, _state.Turn, _state.Turn, "No nearby merchant is ready to trade.");
+            return ActionResult.Simple("wares", false, false, turn, turn, "No nearby merchant is ready to trade.");
         }
 
-        var wares = merchant.Get<MerchantComponent>().Wares
+        var messages = new List<string>();
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(
+            merchant,
+            "wares",
+            messages,
+            alreadyPersistedMessages: messages.ToList()).ToList();
+        if (!merchant.TryGet<MerchantComponent>(out var merchantComponent))
+        {
+            return new ActionResult
+            {
+                Action = "wares",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turn,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { "No nearby merchant is ready to trade." }).ToArray(),
+                Deltas = deltas,
+            };
+        }
+
+        var wares = merchantComponent.Wares
             .Where(pair => pair.Value > 0)
             .OrderBy(pair => pair.Key)
             .Select(pair =>
@@ -290,29 +660,61 @@ public sealed class ItemSystem
                 return $"{merchant.Name} offers {pair.Value}x {name} for {value} gold each.";
             })
             .ToArray();
-        return ActionResult.Simple(
-            "wares",
-            true,
-            false,
-            _state.Turn,
-            _state.Turn,
-            wares.Length == 0 ? new[] { $"{merchant.Name} has nothing for sale." } : wares);
+        messages.AddRange(wares.Length == 0 ? new[] { $"{merchant.Name} has nothing for sale." } : wares);
+        return new ActionResult
+        {
+            Action = "wares",
+            Success = true,
+            ConsumedTurn = false,
+            TurnBefore = turn,
+            TurnAfter = _state.Turn,
+            Messages = messages.ToArray(),
+            Deltas = deltas,
+        };
     }
 
     public ActionResult Buy(string item, string? target)
     {
         var turnBefore = _state.Turn;
-        var merchant = ResolveNearbyMerchant(target);
+        var merchant = ResolveNearbyCommerceProvider(target, "buy");
         if (merchant is null)
         {
             return ActionResult.Simple("buy", false, false, turnBefore, _state.Turn, "No nearby merchant is ready to trade.");
         }
 
-        var merchantComponent = merchant.Get<MerchantComponent>();
+        var messages = new List<string>();
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(
+            merchant,
+            "buy",
+            messages,
+            alreadyPersistedMessages: messages.ToList()).ToList();
+        if (!merchant.TryGet<MerchantComponent>(out var merchantComponent))
+        {
+            return new ActionResult
+            {
+                Action = "buy",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { "No nearby merchant is ready to trade." }).ToArray(),
+                Deltas = deltas,
+            };
+        }
+
         var wareKey = FindWareKey(merchantComponent, item);
         if (wareKey is null)
         {
-            return ActionResult.Simple("buy", false, false, turnBefore, _state.Turn, $"{merchant.Name} is not selling {item}.");
+            return new ActionResult
+            {
+                Action = "buy",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { $"{merchant.Name} is not selling {item}." }).ToArray(),
+                Deltas = deltas,
+            };
         }
 
         var definition = _itemCatalog.Find(wareKey);
@@ -321,55 +723,161 @@ public sealed class ItemSystem
         inventory.Items.TryGetValue("gold", out var gold);
         if (gold < price)
         {
-            return ActionResult.Simple("buy", false, false, turnBefore, _state.Turn, $"You need {price} gold for {definition?.Name ?? wareKey}.");
+            return new ActionResult
+            {
+                Action = "buy",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { $"You need {price} gold for {definition?.Name ?? wareKey}." }).ToArray(),
+                Deltas = deltas,
+            };
         }
 
-        ChangeInventory(inventory, "gold", -price);
-        inventory.Items.TryGetValue(definition?.Name ?? wareKey, out var current);
-        inventory.Items[definition?.Name ?? wareKey] = current + 1;
-        merchantComponent.Wares[wareKey] -= 1;
-        merchant.Set(merchantComponent with { Gold = merchantComponent.Gold + price });
-        var message = $"You buy {definition?.Name ?? wareKey} from {merchant.Name} for {price} gold.";
-        _state.AddMessage(message);
-        _engine.AdvanceTurn();
-        return ActionResult.Simple("buy", true, true, turnBefore, _state.Turn, message);
+        var itemName = definition?.Name ?? wareKey;
+        var message = $"You buy {itemName} from {merchant.Name} for {price} gold.";
+        var applied = _engine.ApplyConsequence(WorldConsequence.ExecuteTrade(
+            "trade",
+            merchant.Id.Value,
+            _state.ControlledEntityId.Value,
+            "buy",
+            itemName,
+            wareKey,
+            price,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: message,
+            message: message));
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"{merchant.Name} cannot complete that trade.";
+            return new ActionResult
+            {
+                Action = "buy",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { failure }).ToArray(),
+                Deltas = deltas.Concat(applied.Deltas).ToArray(),
+            };
+        }
+
+        var turnDeltas = _engine.AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "buy",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = messages.Concat(applied.Messages).Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = deltas.Concat(applied.Deltas).Concat(turnDeltas).ToArray(),
+        };
     }
 
     public ActionResult Sell(string item, string? target)
     {
         var turnBefore = _state.Turn;
-        var merchant = ResolveNearbyMerchant(target);
+        var merchant = ResolveNearbyCommerceProvider(target, "sell");
         if (merchant is null)
         {
             return ActionResult.Simple("sell", false, false, turnBefore, _state.Turn, "No nearby merchant is ready to trade.");
+        }
+
+        var messages = new List<string>();
+        var deltas = _promiseRealizationSystem.RealizeAnchoredPromises(
+            merchant,
+            "sell",
+            messages,
+            alreadyPersistedMessages: messages.ToList()).ToList();
+        if (!merchant.TryGet<MerchantComponent>(out var merchantComponent))
+        {
+            return new ActionResult
+            {
+                Action = "sell",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { "No nearby merchant is ready to trade." }).ToArray(),
+                Deltas = deltas,
+            };
         }
 
         var inventory = EnsureInventory(_state.ControlledEntity);
         var key = FindInventoryKey(inventory, item);
         if (key is null || key.Equals("gold", StringComparison.OrdinalIgnoreCase))
         {
-            return ActionResult.Simple("sell", false, false, turnBefore, _state.Turn, $"You are not carrying {item}.");
+            return new ActionResult
+            {
+                Action = "sell",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { $"You are not carrying {item}." }).ToArray(),
+                Deltas = deltas,
+            };
         }
 
         var definition = _itemCatalog.Find(key);
         var price = Math.Max(1, definition?.Value ?? 1);
-        var merchantComponent = merchant.Get<MerchantComponent>();
         if (merchantComponent.Gold < price)
         {
-            return ActionResult.Simple("sell", false, false, turnBefore, _state.Turn, $"{merchant.Name} cannot afford {key}.");
+            return new ActionResult
+            {
+                Action = "sell",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { $"{merchant.Name} cannot afford {key}." }).ToArray(),
+                Deltas = deltas,
+            };
         }
 
-        ChangeInventory(inventory, key, -1);
-        inventory.Items.TryGetValue("gold", out var gold);
-        inventory.Items["gold"] = gold + price;
         var wareKey = definition?.Name ?? key;
-        merchantComponent.Wares.TryGetValue(wareKey, out var current);
-        merchantComponent.Wares[wareKey] = current + 1;
-        merchant.Set(merchantComponent with { Gold = merchantComponent.Gold - price });
         var message = $"You sell {wareKey} to {merchant.Name} for {price} gold.";
-        _state.AddMessage(message);
-        _engine.AdvanceTurn();
-        return ActionResult.Simple("sell", true, true, turnBefore, _state.Turn, message);
+        var applied = _engine.ApplyConsequence(WorldConsequence.ExecuteTrade(
+            "trade",
+            merchant.Id.Value,
+            _state.ControlledEntityId.Value,
+            "sell",
+            wareKey,
+            wareKey,
+            price,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: _state.ControlledEntityId.Value,
+            evidence: message,
+            message: message));
+        if (!applied.Applied)
+        {
+            var failure = applied.Error ?? $"{merchant.Name} cannot complete that trade.";
+            return new ActionResult
+            {
+                Action = "sell",
+                Success = false,
+                ConsumedTurn = false,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = messages.Concat(new[] { failure }).ToArray(),
+                Deltas = deltas.Concat(applied.Deltas).ToArray(),
+            };
+        }
+
+        var turnDeltas = _engine.AdvanceTurn();
+        return new ActionResult
+        {
+            Action = "sell",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = _state.Turn,
+            Messages = messages.Concat(applied.Messages).Concat(turnDeltas.PlayerMessages()).ToArray(),
+            Deltas = deltas.Concat(applied.Deltas).Concat(turnDeltas).ToArray(),
+        };
     }
 
     public bool IsCarrying(string item)
@@ -382,28 +890,6 @@ public sealed class ItemSystem
         entity.TryGet<InventoryComponent>(out var inventory)
         && FindInventoryKey(inventory, item) is not null;
 
-    public Entity BuildItemEntity(string item, GridPoint position, int quantity)
-    {
-        var definition = _itemCatalog.Find(item);
-        var idPrefix = NormalizeId(definition?.Id ?? item, "item");
-        var tags = definition?.Tags ?? new[] { "item" };
-        var name = definition?.Name ?? item;
-        return new Entity(_state.NextEntityId(idPrefix), name)
-            .Set(new PositionComponent(position))
-            .Set(new RenderableComponent(definition?.Glyph ?? '*', "item"))
-            .Set(new TagsComponent(tags.Concat(new[] { "item" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()))
-            .Set(new PhysicalComponent(BlocksMovement: false, Material: definition?.Material ?? "unknown"))
-            .Set(new ItemComponent(
-                definition?.Id ?? NormalizeId(item, "item"),
-                definition?.Value ?? 1,
-                definition?.Material ?? "unknown",
-                tags,
-                definition?.StackPolicy ?? "commodity",
-                definition?.UseProfile ?? "inert",
-                definition?.EquipmentSlot))
-            .Set(new StackComponent(quantity));
-    }
-
     private InventoryComponent EnsureInventory(Entity entity)
     {
         if (entity.TryGet<InventoryComponent>(out var inventory))
@@ -411,9 +897,7 @@ public sealed class ItemSystem
             return inventory;
         }
 
-        inventory = InventoryComponent.Empty();
-        entity.Set(inventory);
-        return inventory;
+        return InventoryComponent.Empty();
     }
 
     private static EquipmentComponent EnsureEquipment(Entity entity)
@@ -423,9 +907,7 @@ public sealed class ItemSystem
             return equipment;
         }
 
-        equipment = EquipmentComponent.Empty();
-        entity.Set(equipment);
-        return equipment;
+        return EquipmentComponent.Empty();
     }
 
     private string? FindInventoryKey(InventoryComponent inventory, string item)
@@ -455,20 +937,6 @@ public sealed class ItemSystem
         return inventory.Items.Keys.FirstOrDefault(key =>
             key.Contains(item, StringComparison.OrdinalIgnoreCase)
             || item.Contains(key, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static void ChangeInventory(InventoryComponent inventory, string item, int delta)
-    {
-        inventory.Items.TryGetValue(item, out var current);
-        var next = current + delta;
-        if (next <= 0)
-        {
-            inventory.Items.Remove(item);
-            inventory.TreasuredItems.Remove(item);
-            return;
-        }
-
-        inventory.Items[item] = next;
     }
 
     private string InventoryKey(Entity entity, ItemComponent item)
@@ -526,6 +994,59 @@ public sealed class ItemSystem
     private Entity? ResolveNearbyMerchant(string? target) =>
         ResolveNearbyEntity(target, entity => entity.Has<MerchantComponent>(), range: 2);
 
+    private Entity? ResolveNearbyCommerceProvider(string? target, string trigger)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return ResolveNearbyMerchant(null)
+                ?? ResolveNearbyEntity(null, entity => HasCommercePromise(entity, trigger), range: 2);
+        }
+
+        return ResolveNearbyEntity(
+            target,
+            entity => entity.Has<MerchantComponent>() || HasCommercePromise(entity, trigger),
+            range: 2);
+    }
+
+    private bool HasCommercePromise(Entity entity, string trigger)
+    {
+        if (!entity.TryGet<PromiseAnchorComponent>(out var anchor))
+        {
+            return false;
+        }
+
+        return anchor.PromiseIds.Any(promiseId =>
+            _state.PromiseLedger.Promises.Any(promise =>
+                promise.Id.Equals(promiseId, StringComparison.OrdinalIgnoreCase)
+                && promise.Status.Equals("bound", StringComparison.OrdinalIgnoreCase)
+                && CommerceRealizationKind(promise)
+                && CommerceTriggerMatches(promise.TriggerHint, trigger)));
+    }
+
+    private static bool CommerceRealizationKind(WorldPromise promise)
+    {
+        var text = NormalizeToken(promise.RealizationKind ?? promise.Kind);
+        return text is "merchant_stock" or "stock" or "trade";
+    }
+
+    private static bool CommerceTriggerMatches(string? triggerHint, string trigger)
+    {
+        if (string.IsNullOrWhiteSpace(triggerHint))
+        {
+            return true;
+        }
+
+        var normalizedTrigger = NormalizeToken(trigger);
+        var parts = triggerHint
+            .Split(new[] { ',', '/', '|', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(NormalizeToken)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return parts.Contains(normalizedTrigger)
+            || parts.Contains("encounter")
+            || (normalizedTrigger is "buy" or "sell" or "wares" or "trade"
+                && parts.Overlaps(new[] { "buy", "wares", "trade", "sell", "merchant", "market", "stock" }));
+    }
+
     private string? FindWareKey(MerchantComponent merchant, string item)
     {
         if (string.IsNullOrWhiteSpace(item))
@@ -572,4 +1093,6 @@ public sealed class ItemSystem
                 .Split(new[] { ' ', '-', '.', ',', ':', ';', '/', '\\' }, StringSplitOptions.RemoveEmptyEntries));
         return string.IsNullOrWhiteSpace(cleaned) ? fallback : cleaned;
     }
+
+    private static string NormalizeToken(string value) => NormalizeId(value, "");
 }

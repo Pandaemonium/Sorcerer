@@ -47,12 +47,14 @@ Purpose-specific settings allow the game to use different models, timeouts, host
 keys for different jobs.
 
 Current implementation has `LlmConfiguration` and `LlmPurposeSettings` for these lanes. The CLI
-creates the foreground spell provider from `LlmPurpose.Wild`, while background settings are kept
-separate and currently drive only deterministic queue/throttle controls until real background
-provider calls are wired in. Purpose-specific environment variables follow
+creates foreground spell, generated-dialogue, and dialogue-claim providers from the `wild` and
+`dialogue` purposes, while background settings are kept separate and currently drive only
+deterministic queue/throttle controls until real background provider calls are wired in.
+Purpose-specific environment variables follow
 `SORCERER_<PURPOSE>_PROVIDER`, `SORCERER_<PURPOSE>_HOST`,
 `SORCERER_<PURPOSE>_MODEL`, `SORCERER_<PURPOSE>_TIMEOUT_SECONDS`,
-`SORCERER_<PURPOSE>_MAX_CONCURRENT_CALLS`, and `SORCERER_<PURPOSE>_ENABLED`.
+`SORCERER_<PURPOSE>_MAX_CONCURRENT_CALLS`, `SORCERER_<PURPOSE>_ENABLED`, and
+`SORCERER_<PURPOSE>_API_KEY`.
 
 ## Foreground Calls
 
@@ -88,14 +90,18 @@ Ollama can be supported, but Sorcerer should not require Ollama as the only real
 
 Provider implementations can include:
 
-- Ollama
-- OpenAI-compatible local or hosted endpoint
-- direct API-key provider
+- Ollama for local `/api/chat`
+- OpenAI-compatible local or hosted `/v1/chat/completions` endpoints
 - mock
 - deterministic fixture provider
 - replay provider fed by materialized transcript JSON
 
-Configuration should make it easy for users to use their preferred model.
+Configuration should make it easy for users to use their preferred model. The current
+OpenAI-compatible adapter is implemented for wild magic, generated dialogue, dialogue-claim
+extraction, and background text generation; it posts JSON-mode chat-completion requests, parses
+assistant content, and reuses the same engine-side parsing/repair contracts as the Ollama adapters.
+`--host` may be either a base URL such as `https://api.openai.com/v1` or a full
+`/chat/completions` endpoint.
 
 `ReplaySpellProvider` is not a live model provider. It replays normalized `SpellResolution` JSON
 captured in transcripts so command sequences that touched wild magic can be reproduced without
@@ -109,9 +115,15 @@ dotnet run --project src/Sorcerer.Cli -- --provider ollama --model qwen3.5:9b-cp
   --command "cast bind the nearest soldier in blue glass"
 ```
 
-Use `--background-provider`, `--background-host`, and `--background-model` to record separate
-background purpose settings for future workers; use `--max-background-jobs` and
-`--background-jobs-per-turn` to throttle the current deterministic background lane.
+Use `--background-provider`, `--background-host`, and `--background-model` to run separate
+background text generation behind the job queue. Use `--max-background-jobs` and
+`--background-jobs-per-turn` to throttle the lane; when the background provider is disabled or
+fails, the turn pump falls back to deterministic routed-lore text.
+
+The Godot menu uses the same provider factories for new runs. Its provider, host, and model fields
+default from `SORCERER_PROVIDER`, `SORCERER_HOST`/provider-specific host variables, and
+`SORCERER_MODEL`, so switching GUI playtests between Ollama, mock, and OpenAI-compatible endpoints
+does not require a separate code path.
 
 ## Secrets
 
@@ -120,9 +132,20 @@ API keys must not be stored in committed files.
 Local config files should be ignored by git once the repo exists. Example files can show
 variable names without secrets.
 
+The OpenAI-compatible adapter reads purpose-specific keys first
+(`SORCERER_WILD_API_KEY`, `SORCERER_DIALOGUE_API_KEY`, and so on through
+`SORCERER_<PURPOSE>_API_KEY`), then falls back to `SORCERER_OPENAI_API_KEY`, `SORCERER_API_KEY`,
+and `OPENAI_API_KEY`. Local OpenAI-compatible endpoints that do not require auth can omit these.
+
 ## Audits
 
 Audit records should include provider information, but not secrets.
+
+Current JSONL sinks:
+
+- `logs/wild_magic_audit.jsonl` for spell resolution
+- `logs/dialogue_audit.jsonl` for generated dialogue and claim extraction context
+- `logs/background_audit.jsonl` for background text generation
 
 Record:
 

@@ -10,6 +10,21 @@ public sealed record PerceptionSnapshot(
     IReadOnlySet<GridPoint> ExploredTiles,
     IReadOnlySet<EntityId> VisibleEntityIds);
 
+public sealed record SuspicionUpdateProposal(
+    string SuspicionId,
+    string Status,
+    string? SuspectedSoulId,
+    int? AttributedTurn);
+
+public sealed record SuspicionCapturePlan(
+    string WitnessSoulId,
+    string Kind,
+    GridPoint EffectPoint,
+    string Status,
+    string? SuspectedSoulId,
+    int? AttributedTurn,
+    int ExpiresTurn);
+
 public sealed class PerceptionSystem
 {
     public const int DefaultSightRadius = 8;
@@ -24,18 +39,7 @@ public sealed class PerceptionSystem
 
     public PerceptionSnapshot RefreshControlled()
     {
-        var snapshot = ComputeFor(_state.ControlledEntity, DefaultSightRadius);
-        var explored = ExploredForSoul(snapshot.SoulId);
-        foreach (var point in snapshot.VisibleTiles)
-        {
-            explored.Add(point);
-        }
-
-        UpdatePendingSuspicionAttributions();
-        return snapshot with
-        {
-            ExploredTiles = new HashSet<GridPoint>(explored),
-        };
+        return ComputeFor(_state.ControlledEntity, DefaultSightRadius);
     }
 
     public PerceptionSnapshot SnapshotForControlled() => RefreshControlled();
@@ -57,7 +61,7 @@ public sealed class PerceptionSystem
             .ToArray();
     }
 
-    public IReadOnlyList<SuspicionRecord> RecordEffectSuspicion(
+    public IReadOnlyList<SuspicionCapturePlan> PlanEffectSuspicion(
         GridPoint effectPoint,
         string kind,
         Entity? actor = null)
@@ -66,15 +70,14 @@ public sealed class PerceptionSystem
         var actorPosition = actor?.TryGet<PositionComponent>(out var position) == true
             ? position.Position
             : (GridPoint?)null;
-        var created = new List<SuspicionRecord>();
+        var plans = new List<SuspicionCapturePlan>();
         foreach (var witness in WitnessesOf(effectPoint, actor?.Id))
         {
             var seesActor = actorPosition is not null
                 && witness.TryGet<PositionComponent>(out var witnessPosition)
                 && IsWithinSightRadius(witnessPosition.Position, actorPosition.Value, DefaultSightRadius)
                 && HasLineOfSight(witnessPosition.Position, actorPosition.Value);
-            created.Add(_state.Suspicions.Append(
-                _state.Turn,
+            plans.Add(new SuspicionCapturePlan(
                 SoulIdFor(witness),
                 kind,
                 effectPoint,
@@ -84,7 +87,43 @@ public sealed class PerceptionSystem
                 _state.Turn + SuspicionAttributionWindow));
         }
 
-        return created;
+        return plans;
+    }
+
+    public IReadOnlyList<SuspicionUpdateProposal> PendingSuspicionUpdates()
+    {
+        var player = _state.ControlledEntity;
+        if (!player.TryGet<PositionComponent>(out var playerPosition))
+        {
+            return Array.Empty<SuspicionUpdateProposal>();
+        }
+
+        var playerSoulId = SoulIdFor(player);
+        var updates = new List<SuspicionUpdateProposal>();
+        foreach (var suspicion in _state.Suspicions.Records
+            .Where(record => record.Status.Equals("pending", StringComparison.OrdinalIgnoreCase))
+            .ToArray())
+        {
+            if (suspicion.ExpiresTurn < _state.Turn)
+            {
+                updates.Add(new SuspicionUpdateProposal(suspicion.Id, "expired", suspicion.SuspectedSoulId, suspicion.AttributedTurn));
+                continue;
+            }
+
+            var witness = _state.Entities.Values.FirstOrDefault(entity =>
+                SoulIdFor(entity).Equals(suspicion.WitnessSoulId, StringComparison.OrdinalIgnoreCase));
+            if (witness is null
+                || !witness.TryGet<PositionComponent>(out var witnessPosition)
+                || !IsWithinSightRadius(witnessPosition.Position, playerPosition.Position, DefaultSightRadius)
+                || !HasLineOfSight(witnessPosition.Position, playerPosition.Position))
+            {
+                continue;
+            }
+
+            updates.Add(new SuspicionUpdateProposal(suspicion.Id, "attributed", playerSoulId, _state.Turn));
+        }
+
+        return updates;
     }
 
     public string RelationToPlayer(GridPoint point, PerceptionSnapshot snapshot)
@@ -146,7 +185,7 @@ public sealed class PerceptionSystem
             return new PerceptionSnapshot(
                 SoulIdFor(viewer),
                 new HashSet<GridPoint>(),
-                ExploredForSoul(SoulIdFor(viewer)),
+                ExploredSnapshotForSoul(SoulIdFor(viewer)),
                 new HashSet<EntityId>());
         }
 
@@ -178,57 +217,18 @@ public sealed class PerceptionSystem
         return new PerceptionSnapshot(
             soulId,
             visibleTiles,
-            new HashSet<GridPoint>(ExploredForSoul(soulId)),
+            ExploredSnapshotForSoul(soulId),
             visibleEntities);
     }
 
-    private void UpdatePendingSuspicionAttributions()
-    {
-        var player = _state.ControlledEntity;
-        if (!player.TryGet<PositionComponent>(out var playerPosition))
-        {
-            return;
-        }
-
-        var playerSoulId = SoulIdFor(player);
-        foreach (var suspicion in _state.Suspicions.Records
-            .Where(record => record.Status.Equals("pending", StringComparison.OrdinalIgnoreCase))
-            .ToArray())
-        {
-            if (suspicion.ExpiresTurn < _state.Turn)
-            {
-                _state.Suspicions.Replace(suspicion with { Status = "expired" });
-                continue;
-            }
-
-            var witness = _state.Entities.Values.FirstOrDefault(entity =>
-                SoulIdFor(entity).Equals(suspicion.WitnessSoulId, StringComparison.OrdinalIgnoreCase));
-            if (witness is null
-                || !witness.TryGet<PositionComponent>(out var witnessPosition)
-                || !IsWithinSightRadius(witnessPosition.Position, playerPosition.Position, DefaultSightRadius)
-                || !HasLineOfSight(witnessPosition.Position, playerPosition.Position))
-            {
-                continue;
-            }
-
-            _state.Suspicions.Replace(suspicion with
-            {
-                Status = "attributed",
-                SuspectedSoulId = playerSoulId,
-                AttributedTurn = _state.Turn,
-            });
-        }
-    }
-
-    private HashSet<GridPoint> ExploredForSoul(string soulId)
+    private IReadOnlySet<GridPoint> ExploredSnapshotForSoul(string soulId)
     {
         if (!_state.ExploredBySoulId.TryGetValue(soulId, out var explored))
         {
-            explored = new HashSet<GridPoint>();
-            _state.ExploredBySoulId[soulId] = explored;
+            return new HashSet<GridPoint>();
         }
 
-        return explored;
+        return new HashSet<GridPoint>(explored);
     }
 
     private bool InBounds(GridPoint point) =>

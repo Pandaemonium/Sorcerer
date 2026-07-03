@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
@@ -32,6 +33,11 @@ public static class Program
         var provider = SpellProviderFactory.Create(configuration, LlmPurpose.Wild);
         var dialogueProvider = DialogueProviderFactory.Create(configuration, LlmPurpose.Dialogue);
         var dialogueClaimExtractor = DialogueClaimExtractorFactory.Create(configuration, LlmPurpose.Dialogue);
+        var backgroundAudit = new JsonlBackgroundTextAuditSink(Path.Combine("logs", "background_audit.jsonl"));
+        var backgroundTextGenerator = BackgroundTextGeneratorFactory.Create(
+            configuration,
+            LlmPurpose.Background,
+            backgroundAudit);
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
         var dialogueAudit = new JsonlDialogueAuditSink(Path.Combine("logs", "dialogue_audit.jsonl"));
         if (options.Eval)
@@ -47,11 +53,13 @@ public static class Program
                 dialogueClaimExtractor,
                 dialogueAudit,
                 audit,
+                backgroundTextGenerator,
                 new EpisodeRunnerOptions(
                     options.Episodes,
                     options.MaxTurns,
                     options.Seed,
-                    options.EpisodeLogPath),
+                    options.EpisodeLogPath,
+                    options.QuickstartScene),
                 options.Json);
         }
 
@@ -70,7 +78,8 @@ public static class Program
             CrossRunMemorialStore.LoadDefault(),
             dialogueClaimExtractor,
             dialogueProvider,
-            dialogueAudit);
+            dialogueAudit,
+            backgroundTextGenerator);
         ApplyBackgroundOptions(session, options);
         ApplyQuickstart(session, options.QuickstartScene);
         await using var transcript = TranscriptWriter.Open(options.TranscriptPath);
@@ -146,13 +155,16 @@ public static class Program
             || options.BackgroundModel is not null
             || options.BackgroundEnabled is not null)
         {
+            var providerSpecified = options.BackgroundProvider is not null
+                || options.BackgroundHost is not null
+                || options.BackgroundModel is not null;
             configuration = configuration.WithPurposeOverride(
                 LlmPurpose.Background,
                 options.BackgroundProvider,
                 options.BackgroundHost,
                 options.BackgroundModel,
                 maxConcurrentCalls: options.BackgroundConcurrency,
-                enabled: options.BackgroundEnabled);
+                enabled: options.BackgroundEnabled ?? providerSpecified);
         }
 
         return configuration;
@@ -190,7 +202,7 @@ public static class Program
         return result.ShouldQuit;
     }
 
-    private static void ApplyQuickstart(GameSession session, string? quickstart)
+    internal static void ApplyQuickstart(GameSession session, string? quickstart)
     {
         if (!string.Equals(quickstart, "social", StringComparison.OrdinalIgnoreCase))
         {
@@ -198,22 +210,44 @@ public static class Program
         }
 
         var state = session.Engine.State;
-        state.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
-        if (session.Engine.EntityById("cell_door_1") is { } door)
-        {
-            door.Set(door.Get<DoorComponent>() with { IsOpen = true });
-            door.Set(door.Get<PhysicalComponent>() with { BlocksMovement = false, BlocksSight = false });
-        }
+        session.Engine.ApplyConsequence(WorldConsequence.OpenOrUnlock(
+            "cli_quickstart",
+            "cell_door_1",
+            unlock: true,
+            open: true,
+            operation: "quickstartOpenDoor"));
+        session.Engine.ApplyConsequence(WorldConsequence.MoveEntity(
+            "cli_quickstart",
+            state.ControlledEntityId.Value,
+            13,
+            5,
+            operation: "quickstartMove",
+            emitMessage: false));
 
         foreach (var id in new[] { "soldier_1", "soldier_2" })
         {
             if (session.Engine.EntityById(id) is { } soldier)
             {
-                soldier.Set(new ControllerComponent(ControllerKind.None));
+                session.Engine.ApplyConsequence(WorldConsequence.UpdateControl(
+                    "cli_quickstart",
+                    soldier.Id.Value,
+                    "none",
+                    removeAi: true,
+                    operation: "quickstartDisableAi"));
             }
         }
 
-        state.AddMessage("Social quickstart: the cell is open enough for conversation.");
+        session.Engine.ApplyConsequence(WorldConsequence.Message(
+            "cli_quickstart",
+            "Social quickstart: the cell is open enough for conversation.",
+            targetEntityId: state.ControlledEntityId.Value,
+            visibility: WorldConsequenceVisibility.Message,
+            sourceEntityId: state.ControlledEntityId.Value,
+            operation: "quickstartMessage",
+            details: new Dictionary<string, object?>
+            {
+                ["quickstart"] = "social",
+            }));
     }
 
     private static IReadOnlyList<string> LoadScriptCommands(string? scriptPath)
@@ -284,9 +318,17 @@ public static class Program
 
             return type.Trim().ToLowerInvariant() switch
             {
+                "n" or "north" => new MoveCommand(Direction.North),
+                "s" or "south" => new MoveCommand(Direction.South),
+                "e" or "east" => new MoveCommand(Direction.East),
+                "w" or "west" => new MoveCommand(Direction.West),
+                "ne" or "northeast" => new MoveCommand(Direction.NorthEast),
+                "nw" or "northwest" => new MoveCommand(Direction.NorthWest),
+                "se" or "southeast" => new MoveCommand(Direction.SouthEast),
+                "sw" or "southwest" => new MoveCommand(Direction.SouthWest),
                 "move" => new MoveCommand(ParseDirection(ReadString(root, "direction", "east"))),
                 "wait" => new WaitCommand(),
-                "inspect" => new InspectCommand(),
+                "inspect" or "look" => new InspectCommand(),
                 "map" => new MapCommand(ReadInt(root, "radius", 8)),
                 "cast" => ReadBool(root, "await", true)
                     ? new CastCommand(ReadString(root, "text", ""), CastPerformance.Neutral)
@@ -295,10 +337,10 @@ public static class Program
                 "await_cast" or "resolve_cast" => new AwaitCastCommand(),
                 "cancel_cast" => new CancelCastCommand(),
                 "target" => new TargetCommand(new GridPoint(ReadInt(root, "x", 0), ReadInt(root, "y", 0))),
-                "untarget" => new ClearTargetCommand(),
+                "untarget" or "cleartarget" => new ClearTargetCommand(),
                 "travel" or "go" => new TravelCommand(ParseDirection(ReadString(root, "direction", "east"))),
                 "atlas" or "world" => new AtlasCommand(),
-                "pickup" => new PickupCommand(ReadNullableString(root, "target")),
+                "pickup" or "get" => new PickupCommand(ReadNullableString(root, "target")),
                 "drop" => new DropCommand(ReadString(root, "item", "")),
                 "use" => new UseItemCommand(ReadString(root, "item", "")),
                 "equip" => new EquipCommand(ReadString(root, "item", "")),
@@ -315,14 +357,15 @@ public static class Program
                 "request" or "service" => new RequestServiceCommand(
                     ReadString(root, "service", ReadString(root, "name", "")),
                     ReadNullableString(root, "target")),
-                "journal" => new JournalCommand(),
+                "journal" or "promises" => new JournalCommand(),
+                "rumors" or "gossip" => new RumorsCommand(),
                 "character" or "sheet" or "profile" => new CharacterCommand(),
-                "talk" => new TalkCommand(ReadString(root, "text", "")),
+                "talk" or "say" or "speak" => new TalkCommand(ReadString(root, "text", "")),
                 "give" or "gift" => new GiveCommand(ReadString(root, "item", ""), ReadNullableString(root, "target")),
                 "recruit" => new RecruitCommand(ReadNullableString(root, "target")),
                 "bonds" or "bond" => new BondsCommand(ReadNullableString(root, "target")),
                 "read" => new ReadCommand(ReadNullableString(root, "target")),
-                "examine" => new ExamineCommand(ReadNullableString(root, "target")),
+                "examine" or "study" => new ExamineCommand(ReadNullableString(root, "target")),
                 "open" => new OpenCommand(ReadNullableString(root, "target")),
                 "possess" => new PossessCommand(ReadNullableString(root, "target")),
                 "standing" => new StandingCommand(),
@@ -610,6 +653,8 @@ public sealed class TranscriptWriter : IAsyncDisposable
             options.BackgroundEnabled,
             options.MaxBackgroundJobs,
             options.BackgroundJobsPerTurn,
+            options.Quickstart,
+            options.QuickstartScene,
             options.Commands,
             observation));
 
@@ -651,6 +696,8 @@ public sealed class TranscriptWriter : IAsyncDisposable
         bool? BackgroundEnabled,
         int MaxBackgroundJobs,
         int BackgroundJobsPerTurn,
+        bool Quickstart,
+        string? QuickstartScene,
         IReadOnlyList<string> Commands,
         AgentObservation InitialObservation);
 

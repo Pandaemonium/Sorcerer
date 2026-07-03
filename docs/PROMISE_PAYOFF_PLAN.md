@@ -33,17 +33,55 @@ The current implementation already has useful bones:
   renderer code.
 - Generated dialogue can propose claims/promises, and the engine validates them
   before mutating state.
+- `ClaimSourceComponent` lets readable and examinable entities carry authored
+  claim seeds. `read` and `examine` surface those seeds through `record_claim`;
+  high-salience visible seeds mint rumors through `record_rumor`; seeds marked
+  as buildable hooks bind through `create_promise`, then the claim is updated
+  through `update_claim`.
 - `PromiseRealizationSystem` is the first shared payoff service. Travel
-  generation and anchored interactions now route through it instead of keeping
-  separate realization code in `GenerationSystem` and `InteractionSystem`.
+  generation, anchored interactions, and the first ambient player-turn trigger
+  now route through it instead of keeping separate realization code in
+  `GenerationSystem`, `InteractionSystem`, or command handlers.
 - Travel generation can realize region-bound promises as sites, items, people,
-  threats, or merchant-stock payoffs and emits a standard `realizePromise`
-  delta before the concrete payoff delta.
+  threats, routes, or merchant/service payoffs and emits a hidden
+  `promiseRealizationPlan` audit delta, then a standard `realizePromise` delta,
+  before the concrete payoff delta. Destination-zone
+  payoffs now run ordinary `WorldConsequenceApplier` handlers against a detached
+  destination-state snapshot. The staged zone entity map stays separate from
+  the currently loaded zone, but global ledgers such as canon, memories, rumors,
+  scheduled events, world flags, RNG, and entity serial commit back only after
+  successful application. Compound generated payoffs stage every child
+  consequence in that detached snapshot and commit once, so a rejected
+  `offer_trade`, `offer_service`, or `add_canon` cannot leave behind an orphaned
+  provider or partial lore receipt. Site, item, person, threat, and route payoffs use `spawn_fixture`,
+  `spawn_item`, `spawn_entity`, and `create_route`; merchant and service
+  payoffs spawn the provider through `spawn_entity`, then attach `offer_trade`
+  or `offer_service`. Promise-spawned
+  people, merchants, and service providers receive `WantComponent`s from the same
+  spawn payload so first contact has an active desire without bespoke scripting.
 - Anchored `talk`, `read`, `open`, and `inspect`/`examine` interactions can
-  realize promises as memory, threat, item, quest/canon, site/canon, or
+  realize promises as memory, threat, item, route, quest/canon, site/canon, or
   omen/canon.
+- The `wait` command can realize one explicitly time-triggered bound promise
+  per use through the same service. This is intentionally narrow: `wait`,
+  `rest`, `linger`, `bellfall`, `nightfall`, and similar trigger hints can
+  mature omens, debts, threats, door rules, items, people, services, or routes,
+  but ordinary travel leads do not cash in just because the player spent a turn.
+- Commerce commands can wake anchored merchant-stock promises. `wares`, `buy`,
+  and `sell` resolve a nearby merchant or promise-backed provider, ask
+  `PromiseRealizationSystem` for commerce payoffs, and then inspect, purchase,
+  or sell through the ordinary `MerchantComponent` and `execute_trade`
+  consequence. A promised seller can therefore become a normal merchant at the
+  moment the player asks for wares, buys promised stock, or offers goods for sale.
+- Service commands can wake anchored service promises. `services` and `request`
+  resolve a nearby service provider or promise-backed provider, ask
+  `PromiseRealizationSystem` for service payoffs, attach an ordinary
+  `ServiceComponent` through `offer_service`, and then list or request the
+  service through the normal validated service path.
 - Realization produces state deltas, player-facing messages, durable canon or
   memory where appropriate, and promise-anchored entities for concrete payoffs.
+  Anchored route and canon payoffs now apply through `create_route` and
+  `add_canon`, so their audit deltas match the shared consequence grammar.
 
 The next step is not to invent a separate quest engine. It is to make promise
 payoff selection and application deeper, more general, and more consistent.
@@ -85,8 +123,11 @@ payoff selection and application deeper, more general, and more consistent.
 6. **Plan.** The payoff system builds a small validated realization plan:
    create an entity, add stock, attach a service, write memory, spawn a threat,
    add canon, reveal a route, or schedule an event.
-7. **Apply transactionally.** The engine applies the plan, marks the promise
-   realized or advanced, records `realizedIn`, and emits deltas.
+7. **Apply transactionally.** The engine applies the payoff, marks the promise
+   realized or advanced, records `realizedIn`, and emits deltas as one commit.
+   If either payoff application or final status update rejects, staged state and
+   visible payoff messages roll back and the audit trail records
+   `promiseRealizationSkipped`.
 8. **Surface.** The player gets a diegetic message or journal movement. Debug
    views get exact ids, kinds, triggers, and created state.
 9. **Continue.** Realized content can carry memories, anchors, traits, faction
@@ -95,7 +136,36 @@ payoff selection and application deeper, more general, and more consistent.
 ## Realization Context
 
 Promise payoff should use one shared context shape no matter which system
-triggered it. A future `PromiseRealizationContext` should include:
+triggered it. The first `PromiseRealizationContext` now covers travel, ambient
+turn hooks, and anchored interactions. Travel contexts carry trigger,
+destination zone, region, entry direction, and placement origin; anchored
+contexts carry trigger, region, and anchor entity id. Selected payoffs now become
+`PromiseRealizationPlan`s with a normalized handler, target, `realizedIn`,
+selection score, and selection reasons. `promiseRealizationPlan` and
+`realizePromise` audit deltas include these fields so debug views can explain
+why a promise paid off in this place at this moment.
+Concrete plans preflight basic capacity before status mutation: spawned
+item/threat/person/site/provider payoffs need an open placement tile, and
+door-rule payoffs require a real door anchor. If preflight fails, the promise
+stays bound and receives a hidden eligibility failure such as
+`no_open_adjacent_tile` instead of being spent.
+Concrete handler application now also precedes the final status update, but the
+handler output and `promiseStatus` update are committed together. If the
+registered handler returns a rejected consequence, a skipped payoff, or a final
+status-update rejection, the promise stays bound, staged payoff content and
+visible payoff messages roll back, rejection diagnostics remain in audit deltas,
+and the last eligibility failure records why the promise did not pay off.
+Plans now dispatch through registered archetype handlers for travel and
+anchored/ambient payoff families. Each handler owns its preflight and concrete
+application step, so adding a new promise payoff type should mean registering a
+handler rather than adding another caller-specific switch.
+Claim-derived promises now preserve source claim id, source speaker id, source
+listener soul id, and source confidence on `WorldPromise`. `create_promise`
+deltas, `PromiseCard`, and `promiseRealizationPlan` audit deltas expose that
+chain so later dialogue, debugging, and payoff evaluation can trace a realized
+thing back to the claim that birthed it.
+
+A deeper `PromiseRealizationContext` should continue growing toward:
 
 - triggering verb: `travel`, `talk`, `read`, `inspect`, `open`, `buy`, `trade`,
   `wait`, `cast`, or `faction`
@@ -191,6 +261,8 @@ Preferred triggers:
 - `talk`
 - `buy`
 - `trade`
+- `services`
+- `request`
 - `inspect` merchant or stall
 
 Payoff:
@@ -229,6 +301,9 @@ Payoff:
   add a hazard, or attach a looming status to a region.
 - Threats do not always need to attack instantly. A debt collector can speak
   first; a patrol can block a road; a shrine can demand repayment.
+- Time-triggered `debt` realization now dispatches through the threat handler,
+  so a debt that comes due creates an actionable collector/threat instead of
+  only adding abstract canon.
 - Preserve the source promise so the player understands why the consequence
   arrived.
 
@@ -259,8 +334,10 @@ Payoff:
   route promise is another engine-authorized terrain/action change, not a
   separate narrative-only shortcut system.
 - The first route payoff creates an ordinary route fixture with tags,
-  description, position, and interaction verbs. The first door/service payoff
-  can unlock/open a nearby door through `open_or_unlock`.
+  description, position, promise anchor, material, and interaction verbs through
+  `create_route`. Anchored door-rule payoffs on actual doors unlock/open through
+  `open_or_unlock`; service payoffs reveal `ServiceComponent` affordances through
+  `offer_service`.
 
 Complete when the player can discover, satisfy, violate, or exploit the route
 or rule.
@@ -320,15 +397,33 @@ The engine should not simply realize promises in insertion order forever.
 Travel selection is now scored with deterministic randomness. The current first
 slice still keeps a small per-zone budget, but eligible travel promises are
 ranked by salience, trigger fit, archetype, opening pressure, stacks, and RNG
-jitter instead of raw ledger order. This lets early runs exercise the system
-without forcing a guaranteed payoff every time.
+jitter instead of raw ledger order. Travel selection also reads the realization
+context: clear "north/south/east/west of here" style directions gate payoff
+eligibility, while softer route prose such as "a road south of the yard" remains
+available unless it names an exact zone contradiction. Ambient `wait` selection
+uses the same scored promise path, but only for promises with explicit
+time-shaped trigger hints, so waiting cannot accidentally empty the journal of
+travel leads. This lets early runs exercise the system without forcing a
+guaranteed payoff every time or cashing a major lead in a plainly wrong
+direction.
+
+Anchored interactions now use the same discipline. `talk`, `read`, `inspect`,
+`open`, `wares`, `buy`, `sell`, `services`, and `request` collect matching
+anchor-bound promises, score them by salience, trigger fit, bound target,
+anchor suitability, realization kind, and stacks, then wake a small budgeted
+set. This prevents a dialogue-heavy NPC or object from dumping every broad omen
+at once, and it lets a lower-salience but exact service/door/trade promise beat
+an earlier generic claim when the player invokes the matching verb. Anchored
+`realizePromise` audit deltas now include the selection score.
 
 Eligibility gates:
 
 - Promise is active and bound.
 - Trigger hint matches the current apply point, or the promise has no stricter
   trigger.
-- Bound target, bound place, or region is compatible with the current context.
+- Bound target, exact zone claim, or explicit directional claim is compatible
+  with the current context. Source-region stamps are scoring context, not hard
+  destination locks.
 - The realization kind has a buildable archetype.
 - There is capacity: open tile, valid entity, valid merchant, valid region
   affordance, or valid event slot.
@@ -355,6 +450,14 @@ Pacing rules:
   like a ledger dump.
 - If the world cannot currently honor a promise, keep it active and record why
   in debug/audit state rather than silently discarding it.
+
+Eligibility diagnostics are now part of the promise lifecycle. Failed travel,
+ambient, or anchored checks submit hidden `update_promise` consequences that
+store the last eligibility failure, context, and turn on `WorldPromise`.
+Player-facing action deltas stay quiet, while `PromiseCard` and debug surfaces
+can explain why a promise is still waiting. Realization clears the diagnostic
+through the same `update_promise` status change so stale failure reasons do not
+survive a successful payoff.
 
 ## Relocation And Contradiction
 
@@ -434,35 +537,47 @@ markets, shrines, roads, and prisons.
 ## Architecture Direction
 
 The first consolidation slice is implemented: `PromiseRealizationSystem` now
-owns the concrete realization handlers for travel promises and entity-anchored
-promises. `GenerationSystem` asks it to realize travel hooks when a zone is
-generated. `InteractionSystem` asks it to realize anchored hooks for `talk`,
-`read`, `open`, and `examine`/`inspect`.
+owns the concrete realization handlers for travel promises, entity-anchored
+promises, and the first ambient command trigger. `GenerationSystem` asks it to
+realize travel hooks when a zone is generated. `InteractionSystem` asks it to
+realize anchored hooks for `talk`, `read`, `open`, and `examine`/`inspect`.
+`wait` asks it to realize one explicitly time-triggered promise before the turn
+pump runs. `wares`, `buy`, and `sell` ask it to realize anchored merchant-stock
+promises before listing stock or executing trade. `services` and `request` ask
+it to realize anchored service promises before listing or submitting `request_service`.
 
 Adjacent dialogue side effects have started the same consolidation. The
 `WorldConsequence`/`WorldConsequenceApplier` slice now applies `record_memory`,
-`update_bond`, `add_merchant_stock`, `offer_trade`, `offer_service`,
-`open_or_unlock`, and `create_route` consequences through a shared engine path.
+`update_bond`, `create_promise`, `update_promise`, `add_merchant_stock`,
+`offer_trade`, `execute_trade`, `offer_service`, `request_service`, `open_or_unlock`, `create_route`, `free_captive`,
+`spawn_fixture`, `spawn_item`, and `spawn_entity` through a shared engine path,
+including destination-zone promise payoffs applied against detached generated-zone
+state.
 Generated dialogue, claim extraction, services, promise payoffs, books, AI
 plans, factions, and magic should increasingly submit the same source-agnostic
 typed consequences instead of owning separate mutation helpers. Immediate
 tactical payoffs and durable social/world payoffs should share the envelope;
 their handlers and `timing` fields decide whether they resolve now, after the
 turn, at a world pump, or later.
+Authored documents and props follow the same rule: `ClaimSourceComponent` is only a source of
+candidate claims. The authoritative writes are still `record_claim`, `record_rumor`,
+`create_promise`, and `update_claim`, with duplicate suppression handled by the claim and rumor
+ledgers rather than by each object.
 
 The next step is to deepen that service:
 
-- Score and select eligible promises within a pacing budget instead of relying
-  on simple ledger order.
-- Build explicit realization plans using registered archetype handlers.
-- Validate all entity ids, positions, stock targets, components, and event
-  slots before mutation.
+- Deepen preflight beyond the first capacity checks by validating all entity
+  ids, stock targets, components, event slots, and handler-specific costs before
+  mutation.
 - Route simple payoff side effects through the typed consequence applier when
   they match an existing consequence type.
-- Route buy, trade, wait, magic, and faction-turn payoffs through the same
-  service.
-- Deepen merchant-stock selection, then add service, door-rule, route,
-  staged-prophecy, and objective handlers behind the same context shape.
+- Route broader trade/service aliases, magic, and faction-turn payoffs through
+  the same service; the first `wait`, `wares`, `buy`, `sell`, `services`, and
+  `request` triggers are live behind explicit trigger guards.
+- Deepen merchant-stock and service selection, then add door-rule,
+  staged-prophecy, and objective handlers behind the same context shape. Route,
+  service, and durable-canon anchored payoffs have the first consequence-backed
+  handlers.
 
 This keeps "open a door because dialogue proposed it" from needing separate
 door-specific promise logic. The dialogue action, the player command, and a
@@ -483,13 +598,9 @@ and fold them into shared engine-side helpers as part of the consolidation pass.
 The current `WorldPromise` can support the first payoff slice. Deeper payoffs
 will probably want:
 
-- source claim id
-- source speaker id and listener id
-- reliability/confidence copied from claim binding
 - realization stage, for promises that stir before they fully realize
 - payoff tags separate from display text
 - objective payload for quest/bargain/debt promises
-- last eligibility failure for debug views
 - deterministic realization seed or replay token
 
 Do not add all of these preemptively. Add them when a payoff archetype or test
@@ -505,9 +616,17 @@ Focused tests should cover:
 - impossible exact locations relocate instead of disappearing
 - duplicate or corroborating claims do not create nonsense duplicates
 - merchant stock promises add stock to existing merchants when possible
-- service promises create visible service affordances without auto-completing the
-  service
-- door rule and escape route promises use ordinary world action validation
+- anchored merchant-stock promises can realize through `wares`, `buy`, or `sell`
+  and then use ordinary `execute_trade`
+- anchored service promises can realize through `services` or `request`, create
+  visible service affordances through `offer_service`, and then use ordinary
+  service listing plus the shared `request_service` consequence
+- anchored door-rule promises can realize through `open`, unlock/open actual
+  doors through `open_or_unlock`, and then request broader follow-on outcomes
+  such as `free_captive` through ordinary interaction consequences
+- escape route promises use ordinary route validation
+- explicit wait/time promises can realize through the `wait` command without
+  realizing unrelated travel promises
 - threats change actual state, not only messages
 - generated-dialogue and claim-extraction bond proposals share clamp limits and
   missing-entity failure behavior
@@ -531,15 +650,29 @@ Live evals should include:
 2. **Centralize realization context.** Introduce a shared context/selection
    surface while preserving current behavior.
 3. **Move existing archetypes behind handlers.** Site, item, person, threat,
-   memory, and canon should use the shared payoff path.
+   route, memory, and canon should use the shared payoff path. Travel payoffs
+   apply ordinary consequence handlers against detached generated-zone state;
+   merchant and service travel payoffs compose provider spawns with
+   `offer_trade`/`offer_service`; service performance then uses
+   `request_service`. Payoff canon receipts are returned as `promiseCanon`
+   child deltas and roll the realization back if the receipt cannot be written.
 4. **Add provenance depth.** Preserve source claim/speaker/listener in realized
    entities, memories, canon, and debug deltas.
-5. **Add merchant stock and service payoffs.** This makes dialogue claims like
-   "Jimmer can sell you a fine blade" immediately useful without scripting.
-6. **Add door rule and escape route payoffs.** Use the general world action
-   grammar rather than one-off door handlers.
-7. **Add scoring and pacing.** Replace ledger-order realization with
-   deterministic eligibility scoring.
+5. **Deepen merchant stock and service payoffs.** The first typed payoff path
+   exists; merchant and service payoffs can now carry costs and service-provider
+   want completion metadata that resolves through `update_want` inside a
+   successful `request_service`. Next, add richer prices and rumor provenance without
+   leaving the shared consequence grammar.
+6. **Deepen escape route and door-rule payoffs.** The first anchored door-rule
+   payoff uses `open_or_unlock`; next, add richer conditions and route/door
+   variants without leaving the general world action grammar.
+7. **Add scoring and pacing.** Travel, ambient wait, and anchored interactions
+   now use deterministic eligibility scoring, small budgets, explicit
+   `promiseRealizationPlan` audit deltas, and persisted eligibility failure
+   diagnostics. Concrete item/threat/travel placement and door-rule plans
+   preflight basic capacity before status mutation. Travel and anchored/ambient
+   payoffs dispatch through registered archetype handlers. Next, deepen
+   handler-specific preflight.
 8. **Wire the opening.** Give the opening two or three promise sources and one
    guaranteed early payoff using ordinary systems.
 9. **Run evals.** Keep a small synthetic suite for binding quality and a
