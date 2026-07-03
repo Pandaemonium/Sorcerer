@@ -5199,6 +5199,85 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public async Task BumpingLockedDoorWithoutKeyReportsLockedWithoutConsumingTurn()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        var player = session.Engine.State.ControlledEntity;
+        var start = new GridPoint(12, 5);
+        player.Set(new PositionComponent(start));
+        var door = session.Engine.EntityById("cell_door_1")!;
+        var turnBefore = session.Engine.State.Turn;
+
+        var result = await session.ExecuteAsync(new MoveCommand(Direction.East));
+
+        Assert.False(result.Success);
+        Assert.False(result.ConsumedTurn);
+        Assert.Equal("move", result.Action);
+        Assert.Equal(turnBefore, result.TurnAfter);
+        Assert.Equal(start, player.Get<PositionComponent>().Position);
+        Assert.False(door.Get<DoorComponent>().IsOpen);
+        Assert.Contains(result.Messages, message =>
+            message.Equals("locked imperial cell door is locked.", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(session.Engine.State.Messages, message =>
+            message.Equals("locked imperial cell door is locked.", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "openLockedMessage"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.Message)
+            && Equals(delta.Details["doorId"], "cell_door_1"));
+    }
+
+    [Fact]
+    public async Task BumpingLockedDoorWithKeyOpensDoorWithoutMovingThroughIt()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        var player = session.Engine.State.ControlledEntity;
+        player.Set(new PositionComponent(new GridPoint(7, 6)));
+        var pickupKey = await session.ExecuteAsync(new PickupCommand("key"));
+        var start = new GridPoint(12, 5);
+        player.Set(new PositionComponent(start));
+        var door = session.Engine.EntityById("cell_door_1")!;
+        var turnBefore = session.Engine.State.Turn;
+
+        var result = await session.ExecuteAsync(new MoveCommand(Direction.East));
+
+        Assert.True(pickupKey.Success);
+        Assert.True(result.Success);
+        Assert.True(result.ConsumedTurn);
+        Assert.Equal("move", result.Action);
+        Assert.True(result.TurnAfter > turnBefore);
+        Assert.Equal(start, player.Get<PositionComponent>().Position);
+        Assert.True(door.Get<DoorComponent>().IsOpen);
+        Assert.Null(door.Get<DoorComponent>().KeyId);
+        Assert.False(door.Get<PhysicalComponent>().BlocksMovement);
+        Assert.Contains(result.Messages, message =>
+            message.Equals("You open locked imperial cell door.", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "open"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.OpenOrUnlock)
+            && Equals(delta.Details["open"], true));
+    }
+
+    [Fact]
+    public async Task EmptyTalkAsksForTargetWhenSeveralSpeakersAreNearby()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        DisableImperialAi(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(12, 5)));
+        var turnBefore = session.Engine.State.Turn;
+
+        var result = await session.ExecuteAsync(new TalkCommand(""));
+
+        Assert.False(result.Success);
+        Assert.False(result.ConsumedTurn);
+        Assert.Equal(turnBefore, result.TurnAfter);
+        Assert.Contains(result.Messages, message =>
+            message.Contains("Who do you want to talk to?", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("Lio", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task MagicPromiseCanBindToReadableAnchorAndRealizeOnRead()
     {
         var session = GameSession.CreateImperialEncounter(new WildMagicController(new PromiseBindingSpellProvider()));
@@ -5488,6 +5567,47 @@ public sealed class GameSessionTests
             && Equals(delta.Details["controlledEntityId"], soldier.Id.Value));
         Assert.DoesNotContain(result.Deltas, delta => delta.Operation == "possessionSkipped");
         Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
+    public async Task SummonFollowupCanTargetModelGuessedSummonId()
+    {
+        var resolution = AcceptedSpell(
+            "A lightning hound lands in a bright crouch.",
+            new SpellEffect(
+                "summon",
+                new Dictionary<string, object?>
+                {
+                    ["name"] = "lightning hound",
+                    ["faction"] = "player",
+                    ["hp"] = 6,
+                    ["attack"] = 3,
+                    ["glyph"] = "h",
+                }),
+            new SpellEffect(
+                "addStatus",
+                new Dictionary<string, object?>
+                {
+                    ["target"] = "lightning_hound_0",
+                    ["status"] = "charged",
+                    ["displayName"] = "charged",
+                    ["duration"] = 4,
+                }));
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(resolution)));
+        DisableImperialAi(session);
+
+        var result = await session.ExecuteAsync(new CastCommand("summon a lightning hound and charge it"));
+        var hound = session.Engine.EntityById("lightning_hound_0");
+
+        Assert.True(result.Success, string.Join("\n", result.Messages));
+        Assert.NotNull(hound);
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "summon"
+            && delta.Target == "lightning_hound_0"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.SpawnEntity));
+        Assert.Contains(hound!.Get<StatusContainerComponent>().Statuses, status =>
+            status.Id == "charged"
+            && status.ExpiresTurn == 4);
     }
 
     private static StateDelta ApplyStatus(

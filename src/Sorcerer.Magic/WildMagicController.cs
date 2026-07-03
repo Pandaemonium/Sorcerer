@@ -153,10 +153,12 @@ public sealed class WildMagicController : IWildMagicController
             return result;
         }
 
+        resolution = WithSummonReferenceRepair(resolution);
+        var projectedEntities = ProjectedSummonedEntities(engine, resolution);
         var effectContext = new EffectContext(
             engine,
             engine.State.ControlledEntity,
-            new EngineReferenceResolver(engine, engine.State.ControlledEntity));
+            new EngineReferenceResolver(engine, engine.State.ControlledEntity, projectedEntities: projectedEntities));
         var validationIssues = ValidateResolution(engine, command.Text, resolution, effectContext);
         if (validationIssues.Count > 0)
         {
@@ -495,6 +497,109 @@ public sealed class WildMagicController : IWildMagicController
 
     private static string SerializeResolution(SpellResolution resolution) =>
         JsonSerializer.Serialize(resolution, JsonOptions);
+
+    private static SpellResolution WithSummonReferenceRepair(SpellResolution resolution)
+    {
+        var effects = resolution.Effects
+            .Select(effect => effect.Type.Equals("summon", StringComparison.OrdinalIgnoreCase)
+                ? effect with { Fields = RepairSummonFields(effect, resolution.Effects) }
+                : effect)
+            .ToArray();
+        return resolution with { Effects = effects };
+    }
+
+    private static IReadOnlyDictionary<string, object?> RepairSummonFields(
+        SpellEffect summon,
+        IReadOnlyList<SpellEffect> allEffects)
+    {
+        if (HasFieldText(summon.Fields, "entityId", "entity_id", "id"))
+        {
+            return summon.Fields;
+        }
+
+        var name = FirstNonBlank(
+            ReadString(summon.Fields, "name", ""),
+            ReadString(summon.Fields, "entityName", ""),
+            ReadString(summon.Fields, "entity_name", ""),
+            "summon")!;
+        var prefix = OperationHelpers.NormalizeToken(name, "summon");
+        var referencedId = allEffects
+            .Where(effect => !ReferenceEquals(effect, summon))
+            .SelectMany(TargetFieldTexts)
+            .Select(target => OperationHelpers.NormalizeToken(target, ""))
+            .FirstOrDefault(target => target.Equals(prefix, StringComparison.OrdinalIgnoreCase)
+                || target.StartsWith($"{prefix}_", StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(referencedId))
+        {
+            return summon.Fields;
+        }
+
+        return new Dictionary<string, object?>(summon.Fields, StringComparer.OrdinalIgnoreCase)
+        {
+            ["entityId"] = referencedId,
+        };
+    }
+
+    private static IReadOnlyDictionary<string, Entity> ProjectedSummonedEntities(
+        GameEngine engine,
+        SpellResolution resolution)
+    {
+        var projected = new Dictionary<string, Entity>(StringComparer.OrdinalIgnoreCase);
+        var serial = engine.State.NextEntitySerial;
+        var origin = engine.State.ControlledEntity.Get<PositionComponent>().Position;
+        foreach (var effect in resolution.Effects)
+        {
+            if (!effect.Type.Equals("summon", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var name = FirstNonBlank(
+                ReadString(effect.Fields, "name", ""),
+                ReadString(effect.Fields, "entityName", ""),
+                ReadString(effect.Fields, "entity_name", ""),
+                "summoned wonder")!;
+            var prefix = OperationHelpers.NormalizeToken(name, "summon");
+            var explicitId = FirstNonBlank(
+                ReadString(effect.Fields, "entityId", ""),
+                ReadString(effect.Fields, "entity_id", ""),
+                ReadString(effect.Fields, "id", ""));
+            var id = string.IsNullOrWhiteSpace(explicitId)
+                ? $"{prefix}_{serial++}"
+                : OperationHelpers.NormalizeToken(explicitId, prefix);
+            if (engine.EntityById(id) is not null || projected.ContainsKey(id))
+            {
+                continue;
+            }
+
+            var faction = OperationHelpers.NormalizeToken(ReadString(effect.Fields, "faction", "player"), "player");
+            var hp = Math.Clamp(ReadInt(effect.Fields, "hp", 5), 1, 20);
+            var attack = Math.Clamp(ReadInt(effect.Fields, "attack", 2), 0, 10);
+            projected[id] = new Entity(EntityId.Create(id), name)
+                .Set(new PositionComponent(origin))
+                .Set(new RenderableComponent('*', faction))
+                .Set(new TagsComponent(new[] { "summoned", "wild_magic", "projected" }))
+                .Set(new PhysicalComponent(BlocksMovement: true, Material: "summoned"))
+                .Set(new ActorComponent(hp, hp, 0, 0, attack, 0, faction));
+        }
+
+        return projected;
+    }
+
+    private static bool HasFieldText(IReadOnlyDictionary<string, object?> fields, params string[] keys) =>
+        keys.Any(key => !string.IsNullOrWhiteSpace(ReadString(fields, key, "")));
+
+    private static IEnumerable<string> TargetFieldTexts(SpellEffect effect)
+    {
+        foreach (var key in new[] { "target", "targetEntityId", "target_entity_id", "targetId", "target_id", "entityId", "entity_id" })
+        {
+            var value = ReadString(effect.Fields, key, "");
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                yield return value;
+            }
+        }
+    }
 
     private IReadOnlyList<SpellValidationIssue> ValidateResolution(
         GameEngine engine,

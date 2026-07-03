@@ -372,7 +372,8 @@ public sealed class SummonOperation : OperationBase
             Int(effect, "hp", 5, min: 1, max: 20),
             Int(effect, "attack", 2, min: 0, max: 10),
             tags,
-            sourceEntityId: context.Caster.Id.Value)).Deltas;
+            sourceEntityId: context.Caster.Id.Value,
+            entityId: Text(effect, "entityId", Text(effect, "entity_id", Text(effect, "id", ""))))).Deltas;
     }
 
     private static string SummonName(SpellEffect effect, string fallback) =>

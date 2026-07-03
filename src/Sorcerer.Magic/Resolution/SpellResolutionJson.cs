@@ -69,6 +69,7 @@ public static class SpellResolutionJson
             .Select(fields => NormalizeFields(fields, registry))
             .Concat(rescuedEffects)
             .ToList();
+        BindSummonFollowupIds(effectFields);
         MergeSummonTraitFollowups(effectFields);
 
         var effects = effectFields
@@ -586,9 +587,64 @@ public static class SpellResolutionJson
         }
     }
 
+    private static void BindSummonFollowupIds(List<Dictionary<string, object?>> effects)
+    {
+        for (var summonIndex = 0; summonIndex < effects.Count; summonIndex++)
+        {
+            var summon = effects[summonIndex];
+            if (!ReadType(summon).Equals("summon", StringComparison.OrdinalIgnoreCase)
+                || HasExplicitEntityId(summon))
+            {
+                continue;
+            }
+
+            var name = FieldText(summon, "name", FieldText(summon, "entityName", FieldText(summon, "entity_name")));
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            var prefix = OperationHelpers.NormalizeToken(name, "summon");
+            var followupId = effects
+                .Where((_, index) => index != summonIndex)
+                .Select(TargetText)
+                .Select(target => OperationHelpers.NormalizeToken(target, ""))
+                .FirstOrDefault(target => IsSummonFollowupId(target, prefix));
+            if (!string.IsNullOrWhiteSpace(followupId))
+            {
+                summon["entityId"] = followupId;
+            }
+        }
+    }
+
+    private static bool HasExplicitEntityId(IReadOnlyDictionary<string, object?> fields) =>
+        !string.IsNullOrWhiteSpace(FieldText(fields, "entityId"))
+        || !string.IsNullOrWhiteSpace(FieldText(fields, "entity_id"))
+        || !string.IsNullOrWhiteSpace(FieldText(fields, "id"));
+
+    private static bool IsSummonFollowupId(string target, string summonPrefix)
+    {
+        if (string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(summonPrefix))
+        {
+            return false;
+        }
+
+        return target.Equals(summonPrefix, StringComparison.OrdinalIgnoreCase)
+            || target.StartsWith($"{summonPrefix}_", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string TargetText(IReadOnlyDictionary<string, object?> fields)
     {
-        if (!fields.TryGetValue("target", out var target) || target is null)
+        object? target = null;
+        foreach (var key in new[] { "target", "targetEntityId", "target_entity_id", "targetId", "target_id", "entityId", "entity_id" })
+        {
+            if (fields.TryGetValue(key, out target) && target is not null)
+            {
+                break;
+            }
+        }
+
+        if (target is null)
         {
             return string.Empty;
         }

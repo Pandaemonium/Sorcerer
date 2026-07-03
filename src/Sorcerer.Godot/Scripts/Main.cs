@@ -48,6 +48,7 @@ public partial class Main : Control
     private string? _lastError;
     private string? _lastPendingCastKey;
     private string _activeProviderName = "ollama";
+    private string? _busyStatusText;
     private bool _busy;
 
     public override void _Ready()
@@ -64,6 +65,11 @@ public partial class Main : Control
         }
 
         RefreshView();
+    }
+
+    public override void _Input(InputEvent @event)
+    {
+        TryConsumeNumpadMovement(@event);
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -85,11 +91,8 @@ public partial class Main : Control
             return;
         }
 
-        var numpadCommand = NumpadCommandForKey(key.Keycode);
-        if (numpadCommand is not null)
+        if (TryConsumeNumpadMovement(@event))
         {
-            _ = ExecuteAsync(numpadCommand);
-            GetViewport().SetInputAsHandled();
             return;
         }
 
@@ -101,6 +104,13 @@ public partial class Main : Control
         if (key.Keycode == Key.C)
         {
             _spellLine.GrabFocus();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        if (key.Keycode == Key.T)
+        {
+            FocusCommandLine("talk ");
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -371,6 +381,16 @@ public partial class Main : Control
         header.AddChild(inspect);
         _busyControls.Add(inspect);
 
+        var pickup = SmallButton("Pickup");
+        pickup.Pressed += () => _ = ExecuteAsync(new PickupCommand());
+        header.AddChild(pickup);
+        _busyControls.Add(pickup);
+
+        var talk = SmallButton("Talk");
+        talk.Pressed += () => FocusCommandLine("talk ");
+        header.AddChild(talk);
+        _busyControls.Add(talk);
+
         var mapFrame = new PanelContainer
         {
             ThemeTypeVariation = "MapFrame",
@@ -612,7 +632,7 @@ public partial class Main : Control
     {
         if (_busy)
         {
-            return "resolving...";
+            return _busyStatusText ?? "resolving...";
         }
 
         if (pendingCast is not null)
@@ -685,6 +705,13 @@ public partial class Main : Control
         await ExecuteAsync(TextCommandParser.Parse(text.Trim()));
     }
 
+    private void FocusCommandLine(string prefix)
+    {
+        _commandLine.Text = prefix;
+        _commandLine.CaretColumn = prefix.Length;
+        _commandLine.GrabFocus();
+    }
+
     private async Task ExecuteAsync(GameCommand command)
     {
         if (_busy)
@@ -693,7 +720,9 @@ public partial class Main : Control
         }
 
         _busy = true;
+        _busyStatusText = BusyStatusFor(command);
         SetBusy(true);
+        SetProviderBusyStatus();
         _lastError = null;
 
         try
@@ -711,8 +740,32 @@ public partial class Main : Control
         finally
         {
             _busy = false;
+            _busyStatusText = null;
             RefreshView();
         }
+    }
+
+    private string BusyStatusFor(GameCommand command) =>
+        command switch
+        {
+            TalkCommand => "dialogue resolving",
+            CastCommand => "spell resolving",
+            AwaitCastCommand => "spell resolving",
+            SaveCommand => "saving",
+            LoadCommand => "loading",
+            _ => "resolving...",
+        };
+
+    private void SetProviderBusyStatus()
+    {
+        if (_providerStatus is null || _providerStatusPanel is null)
+        {
+            return;
+        }
+
+        _providerStatus.Text = _busyStatusText ?? "resolving...";
+        _providerStatus.AddThemeColorOverride("font_color", UiTheme.Background);
+        _providerStatusPanel.AddThemeStyleboxOverride("panel", UiTheme.PillBox(UiTheme.Warning));
     }
 
     private void RefreshView()
@@ -726,6 +779,29 @@ public partial class Main : Control
         _lastPendingCastKey = PendingCastKey(observation.PendingCast);
         SetBusy(_busy);
         SessionHost.Session = _session;
+    }
+
+    private bool TryConsumeNumpadMovement(InputEvent @event)
+    {
+        if (@event is not InputEventKey key || !key.Pressed || key.Echo)
+        {
+            return false;
+        }
+
+        if (_session is null || _escMenu is null || _escMenu.Visible || _busy)
+        {
+            return false;
+        }
+
+        var command = NumpadCommandForKey(key.PhysicalKeycode) ?? NumpadCommandForKey(key.Keycode);
+        if (command is null)
+        {
+            return false;
+        }
+
+        _ = ExecuteAsync(command);
+        GetViewport().SetInputAsHandled();
+        return true;
     }
 
     private void RenderMap(GameView view)
@@ -1057,7 +1133,7 @@ public partial class Main : Control
             return "X";
         }
 
-        return tile?.Terrain switch
+        var glyph = tile.Terrain switch
         {
             "wall" => "#",
             "slick_ice" => "~",
@@ -1067,8 +1143,14 @@ public partial class Main : Control
             "rubble" => "%",
             "wild_fire" => "^",
             "ice_wall" => "#",
-            _ => ".",
+            _ => null,
         };
+        if (glyph is not null)
+        {
+            return glyph;
+        }
+
+        return IsWallLike(tile) ? "#" : ".";
     }
 
     private static string CellTooltip(GridPoint point, MapTileCard? tile, EntityCard? entity, bool selected)
@@ -1144,7 +1226,7 @@ public partial class Main : Control
             return UiTheme.Warning;
         }
 
-        return (tile.Terrain == "wall" ? UiTheme.Muted : UiTheme.Text).Darkened(dim);
+        return (IsWallLike(tile) ? UiTheme.Muted.Lightened(0.25f) : UiTheme.Text).Darkened(dim);
     }
 
     private static Color TerrainColor(MapTileCard? tile)
@@ -1169,10 +1251,16 @@ public partial class Main : Control
             "rubble" => new Color("3a332b"),
             "wild_fire" => new Color("462817"),
             "ice_wall" => new Color("263e50"),
-            _ => new Color("15191f"),
+            _ => IsWallLike(tile) ? new Color("252b33") : new Color("15191f"),
         };
         return tile.Visible ? color : color.Darkened(0.28f);
     }
+
+    private static bool IsWallLike(MapTileCard tile) =>
+        tile.BlocksSight
+        || (tile.BlocksMovement
+            && !tile.Terrain.Contains("rubble", StringComparison.OrdinalIgnoreCase)
+            && !tile.Terrain.Contains("vine", StringComparison.OrdinalIgnoreCase));
 
     private static StyleBoxFlat CellStyle(Color background, bool selected)
     {
@@ -1198,6 +1286,7 @@ public partial class Main : Control
             Key.U => new MoveCommand(Direction.NorthEast),
             Key.B => new MoveCommand(Direction.SouthWest),
             Key.N => new MoveCommand(Direction.SouthEast),
+            Key.G => new PickupCommand(),
             Key.Period => new WaitCommand(),
             Key.I => new InspectCommand(),
             _ => null,

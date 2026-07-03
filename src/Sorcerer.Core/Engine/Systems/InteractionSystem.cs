@@ -52,10 +52,36 @@ public sealed class InteractionSystem
     public DialoguePreparation PrepareDialogue(string text)
     {
         var turnBefore = State.Turn;
-        var target = ResolveNearbyEntity(
-            text,
-            entity => entity.Id != State.ControlledEntityId && entity.Has<ActorComponent>(),
-            range: 2);
+        Entity? target;
+        if (string.IsNullOrWhiteSpace(text) && State.SelectedTarget is null)
+        {
+            var candidates = NearbyCandidates(
+                entity => entity.Id != State.ControlledEntityId && entity.Has<ActorComponent>(),
+                range: 2);
+            if (candidates.Count > 1)
+            {
+                var names = string.Join(", ", candidates.Select(entity => entity.Name));
+                return new DialoguePreparation(
+                    null,
+                    ActionResult.Simple(
+                        "talk",
+                        false,
+                        false,
+                        turnBefore,
+                        State.Turn,
+                        $"Who do you want to talk to? Nearby: {names}. Try \"talk Lio\" or select someone first."));
+            }
+
+            target = candidates.FirstOrDefault();
+        }
+        else
+        {
+            target = ResolveNearbyEntity(
+                text,
+                entity => entity.Id != State.ControlledEntityId && entity.Has<ActorComponent>(),
+                range: 2);
+        }
+
         target ??= ResolveNearbyActorMention(text);
         if (target is null)
         {
@@ -1135,6 +1161,25 @@ public sealed class InteractionSystem
         if (!string.IsNullOrWhiteSpace(doorComponent.KeyId)
             && !_itemSystem.IsCarrying(actor, doorComponent.KeyId))
         {
+            var lockedText = $"{door.Name} is locked.";
+            var lockedMessage = _engine.ApplyConsequence(WorldConsequence.Message(
+                context.Source,
+                lockedText,
+                targetEntityId: door.Id.Value,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: actor.Id.Value,
+                evidence: lockedText,
+                reason: "An actor tried to open a locked door without the matching key.",
+                operation: $"{context.DeltaOperation}LockedMessage",
+                details: new Dictionary<string, object?>
+                {
+                    ["doorId"] = door.Id.Value,
+                    ["actorId"] = actor.Id.Value,
+                    ["keyId"] = doorComponent.KeyId,
+                    ["playerVisible"] = true,
+                }));
+            messages.AddRange(lockedMessage.Messages);
+            deltas.AddRange(lockedMessage.Deltas);
             return new ActionResult
             {
                 Action = context.ResultAction,
@@ -1142,7 +1187,7 @@ public sealed class InteractionSystem
                 ConsumedTurn = false,
                 TurnBefore = turnBefore,
                 TurnAfter = State.Turn,
-                Messages = messages.Concat(new[] { $"{door.Name} is locked." }).ToArray(),
+                Messages = messages.ToArray(),
                 Deltas = deltas,
             };
         }

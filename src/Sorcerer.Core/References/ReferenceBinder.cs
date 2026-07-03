@@ -232,12 +232,18 @@ public sealed class EngineReferenceResolver : IReferenceResolver
     private readonly GameEngine _engine;
     private readonly Entity _caster;
     private readonly int _groupCap;
+    private readonly IReadOnlyDictionary<string, Entity> _projectedEntities;
 
-    public EngineReferenceResolver(GameEngine engine, Entity caster, int groupCap = 8)
+    public EngineReferenceResolver(
+        GameEngine engine,
+        Entity caster,
+        int groupCap = 8,
+        IReadOnlyDictionary<string, Entity>? projectedEntities = null)
     {
         _engine = engine;
         _caster = caster;
         _groupCap = groupCap;
+        _projectedEntities = projectedEntities ?? new Dictionary<string, Entity>(StringComparer.OrdinalIgnoreCase);
     }
 
     public ResolvedEntitySet Resolve(EntityRef reference) =>
@@ -256,6 +262,11 @@ public sealed class EngineReferenceResolver : IReferenceResolver
         var entity = _engine.EntityById(reference.Value);
         if (entity is null)
         {
+            if (_projectedEntities.TryGetValue(reference.Value, out var projected))
+            {
+                return new ResolvedEntitySet(reference, new[] { projected }, PositionOf(projected), null);
+            }
+
             return ResolvedEntitySet.Failure(reference, $"No visible entity has id {reference.Value}.");
         }
 
@@ -315,7 +326,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
             return ResolvedEntitySet.Failure(reference, $"Name reference is too vague: {reference.Value}.");
         }
 
-        var matches = _engine.State.Entities.Values
+        var matches = _engine.State.Entities.Values.Concat(_projectedEntities.Values)
             .Where(entity => entity.TryGet<PositionComponent>(out _))
             .Select(entity => new
             {

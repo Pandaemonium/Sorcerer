@@ -86,6 +86,18 @@ public sealed class MovementSystem
         var blocker = _engine.BlockingEntityAt(destination);
         if (blocker is not null)
         {
+            if (blocker.Has<DoorComponent>())
+            {
+                return _engine.OpenDoor(
+                    actor,
+                    blocker,
+                    new WorldActionContext(
+                        "player_command",
+                        ConsumeTurn: true,
+                        ResultAction: "move",
+                        DeltaOperation: "open"));
+            }
+
             if (_engine.IsHostile(actor, blocker))
             {
                 var origin = position.Position;
