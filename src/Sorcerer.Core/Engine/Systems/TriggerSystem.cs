@@ -75,6 +75,28 @@ public sealed class TriggerSystem
             case "worldconsequence":
             case "world_consequence":
                 {
+                    var radiusMode = record.Radius > 0
+                        || record.Kind.Equals("aura", StringComparison.OrdinalIgnoreCase)
+                        || record.Kind.Equals("ward", StringComparison.OrdinalIgnoreCase);
+                    if (radiusMode)
+                    {
+                        foreach (var target in ResolveTargets(record)
+                            .Where(target => target.TryGet<ActorComponent>(out var actor) && actor.Alive))
+                        {
+                            if (!TryBuildTriggerConsequence(record, out var areaConsequence, target.Id.Value))
+                            {
+                                deltas.Add(TriggerConsequenceRejectedDelta(
+                                    record,
+                                    "Generic trigger consequence did not include consequenceType."));
+                                return deltas;
+                            }
+
+                            deltas.AddRange(_engine.ApplyConsequence(areaConsequence).Deltas);
+                        }
+
+                        return deltas;
+                    }
+
                     if (!TryBuildTriggerConsequence(record, out var consequence))
                     {
                         deltas.Add(TriggerConsequenceRejectedDelta(
@@ -314,7 +336,7 @@ public sealed class TriggerSystem
             });
     }
 
-    private static bool TryBuildTriggerConsequence(TriggerRecord record, out WorldConsequence consequence)
+    private static bool TryBuildTriggerConsequence(TriggerRecord record, out WorldConsequence consequence, string? targetOverride = null)
     {
         var consequenceType = TextOrNull(record.EffectFields, "consequenceType")
             ?? TextOrNull(record.EffectFields, "consequence_type");
@@ -325,7 +347,8 @@ public sealed class TriggerSystem
         }
 
         var payload = TriggerConsequencePayload(record);
-        var target = TextOrNull(record.EffectFields, "targetEntityId")
+        var target = targetOverride
+            ?? TextOrNull(record.EffectFields, "targetEntityId")
             ?? TextOrNull(record.EffectFields, "target_entity_id")
             ?? TextOrNull(record.EffectFields, "target")
             ?? record.AnchorEntityId;

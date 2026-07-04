@@ -2231,6 +2231,60 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public async Task CreateTriggerConsequenceWardHitsNearbyEnemiesNotTheCasterAnchor()
+    {
+        // Repro from live playtest (style06_guardian, seed 3006, Workstream: 10-run style playtest
+        // goal): "set an unseen ward at my back, so nothing can strike me from behind without
+        // waking a wall of thorns" resolved to a createTrigger with kind "ward", radius 2,
+        // targetFilter "enemies", effectType "consequence" (a generic applyStatus payload with no
+        // explicit target). The addStatus/damage/heal trigger cases all resolve targets via
+        // ResolveTargets (radius + targetFilter), but the generic "consequence" case instead built
+        // its WorldConsequence straight from TryBuildTriggerConsequence, which falls back to
+        // record.AnchorEntityId when no target field is given - the CASTER, since the anchor was
+        // "player" - completely ignoring targetFilter "enemies". The trigger then fired every turn
+        // (interval 1, uses 999) re-rooting the player in place indefinitely, dropping them from
+        // full HP to 10/24 over several turns of "You struggle against binding magic" with no
+        // recourse. This test arms an equivalent radius+filter "consequence" ward and asserts the
+        // status lands on the nearby hostile, never on the caster.
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(AcceptedSpell(
+            "An unseen ward settles at your back.",
+            new SpellEffect(
+                "createTrigger",
+                new Dictionary<string, object?>
+                {
+                    ["name"] = "unseen ward",
+                    ["kind"] = "ward",
+                    ["delay"] = 1,
+                    ["interval"] = 1,
+                    ["uses"] = 1,
+                    ["anchor"] = "player",
+                    ["radius"] = 4,
+                    ["targetFilter"] = "enemies",
+                    ["effectType"] = "consequence",
+                    ["effect"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "consequence",
+                        ["consequenceType"] = WorldConsequenceTypes.ApplyStatus,
+                        ["status"] = "poisoned",
+                        ["duration"] = 3,
+                    },
+                    ["description"] = "A ward waits at your back.",
+                })))));
+        DisableImperialAi(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(11, 5)));
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        var player = session.Engine.State.ControlledEntity;
+
+        var cast = await session.ExecuteAsync(new CastCommand("set an unseen ward at my back"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.True(cast.Success);
+        Assert.Contains(soldier.Get<StatusContainerComponent>().Statuses, status => status.Id == "poisoned");
+        Assert.DoesNotContain(player.Get<StatusContainerComponent>().Statuses, status => status.Id == "poisoned");
+        Assert.True(session.Engine.ValidateState().IsValid);
+    }
+
+    [Fact]
     public async Task InvalidTriggerShapeRejectsWithoutArmingTrigger()
     {
         var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureSpellProvider(AcceptedSpell(
