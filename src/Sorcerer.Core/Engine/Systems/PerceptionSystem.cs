@@ -1,5 +1,6 @@
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Status;
 using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Engine.Systems;
@@ -30,11 +31,18 @@ public sealed class PerceptionSystem
     public const int DefaultSightRadius = 8;
     public const int SuspicionAttributionWindow = 20;
 
-    private readonly GameState _state;
+    // How close a witness must stand to notice/witness a bearer of a conceals-bearer status
+    // (e.g. canonical "concealed") despite the concealment. Shared by AI targeting and deed
+    // witnessing so there is exactly one concealment rule in the codebase.
+    public const int ConcealedNoticeRadius = 2;
 
-    public PerceptionSystem(GameState state)
+    private readonly GameState _state;
+    private readonly StatusRegistry _statusRegistry;
+
+    public PerceptionSystem(GameState state, StatusRegistry statusRegistry)
     {
         _state = state;
+        _statusRegistry = statusRegistry;
     }
 
     public PerceptionSnapshot RefreshControlled()
@@ -44,7 +52,7 @@ public sealed class PerceptionSystem
 
     public PerceptionSnapshot SnapshotForControlled() => RefreshControlled();
 
-    public IReadOnlyList<Entity> WitnessesOf(GridPoint point, EntityId? exclude = null)
+    public IReadOnlyList<Entity> WitnessesOf(GridPoint point, EntityId? exclude = null, Entity? subject = null)
     {
         if (!InBounds(point))
         {
@@ -57,9 +65,54 @@ public sealed class PerceptionSystem
             .Where(entity => entity.TryGet<PositionComponent>(out var position)
                 && IsWithinSightRadius(position.Position, point, DefaultSightRadius)
                 && HasLineOfSight(position.Position, point))
+            .Where(entity => subject is null || CanPerceiveSubject(entity, subject))
             .OrderBy(entity => entity.Id.Value)
             .ToArray();
     }
+
+    // A witness can perceive a subject unless the subject bears an active conceals-bearer
+    // status (canonical "concealed" and aliases) with no active "revealed" status countering it,
+    // and the witness is farther than ConcealedNoticeRadius away. This is the one shared
+    // concealment rule: it gates both deed/witness capture (WitnessesOf) and AI targeting
+    // (AiSystem.CanNoticeTarget delegates here).
+    public bool CanPerceiveSubject(Entity witness, Entity subject)
+    {
+        if (!IsConcealed(subject))
+        {
+            return true;
+        }
+
+        if (!witness.TryGet<PositionComponent>(out var witnessPosition)
+            || !subject.TryGet<PositionComponent>(out var subjectPosition))
+        {
+            return true;
+        }
+
+        return GameEngine.Distance(witnessPosition.Position, subjectPosition.Position) <= ConcealedNoticeRadius;
+    }
+
+    private bool IsConcealed(Entity subject)
+    {
+        if (!subject.TryGet<StatusContainerComponent>(out var statuses))
+        {
+            return false;
+        }
+
+        var hasActiveConceal = statuses.Statuses.Any(status =>
+            IsStatusActive(status) && _statusRegistry.ConcealsBearer(status.Id));
+        if (!hasActiveConceal)
+        {
+            return false;
+        }
+
+        var hasActiveReveal = statuses.Statuses.Any(status =>
+            IsStatusActive(status)
+            && _statusRegistry.Canonicalize(status.Id).Equals("revealed", StringComparison.OrdinalIgnoreCase));
+        return !hasActiveReveal;
+    }
+
+    private bool IsStatusActive(StatusInstance status) =>
+        status.ExpiresTurn is null || status.ExpiresTurn > _state.Turn;
 
     public IReadOnlyList<SuspicionCapturePlan> PlanEffectSuspicion(
         GridPoint effectPoint,
@@ -76,7 +129,8 @@ public sealed class PerceptionSystem
             var seesActor = actorPosition is not null
                 && witness.TryGet<PositionComponent>(out var witnessPosition)
                 && IsWithinSightRadius(witnessPosition.Position, actorPosition.Value, DefaultSightRadius)
-                && HasLineOfSight(witnessPosition.Position, actorPosition.Value);
+                && HasLineOfSight(witnessPosition.Position, actorPosition.Value)
+                && (actor is null || CanPerceiveSubject(witness, actor));
             plans.Add(new SuspicionCapturePlan(
                 SoulIdFor(witness),
                 kind,
@@ -115,7 +169,8 @@ public sealed class PerceptionSystem
             if (witness is null
                 || !witness.TryGet<PositionComponent>(out var witnessPosition)
                 || !IsWithinSightRadius(witnessPosition.Position, playerPosition.Position, DefaultSightRadius)
-                || !HasLineOfSight(witnessPosition.Position, playerPosition.Position))
+                || !HasLineOfSight(witnessPosition.Position, playerPosition.Position)
+                || !CanPerceiveSubject(witness, player))
             {
                 continue;
             }

@@ -106,6 +106,16 @@ Crystallization is just an operation (RFC section 2) whose **content** came from
 model read. It is the second dividend of the operation registry: promotion has somewhere to
 land.
 
+**Worked example: concealment.** A player writes "hide me in shadow and silence." The resolver
+crystallizes that immediately into an ordinary `addStatus` naming any alias of the canonical
+`concealed` status (`StatusRegistry` recognizes `hidden`, `shadowed`, `veiled`,
+`mist_cloaked`, `camouflaged`, and others as the same status). From that point on the effect
+is fully mechanical, not semantic: `PerceptionSystem.CanPerceiveSubject` reads the status
+directly and gates both deed-witness capture and hostile AI notice by it (see
+EMERGENT_WORLD.md's "Deeds -> Legend -> Reputation" section). There is no separate "stealth
+system" the resolver has to know about - it only ever had to reach for one of the aliases of
+one status, exactly like any other crystallized trait.
+
 ## 5. How it sits in Sorcerer's architecture
 
 Concrete mapping onto the existing scaffold and the RFC:

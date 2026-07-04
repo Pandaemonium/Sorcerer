@@ -3450,19 +3450,70 @@ public sealed class GameSession
         }
     }
 
+    // Below this Jaccard overlap of significant (4+ char) tokens, two claim texts are treated as
+    // unrelated facts rather than a restatement of the same one, even from the same speaker.
+    private const double FuzzyClaimPromiseTextOverlapThreshold = 0.6;
+
     private WorldPromise? MatchingActivePromise(
         ClaimRecord record,
         DialogueClaimProposal proposal,
         string triggerHint,
-        string realizationKind) =>
-        Engine.State.PromiseLedger.Promises.FirstOrDefault(promise =>
-            !promise.Status.Equals("cleared", StringComparison.OrdinalIgnoreCase)
-            && !promise.Status.Equals("realized", StringComparison.OrdinalIgnoreCase)
-            && promise.Text.Equals(record.Text, StringComparison.OrdinalIgnoreCase)
-            && PromiseRealizationKindsCompatible(promise.RealizationKind, realizationKind)
-            && TriggerHintsOverlap(promise.TriggerHint, triggerHint)
-            && (string.IsNullOrWhiteSpace(proposal.PromiseKind)
-                || promise.Kind.Equals(proposal.PromiseKind, StringComparison.OrdinalIgnoreCase)));
+        string realizationKind)
+    {
+        var candidates = Engine.State.PromiseLedger.Promises
+            .Where(promise =>
+                !promise.Status.Equals("cleared", StringComparison.OrdinalIgnoreCase)
+                && !promise.Status.Equals("realized", StringComparison.OrdinalIgnoreCase)
+                && PromiseRealizationKindsCompatible(promise.RealizationKind, realizationKind)
+                && TriggerHintsOverlap(promise.TriggerHint, triggerHint)
+                && (string.IsNullOrWhiteSpace(proposal.PromiseKind)
+                    || promise.Kind.Equals(proposal.PromiseKind, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        var exact = candidates.FirstOrDefault(promise =>
+            promise.Text.Equals(record.Text, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        // A model that restates the same fact in different words should re-link to the existing
+        // promise/rumor thread instead of forking a parallel one (ledger sprawl). Guardrail:
+        // require shared provenance (same speaker or same non-empty subject) in addition to text
+        // overlap, so two genuinely different facts that merely share common words never match.
+        return candidates.FirstOrDefault(promise =>
+            (SameNonBlank(promise.SourceSpeakerId, record.SpeakerId)
+                || SameNonBlank(promise.Subject, record.Subject))
+            && SignificantTokenOverlap(promise.Text, record.Text) >= FuzzyClaimPromiseTextOverlapThreshold);
+    }
+
+    private static bool SameNonBlank(string? left, string? right) =>
+        !string.IsNullOrWhiteSpace(left)
+        && !string.IsNullOrWhiteSpace(right)
+        && left.Equals(right, StringComparison.OrdinalIgnoreCase);
+
+    private static double SignificantTokenOverlap(string left, string right)
+    {
+        var leftTokens = SignificantTokens(left);
+        var rightTokens = SignificantTokens(right);
+        if (leftTokens.Count == 0 || rightTokens.Count == 0)
+        {
+            return 0;
+        }
+
+        var intersection = leftTokens.Intersect(rightTokens, StringComparer.OrdinalIgnoreCase).Count();
+        var union = leftTokens.Union(rightTokens, StringComparer.OrdinalIgnoreCase).Count();
+        return union == 0 ? 0 : (double)intersection / union;
+    }
+
+    private static HashSet<string> SignificantTokens(string text) =>
+        text
+            .ToLowerInvariant()
+            .Split(
+                new[] { ' ', '\t', '\r', '\n', '.', ',', ';', ':', '!', '?', '\'', '"', '-', '_' },
+                StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => token.Length >= 4)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static bool ShouldRebindExistingPromise(
         WorldPromise promise,
@@ -3618,7 +3669,12 @@ public sealed class GameSession
         deltas.AddRange(applied.Deltas);
     }
 
-    private static bool ShouldBindToRegion(string? triggerHint, string? realizationKind) =>
+    // Shared with InteractionSystem's document/prop claim-seed promise binding, so a promise
+    // whose realization kind can only ever pay off through travel (site/town/escape_route/etc.)
+    // binds to the current region regardless of whether it came from dialogue or a read/examine
+    // claim seed. Without this, non-anchored promise kinds that CanBindToRegion doesn't recognize
+    // (e.g. "rumor") would never bind and could never become travel-realization candidates.
+    internal static bool ShouldBindToRegion(string? triggerHint, string? realizationKind) =>
         TriggerMatches(triggerHint, "travel")
         && NormalizeToken(realizationKind ?? "", "site") is "site" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade" or "service" or "escape_route" or "door_rule" or "route";
 

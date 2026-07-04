@@ -40,7 +40,8 @@ public sealed class InteractionSystem
             : null;
         if (target is null)
         {
-            return ActionResult.Simple("talk", false, false, turn.TurnBefore, State.Turn, "No one nearby is ready to talk.");
+            var hint = OutOfReachHint(_engine, State, turn.SpeakerId, entity => entity.Id != State.ControlledEntityId && entity.Has<ActorComponent>());
+            return ActionResult.Simple("talk", false, false, turn.TurnBefore, State.Turn, hint ?? "No one nearby is ready to talk.");
         }
 
         var messages = new List<string>();
@@ -85,9 +86,10 @@ public sealed class InteractionSystem
         target ??= ResolveNearbyActorMention(text);
         if (target is null)
         {
+            var hint = OutOfReachHint(_engine, State, text, entity => entity.Id != State.ControlledEntityId && entity.Has<ActorComponent>());
             return new DialoguePreparation(
                 null,
-                ActionResult.Simple("talk", false, false, turnBefore, State.Turn, "No one nearby is ready to talk."));
+                ActionResult.Simple("talk", false, false, turnBefore, State.Turn, hint ?? "No one nearby is ready to talk."));
         }
 
         var actor = target.TryGet<ActorComponent>(out var actorComponent) ? actorComponent : null;
@@ -973,7 +975,8 @@ public sealed class InteractionSystem
         var entity = ResolveNearbyEntity(target, candidate => candidate.Has<ReadableComponent>(), range: 1);
         if (entity is null)
         {
-            return ActionResult.Simple("read", false, false, turnBefore, State.Turn, "There is nothing readable within reach.");
+            var hint = OutOfReachHint(_engine, State, target, candidate => candidate.Has<ReadableComponent>());
+            return ActionResult.Simple("read", false, false, turnBefore, State.Turn, hint ?? "There is nothing readable within reach.");
         }
 
         var readable = entity.Get<ReadableComponent>();
@@ -1043,7 +1046,8 @@ public sealed class InteractionSystem
         var entity = ResolveNearbyEntity(target, entity => entity.Id != State.ControlledEntityId, range: 2);
         if (entity is null)
         {
-            return ActionResult.Simple("examine", false, false, State.Turn, State.Turn, "There is nothing close enough to examine.");
+            var hint = OutOfReachHint(_engine, State, target, entity => entity.Id != State.ControlledEntityId);
+            return ActionResult.Simple("examine", false, false, State.Turn, State.Turn, hint ?? "There is nothing close enough to examine.");
         }
 
         var messages = DescribeEntity(entity).ToList();
@@ -1085,7 +1089,8 @@ public sealed class InteractionSystem
         var door = ResolveNearbyEntity(target, entity => entity.Has<DoorComponent>(), range: 1);
         if (door is null)
         {
-            return ActionResult.Simple("open", false, false, turnBefore, State.Turn, "There is nothing here you can open.");
+            var hint = OutOfReachHint(_engine, State, target, entity => entity.Has<DoorComponent>());
+            return ActionResult.Simple("open", false, false, turnBefore, State.Turn, hint ?? "There is nothing here you can open.");
         }
 
         return OpenDoor(State.ControlledEntity, door, WorldActionContext.PlayerCommand("open"));
@@ -1306,6 +1311,77 @@ public sealed class InteractionSystem
             .OrderBy(entity => entity.TryGet<PositionComponent>(out var position) ? GameEngine.Distance(origin, position.Position) : int.MaxValue)
             .ThenBy(entity => entity.Id.Value)
             .ToArray();
+    }
+
+    // Names the nearest visible-to-the-player candidate matching the same predicate/target used
+    // by an interaction that just failed for being out of range, so the failure message can say
+    // where the thing actually is instead of a bare "nothing here." Perception-bound (only
+    // entities in PerceptionSystem's current visible set are candidates), so a hidden entity is
+    // never named here even if it happens to match. Shared (public static, taking the engine
+    // explicitly) because ItemSystem's Pickup lives in a different class but wants the same hint.
+    public static string? OutOfReachHint(GameEngine engine, GameState state, string? target, Func<Entity, bool> predicate)
+    {
+        if (!state.ControlledEntity.TryGet<PositionComponent>(out var originPosition))
+        {
+            return null;
+        }
+
+        var origin = originPosition.Position;
+        var visibleIds = engine.Perception().VisibleEntityIds;
+        var candidates = state.Entities.Values
+            .Where(entity => entity.Id != state.ControlledEntityId)
+            .Where(predicate)
+            .Where(entity => visibleIds.Contains(entity.Id))
+            .Where(entity => entity.TryGet<PositionComponent>(out _))
+            .ToArray();
+
+        if (!string.IsNullOrWhiteSpace(target))
+        {
+            var normalizedTarget = target.Trim();
+            var normalizedSearchText = NormalizeSearchText(normalizedTarget);
+            candidates = candidates
+                .Where(entity =>
+                    entity.Id.Value.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase)
+                    || entity.Name.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase)
+                    // Short target words (e.g. "notice", "the door"): does the entity's name
+                    // contain the search text?
+                    || entity.Name.Contains(normalizedTarget, StringComparison.OrdinalIgnoreCase)
+                    // Conversational mentions (e.g. "Lio, do you trust me?"): does the search
+                    // text mention one of the entity's name tokens?
+                    || EntityNameTokens(entity).Any(token => normalizedSearchText.Contains(token, StringComparison.OrdinalIgnoreCase))
+                    || (entity.TryGet<TagsComponent>(out var tags)
+                        && tags.Tags.Any(tag => tag.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase))))
+                .ToArray();
+        }
+
+        var nearest = candidates
+            .Select(entity => new { Entity = entity, Position = entity.Get<PositionComponent>().Position })
+            .OrderBy(match => GameEngine.Distance(origin, match.Position))
+            .ThenBy(match => match.Entity.Id.Value)
+            .FirstOrDefault();
+        if (nearest is null)
+        {
+            return null;
+        }
+
+        var distance = GameEngine.Distance(origin, nearest.Position);
+        var direction = CompassDirection(origin, nearest.Position);
+        var tiles = distance == 1 ? "tile" : "tiles";
+        return $"{nearest.Entity.Name} is out of reach - {distance} {tiles} {direction}.";
+    }
+
+    private static string CompassDirection(GridPoint from, GridPoint to)
+    {
+        var dx = to.X - from.X;
+        var dy = to.Y - from.Y;
+        var vertical = dy < 0 ? "north" : dy > 0 ? "south" : "";
+        var horizontal = dx < 0 ? "west" : dx > 0 ? "east" : "";
+        if (vertical.Length > 0 && horizontal.Length > 0)
+        {
+            return $"{vertical}{horizontal}";
+        }
+
+        return vertical.Length > 0 ? vertical : horizontal.Length > 0 ? horizontal : "here";
     }
 
     private static bool CanReach(Entity actor, Entity target, int range) =>
@@ -1716,11 +1792,12 @@ public sealed class InteractionSystem
                 continue;
             }
 
+            var claimSeedTriggerHint = string.IsNullOrWhiteSpace(seed.TriggerHint) ? trigger : seed.TriggerHint;
             var promise = _engine.ApplyConsequence(WorldConsequence.CreatePromise(
                 sourceKey,
                 string.IsNullOrWhiteSpace(seed.PromiseKind) ? "rumor" : seed.PromiseKind,
                 seed.Text,
-                triggerHint: string.IsNullOrWhiteSpace(seed.TriggerHint) ? trigger : seed.TriggerHint,
+                triggerHint: claimSeedTriggerHint,
                 visibility: WorldConsequenceVisibility.Hidden,
                 sourceEntityId: source.Id.Value,
                 evidence: seed.Text,
@@ -1731,6 +1808,7 @@ public sealed class InteractionSystem
                 subject: seed.Subject,
                 claimedPlace: seed.ClaimedPlace,
                 realizationKind: seed.RealizationKind,
+                bindPlace: GameSession.ShouldBindToRegion(claimSeedTriggerHint, seed.RealizationKind) ? State.RegionId : null,
                 sourceClaimId: claim.TargetId,
                 sourceSpeakerId: source.Id.Value,
                 sourceListenerSoulId: PlayerSoulId(),

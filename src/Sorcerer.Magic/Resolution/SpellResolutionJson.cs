@@ -709,6 +709,17 @@ public static class SpellResolutionJson
     {
         x = 0;
         y = 0;
+        if (raw is IReadOnlyDictionary<string, object?> pointObject
+            && pointObject.TryGetValue("x", out var xValue)
+            && pointObject.TryGetValue("y", out var yValue)
+            && int.TryParse(Convert.ToString(xValue), out x)
+            && int.TryParse(Convert.ToString(yValue), out y))
+        {
+            return true;
+        }
+
+        x = 0;
+        y = 0;
         if (raw is System.Collections.IEnumerable outer && raw is not string)
         {
             foreach (var first in outer)

@@ -6,6 +6,16 @@ namespace Sorcerer.Core.References;
 
 public static class ReferenceBinder
 {
+    // Shared rejection wording so a player/agent can tell "nothing was selected" apart from
+    // "the named/id target does not exist or is not visible" regardless of which reference
+    // shape or binder (ReferenceBinder or EngineReferenceResolver) produced the failure.
+    public const string NoSelectedTargetMessage =
+        "No target is selected. Choose one with 'target <x> <y>' or name something you can see.";
+
+    // Deliberately identical whether the name/id never existed or names a real entity the
+    // player cannot currently perceive - the wording must not leak which case it is.
+    public static string NoVisibleTargetMessage(string name) => $"Nothing you can see answers to '{name}'.";
+
     private static readonly HashSet<string> Selectors = new(StringComparer.OrdinalIgnoreCase)
     {
         "self",
@@ -148,7 +158,7 @@ public static class ReferenceBinder
         var entity = engine.EntityById(id);
         if (entity is null)
         {
-            return BoundReference.Failure(reference, $"No entity with id {id}.");
+            return BoundReference.Failure(reference, NoVisibleTargetMessage(id));
         }
 
         var position = entity.TryGet<PositionComponent>(out var pos) ? pos.Position : (GridPoint?)null;
@@ -181,7 +191,7 @@ public static class ReferenceBinder
             case "selected_target":
                 return engine.State.SelectedTarget is { } selected
                     ? new BoundReference(reference, null, selected, Array.Empty<Entity>(), null)
-                    : BoundReference.Failure(reference, "No target is selected.");
+                    : BoundReference.Failure(reference, NoSelectedTargetMessage);
             case "all_enemies":
                 {
                     var actor = engine.State.ControlledEntity;
@@ -267,7 +277,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
                 return new ResolvedEntitySet(reference, new[] { projected }, PositionOf(projected), null);
             }
 
-            return ResolvedEntitySet.Failure(reference, $"No visible entity has id {reference.Value}.");
+            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoVisibleTargetMessage(reference.Value));
         }
 
         return new ResolvedEntitySet(reference, new[] { entity }, PositionOf(entity), null);
@@ -344,7 +354,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
 
         if (matches.Length == 0)
         {
-            return ResolvedEntitySet.Failure(reference, $"No visible entity matches {reference.Value}.");
+            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoVisibleTargetMessage(reference.Value));
         }
 
         if (matches.Length > 1
@@ -362,7 +372,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
     {
         if (_engine.State.SelectedTarget is not { } target)
         {
-            return ResolvedEntitySet.Failure(reference, "No target is selected.");
+            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoSelectedTargetMessage);
         }
 
         var occupant = _engine.State.Entities.Values
@@ -436,7 +446,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
             .Where(entity => entity.Id != _caster.Id)
             .Where(entity => entity.TryGet<ActorComponent>(out var targetActor) && targetActor.Alive)
             .Where(entity => hostile
-                ? entity.Get<ActorComponent>().Faction != casterFaction && entity.Get<ActorComponent>().Faction != "neutral"
+                ? _engine.IsHostile(_caster, entity)
                 : entity.Get<ActorComponent>().Faction == casterFaction);
     }
 

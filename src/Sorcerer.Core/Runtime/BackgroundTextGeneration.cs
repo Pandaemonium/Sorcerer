@@ -23,7 +23,11 @@ public sealed record BackgroundTextGenerationResult(
     string? Error = null,
     string Provider = "deterministic",
     string? Model = null,
-    string? RawText = null);
+    string? RawText = null,
+    // Set by generators (e.g. replay) that are feeding back an already-recorded, already-final
+    // result rather than freshly generating prose. Skips post-generation normalization so replay
+    // reproduces the exact materialized text instead of re-truncating it.
+    bool AlreadyMaterialized = false);
 
 public interface IBackgroundTextGenerator
 {

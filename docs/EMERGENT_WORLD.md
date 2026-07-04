@@ -74,6 +74,35 @@ tags. `standing` and `journal` show the resulting reputation and legend instead 
 rows. Suspicious magic can raise suspicion without attaching legend when only the effect was
 seen.
 
+**Concealment gates who counts as a witness of the actor, not of the effect.**
+`PerceptionSystem.CanPerceiveSubject` is the one shared concealment rule: a bearer of an
+active conceals-bearer status (the canonical `concealed` status and its aliases -
+`hidden`, `shadowed`, `veiled`, `mist_cloaked`, `camouflaged`, and others in
+`StatusRegistry`) is not counted as witnessed by anyone farther than
+`PerceptionSystem.ConcealedNoticeRadius` (2 tiles), unless an active `revealed` status
+counters the concealment. This same rule gates both deed/witness capture
+(`GameEngine.PlanDeedCapture` filters *actor*-witnesses through it, in
+`PerceptionSystem.WitnessesOf`) and hostile AI targeting (`AiSystem.CanNoticeTarget`
+delegates to it), so a concealment spell that hides the caster from soldiers' notice also
+hides the caster from their deed-witness memory - one mechanic, not two coincidentally
+similar ones. Effect-witnesses are never filtered by concealment: an effect that is loud or
+visible is still seen even when its caster is not, which is what turns a concealed public
+cast into a `suspicious` deed (unattributed - the world remembers "someone unnamed worked
+wild magic," not the sorcerer by name) rather than a fully `secret` one. This is deliberately
+about *identity*, not *visibility of the location itself*: disguise/misattribution (a visible
+actor whose identity is wrong) is a distinct, not-yet-built axis that this rule does not
+touch.
+
+**Region "cover" traits are narrative only today, not a line-of-sight mechanic.** Affordance
+cards such as `imperial_cover` ("Marble walls create hard lines of sight and official blind
+spots.") or `reed_cover` are text-and-tags: they surface in `atlas`, feed lore-routing subjects,
+and tag generated zones, but `PerceptionSystem.BlocksSight`/`HasLineOfSight` reads only
+`GameState.BlockingTerrain` and per-entity `PhysicalComponent.BlocksSight` - never a region's
+affordance ids. Standing behind an actual wall or blocking fixture blocks sight; standing in a
+region whose prose says it has "blind spots" does not, by itself, block or reduce anyone's
+perception. Don't design a spell, an encounter, or a doc passage assuming a region's cover trait
+does anything mechanical yet - if that changes, this note should move or be removed.
+
 ## Factions spend finite resources
 
 A reaction is an expenditure, not a threshold trip. A crackdown is "the Empire spends a

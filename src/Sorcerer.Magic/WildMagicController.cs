@@ -162,7 +162,7 @@ public sealed class WildMagicController : IWildMagicController
         var validationIssues = ValidateResolution(engine, command.Text, resolution, effectContext);
         if (validationIssues.Count > 0)
         {
-            var reason = string.Join("; ", validationIssues.Select(issue => issue.Message));
+            var reason = string.Join("; ", validationIssues.Select(issue => issue.Message).Distinct());
             var result = validationIssues.Any(issue => issue.TechnicalFailure)
                 ? TechnicalFailure(engine, providerResult.Provider, turnBefore, reason)
                 : Rejected(
@@ -203,6 +203,13 @@ public sealed class WildMagicController : IWildMagicController
 
             var effectEnd = deltas.Count;
             deltas.AddRange(SpellCostApplier.Apply(engine, resolution.Costs));
+            if (deltas.Count == effectEnd)
+            {
+                // Distinguishes a genuinely free cast from "the cost line was silently dropped":
+                // no cost line at all previously left this ambiguous (FEEL_LOG [03]).
+                deltas.AddRange(ApplyMagicMessage(engine, "Cost: nothing.", "costNothing", "Accepted wild magic cost was free.").Deltas);
+            }
+
             var costEnd = deltas.Count;
             var actor = engine.State.ControlledEntity;
             var actorPosition = actor.Get<PositionComponent>().Position;

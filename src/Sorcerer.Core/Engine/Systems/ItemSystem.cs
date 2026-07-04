@@ -35,13 +35,14 @@ public sealed class ItemSystem
         var item = ResolveNearbyEntity(target, entity => entity.Has<ItemComponent>(), range: 1);
         if (item is null)
         {
+            var hint = InteractionSystem.OutOfReachHint(_engine, _state, target, entity => entity.Has<ItemComponent>());
             return ActionResult.Simple(
                 "pickup",
                 success: false,
                 consumedTurn: false,
                 turnBefore,
                 _state.Turn,
-                "There is nothing here you can pick up.");
+                hint ?? "There is nothing here you can pick up.");
         }
 
         var itemComponent = item.Get<ItemComponent>();

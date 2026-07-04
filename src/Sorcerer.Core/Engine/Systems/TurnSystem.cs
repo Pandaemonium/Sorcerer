@@ -905,7 +905,9 @@ public sealed class TurnSystem
         var useFallback = generated.TechnicalFailure || string.IsNullOrWhiteSpace(generated.Text);
         var text = useFallback
             ? GenerateDeterministicBackgroundText(job)
-            : NormalizeGeneratedBackgroundText(generated.Text!);
+            : generated.AlreadyMaterialized
+                ? generated.Text!
+                : NormalizeGeneratedBackgroundText(generated.Text!);
         return new BackgroundTextMaterialization(
             text,
             new[]

@@ -4,6 +4,7 @@ using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Runtime;
 using Sorcerer.Llm;
 using Sorcerer.Magic;
 using Sorcerer.Magic.Replay;
@@ -126,6 +127,19 @@ public sealed class WinConditionTests
         Assert.Contains(session.Engine.State.Canon.Records, record =>
             record.Kind == "chronicle"
             && record.Tags.Contains("defeat"));
+    }
+
+    [Fact]
+    public void RunChronicleFallbackTextIsGrammaticalWithNoLegendOrDeeds()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()));
+        session.Engine.State.RunStatus = "defeat";
+        session.Engine.State.RunConclusion = "The sorcerer's current body is dead.";
+
+        var chronicle = RunChronicle.Build(session.Engine.State);
+
+        Assert.Contains("the ledgers remember few official marks", chronicle.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("remember left", chronicle.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

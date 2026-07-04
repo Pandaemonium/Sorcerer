@@ -553,11 +553,11 @@ public sealed class WorldConsequenceApplier
         }
     }
 
-    private static string FormatActorResourceSummary(Entity entity, string resource, int delta, int after)
+    private string FormatActorResourceSummary(Entity entity, string resource, int delta, int after)
     {
-        var verb = delta >= 0 ? "gains" : "loses";
+        var verb = Verb(entity, delta >= 0 ? "gain" : "lose", delta >= 0 ? "gains" : "loses");
         var label = resource.Replace('_', ' ');
-        return $"{entity.Name} {verb} {Math.Abs(delta)} {label}; now {after}.";
+        return $"{Subject(entity)} {verb} {Math.Abs(delta)} {label}; now {after}.";
     }
 
     private WorldConsequenceApplyResult ApplyMoveEntity(WorldConsequence consequence)
@@ -990,7 +990,7 @@ public sealed class WorldConsequenceApplier
         }
 
         var operation = ReadString(payload, "operation") ?? "accelerateStatus";
-        var summary = $"{target.Entity.Name}'s {instance.DisplayName.Replace('_', ' ')} rushes to its conclusion.";
+        var summary = $"{Possessive(target.Entity)} {instance.DisplayName.Replace('_', ' ')} rushes to its conclusion.";
         var appliedDelta = new StateDelta(
             operation,
             target.Entity.Id.Value,
@@ -1480,7 +1480,10 @@ public sealed class WorldConsequenceApplier
         var status = NormalizeToken(ReadString(payload, "status") ?? "", "");
         var boundPlace = FirstNonBlank(ReadString(payload, "bindPlace"), ReadString(payload, "boundPlace"), ReadString(payload, "bind_place"), ReadString(payload, "bound_place"));
         var boundTargetId = FirstNonBlank(ReadString(payload, "boundTargetId"), ReadString(payload, "targetId"), ReadString(payload, "bound_target_id"));
-        var triggerHint = FirstNonBlank(ReadString(payload, "triggerHint"), ReadString(payload, "trigger"), ReadString(payload, "trigger_hint"));
+        // Deliberately does not fall back to a bare "trigger" key: that key is used throughout
+        // PromiseRealizationSystem purely as audit context (which trigger evaluated the promise
+        // this time), not as a request to rebind the promise's TriggerHint.
+        var triggerHint = FirstNonBlank(ReadString(payload, "triggerHint"), ReadString(payload, "trigger_hint"));
         var realizationKind = FirstNonBlank(ReadString(payload, "realizationKind"), ReadString(payload, "realization_kind"));
         var realizedIn = FirstNonBlank(ReadString(payload, "realizedIn"), ReadString(payload, "realized_in"));
         var hasEligibilityFailure = HasAnyKey(payload, "lastEligibilityFailure", "last_eligibility_failure", "eligibilityFailure", "eligibility_failure");
@@ -1983,7 +1986,7 @@ public sealed class WorldConsequenceApplier
 
         target.Entity.Set(inventory);
         var operation = ReadString(payload, "operation") ?? "modifyInventory";
-        var defaultSummary = $"{target.Entity.Name}'s {item.Replace('_', ' ')} count becomes {updated}.";
+        var defaultSummary = $"{Possessive(target.Entity)} {item.Replace('_', ' ')} count becomes {updated}.";
         var summary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), defaultSummary)!;
         var delta = new StateDelta(
             operation,
@@ -2388,7 +2391,7 @@ public sealed class WorldConsequenceApplier
         equipment.FocusSlots.Add(slot);
         actor.Set(equipment);
 
-        var summary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), $"{item} is now {actor.Name}'s magical focus.")!;
+        var summary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), $"{item} is now {Possessive(actor)} magical focus.")!;
         var operation = ReadString(payload, "operation") ?? "focus";
         var delta = new StateDelta(
             operation,
@@ -2417,7 +2420,7 @@ public sealed class WorldConsequenceApplier
             equipment.FocusSlots.Clear();
             actor.Set(equipment);
 
-            var clearSummary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), $"{actor.Name} releases their magical focus.")!;
+            var clearSummary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), $"{Subject(actor)} {Verb(actor, "release", "releases")} {(actor.Id == _state.ControlledEntityId ? "your" : "their")} magical focus.")!;
             var clearOperation = ReadString(payload, "operation") ?? "unfocus";
             var clearDelta = new StateDelta(
                 clearOperation,
@@ -2441,7 +2444,7 @@ public sealed class WorldConsequenceApplier
         equipment.FocusSlots.Remove(slot);
         actor.Set(equipment);
 
-        var summary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), $"{item} is no longer {actor.Name}'s focus.")!;
+        var summary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), $"{item} is no longer {Possessive(actor)} focus.")!;
         var operation = ReadString(payload, "operation") ?? "unfocus";
         var delta = new StateDelta(
             operation,
@@ -4060,9 +4063,10 @@ public sealed class WorldConsequenceApplier
             : entity.TryGet<ItemComponent>(out var transformedItem)
                 ? transformedItem.Material
                 : null;
+        var becomesVerb = Verb(entity, "become", "becomes");
         var summary = entity.Name.Equals(before, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(currentMaterial)
-            ? $"{before} becomes {currentMaterial.Replace('_', ' ')}."
-            : $"{before} becomes {entity.Name}.";
+            ? $"{before} {becomesVerb} {currentMaterial.Replace('_', ' ')}."
+            : $"{before} {becomesVerb} {entity.Name}.";
         var delta = new StateDelta(
             operation,
             entity.Id.Value,
@@ -4138,7 +4142,7 @@ public sealed class WorldConsequenceApplier
         var turns = Math.Clamp(ReadInt(payload, "turns") ?? ReadInt(payload, "delay") ?? 3, 1, 999);
         target.Entity.Set(new DelayedDamageComponent(0, _state.Turn + turns));
         var operation = ReadString(payload, "operation") ?? "delayIncoming";
-        var summary = $"{target.Entity.Name}'s wounds are held back for {turns} turns.";
+        var summary = $"{Possessive(target.Entity)} wounds are held back for {turns} turns.";
         var delta = new StateDelta(
             operation,
             target.Entity.Id.Value,
@@ -4165,7 +4169,7 @@ public sealed class WorldConsequenceApplier
         if (!target.Entity.TryGet<ActorComponent>(out _))
         {
             target.Entity.Remove<DelayedDamageComponent>();
-            var skippedSummary = $"{target.Entity.Name}'s delayed wounds dissipate without a living body.";
+            var skippedSummary = $"{Possessive(target.Entity)} delayed wounds dissipate without a living body.";
             var skippedDelta = new StateDelta(
                 operation,
                 target.Entity.Id.Value,
@@ -4212,7 +4216,7 @@ public sealed class WorldConsequenceApplier
                     operation));
         }
 
-        var summary = $"{target.Entity.Name}'s delayed wounds dissipate.";
+        var summary = $"{Possessive(target.Entity)} delayed wounds dissipate.";
         var delta = new StateDelta(
             operation,
             target.Entity.Id.Value,
@@ -4425,7 +4429,7 @@ public sealed class WorldConsequenceApplier
         }
 
         var operation = ReadString(payload, "operation") ?? "updateBehavior";
-        var summary = $"{target.Entity.Name}'s {tag.Replace('_', ' ')} compulsion {verb}.";
+        var summary = $"{Possessive(target.Entity)} {tag.Replace('_', ' ')} compulsion {verb}.";
         var delta = new StateDelta(
             operation,
             target.Entity.Id.Value,
@@ -4867,7 +4871,7 @@ public sealed class WorldConsequenceApplier
         var provenance = FirstNonBlank(ReadString(payload, "provenance"), fallbackProvenance, consequence.Source)!;
         var shareable = ReadBool(payload, "shareable") ?? strength >= 4;
         var operation = ReadString(payload, "operation") ?? "editMemory";
-        var summary = $"{target.Name}'s memory shifts: {text}";
+        var summary = $"{Possessive(target)} memory shifts: {text}";
         var memory = Apply(WorldConsequence.RecordMemory(
             consequence.Source,
             target.Id.Value,
@@ -4924,7 +4928,7 @@ public sealed class WorldConsequenceApplier
         var operation = ReadString(payload, "operation") ?? "editMemory";
         var summary = aboutCaster
             ? $"{target.Name} no longer remembers the caster; the hostility drains out of them."
-            : $"{target.Name}'s memory of {subject} fades.";
+            : $"{Possessive(target)} memory of {subject} fades.";
         var delta = new StateDelta(
             operation,
             target.Id.Value,
@@ -5189,7 +5193,7 @@ public sealed class WorldConsequenceApplier
             ClampDelta(ReadInt(payload, "admirationDelta") ?? 0, maxDelta),
             ClampDelta(ReadInt(payload, "resentmentDelta") ?? 0, maxDelta),
             FirstNonBlank(ReadString(payload, "posture")));
-        var summary = $"{entity.Name}'s posture shifts: {BondSummary(bond)}.";
+        var summary = $"{Possessive(entity)} posture shifts: {BondSummary(bond)}.";
         var delta = new StateDelta(
             operation,
             entity.Id.Value,
@@ -7032,6 +7036,9 @@ public sealed class WorldConsequenceApplier
 
     private string Verb(Entity entity, string secondPerson, string thirdPerson) =>
         entity.Id == _state.ControlledEntityId ? secondPerson : thirdPerson;
+
+    private string Possessive(Entity entity) =>
+        entity.Id == _state.ControlledEntityId ? "Your" : $"{entity.Name}'s";
 
     private static int ClampDelta(int value, int maxDelta) =>
         Math.Clamp(value, -maxDelta, maxDelta);

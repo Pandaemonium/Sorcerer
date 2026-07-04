@@ -20,7 +20,7 @@ public sealed class DamageOperation : OperationBase
     }
 
     public override ValidationOutcome Validate(EffectContext context, SpellEffect effect) =>
-        RequireActorTargets(context, effect, "nearest_enemy");
+        RequireLivingActorTargets(context, effect, "nearest_enemy", "Damage needs a living target; that one has already fallen.");
 
     public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect) =>
         ResolveTargets(context, effect, "nearest_enemy")
@@ -1361,6 +1361,22 @@ internal static class OperationHelpers
         return targets.Length > 0 && targets.All(target => target.TryGet<ActorComponent>(out _))
             ? ValidationOutcome.Pass
             : ValidationOutcome.Reject("Spell needs one or more actor targets.");
+    }
+
+    public static ValidationOutcome RequireLivingActorTargets(
+        EffectContext context, SpellEffect effect, string fallback, string deadReason)
+    {
+        var actorOutcome = RequireActorTargets(context, effect, fallback);
+        if (!actorOutcome.Ok)
+        {
+            return actorOutcome;
+        }
+
+        var resolved = ResolveTargetSet(context, effect, fallback);
+        var targets = resolved.Entities.Take(context.GroupTargetCap).ToArray();
+        return targets.Any(target => target.TryGet<ActorComponent>(out var actor) && actor.Alive)
+            ? ValidationOutcome.Pass
+            : ValidationOutcome.Reject(deadReason);
     }
 
     public static ValidationOutcome RequirePositionedTargets(EffectContext context, SpellEffect effect, string fallback)

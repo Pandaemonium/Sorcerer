@@ -47,7 +47,7 @@ public sealed class GameEngine
         _inventoryService = new InventoryService(_itemCatalog);
         _itemSystem = new ItemSystem(this, _itemCatalog, _inventoryService);
         _movementSystem = new MovementSystem(this, _statusRegistry);
-        _perceptionSystem = new PerceptionSystem(State);
+        _perceptionSystem = new PerceptionSystem(State, _statusRegistry);
         _persistentEffects = new PersistentEffectSystem(this);
         _turnSystem = new TurnSystem(this, State, _statusRegistry, _loreCatalog, backgroundTextGenerator);
         _interactionSystem = new InteractionSystem(this, _itemSystem, _turnSystem);
@@ -123,7 +123,10 @@ public sealed class GameEngine
 
             if (perception.VisibleEntityIds.Contains(entity.Id))
             {
-                messages.Add($"{entity.Name} at {entityPosition.Position.X},{entityPosition.Position.Y}.");
+                var label = entity.TryGet<ActorComponent>(out var entityActor) && !entityActor.Alive
+                    ? $"{entity.Name}'s corpse"
+                    : entity.Name;
+                messages.Add($"{label} at {entityPosition.Position.X},{entityPosition.Position.Y}.");
             }
         }
 
@@ -413,21 +416,35 @@ public sealed class GameEngine
     public ActionResult CharacterSheet()
     {
         var sheet = _viewBuilder.BuildCharacterSheet();
-        var messages = new[]
+        var messages = new List<string>
         {
             $"{sheet.PublicName} ({sheet.OriginName})",
             $"Body: Vigor {sheet.Vigor}; HP {sheet.HitPoints}/{sheet.MaxHitPoints}; appearance: {sheet.Appearance}",
             $"Soul: Attunement {sheet.Attunement}, Composure {sheet.Composure}; MP {sheet.Mana}/{sheet.MaxMana}",
             $"Signature: {sheet.MagicalSignature}",
         };
+        if (IsWearingBorrowedBody())
+        {
+            // The body/soul stat split above already shows this (body row vs. soul row belong
+            // to different beings while possessing), but that split reads as mysterious rather
+            // than legible on first encounter without this line spelling it out.
+            messages.Add("You wear this body; the mind and magic are your own.");
+        }
+
         return ActionResult.Simple(
             "character",
             true,
             false,
             State.Turn,
             State.Turn,
-            messages);
+            messages.ToArray());
     }
+
+    private bool IsWearingBorrowedBody() =>
+        State.ControlledEntity.TryGet<StatusContainerComponent>(out var statuses)
+        && statuses.Statuses.Any(status =>
+            (status.ExpiresTurn is null || status.ExpiresTurn > State.Turn)
+            && _statusRegistry.Canonicalize(status.Id).Equals("borrowed_body", StringComparison.OrdinalIgnoreCase));
 
     public IReadOnlyList<StateDelta> AdvanceTurn()
     {
@@ -593,6 +610,9 @@ public sealed class GameEngine
         Entity? actor = null) =>
         _perceptionSystem.PlanEffectSuspicion(effectPoint, kind, actor);
 
+    internal bool CanPerceiveSubject(Entity witness, Entity subject) =>
+        _perceptionSystem.CanPerceiveSubject(witness, subject);
+
     internal DeedCaptureResult PlanDeedCapture(
         Entity actor,
         string kind,
@@ -601,7 +621,7 @@ public sealed class GameEngine
         GridPoint? effectPoint,
         IEnumerable<string>? tags = null)
     {
-        var actorWitnesses = _perceptionSystem.WitnessesOf(origin, actor.Id);
+        var actorWitnesses = _perceptionSystem.WitnessesOf(origin, actor.Id, subject: actor);
         var effectWitnesses = effectPoint is null
             ? Array.Empty<Entity>()
             : _perceptionSystem.WitnessesOf(effectPoint.Value, actor.Id);

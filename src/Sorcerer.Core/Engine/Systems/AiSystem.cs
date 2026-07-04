@@ -169,22 +169,9 @@ public sealed class AiSystem
         return _state.Factions.IsHostile(actorStats.Faction, targetStats.Faction);
     }
 
-    private bool CanNoticeTarget(Entity actor, Entity target)
-    {
-        if (!target.TryGet<StatusContainerComponent>(out var statuses)
-            || !statuses.Statuses.Any(status => IsStatusActive(status) && _statusRegistry.ConcealsBearer(status.Id)))
-        {
-            return true;
-        }
-
-        if (!actor.TryGet<PositionComponent>(out var actorPosition)
-            || !target.TryGet<PositionComponent>(out var targetPosition))
-        {
-            return true;
-        }
-
-        return GameEngine.Distance(actorPosition.Position, targetPosition.Position) <= 2;
-    }
+    // Delegates to PerceptionSystem's shared concealment rule (via GameEngine) so AI targeting
+    // and deed/witness capture use exactly one definition of "concealed."
+    private bool CanNoticeTarget(Entity actor, Entity target) => _engine.CanPerceiveSubject(actor, target);
 
     private static string SoulIdFor(Entity entity) =>
         entity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : entity.Id.Value;

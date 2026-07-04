@@ -4647,6 +4647,144 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
+    public async Task RewordedSameSpeakerClaimLinksToExistingPromiseInsteadOfForkingAThread()
+    {
+        // Reproduces FEEL_LOG [06]: the model restated the same fact ("Jimmer sells blades that
+        // don't sing to ward-captains") in different words across two turns. The second claim
+        // should link back to the first promise rather than minting a parallel one.
+        var extractor = new SequentialDialogueClaimExtractor(
+            new DialogueClaimProposal(
+                "Jimmer is a quiet blade-seller in the lower markets who sells blades that do not sing to ward-captains.",
+                "person",
+                "jimmer",
+                Salience: 4,
+                Confidence: 85,
+                PlayerVisible: true,
+                BindAsPromise: true,
+                PromiseKind: "rumor",
+                RealizationKind: "person"),
+            new DialogueClaimProposal(
+                "Jimmer in the lower markets sells blades that do not sing to ward-captains.",
+                "person",
+                "jimmer",
+                Salience: 4,
+                Confidence: 85,
+                PlayerVisible: true,
+                BindAsPromise: true,
+                PromiseKind: "rumor",
+                RealizationKind: "person"));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        await session.ExecuteAsync(new TalkCommand("Lio, tell me about Jimmer."));
+        await session.ExecuteAsync(new WaitCommand());
+        await session.ExecuteAsync(new TalkCommand("Lio, do you trust me?"));
+        var secondWait = await session.ExecuteAsync(new WaitCommand());
+
+        var jimmerPromises = session.Engine.State.PromiseLedger.Promises
+            .Where(promise => promise.Text.Contains("Jimmer", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.Single(jimmerPromises);
+        Assert.Contains(secondWait.Deltas, delta => delta.Operation == "claimPromiseLinked");
+        var claims = session.Engine.State.Claims.Records
+            .Where(claim => claim.Text.Contains("Jimmer", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.Equal(2, claims.Length);
+        Assert.All(claims, claim => Assert.Equal(jimmerPromises[0].Id, claim.BoundPromiseId));
+    }
+
+    [Fact]
+    public async Task SameSpeakerUnrelatedFactsCreateSeparatePromisesRatherThanMerging()
+    {
+        var extractor = new SequentialDialogueClaimExtractor(
+            new DialogueClaimProposal(
+                "Jimmer is a quiet blade-seller in the lower markets who sells blades that do not sing to ward-captains.",
+                "person",
+                "jimmer",
+                Salience: 4,
+                Confidence: 85,
+                PlayerVisible: true,
+                BindAsPromise: true,
+                PromiseKind: "rumor",
+                RealizationKind: "person"),
+            new DialogueClaimProposal(
+                "An old burned oak marks a hidden road east of the yard.",
+                "site",
+                "burned_oak",
+                Salience: 4,
+                Confidence: 85,
+                PlayerVisible: true,
+                BindAsPromise: true,
+                PromiseKind: "rumor",
+                RealizationKind: "site"));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        await session.ExecuteAsync(new TalkCommand("Lio, tell me about Jimmer."));
+        await session.ExecuteAsync(new WaitCommand());
+        await session.ExecuteAsync(new TalkCommand("Lio, what else do you know?"));
+        var secondWait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Equal(2, session.Engine.State.PromiseLedger.Promises.Count(promise =>
+            promise.Text.Contains("Jimmer", StringComparison.OrdinalIgnoreCase)
+            || promise.Text.Contains("oak", StringComparison.OrdinalIgnoreCase)));
+        Assert.DoesNotContain(secondWait.Deltas, delta => delta.Operation == "claimPromiseLinked");
+    }
+
+    [Fact]
+    public async Task DifferentSpeakersWithNoSharedSubjectCreateSeparatePromisesDespiteSimilarText()
+    {
+        // Same near-duplicate wording as the merge test above (high token overlap), but from two
+        // different speakers with two different subjects - the provenance guardrail must block
+        // the merge even though the text alone would otherwise qualify.
+        var extractorForLio = new DialogueClaimProposal(
+            "Jimmer is a quiet blade-seller in the lower markets who sells blades that do not sing to ward-captains.",
+            "person",
+            "jimmer",
+            Salience: 4,
+            Confidence: 85,
+            PlayerVisible: true,
+            BindAsPromise: true,
+            PromiseKind: "rumor",
+            RealizationKind: "person");
+        var extractorForStranger = new DialogueClaimProposal(
+            "Jimmer in the lower markets sells blades that do not sing to ward-captains.",
+            "person",
+            "market_gossip",
+            Salience: 4,
+            Confidence: 85,
+            PlayerVisible: true,
+            BindAsPromise: true,
+            PromiseKind: "rumor",
+            RealizationKind: "person");
+        var extractor = new SequentialDialogueClaimExtractor(extractorForLio, extractorForStranger);
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: extractor);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+        AddTestNpc(session, "market_stranger_1", "a passing stranger", new GridPoint(13, 6));
+
+        await session.ExecuteAsync(new TalkCommand("Lio, tell me about Jimmer."));
+        await session.ExecuteAsync(new WaitCommand());
+        await session.ExecuteAsync(new TalkCommand("stranger, what do you know of Jimmer?"));
+        var secondWait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.Equal(2, session.Engine.State.PromiseLedger.Promises.Count(promise =>
+            promise.Text.Contains("Jimmer", StringComparison.OrdinalIgnoreCase)));
+        Assert.DoesNotContain(secondWait.Deltas, delta => delta.Operation == "claimPromiseLinked");
+    }
+
+    [Fact]
     public async Task GeneratedDialogueSupportAllowsInflectedMerchantClaim()
     {
         var provider = new FixtureDialogueProvider(new DialogueResponse(
@@ -6298,6 +6436,10 @@ public sealed class GameSessionCharacterizationTests
             message.Contains("Test duelist strikes you", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(session.Engine.State.Messages, message =>
             message.Contains("Test duelist strikes you", StringComparison.OrdinalIgnoreCase));
+        // The "Your step becomes a strike." framing beat is specific to a *move* resolving as an
+        // attack; an explicit dialogue-triggered attack is not a walk-into-a-fight moment and
+        // must not get it.
+        Assert.DoesNotContain(talk.Messages, message => message.Contains("becomes a strike", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -8713,6 +8855,38 @@ public sealed class GameSessionCharacterizationTests
                 TechnicalFailure: false,
                 Error: null,
                 Claims: _claims));
+    }
+
+    // Returns one single-proposal extraction result per call, in order (clamped to the last
+    // entry once exhausted), so tests can simulate a speaker restating a claim across separate
+    // `talk` turns rather than a single turn producing several proposals at once.
+    private sealed class SequentialDialogueClaimExtractor : IDialogueClaimExtractor
+    {
+        private readonly IReadOnlyList<DialogueClaimProposal> _claimsInOrder;
+        private int _callCount;
+
+        public SequentialDialogueClaimExtractor(params DialogueClaimProposal[] claimsInOrder)
+        {
+            _claimsInOrder = claimsInOrder;
+        }
+
+        public string Name => "sequential-fixture-dialogue-claims";
+
+        public bool RequiresSpokenTextSupport => false;
+
+        public Task<DialogueClaimExtractionResult> ExtractAsync(
+            DialogueClaimRequest request,
+            CancellationToken cancellationToken)
+        {
+            var index = Math.Min(_callCount, _claimsInOrder.Count - 1);
+            _callCount++;
+            return Task.FromResult(new DialogueClaimExtractionResult(
+                Name,
+                RawText: "",
+                TechnicalFailure: false,
+                Error: null,
+                Claims: new[] { _claimsInOrder[index] }));
+        }
     }
 
     private sealed class TechnicalFailureDialogueClaimExtractor : IDialogueClaimExtractor

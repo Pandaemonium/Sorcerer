@@ -117,6 +117,11 @@ public sealed class MovementSystem
                     sourceEntityId: actor.Id.Value));
                 var turnDeltas = _engine.AdvanceTurn();
                 var actionDeltas = attackDeltas.Concat(deed.Deltas).ToArray();
+                // A move that lands on a hostile becomes a strike with no beat of its own
+                // (FEEL_LOG [01]); this line marks the player's own transition from walking to
+                // fighting. Move-resolved-as-attack only - explicit attacks (dialogue, AI) don't
+                // get it, since the player there already chose to fight.
+                var framing = new[] { "Your step becomes a strike." };
                 return new ActionResult
                 {
                     Action = "attack",
@@ -124,7 +129,7 @@ public sealed class MovementSystem
                     ConsumedTurn = true,
                     TurnBefore = turnBefore,
                     TurnAfter = _state.Turn,
-                    Messages = actionDeltas.PlayerMessages().Concat(turnDeltas.PlayerMessages()).ToArray(),
+                    Messages = framing.Concat(actionDeltas.PlayerMessages()).Concat(turnDeltas.PlayerMessages()).ToArray(),
                     Deltas = actionDeltas.Concat(turnDeltas).ToArray(),
                 };
             }

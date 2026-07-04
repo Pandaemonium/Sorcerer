@@ -575,9 +575,9 @@ public sealed class PromiseRealizationSystem
         {
             ["memory"] = new("memory", (_, _) => null, (_, promise, anchor, trigger, messages, persisted) =>
                 RealizeAnchoredMemory(promise, anchor, trigger, messages, persisted)),
-            ["threat"] = new("threat", (_, anchor) => HasOpenAdjacentPayoffTile(anchor) ? null : "no_open_adjacent_tile", (_, promise, anchor, trigger, messages, persisted) =>
+            ["threat"] = new("threat", (_, anchor) => PreflightOpenAdjacentPayoffAnchor(anchor), (_, promise, anchor, trigger, messages, persisted) =>
                 RealizeAnchoredThreat(promise, anchor, trigger, messages, persisted)),
-            ["item"] = new("item", (_, anchor) => HasOpenAdjacentPayoffTile(anchor) ? null : "no_open_adjacent_tile", (_, promise, anchor, trigger, messages, persisted) =>
+            ["item"] = new("item", (_, anchor) => PreflightOpenAdjacentPayoffAnchor(anchor), (_, promise, anchor, trigger, messages, persisted) =>
                 RealizeAnchoredItem(promise, anchor, trigger, messages, persisted)),
             ["merchant_stock"] = new("merchant_stock", (_, _) => null, (_, promise, anchor, trigger, messages, persisted) =>
                 RealizeAnchoredMerchantStock(promise, anchor, trigger, messages, persisted)),
@@ -2815,6 +2815,23 @@ public sealed class PromiseRealizationSystem
 
     private GridPoint FindGeneratedOpenPoint(IReadOnlyDictionary<EntityId, Entity> entities, GridPoint origin) =>
         FindOpenNear(origin, OccupiedPoints(entities.Values)) ?? origin;
+
+    // A door-anchored promise whose payoff does not itself open the door (threat, item) should
+    // only realize once the door has actually opened, not merely because someone attempted to
+    // open it. Door-affecting handlers such as door_rule are exempt: their entire purpose is to
+    // decide whether the door opens, so they must run before the lock check.
+    private static bool AnchorDoorIsOpenOrNotADoor(Entity anchor) =>
+        !anchor.TryGet<DoorComponent>(out var doorComponent) || doorComponent.IsOpen;
+
+    private string? PreflightOpenAdjacentPayoffAnchor(Entity anchor)
+    {
+        if (!AnchorDoorIsOpenOrNotADoor(anchor))
+        {
+            return "anchor_door_not_open";
+        }
+
+        return HasOpenAdjacentPayoffTile(anchor) ? null : "no_open_adjacent_tile";
+    }
 
     private bool HasOpenAdjacentPayoffTile(Entity anchor)
     {

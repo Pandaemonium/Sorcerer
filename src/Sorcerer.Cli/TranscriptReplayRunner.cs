@@ -548,7 +548,7 @@ public static class TranscriptReplayRunner
 
         public BackgroundTextGenerationResult Generate(BackgroundTextRequest request) =>
             textsByJobId.TryGetValue(request.JobId, out var text)
-                ? new BackgroundTextGenerationResult(text, Provider: Name, Model: "transcript")
+                ? new BackgroundTextGenerationResult(text, Provider: Name, Model: "transcript", AlreadyMaterialized: true)
                 : new BackgroundTextGenerationResult(
                     null,
                     TechnicalFailure: true,

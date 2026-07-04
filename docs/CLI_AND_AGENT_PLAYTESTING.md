@@ -256,6 +256,16 @@ Every command should return an action result and a fresh observation:
 
 The exact schema can evolve, but fields must stay stable once agents depend on them.
 
+`ActionResult.ShouldQuit` is `true` once a run has concluded (victory or defeat) or the player
+explicitly quits. When it is set, a `--command`/`--script` batch **stops processing remaining
+entries** for that invocation - this is deliberate (a script queued for a still-running world
+shouldn't keep firing actions into a concluded one), not a bug. An agent that wants to inspect
+final state after death or victory should check `runStatus`/`runConclusion`/`ShouldQuit` on each
+result and branch its own logic accordingly, rather than relying on a `journal`/`inspect` queued
+later in the same batch to execute. The concluding command's own result already carries the
+closeout narration and, for wild-magic and free-captive/rescue cascades, the `runComplete`/
+`runChronicle` deltas in the same step.
+
 `ActionResult.Messages` should include both the direct command outcome and diegetic turn-boundary
 messages produced by the same consumed turn, such as temporary terrain fading or scheduled magic
 coming due. Background jobs expose queue/apply state through `jobs` and debug observations; their

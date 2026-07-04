@@ -42,7 +42,7 @@ public static class RunChronicle
             ? state.RunStatus
             : state.RunConclusion!;
         var legendText = legend.Length == 0 ? "unfiled" : string.Join(", ", legend);
-        var deedText = deeds.Length == 0 ? "left few official marks" : string.Join("; ", deeds);
+        var deedText = deeds.Length == 0 ? "few official marks" : string.Join("; ", deeds);
         var text = state.RunStatus.Equals("victory", StringComparison.OrdinalIgnoreCase)
             ? $"Chronicle of a sorcerer who ended at turn {state.Turn}: {conclusion} The legend reads {legendText}; the ledgers remember {deedText}."
             : $"Chronicle of a sorcerer who ended at turn {state.Turn}: {conclusion}. The legend reads {legendText}; the ledgers remember {deedText}.";
