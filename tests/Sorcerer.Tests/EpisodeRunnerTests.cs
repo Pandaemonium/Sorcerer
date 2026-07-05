@@ -125,6 +125,7 @@ public sealed class EpisodeRunnerTests
                 DebugState: true,
                 Eval: false,
                 Episode: false,
+                LivePlaytest: false,
                 Episodes: 1,
                 MaxTurns: 40,
                 Seed: 7,

@@ -48,6 +48,28 @@ public static class Program
             return await SpellEvalHarness.RunAsync(provider, audit, options.Json);
         }
 
+        if (options.LivePlaytest)
+        {
+            return await LivePlaytestHarness.RunAsync(
+                provider,
+                dialogueProvider,
+                dialogueRouter,
+                dialogueParserRouter,
+                dialogueParser,
+                dialogueAudit,
+                audit,
+                backgroundTextGenerator,
+                new LivePlaytestOptions(
+                    options.Episodes,
+                    options.Seed,
+                    MinSpells: 20,
+                    MinDialogues: 12,
+                    MinNpcs: 5,
+                    MaxSteps: 800,
+                    options.EpisodeLogPath),
+                options.Json);
+        }
+
         if (options.Episode)
         {
             return await EpisodeRunner.RunAsync(
@@ -492,6 +514,7 @@ public sealed record CliOptions(
     bool DebugState,
     bool Eval,
     bool Episode,
+    bool LivePlaytest,
     int Episodes,
     int MaxTurns,
     int Seed,
@@ -522,6 +545,7 @@ public sealed record CliOptions(
         var debugState = false;
         var eval = false;
         var episode = false;
+        var livePlaytest = false;
         var episodes = 1;
         var maxTurns = 40;
         var seed = 7;
@@ -570,6 +594,9 @@ public sealed record CliOptions(
                 case "--episode":
                 case "--playtest":
                     episode = true;
+                    break;
+                case "--live-playtest":
+                    livePlaytest = true;
                     break;
                 case "--episodes" when index + 1 < args.Length:
                     episodes = Math.Max(1, ReadPositiveInt(args[++index], episodes));
@@ -649,6 +676,7 @@ public sealed record CliOptions(
             debugState,
             eval,
             episode,
+            livePlaytest,
             episodes,
             maxTurns,
             seed,
