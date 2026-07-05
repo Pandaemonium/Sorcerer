@@ -34,6 +34,8 @@ public partial class Main : Control
     private Label _statusLine = null!;
     private ProgressBar _hpBar = null!;
     private Label _hpLabel = null!;
+    private ProgressBar _manaBar = null!;
+    private Label _manaLabel = null!;
     private HFlowContainer _statusChips = null!;
     private RichTextLabel _entities = null!;
     private RichTextLabel _inventory = null!;
@@ -549,6 +551,25 @@ public partial class Main : Control
         _hpLabel.CustomMinimumSize = new Vector2(60, 0);
         hpRow.AddChild(_hpLabel);
 
+        var manaRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        manaRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        box.AddChild(manaRow);
+
+        _manaBar = new ProgressBar
+        {
+            MinValue = 0,
+            MaxValue = 1,
+            Step = 0.01,
+            ShowPercentage = false,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 16),
+        };
+        manaRow.AddChild(_manaBar);
+
+        _manaLabel = SmallLabel("");
+        _manaLabel.CustomMinimumSize = new Vector2(60, 0);
+        manaRow.AddChild(_manaLabel);
+
         _statusChips = new HFlowContainer();
         _statusChips.AddThemeConstantOverride("h_separation", UiTheme.SpaceXs);
         _statusChips.AddThemeConstantOverride("v_separation", UiTheme.SpaceXs);
@@ -1022,6 +1043,27 @@ public partial class Main : Control
             ? "HP ?"
             : $"{player.HitPoints}/{player.MaxHitPoints}";
         _hpLabel.AddThemeColorOverride("font_color", hpColor);
+
+        var mana = view.Character?.Mana;
+        var maxMana = view.Character?.MaxMana;
+        Color manaColor;
+        double manaFraction = 0;
+        if (mana is null || maxMana is null || maxMana == 0)
+        {
+            manaColor = UiTheme.Muted;
+        }
+        else
+        {
+            manaFraction = (double)mana.Value / maxMana.Value;
+            manaColor = UiTheme.Focus;
+        }
+
+        _manaBar.Value = manaFraction;
+        _manaBar.AddThemeStyleboxOverride(
+            "fill",
+            UiTheme.Box(manaColor, manaColor, borderWidth: 0, radius: 6, shadow: false, marginX: 0, marginY: 0));
+        _manaLabel.Text = mana is null || maxMana is null ? "MP ?" : $"{mana}/{maxMana}";
+        _manaLabel.AddThemeColorOverride("font_color", manaColor);
 
         var origin = view.Character?.OriginName;
         var pendingSuffix = pendingCast is null ? "" : $" | Cast {pendingCast.State}";
