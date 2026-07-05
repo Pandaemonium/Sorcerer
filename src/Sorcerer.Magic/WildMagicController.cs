@@ -115,7 +115,7 @@ public sealed class WildMagicController : IWildMagicController
                 TechnicalFailure: true,
                 Error: error);
             var result = TechnicalFailure(engine, materialized.Provider, turnBefore, error);
-            Audit(technicalProviderResult, command, request.Context, result, Array.Empty<string>());
+            Audit(technicalProviderResult, command, request, result, Array.Empty<string>());
             return result;
         }
 
@@ -142,7 +142,7 @@ public sealed class WildMagicController : IWildMagicController
                 TechnicalFailure: true,
                 Error: ex.Message);
             var result = TechnicalFailure(engine, materialized.Provider, turnBefore, ex.Message);
-            Audit(providerResult, command, request.Context, result, new[] { "materialized_parse_failed" });
+            Audit(providerResult, command, request, result, new[] { "materialized_parse_failed" });
             return result;
         }
 
@@ -155,7 +155,7 @@ public sealed class WildMagicController : IWildMagicController
                 resolution.RejectedReason ?? "The spell refuses to become real.",
                 Array.Empty<string>()),
                 resolution);
-            Audit(providerResult, command, request.Context, result, Array.Empty<string>());
+            Audit(providerResult, command, request, result, Array.Empty<string>());
             return result;
         }
 
@@ -178,7 +178,7 @@ public sealed class WildMagicController : IWildMagicController
                     reason,
                     resolution.Effects.Select(effect => effect.Type).ToArray());
             result = WithResolutionJson(result, resolution);
-            Audit(providerResult, command, request.Context, result, validationIssues.Select(issue => issue.Code).ToArray());
+            Audit(providerResult, command, request, result, validationIssues.Select(issue => issue.Code).ToArray());
             return result;
         }
 
@@ -252,7 +252,7 @@ public sealed class WildMagicController : IWildMagicController
                     {
                         Deltas = rejectedDeltas.Concat(failure.Deltas).ToArray(),
                     };
-                    Audit(providerResult, command, request.Context, failure, new[] { "apply_consequence_rejected" });
+                    Audit(providerResult, command, request, failure, new[] { "apply_consequence_rejected" });
                     return failure;
                 }
 
@@ -274,7 +274,7 @@ public sealed class WildMagicController : IWildMagicController
                 {
                     Deltas = rejectedDeltas.Concat(rejection.Deltas).ToArray(),
                 };
-                Audit(providerResult, command, request.Context, rejection, new[] { "apply_consequence_rejected" });
+                Audit(providerResult, command, request, rejection, new[] { "apply_consequence_rejected" });
                 return rejection;
             }
 
@@ -295,7 +295,7 @@ public sealed class WildMagicController : IWildMagicController
                 var error = string.Join("; ", stateReport.Issues.Select(issue => issue.Message));
                 transaction.Rollback();
                 var failure = TechnicalFailure(engine, providerResult.Provider, turnBefore, error);
-                Audit(providerResult, command, request.Context, failure, stateReport.Issues.Select(issue => issue.Code).ToArray());
+                Audit(providerResult, command, request, failure, stateReport.Issues.Select(issue => issue.Code).ToArray());
                 return failure;
             }
 
@@ -321,14 +321,14 @@ public sealed class WildMagicController : IWildMagicController
                     ResolvedMagicJson = SerializeResolution(resolution),
                 },
             };
-            Audit(providerResult, command, request.Context, result, Array.Empty<string>());
+            Audit(providerResult, command, request, result, Array.Empty<string>());
             return result;
         }
         catch (Exception ex)
         {
             transaction.Rollback();
             var result = TechnicalFailure(engine, providerResult.Provider, turnBefore, ex.Message);
-            Audit(providerResult, command, request.Context, result, new[] { "application_exception" });
+            Audit(providerResult, command, request, result, new[] { "application_exception" });
             return result;
         }
     }
@@ -453,19 +453,26 @@ public sealed class WildMagicController : IWildMagicController
     private void Audit(
         SpellProviderResult providerResult,
         CastCommand command,
-        object context,
+        SpellRequest request,
         ActionResult result,
         IReadOnlyList<string> validationErrors) =>
         _audit.Record(new SpellAuditEntry(
             DateTimeOffset.UtcNow,
             providerResult.Provider,
             command.Text,
-            context,
+            request.Context,
             providerResult.RawText,
             providerResult.Resolution,
             result,
             validationErrors,
-            command.Performance));
+            command.Performance,
+            BuildRoutingRecord(request)));
+
+    private static SpellRoutingRecord BuildRoutingRecord(SpellRequest request) =>
+        new(
+            request.SelectedCapabilities?.Select(card => card.Id).ToArray() ?? Array.Empty<string>(),
+            request.SupportedOperations.Count,
+            System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(request.Context, JsonOptions)));
 
     private SpellResolution Normalize(SpellResolution resolution) =>
         resolution with
