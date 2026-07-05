@@ -285,6 +285,22 @@ public sealed class MovementSystem
             "wait",
             messages,
             alreadyPersistedMessages: messages.ToList()));
+        if (_state.ControlledEntity.TryGet<ActorComponent>(out var resting) && resting.Mana < resting.MaxMana)
+        {
+            // Waiting a turn is a deliberate rest: recover 1 mana (never past the maximum, so a
+            // full-mana wait produces no change and no message).
+            var manaRegen = _engine.ApplyConsequence(WorldConsequence.RestoreMana(
+                "wait_rest",
+                _state.ControlledEntityId.Value,
+                1,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: _state.ControlledEntityId.Value,
+                reason: "Resting a turn recovers a little mana.",
+                operation: "waitManaRegen"));
+            messages.AddRange(manaRegen.Messages);
+            deltas.AddRange(manaRegen.Deltas);
+        }
+
         var turnDeltas = _engine.AdvanceTurn();
         return new ActionResult
         {
