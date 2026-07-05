@@ -9,6 +9,20 @@ valuable contracts, content, tests, and hard-won failure knowledge from WildMagi
 preserving Sorcerer's C# engine, entity model, consequence grammar, renderer boundary, and
 agent-playable CLI.
 
+## Reading This Plan
+
+Path convention: in every phase block the **Sources** list is WildMagic, with paths relative to
+`C:\Games\WildMagic\`; the **Sorcerer targets** list is this repository, with paths relative to
+the repo root. Both repos ship identically named docs (`WORLDBUILDING.md`,
+`AESTHETICS_AND_TONE.md`, `CAPABILITY_ROUTING.md`, `SEMANTIC_EFFECTS.md`), so a bare `docs/NAME.md`
+means the WildMagic copy when it appears under Sources and the Sorcerer copy when it appears under
+Sorcerer targets.
+
+Execution order: the numbered phases are thematic groupings, not a schedule. The authoritative
+order of work is the Prioritized Backlog (P0 -> P1 -> P2 -> deferred) near the end of this
+document; it deliberately interleaves early tasks from several phases. Read a phase for the
+contract, tests, and do-not-port rules of one system; read the backlog for what to build next.
+
 ## Import Rule
 
 Port by contract, not by module.
@@ -27,7 +41,7 @@ If a WildMagic system cannot be expressed through those seams, it is not ready t
 
 ## Source Map
 
-High-value WildMagic sources:
+High-value WildMagic sources (paths relative to `C:\Games\WildMagic\`):
 
 - Magic contract and parser repair: `wildmagic/wild_magic.py`,
   `wildmagic/resolution_parsing.py`, `wildmagic/spell_contract.py`,
@@ -46,6 +60,10 @@ High-value WildMagic sources:
 - Tooling and evals: `wildmagic/cli.py`, `wildmagic/replay.py`, `wildmagic/autoplay.py`,
   `wildmagic/speleval.py`, `wildmagic/dialogue_eval.py`, `wildmagic/lore_eval.py`,
   `docs/AGENT_PLAYTESTING.md`, `docs/MODEL_CONFIG.md`.
+- Region and worldgen data not yet mapped above but relevant to Phases 4 and 6:
+  `wildmagic/game_data.py` (region/place records such as Hollowmere, Glasswild, Saltmarket),
+  `wildmagic/town_gen.py`, and `wildmagic/npc_quests.py`. Cite or explicitly exclude each of
+  these before the matching phase begins.
 
 Sorcerer targets:
 
@@ -86,6 +104,10 @@ Tasks:
 
 - Create a small source index from `C:\Games\WildMagic` with candidate systems, source paths,
   Sorcerer target modules, and status.
+- Reconcile the content import list against the actual WildMagic file inventory before importing:
+  diff the Phase 10 lists against `C:\Games\WildMagic\content\lore\*.md`, `regions.py`,
+  `game_data.py`, and `town_gen.py` so no card, region, or population is dropped by omission or
+  miscategorized (a lore-card culture treated as a code-defined region, or vice versa).
 - Add a checklist to PR descriptions or implementation notes:
   - no Python runtime dependency
   - no renderer-owned rules
@@ -680,11 +702,15 @@ Import content only when the target system can use it structurally.
 
 Order:
 
-1. Lore cards:
-   - Vigovia/Empire/Censorate
-   - Hollowmere/frontier
+1. Lore cards (from `C:\Games\WildMagic\content\lore\*.md`, 20 cards total):
+   - Vigovia/Empire/Censorate (`vigovia.md`, `empire.md`)
    - traditions: crystal, bone, blood, woven, charter, shadow purge
-   - cultures: Stalnaz, Vint, Brall, Ryolan, Threen, Parn, merfolk, birdfolk
+   - cultures/peoples: Stalnaz, Vint, Brall, Ryolan, Threen, Parn, merfolk, birdfolk,
+     Gontark (goatfolk curses), Monteary (horse-realm), Ontria (yoghurt tribes),
+     Rentacosta (free city of sailors)
+   - Note: place identities such as Hollowmere/frontier, Glasswild, and Saltmarket are not
+     lore-card files; they live in `regions.py`/`game_data.py` and import as region voice cards
+     in Phase 4, not here.
 2. Region voice cards:
    - Hollowmere
    - Vigovia
@@ -748,6 +774,10 @@ Eval rule:
   play.
 
 ## Prioritized Backlog
+
+This backlog is the authoritative execution order (see "Reading This Plan"). It interleaves tasks
+across phases: finish P0 before P1, and P1 before P2, pulling each task's contract, tests, and
+do-not-port rules from its parent phase.
 
 P0 - harden foundations:
 
