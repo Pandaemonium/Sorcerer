@@ -47,4 +47,12 @@ Each note: **[area]** what felt off — why it matters — possible direction. S
 
 ## Bugs found and fixed during playtesting
 
-_(listed here with commit references as they are fixed)_
+- **Harness navigation spin (fixed)** — the live playtest driver spun hundreds of no-op travels
+  once it needed new NPCs, because spawned residents are not perceived until looked at. Fixed with
+  an Inspect-after-travel step + a no-progress breaker (same fix applied to GUI autoplay).
+- **`restoreMana` bundled into unrelated spells (prompt fix, to validate)** — added a resolver
+  prompt rule: "Costs are not effects: never add a restoreMana/heal effect unless that is the
+  spell's actual purpose." Applies on next launch; will confirm it stops the fire-strike-hands-mana
+  behavior.
+- **Unpayable item cost fizzles the spell (fixed earlier)** — resolver-named items the caster does
+  not carry now substitute mana instead of failing the cast (SpellCostRepairTests).
