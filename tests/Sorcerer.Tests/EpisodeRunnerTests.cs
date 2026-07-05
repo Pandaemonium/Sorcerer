@@ -133,6 +133,7 @@ public sealed class EpisodeRunnerTests
                 TranscriptPath: logPath,
                 ReplayPath: null,
                 ReplayAssertFinal: false,
+                ReparseAuditPath: null,
                 OriginId: null,
                 BackgroundProvider: "mock",
                 BackgroundHost: null,

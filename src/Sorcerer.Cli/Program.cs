@@ -76,6 +76,11 @@ public static class Program
                 options.Json);
         }
 
+        if (!string.IsNullOrWhiteSpace(options.ReparseAuditPath))
+        {
+            return await AuditReparseHarness.RunAsync(options.ReparseAuditPath, options.Json);
+        }
+
         var session = GameSession.CreateImperialEncounter(
             new WildMagicController(provider, audit: audit, router: router),
             options.OriginId,
@@ -495,6 +500,7 @@ public sealed record CliOptions(
     string? TranscriptPath,
     string? ReplayPath,
     bool ReplayAssertFinal,
+    string? ReparseAuditPath,
     string? OriginId,
     string? BackgroundProvider,
     string? BackgroundHost,
@@ -524,6 +530,7 @@ public sealed record CliOptions(
         string? transcriptPath = null;
         string? replayPath = null;
         var replayAssertFinal = false;
+        string? reparseAuditPath = null;
         string? originId = null;
         string? backgroundProvider = null;
         string? backgroundHost = null;
@@ -590,6 +597,9 @@ public sealed record CliOptions(
                 case "--replay-assert-final":
                     replayAssertFinal = true;
                     break;
+                case "--reparse-audit" when index + 1 < args.Length:
+                    reparseAuditPath = args[++index];
+                    break;
                 case "--origin" when index + 1 < args.Length:
                     originId = args[++index];
                     break;
@@ -647,6 +657,7 @@ public sealed record CliOptions(
             transcriptPath,
             replayPath,
             replayAssertFinal,
+            reparseAuditPath,
             originId,
             backgroundProvider,
             backgroundHost,
