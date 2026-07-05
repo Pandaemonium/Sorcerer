@@ -53,6 +53,7 @@ public static class SpellResolutionJson
     {
         using var document = JsonDocument.Parse(ExtractFirstJsonObject(raw));
         var root = UnwrapCommonWrapper(document.RootElement);
+        root = UnwrapOutcomeContainer(root);
 
         var accepted = ReadBool(root, "accepted", true);
         var severity = ReadString(root, "severity", "minor");
@@ -65,7 +66,7 @@ public static class SpellResolutionJson
             .ToList();
         var rescuedEffects = RescueEffectShapedCosts(rawCosts, registry);
 
-        var effectFields = ReadObjects(root, "effects")
+        var effectFields = ReadEffectObjects(root, registry)
             .Select(fields => NormalizeFields(fields, registry))
             .Concat(rescuedEffects)
             .ToList();
@@ -124,6 +125,99 @@ public static class SpellResolutionJson
         }
 
         return root;
+    }
+
+    /// <summary>
+    /// Some models nest the whole resolution body inside an <c>"outcome"</c> object, e.g.
+    /// <c>{"outcome":{"effects":[...],"costs":[...]}}</c>. Hoist it only when the outer object has
+    /// no <c>effects</c> of its own, so a real resolution that merely carries an outcome sub-object
+    /// is never hijacked. (A string <c>outcome</c>/<c>outcome_text</c> is left for text reading.)
+    /// </summary>
+    private static JsonElement UnwrapOutcomeContainer(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object || root.TryGetProperty("effects", out _))
+        {
+            return root;
+        }
+
+        if (root.TryGetProperty("outcome", out var outcome)
+            && outcome.ValueKind == JsonValueKind.Object
+            && (outcome.TryGetProperty("effects", out _)
+                || outcome.TryGetProperty("effect", out _)
+                || outcome.TryGetProperty("costs", out _)))
+        {
+            return outcome;
+        }
+
+        return root;
+    }
+
+    private static readonly string[] EnvelopeMarkers =
+    {
+        "accepted", "effects", "effect", "rejected_reason", "rejectedReason",
+    };
+
+    /// <summary>
+    /// Reads the resolution's effect objects, tolerating three envelope malformations beyond the
+    /// canonical <c>"effects"</c> array: a singular <c>"effect"</c> (object or array), and a bare
+    /// effect object with no envelope at all (<c>{"type":"damage",...}</c> as the whole response).
+    /// A bare object is only accepted when its type is positively identifiable (a registered
+    /// operation, element-damage alias, or known status word), never for arbitrary JSON.
+    /// </summary>
+    private static IReadOnlyList<IReadOnlyDictionary<string, object?>> ReadEffectObjects(
+        JsonElement root,
+        OperationRegistry registry)
+    {
+        var effects = ReadObjects(root, "effects");
+        if (effects.Count > 0)
+        {
+            return effects;
+        }
+
+        if (root.TryGetProperty("effect", out var singular))
+        {
+            if (singular.ValueKind == JsonValueKind.Array)
+            {
+                var fromArray = ReadObjects(root, "effect");
+                if (fromArray.Count > 0)
+                {
+                    return fromArray;
+                }
+            }
+            else if (singular.ValueKind == JsonValueKind.Object)
+            {
+                return new[] { ReadObject(singular) };
+            }
+        }
+
+        if (LooksLikeBareEffect(root, registry))
+        {
+            return new[] { ReadObject(root) };
+        }
+
+        return Array.Empty<IReadOnlyDictionary<string, object?>>();
+    }
+
+    private static bool LooksLikeBareEffect(JsonElement root, OperationRegistry registry)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var marker in EnvelopeMarkers)
+        {
+            if (root.TryGetProperty(marker, out _))
+            {
+                return false;
+            }
+        }
+
+        var type = ReadType(ReadObject(root)).Trim();
+        return type.Length > 0
+            && (registry.Supports(type)
+                || ElementDamageAliases.ContainsKey(type)
+                || StatusWordTypes.Contains(type));
     }
 
     /// <summary>
@@ -320,6 +414,7 @@ public static class SpellResolutionJson
 
         InferMissingEffectType(normalized);
         ApplyElementDamageAlias(normalized);
+        ApplyStatusWordType(normalized, registry);
 
         var explicitType = ReadExplicitType(normalized);
         if ((explicitType.Equals("addStatus", StringComparison.OrdinalIgnoreCase)
@@ -517,6 +612,36 @@ public static class SpellResolutionJson
 
         fields["type"] = "damage";
         fields.TryAdd("damageType", canonical);
+    }
+
+    private static readonly HashSet<string> StatusWordTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "regenerating", "regenerate", "burning", "poisoned", "frozen", "stunned", "slowed",
+        "hasted", "invisible", "berserk", "empowered", "warded", "cursed", "bleeding", "rooted",
+        "webbed", "confused", "frightened", "marked", "silenced",
+    };
+
+    /// <summary>
+    /// A model sometimes names a status directly as the effect type, e.g. <c>{"type":"burning"}</c>
+    /// instead of <c>{"type":"addStatus","status":"burning"}</c>. Rewrite the recognized status
+    /// words into an addStatus effect; whether the status itself is valid is left to later
+    /// validation. Never overrides a type that is already a registered operation.
+    /// </summary>
+    private static void ApplyStatusWordType(Dictionary<string, object?> fields, OperationRegistry registry)
+    {
+        var explicitType = ReadExplicitType(fields).Trim();
+        if (explicitType.Length == 0 || registry.Supports(explicitType) || !StatusWordTypes.Contains(explicitType))
+        {
+            return;
+        }
+
+        fields["type"] = "addStatus";
+        if (!fields.ContainsKey("status"))
+        {
+            fields["status"] = explicitType.Equals("regenerate", StringComparison.OrdinalIgnoreCase)
+                ? "regenerating"
+                : explicitType.ToLowerInvariant();
+        }
     }
 
     private static void MergeNestedFields(Dictionary<string, object?> normalized, string key)
@@ -811,19 +936,32 @@ public static class SpellResolutionJson
 
         return array.EnumerateArray()
             .Where(element => element.ValueKind == JsonValueKind.Object)
-            .Select(element => element.EnumerateObject()
-                .ToDictionary(
-                    item => item.Name,
-                    item => ConvertJsonValue(item.Value),
-                    StringComparer.OrdinalIgnoreCase))
+            .Select(ReadObject)
             .ToArray();
     }
+
+    private static IReadOnlyDictionary<string, object?> ReadObject(JsonElement element) =>
+        element.EnumerateObject()
+            .ToDictionary(
+                item => item.Name,
+                item => ConvertJsonValue(item.Value),
+                StringComparer.OrdinalIgnoreCase);
 
     private static IReadOnlyList<IReadOnlyDictionary<string, object?>> ReadCosts(
         JsonElement root,
         string property)
     {
-        if (!root.TryGetProperty(property, out var array) || array.ValueKind != JsonValueKind.Array)
+        if (!root.TryGetProperty(property, out var array))
+        {
+            return Array.Empty<IReadOnlyDictionary<string, object?>>();
+        }
+
+        if (array.ValueKind == JsonValueKind.Object)
+        {
+            return CoerceCostObject(array);
+        }
+
+        if (array.ValueKind != JsonValueKind.Array)
         {
             return Array.Empty<IReadOnlyDictionary<string, object?>>();
         }
@@ -847,6 +985,62 @@ public static class SpellResolutionJson
             .Where(fields => fields is not null)
             .Select(fields => (IReadOnlyDictionary<string, object?>)fields!)
             .ToArray();
+    }
+
+    /// <summary>
+    /// Coerces a costs object (<c>{"mana":5}</c> or <c>{"item":"herb","quantity":2}</c>) into the
+    /// canonical list-of-cost-objects shape. A single already-typed cost object
+    /// (<c>{"type":"mana","amount":5}</c>) is passed through untouched for the normal pipeline.
+    /// </summary>
+    private static IReadOnlyList<IReadOnlyDictionary<string, object?>> CoerceCostObject(JsonElement element)
+    {
+        var dict = ReadObject(element);
+        foreach (var typeKey in new[] { "type", "costType", "cost_type", "kind", "resource" })
+        {
+            if (dict.ContainsKey(typeKey))
+            {
+                return new[] { dict };
+            }
+        }
+
+        var quantity = dict.TryGetValue("quantity", out var rawQuantity)
+            && int.TryParse(Convert.ToString(rawQuantity), out var parsedQuantity)
+            ? parsedQuantity
+            : 1;
+
+        var costs = new List<IReadOnlyDictionary<string, object?>>();
+        foreach (var pair in dict)
+        {
+            if (pair.Key.Equals("quantity", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var canonical = CanonicalCostType(pair.Key);
+            if (canonical == "item" || pair.Key.Equals("name", StringComparison.OrdinalIgnoreCase))
+            {
+                var itemName = Convert.ToString(pair.Value);
+                if (!string.IsNullOrWhiteSpace(itemName))
+                {
+                    costs.Add(new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["type"] = "item",
+                        ["item"] = itemName,
+                        ["amount"] = quantity,
+                    });
+                }
+            }
+            else if (canonical.Length > 0 && int.TryParse(Convert.ToString(pair.Value), out var amount) && amount > 0)
+            {
+                costs.Add(new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["type"] = canonical,
+                    ["amount"] = amount,
+                });
+            }
+        }
+
+        return costs;
     }
 
     private static Dictionary<string, object?> ParseCostString(string text)
