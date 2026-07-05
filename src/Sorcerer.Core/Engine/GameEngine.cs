@@ -670,7 +670,10 @@ public sealed class GameEngine
         return EntityById(target);
     }
 
-    public MagicContextView MagicContext(OperationIndex operations) => _viewBuilder.MagicContext(operations);
+    public MagicContextView MagicContext(
+        OperationIndex operations,
+        IReadOnlyCollection<string>? requiredContext = null) =>
+        _viewBuilder.MagicContext(operations, requiredContext);
 
     public GameView View() => _viewBuilder.View();
 

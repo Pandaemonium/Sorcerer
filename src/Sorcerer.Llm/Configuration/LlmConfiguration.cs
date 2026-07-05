@@ -3,6 +3,7 @@ namespace Sorcerer.Llm.Configuration;
 public enum LlmPurpose
 {
     Wild,
+    Router,
     Dialogue,
     Item,
     Canon,
@@ -66,6 +67,9 @@ public sealed record LlmConfiguration(
         return new LlmConfiguration(new Dictionary<LlmPurpose, LlmPurposeSettings>
         {
             [LlmPurpose.Wild] = PurposeFromEnvironment(LlmPurpose.Wild, provider, host, model, 240),
+            // The router reuses the resolver's provider/host/model by default so no second model is
+            // loaded; it is a short call, hence the tighter timeout. Override with SORCERER_ROUTER_*.
+            [LlmPurpose.Router] = PurposeFromEnvironment(LlmPurpose.Router, provider, host, model, 30),
             [LlmPurpose.Dialogue] = PurposeFromEnvironment(LlmPurpose.Dialogue, provider, host, model, 180),
             [LlmPurpose.Item] = PurposeFromEnvironment(LlmPurpose.Item, provider, host, model, 180),
             [LlmPurpose.Canon] = PurposeFromEnvironment(LlmPurpose.Canon, provider, host, model, 180),

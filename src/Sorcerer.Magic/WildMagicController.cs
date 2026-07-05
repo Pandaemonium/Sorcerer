@@ -22,6 +22,7 @@ public sealed class WildMagicController : IWildMagicController
 
     private readonly ISpellAuditSink _audit;
     private readonly ISpellProvider _provider;
+    private readonly ISpellRouter _router;
     private readonly OperationRegistry _registry;
     private readonly CapabilityRegistry _capabilities;
 
@@ -29,12 +30,14 @@ public sealed class WildMagicController : IWildMagicController
         ISpellProvider provider,
         OperationRegistry? registry = null,
         ISpellAuditSink? audit = null,
-        CapabilityRegistry? capabilities = null)
+        CapabilityRegistry? capabilities = null,
+        ISpellRouter? router = null)
     {
         _provider = provider;
         _registry = registry ?? OperationRegistry.CreateDefault();
         _audit = audit ?? NullSpellAuditSink.Instance;
         _capabilities = capabilities ?? CapabilityRegistry.CreateDefault();
+        _router = router ?? NullSpellRouter.Instance;
     }
 
     public async Task<MaterializedMagicResolution> ResolveAsync(
@@ -42,7 +45,8 @@ public sealed class WildMagicController : IWildMagicController
         CastCommand command,
         CancellationToken cancellationToken)
     {
-        var request = BuildSpellRequest(engine, command.Text);
+        var selectedCapabilities = await RouteCapabilitiesAsync(command.Text, cancellationToken);
+        var request = BuildSpellRequest(engine, command.Text, selectedCapabilities);
         SpellProviderResult providerResult;
         try
         {
@@ -97,7 +101,9 @@ public sealed class WildMagicController : IWildMagicController
     {
         var turnBefore = engine.State.Turn;
         var command = new CastCommand(materialized.SpellText, materialized.Performance);
-        var request = BuildSpellRequest(engine, materialized.SpellText);
+        // Apply-time context is only used for the audit record, so it uses keyword-only selection:
+        // re-running the LLM router here would spend a second call and be non-deterministic.
+        var request = BuildSpellRequest(engine, materialized.SpellText, _capabilities.Select(materialized.SpellText));
 
         if (materialized.TechnicalFailure || string.IsNullOrWhiteSpace(materialized.ResolvedMagicJson))
         {
@@ -394,12 +400,48 @@ public sealed class WildMagicController : IWildMagicController
         return ApplyResolved(engine, resolved);
     }
 
-    private SpellRequest BuildSpellRequest(GameEngine engine, string spellText)
+    /// <summary>
+    /// Runs the LLM router (if one is wired) and unions its picks with keyword routing. A router
+    /// failure, timeout, or empty answer degrades cleanly to keyword-only selection; only outer
+    /// cancellation propagates.
+    /// </summary>
+    private async Task<IReadOnlyList<CapabilityCard>> RouteCapabilitiesAsync(
+        string spellText,
+        CancellationToken cancellationToken)
     {
-        var selectedCapabilities = _capabilities.Select(spellText);
-        var operationIndex = _registry.ToNarrowedIndex(
-            selectedCapabilities.SelectMany(card => card.EffectTypes));
-        var contextView = engine.MagicContext(operationIndex);
+        IReadOnlyList<string> routerNames = Array.Empty<string>();
+        try
+        {
+            var route = await _router.RouteAsync(spellText, _capabilities.CapabilityIndex(), cancellationToken);
+            if (!route.TechnicalFailure)
+            {
+                routerNames = route.CapabilityNames;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Router is best-effort: any failure falls back to keyword-only selection below.
+        }
+
+        return _capabilities.Select(spellText, routerNames);
+    }
+
+    private SpellRequest BuildSpellRequest(
+        GameEngine engine,
+        string spellText,
+        IReadOnlyList<CapabilityCard> selectedCapabilities)
+    {
+        var operationIndex = _registry.ToRoutedIndex(
+            selectedCapabilities.SelectMany(card => card.EffectTypes),
+            _capabilities.AllEffectTypes());
+        var requiredContext = selectedCapabilities
+            .SelectMany(card => card.RequiredContext)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var contextView = engine.MagicContext(operationIndex, requiredContext);
         return new SpellRequest(
             spellText,
             contextView,

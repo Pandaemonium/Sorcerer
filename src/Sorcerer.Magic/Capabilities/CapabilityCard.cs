@@ -44,7 +44,17 @@ public sealed class CapabilityRegistry
     /// positives (an extra loaded card) over false negatives (a missing card that would have made
     /// the spell work).
     /// </summary>
-    public IReadOnlyList<CapabilityCard> Select(string spellText)
+    public IReadOnlyList<CapabilityCard> Select(string spellText) =>
+        Select(spellText, Array.Empty<string>());
+
+    /// <summary>
+    /// Keyword routing unioned with an LLM router's explicit picks. Keyword hits are ranked and
+    /// capped exactly as before; <paramref name="routerCardNames"/> are added as high-confidence
+    /// seeds right after the keyword hits (validated against the registry, so unknown names are
+    /// ignored). Combo expansion and the recall-biased cap then run over the union. When
+    /// <paramref name="routerCardNames"/> is empty this is byte-for-byte the old keyword behavior.
+    /// </summary>
+    public IReadOnlyList<CapabilityCard> Select(string spellText, IEnumerable<string> routerCardNames)
     {
         var text = $" {(spellText ?? string.Empty).ToLowerInvariant()} ";
 
@@ -57,29 +67,63 @@ public sealed class CapabilityRegistry
             .Select(entry => entry.Card)
             .ToList();
 
-        var selected = new List<CapabilityCard>(ranked);
-        var seen = new HashSet<string>(selected.Select(card => card.Id), StringComparer.OrdinalIgnoreCase);
-        foreach (var card in ranked)
+        var routerCards = (routerCardNames ?? Array.Empty<string>())
+            .Select(name => name?.Trim())
+            .Where(name => !string.IsNullOrEmpty(name) && _cards.ContainsKey(name!))
+            .Select(name => _cards[name!])
+            .ToList();
+
+        // Explicit picks (keyword hits, then router picks) come before combo expansions so the cap
+        // trims speculative combos first and never a deliberately-selected card.
+        var selected = new List<CapabilityCard>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var card in ranked.Concat(routerCards))
+        {
+            if (seen.Add(card.Id))
+            {
+                selected.Add(card);
+            }
+        }
+
+        var explicitCount = selected.Count;
+        foreach (var card in selected.Take(explicitCount).ToArray())
         {
             foreach (var comboId in card.CommonCombos)
             {
-                if (!seen.Contains(comboId) && _cards.TryGetValue(comboId, out var combo))
+                if (_cards.TryGetValue(comboId, out var combo) && seen.Add(combo.Id))
                 {
                     selected.Add(combo);
-                    seen.Add(combo.Id);
                 }
             }
         }
 
-        var cap = ranked.Count > 0 ? BaseCapWithHits : BaseCapWithoutHits;
+        var cap = ranked.Count > 0 || routerCards.Count > 0 ? BaseCapWithHits : BaseCapWithoutHits;
         if (Connectives.Any(connective => text.Contains(connective, StringComparison.OrdinalIgnoreCase)))
         {
             cap++;
         }
 
         cap = Math.Min(cap, HardCeiling);
+        if (routerCards.Count > 0)
+        {
+            // Router picks are deliberate: never let the cap drop an explicit pick, only speculative
+            // combos. (Keyword-only selection keeps its original cap so its behavior is unchanged.)
+            cap = Math.Max(cap, explicitCount);
+        }
+
         return selected.Take(cap).ToArray();
     }
+
+    /// <summary>
+    /// Every effect type any capability card can unlock, canonicalization aside. Used by operation
+    /// routing to decide which operations are "gateable" (safe to trim to a lean card when their card
+    /// was not selected) versus operations no card can bring in (which must stay fully advertised).
+    /// </summary>
+    public IReadOnlyCollection<string> AllEffectTypes() =>
+        _cards.Values
+            .SelectMany(card => card.EffectTypes)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
     public string CapabilityIndex() =>
         string.Join("\n", _registryOrder.Select(id => $"- {_cards[id].IndexLine}"));
@@ -163,7 +207,9 @@ public sealed class CapabilityRegistry
             new[] { "remember", "forget", "memory", "memories", "recall", "convince", "erase", "implant", "amnesia", "wipe", "plant a memory" },
             "memory_edit - alter, plant, or erase what an NPC remembers or knows",
             new[] { "editMemory" },
-            new[] { "target_memories" },
+            // hidden_entities: a memory-edit spell may reach a mind the caster cannot currently
+            // perceive, so this card opts into off-screen entity context (see Lever B).
+            new[] { "target_memories", "hidden_entities" },
             "editMemory fields: target, op (add/remove/alter), subject ('the caster' means the "
                 + "player), text, strength (1-5). Removing the caster from a hostile NPC's memory "
                 + "also calms it. This is major magic: pair with a real cost.",

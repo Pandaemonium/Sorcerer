@@ -35,7 +35,9 @@ public sealed class EngineViewBuilder
         _state = engine.State;
     }
 
-    public MagicContextView MagicContext(OperationIndex operations)
+    public MagicContextView MagicContext(
+        OperationIndex operations,
+        IReadOnlyCollection<string>? requiredContext = null)
     {
         var caster = _state.ControlledEntity;
         var casterPosition = caster.Get<PositionComponent>().Position;
@@ -44,8 +46,16 @@ public sealed class EngineViewBuilder
         var soulRecord = CharacterMath.EnsureSoulRecord(_state, caster);
         var statuses = BuildStatusCards(caster);
         var perception = _perceptionSystem.RefreshControlled();
+        // By default the resolver only sees what the caster perceives (plus the caster). Entities the
+        // player cannot perceive are included only when a routed capability asks for them via its
+        // RequiredContext (e.g. a memory-edit spell reaching an unseen mind); otherwise they are
+        // off-screen context the spell does not need. See docs/CAPABILITY_ROUTING.md Lever B.
+        var includeHidden = requiredContext is not null && requiredContext.Contains("hidden_entities");
         var visible = _state.Entities.Values
             .Where(entity => entity.TryGet<PositionComponent>(out _))
+            .Where(entity => includeHidden
+                || entity.Id == _state.ControlledEntityId
+                || perception.VisibleEntityIds.Contains(entity.Id))
             .OrderBy(entity => entity.Id.Value)
             .Select(entity =>
             {

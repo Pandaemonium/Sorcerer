@@ -409,19 +409,24 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
-    public void MagicContextMarksHiddenFactsWithoutRevealingThemToThePlayerView()
+    public void MagicContextGatesHiddenEntitiesBehindRequiredContextAndMarksThemWhenIncluded()
     {
         var session = CreateMockSession();
         DisableImperialAi(session);
         session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(12, 5)));
 
         var playerView = session.View();
-        var context = session.Engine.MagicContext(new OperationIndex(
-            Array.Empty<string>(),
-            Array.Empty<OperationCardView>()));
+        var emptyIndex = new OperationIndex(Array.Empty<string>(), Array.Empty<OperationCardView>());
 
+        // By default the resolver only sees perceived entities: the hidden prisoner is gated out.
+        var defaultContext = session.Engine.MagicContext(emptyIndex);
         Assert.DoesNotContain(playerView.Entities, entity => entity.Id == "prisoner_1");
-        var prisoner = context.Visible.Single(entity => entity.Id == "prisoner_1");
+        Assert.DoesNotContain(defaultContext.Visible, entity => entity.Id == "prisoner_1");
+
+        // A capability that opts into off-screen entities (hidden_entities) sees it, marked hidden.
+        var gatedContext = session.Engine.MagicContext(emptyIndex, new[] { "hidden_entities" });
+        Assert.DoesNotContain(playerView.Entities, entity => entity.Id == "prisoner_1");
+        var prisoner = gatedContext.Visible.Single(entity => entity.Id == "prisoner_1");
         Assert.Equal("hidden_from_player", prisoner.Visibility);
     }
 

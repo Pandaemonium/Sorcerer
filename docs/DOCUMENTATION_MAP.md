@@ -76,6 +76,8 @@ references inside them to Python modules or the old name.
 - [WILD_MAGIC_CONTRACT.md](WILD_MAGIC_CONTRACT.md): the initial wild-magic JSON contract.
 - [MAGIC_RESOLVER_ARCHITECTURE.md](MAGIC_RESOLVER_ARCHITECTURE.md): capability cards,
   operation registry, context routing, and audits.
+- [CAPABILITY_ROUTING.md](CAPABILITY_ROUTING.md): plan for routing the operation cards and
+  game state (and an opt-in generative router call) to cut resolver context/latency.
 - [RENDERER_BOUNDARY.md](RENDERER_BOUNDARY.md): how renderers consume state without owning
   rules.
 - [LLM_AND_BACKGROUND_JOBS.md](LLM_AND_BACKGROUND_JOBS.md): foreground/background model

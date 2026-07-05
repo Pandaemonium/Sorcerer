@@ -31,6 +31,7 @@ public static class Program
         };
         var configuration = BuildLlmConfiguration(options);
         var provider = SpellProviderFactory.Create(configuration, LlmPurpose.Wild);
+        var router = SpellRouterFactory.Create(configuration, LlmPurpose.Router);
         var dialogueProvider = DialogueProviderFactory.Create(configuration, LlmPurpose.Dialogue);
         var dialogueClaimExtractor = DialogueClaimExtractorFactory.Create(configuration, LlmPurpose.Dialogue);
         var backgroundAudit = new JsonlBackgroundTextAuditSink(Path.Combine("logs", "background_audit.jsonl"));
@@ -72,7 +73,7 @@ public static class Program
         }
 
         var session = GameSession.CreateImperialEncounter(
-            new WildMagicController(provider, audit: audit),
+            new WildMagicController(provider, audit: audit, router: router),
             options.OriginId,
             options.Seed,
             CrossRunMemorialStore.LoadDefault(),

@@ -67,6 +67,56 @@ public sealed class OperationRegistry
             operations.Select(op => op.Card.ToView()).ToArray());
     }
 
+    /// <summary>
+    /// Frequently-used operations that make up the palette of most casts. Their full cards are always
+    /// advertised so a routing miss still degrades to a recognizable spell, never a silent capability
+    /// loss. Everything else is trimmed to a lean card (name + summary) unless a routed capability
+    /// unlocks it. Mirrors the WildMagic prototype's CORE_EFFECT_TYPES.
+    /// </summary>
+    private static readonly HashSet<string> CoreCommon = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "damage", "areaDamage", "areaStatus", "addStatus", "removeStatus", "heal", "restoreMana",
+        "teleport", "push", "pull", "createTile", "createTiles", "addResistance", "addWeakness",
+        "setFlag", "addCurse", "message", "addTrait",
+    };
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyFields =
+        new Dictionary<string, string>();
+
+    /// <summary>
+    /// Like <see cref="ToNarrowedIndex"/>, but additionally trims the operation *cards* the resolver
+    /// sees. A card keeps its full prompt guidance, fields, and examples only when it is core-common,
+    /// unlocked by a selected capability, or not reachable by any capability at all (so routing could
+    /// never have brought it in). Every other advertised operation is reduced to a lean name+summary
+    /// card. This is where the bulk of per-cast context (and latency) is saved; validation and apply
+    /// still run against the full registry regardless of what the card advertised.
+    /// </summary>
+    public OperationIndex ToRoutedIndex(
+        IEnumerable<string> selectedEffectTypes,
+        IEnumerable<string> routableEffectTypes)
+    {
+        var selected = new HashSet<string>(selectedEffectTypes.Select(Canonicalize), StringComparer.OrdinalIgnoreCase);
+        var routable = new HashSet<string>(routableEffectTypes.Select(Canonicalize), StringComparer.OrdinalIgnoreCase);
+        var operations = _operations.Values
+            .Where(op => op.IsCore || selected.Contains(op.Name))
+            .OrderBy(op => op.Name)
+            .ToArray();
+
+        return new(
+            operations.Select(op => op.Name).ToArray(),
+            operations
+                .Select(op => KeepFullCard(op, selected, routable) ? op.Card.ToView() : LeanCard(op.Card))
+                .ToArray());
+    }
+
+    private static bool KeepFullCard(IOperation op, HashSet<string> selected, HashSet<string> routable) =>
+        CoreCommon.Contains(op.Name)
+        || selected.Contains(op.Name)
+        || !routable.Contains(op.Name);
+
+    private static OperationCardView LeanCard(OperationCard card) =>
+        new(card.Name, Array.Empty<string>(), card.Summary, string.Empty, EmptyFields, Array.Empty<object>());
+
     public static OperationRegistry Build(IEnumerable<IOperation> operations, IEnumerable<OperationCard>? cards = null)
     {
         var ops = operations.ToArray();

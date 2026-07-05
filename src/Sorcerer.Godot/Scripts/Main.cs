@@ -605,6 +605,7 @@ public partial class Main : Control
             : _host.Text.Trim();
         var model = string.IsNullOrWhiteSpace(_model?.Text) ? null : _model.Text.Trim();
         var provider = SpellProviderFactory.Create(providerName, host, model);
+        var router = SpellRouterFactory.Create(providerName, host, model);
         var dialogueProvider = DialogueProviderFactory.Create(new Sorcerer.Llm.Configuration.LlmPurposeSettings(
             providerName,
             host,
@@ -628,7 +629,7 @@ public partial class Main : Control
             ? Math.Max(1, parsedSeed)
             : 7;
         _session = GameSession.CreateImperialEncounter(
-            new WildMagicController(provider, audit: audit),
+            new WildMagicController(provider, audit: audit, router: router),
             origin,
             seed,
             CrossRunMemorialStore.LoadDefault(),
