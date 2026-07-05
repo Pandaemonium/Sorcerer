@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
@@ -87,15 +88,74 @@ public static class SpellEvalHarness
         bool json,
         CancellationToken cancellationToken = default)
     {
+        var summary = await RunToSummaryAsync(provider, audit, cancellationToken);
+
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(
+                summary,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+        }
+        else
+        {
+            Console.WriteLine($"Spell eval: {summary.Passed}/{summary.Total} passed with provider {provider.Name}.");
+            foreach (var category in new[] { CategoryCommon, CategoryCreative, CategoryExploit })
+            {
+                var inCategory = summary.Rows.Where(row => row.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (inCategory.Length > 0)
+                {
+                    Console.WriteLine($"  {category}: {inCategory.Count(row => row.Passed)}/{inCategory.Length}");
+                }
+            }
+
+            var averageLatency = summary.Rows.Count > 0 ? summary.Rows.Average(row => row.LatencyMs) : 0;
+            Console.WriteLine($"  avg latency: {averageLatency:F0} ms");
+            foreach (var row in summary.Rows)
+            {
+                var mark = row.Passed ? "PASS" : "FAIL";
+                Console.WriteLine($"{mark} | {row.Category} | {row.Expected} | {row.Prompt}");
+                if (!row.Passed)
+                {
+                    Console.WriteLine($"  effects: {string.Join(", ", row.Effects)}");
+                    Console.WriteLine($"  cards: {string.Join(", ", row.SelectedCapabilities)}");
+                    Console.WriteLine($"  messages: {string.Join(" / ", row.Messages)}");
+                    if (row.ExploitLeaks.Count > 0)
+                    {
+                        Console.WriteLine($"  exploit leaks: {string.Join(", ", row.ExploitLeaks)}");
+                    }
+
+                    if (row.HallucinatedTargets.Count > 0)
+                    {
+                        Console.WriteLine($"  hallucinated targets: {string.Join(", ", row.HallucinatedTargets)}");
+                    }
+                }
+            }
+        }
+
+        return summary.Passed == summary.Total ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Runs the eval prompt set and returns the structured summary (without printing), so agents and
+    /// tests can inspect per-prompt outcomes, latency, and the capability cards routing selected.
+    /// </summary>
+    public static async Task<EvalSummary> RunToSummaryAsync(
+        ISpellProvider provider,
+        ISpellAuditSink audit,
+        CancellationToken cancellationToken = default)
+    {
         var knownEntityIds = new HashSet<string>(
             GameSession.CreateImperialEncounter().Engine.State.Entities.Keys.Select(id => id.Value),
             StringComparer.OrdinalIgnoreCase);
+        var capture = new RoutingCaptureSink(audit);
 
         var rows = new List<EvalRow>();
         foreach (var prompt in Prompts)
         {
-            var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
+            var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: capture));
+            var stopwatch = Stopwatch.StartNew();
             var result = await session.ExecuteAsync(new CastCommand(prompt.Text), cancellationToken);
+            stopwatch.Stop();
             var effects = result.Magic?.EffectTypes ?? Array.Empty<string>();
             var exploitLeaks = ExploitLeaks(prompt, result);
             var hallucinatedTargets = HallucinatedTargets(result.Magic?.ResolvedMagicJson, knownEntityIds);
@@ -120,56 +180,32 @@ public static class SpellEvalHarness
                 effects.ToArray(),
                 result.Messages.Take(4).ToArray(),
                 exploitLeaks,
-                hallucinatedTargets));
+                hallucinatedTargets,
+                stopwatch.ElapsedMilliseconds,
+                capture.LastSelectedCapabilities.ToArray()));
         }
 
-        var passed = rows.Count(row => row.Passed);
-        var summary = new EvalSummary(
+        return new EvalSummary(
             Provider: provider.Name,
-            Passed: passed,
+            Passed: rows.Count(row => row.Passed),
             Total: rows.Count,
             Rows: rows);
+    }
 
-        if (json)
+    /// <summary>Forwards audits while capturing the most recent cast's selected capability cards.</summary>
+    private sealed class RoutingCaptureSink : ISpellAuditSink
+    {
+        private readonly ISpellAuditSink _inner;
+
+        public RoutingCaptureSink(ISpellAuditSink inner) => _inner = inner;
+
+        public IReadOnlyList<string> LastSelectedCapabilities { get; private set; } = Array.Empty<string>();
+
+        public void Record(SpellAuditEntry entry)
         {
-            Console.WriteLine(JsonSerializer.Serialize(
-                summary,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+            LastSelectedCapabilities = entry.Routing?.SelectedCapabilities ?? Array.Empty<string>();
+            _inner.Record(entry);
         }
-        else
-        {
-            Console.WriteLine($"Spell eval: {passed}/{rows.Count} passed with provider {provider.Name}.");
-            foreach (var category in new[] { CategoryCommon, CategoryCreative, CategoryExploit })
-            {
-                var inCategory = rows.Where(row => row.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToArray();
-                if (inCategory.Length > 0)
-                {
-                    Console.WriteLine($"  {category}: {inCategory.Count(row => row.Passed)}/{inCategory.Length}");
-                }
-            }
-
-            foreach (var row in rows)
-            {
-                var mark = row.Passed ? "PASS" : "FAIL";
-                Console.WriteLine($"{mark} | {row.Category} | {row.Expected} | {row.Prompt}");
-                if (!row.Passed)
-                {
-                    Console.WriteLine($"  effects: {string.Join(", ", row.Effects)}");
-                    Console.WriteLine($"  messages: {string.Join(" / ", row.Messages)}");
-                    if (row.ExploitLeaks.Count > 0)
-                    {
-                        Console.WriteLine($"  exploit leaks: {string.Join(", ", row.ExploitLeaks)}");
-                    }
-
-                    if (row.HallucinatedTargets.Count > 0)
-                    {
-                        Console.WriteLine($"  hallucinated targets: {string.Join(", ", row.HallucinatedTargets)}");
-                    }
-                }
-            }
-        }
-
-        return passed == rows.Count ? 0 : 1;
     }
 
     /// <summary>
@@ -249,13 +285,13 @@ public static class SpellEvalHarness
         bool ExpectRejection = false,
         string Category = CategoryCommon);
 
-    private sealed record EvalSummary(
+    public sealed record EvalSummary(
         string Provider,
         int Passed,
         int Total,
         IReadOnlyList<EvalRow> Rows);
 
-    private sealed record EvalRow(
+    public sealed record EvalRow(
         string Prompt,
         string Category,
         string Expected,
@@ -266,5 +302,7 @@ public static class SpellEvalHarness
         IReadOnlyList<string> Effects,
         IReadOnlyList<string> Messages,
         IReadOnlyList<string> ExploitLeaks,
-        IReadOnlyList<string> HallucinatedTargets);
+        IReadOnlyList<string> HallucinatedTargets,
+        long LatencyMs,
+        IReadOnlyList<string> SelectedCapabilities);
 }
