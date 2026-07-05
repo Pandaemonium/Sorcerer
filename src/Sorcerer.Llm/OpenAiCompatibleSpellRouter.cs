@@ -38,7 +38,8 @@ public sealed class OpenAiCompatibleSpellRouter : ISpellRouter
             SpellRouterPrompt.User(spellText),
             temperature: 0.0,
             maxTokens: 128,
-            timeout.Token);
+            timeout.Token,
+            label: "wild-router");
 
         return result.Success
             ? SpellRouterPrompt.From(Name, result.RawText, result.Content)

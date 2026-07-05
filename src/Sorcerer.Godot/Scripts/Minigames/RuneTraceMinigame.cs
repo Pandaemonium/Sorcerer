@@ -119,6 +119,7 @@ public partial class RuneTraceMinigame : Control
     private float _traceHead;
     private bool _engaged;
     private Vector2 _cursor;
+    private bool _cursorKnown;
     private float _recentQuality = 0.7f;
     private readonly List<Vector2> _cursorTrail = new();
     private double _sputterAccumulator;
@@ -179,6 +180,7 @@ public partial class RuneTraceMinigame : Control
         _providerReady = false;
         _everTraced = false;
         _skipped = false;
+        _cursorKnown = false;
         _activeSeconds = 0;
         _accuracyWeighted = 0;
         _tracedLength = 0;
@@ -279,25 +281,13 @@ public partial class RuneTraceMinigame : Control
             return;
         }
 
-        if (@event is InputEventMouseButton button && button.ButtonIndex == MouseButton.Left)
-        {
-            _cursor = button.Position - CanvasCenter();
-            if (button.Pressed)
-            {
-                TryEngage();
-            }
-            else
-            {
-                _engaged = false;
-            }
-
-            AcceptEvent();
-            return;
-        }
-
+        // The trace is hover-driven: no mouse button is required. Moving the cursor onto the bright
+        // node auto-engages, and the trace then follows the cursor along the burning path.
         if (@event is InputEventMouseMotion motion)
         {
             _cursor = motion.Position - CanvasCenter();
+            _cursorKnown = true;
+            EngageIfNearHead();
             if (_engaged)
             {
                 _cursorTrail.Add(_cursor);
@@ -443,6 +433,10 @@ public partial class RuneTraceMinigame : Control
         _activeSeconds += delta;
         _burnHead = _runeLength;
 
+        // Auto-engage even without cursor motion, so a cursor already resting on a freshly-burned
+        // rune's start begins tracing without needing a nudge.
+        EngageIfNearHead();
+
         if (_engaged)
         {
             AdvanceTrace(delta);
@@ -515,9 +509,11 @@ public partial class RuneTraceMinigame : Control
 
     // ---------------------------------------------------------------- tracing
 
-    private void TryEngage()
+    // Engages the trace when the cursor is within the capture ring of the current head. Purely
+    // proximity-based: the player never presses or holds a mouse button.
+    private void EngageIfNearHead()
     {
-        if (_phase != Phase.Trace)
+        if (_phase != Phase.Trace || _engaged || !_cursorKnown)
         {
             return;
         }
@@ -529,10 +525,6 @@ public partial class RuneTraceMinigame : Control
             _everTraced = true;
             _cursorTrail.Clear();
             SpawnRing(head, 4f, CanvasRadius() * 0.7f, 0.30f, 0.55f, Jade, 2f);
-        }
-        else
-        {
-            SpawnSputter(_cursor, 6);
         }
     }
 
@@ -1220,7 +1212,7 @@ public partial class RuneTraceMinigame : Control
 
         _hint = new Label
         {
-            Text = "Hold the left mouse button on the bright node and follow the burning path.",
+            Text = "Move the cursor onto the bright node and follow the burning path — no clicking needed.",
             HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = MouseFilterEnum.Ignore,
         };

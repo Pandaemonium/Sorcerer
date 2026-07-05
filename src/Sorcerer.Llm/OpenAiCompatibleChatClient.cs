@@ -33,6 +33,21 @@ internal sealed class OpenAiCompatibleChatClient
         string user,
         double temperature,
         int maxTokens,
+        CancellationToken cancellationToken,
+        string label = "llm")
+    {
+        // Record the prompt before the request leaves so the debug view shows it while the model works.
+        var traceId = Diagnostics.LlmTrace.Begin(label, _model, system, user);
+        var result = await SendAsync(system, user, temperature, maxTokens, cancellationToken);
+        Diagnostics.LlmTrace.End(traceId, result.Success ? result.Content : result.RawText, result.Error);
+        return result;
+    }
+
+    private async Task<OpenAiChatResult> SendAsync(
+        string system,
+        string user,
+        double temperature,
+        int maxTokens,
         CancellationToken cancellationToken)
     {
         var raw = string.Empty;

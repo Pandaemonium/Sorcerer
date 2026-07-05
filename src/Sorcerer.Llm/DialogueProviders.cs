@@ -321,7 +321,8 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             OllamaDialogueProvider.UserPrompt(request, retryNote: null),
             temperature: 0.35,
             maxTokens: 1000,
-            timeout.Token);
+            timeout.Token,
+            label: "dialogue");
         if (!first.Success)
         {
             return Failure(first.RawText, first.Error ?? "OpenAI-compatible dialogue provider failed.");
@@ -341,7 +342,8 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             OllamaDialogueProvider.UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
             temperature: 0.2,
             maxTokens: 1000,
-            timeout.Token);
+            timeout.Token,
+            label: "dialogue-repair");
         if (!retry.Success)
         {
             return Failure(retry.RawText, retry.Error ?? "OpenAI-compatible dialogue retry failed.");
@@ -396,6 +398,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         timeout.CancelAfter(_timeout);
 
         var first = await ChatAsync(
+            "dialogue",
             SystemPrompt(),
             UserPrompt(request, retryNote: null),
             temperature: 0.35,
@@ -416,6 +419,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         }
 
         var retry = await ChatAsync(
+            "dialogue-repair",
             SystemPrompt() + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
             UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
             temperature: 0.2,
@@ -435,6 +439,21 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
     }
 
     private async Task<ChatResult> ChatAsync(
+        string label,
+        string system,
+        string user,
+        double temperature,
+        int maxTokens,
+        CancellationToken cancellationToken)
+    {
+        // Log the prompt before dispatch so it is readable while the call is still in flight.
+        var traceId = Diagnostics.LlmTrace.Begin(label, _model, system, user);
+        var result = await SendAsync(system, user, temperature, maxTokens, cancellationToken);
+        Diagnostics.LlmTrace.End(traceId, result.Success ? result.Content : result.RawText, result.Error);
+        return result;
+    }
+
+    private async Task<ChatResult> SendAsync(
         string system,
         string user,
         double temperature,

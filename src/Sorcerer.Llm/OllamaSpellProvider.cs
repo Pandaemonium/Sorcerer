@@ -46,6 +46,8 @@ public sealed class OllamaSpellProvider : ISpellProvider
                 WriteIndented = false,
             });
         var system = BuildSystemPrompt(supported, request.CapabilityIndex, request.SelectedCapabilities);
+        var user = $"Spell: {request.SpellText}\n\nCurrent magic context JSON:\n{contextJson}";
+        var traceId = Diagnostics.LlmTrace.Begin("wild", _model, system, user);
 
         var payload = new
         {
@@ -62,11 +64,7 @@ public sealed class OllamaSpellProvider : ISpellProvider
             messages = new[]
             {
                 new { role = "system", content = system },
-                new
-                {
-                    role = "user",
-                    content = $"Spell: {request.SpellText}\n\nCurrent magic context JSON:\n{contextJson}",
-                },
+                new { role = "user", content = user },
             },
         };
 
@@ -79,7 +77,9 @@ public sealed class OllamaSpellProvider : ISpellProvider
             rawResponse = await response.Content.ReadAsStringAsync(timeout.Token);
             if (!response.IsSuccessStatusCode)
             {
-                return Failure(rawResponse, $"Ollama returned HTTP {(int)response.StatusCode}.");
+                var httpError = $"Ollama returned HTTP {(int)response.StatusCode}.";
+                Diagnostics.LlmTrace.End(traceId, rawResponse, httpError);
+                return Failure(rawResponse, httpError);
             }
 
             using var document = JsonDocument.Parse(rawResponse);
@@ -90,8 +90,12 @@ public sealed class OllamaSpellProvider : ISpellProvider
 
             if (string.IsNullOrWhiteSpace(content))
             {
+                Diagnostics.LlmTrace.End(traceId, rawResponse, "Ollama returned an empty message.");
                 return Failure(rawResponse, "Ollama returned an empty message.");
             }
+
+            // The model answered; record it now. A JSON-repair retry (below) is logged separately.
+            Diagnostics.LlmTrace.End(traceId, content, null);
 
             try
             {
@@ -112,6 +116,7 @@ public sealed class OllamaSpellProvider : ISpellProvider
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
             var raw = string.IsNullOrWhiteSpace(content) ? rawResponse : content;
+            Diagnostics.LlmTrace.End(traceId, raw, ex.Message);
             return Failure(raw, ex.Message);
         }
     }
@@ -193,6 +198,7 @@ public sealed class OllamaSpellProvider : ISpellProvider
             + "Each effect must be a flat object with a type field; rewrite keyed or nested effects into separate flat effect objects. "
             + "For hiding, cover, protection, disguise, or attention-shifting requests, prefer addStatus on the caster/target, createTile/createTiles near the caster, addTrait on an entity, or message when those operations fit. "
             + $"Spell: {request.SpellText}\n\nCurrent magic context JSON:\n{contextJson}";
+        var traceId = Diagnostics.LlmTrace.Begin("wild-repair", _model, repairSystem, repairUser);
 
         var payload = new
         {
@@ -222,7 +228,9 @@ public sealed class OllamaSpellProvider : ISpellProvider
             rawResponse = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                return Failure(rawResponse, $"Ollama returned HTTP {(int)response.StatusCode} after JSON repair.");
+                var httpError = $"Ollama returned HTTP {(int)response.StatusCode} after JSON repair.";
+                Diagnostics.LlmTrace.End(traceId, rawResponse, httpError);
+                return Failure(rawResponse, httpError);
             }
 
             using var document = JsonDocument.Parse(rawResponse);
@@ -232,9 +240,11 @@ public sealed class OllamaSpellProvider : ISpellProvider
                 .GetString() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(repairContent))
             {
+                Diagnostics.LlmTrace.End(traceId, rawResponse, "Ollama returned invalid JSON, then an empty repair message.");
                 return Failure(invalidContent, "Ollama returned invalid JSON, then an empty repair message.");
             }
 
+            Diagnostics.LlmTrace.End(traceId, repairContent, null);
             var resolution = SpellResolutionJson.Parse(repairContent, _registry);
             return Success(repairContent, resolution);
         }
@@ -243,6 +253,7 @@ public sealed class OllamaSpellProvider : ISpellProvider
             var raw = string.IsNullOrWhiteSpace(repairContent)
                 ? string.IsNullOrWhiteSpace(rawResponse) ? invalidContent : rawResponse
                 : repairContent;
+            Diagnostics.LlmTrace.End(traceId, raw, $"Ollama returned invalid JSON, then repair failed: {ex.Message}");
             return Failure(raw, $"Ollama returned invalid JSON, then repair failed: {ex.Message}");
         }
     }

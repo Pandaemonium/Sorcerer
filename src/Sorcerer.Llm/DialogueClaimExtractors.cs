@@ -180,7 +180,8 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
             OllamaDialogueClaimExtractor.RouterUserPrompt(request),
             temperature: 0.0,
             maxTokens: 180,
-            timeout.Token);
+            timeout.Token,
+            label: "claim-router");
         if (!router.Success)
         {
             return Failure(router.RawText, router.Error ?? "OpenAI-compatible dialogue claim router failed.");
@@ -196,7 +197,8 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
             OllamaDialogueClaimExtractor.DetailUserPrompt(request),
             temperature: 0.1,
             maxTokens: 900,
-            timeout.Token);
+            timeout.Token,
+            label: "claim-detail");
         if (!detail.Success)
         {
             return Failure(detail.RawText, detail.Error ?? "OpenAI-compatible dialogue claim detail extraction failed.");
@@ -260,6 +262,7 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_timeout);
         var router = await ChatAsync(
+            "claim-router",
             RouterSystemPrompt(),
             RouterUserPrompt(request),
             temperature: 0.0,
@@ -276,6 +279,7 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
         }
 
         var detail = await ChatAsync(
+            "claim-detail",
             DetailSystemPrompt(),
             DetailUserPrompt(request),
             temperature: 0.1,
@@ -301,6 +305,20 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor
     }
 
     private async Task<ChatResult> ChatAsync(
+        string label,
+        string system,
+        string user,
+        double temperature,
+        int maxTokens,
+        CancellationToken cancellationToken)
+    {
+        var traceId = Diagnostics.LlmTrace.Begin(label, _model, system, user);
+        var result = await SendAsync(system, user, temperature, maxTokens, cancellationToken);
+        Diagnostics.LlmTrace.End(traceId, result.Success ? result.Content : result.RawText, result.Error);
+        return result;
+    }
+
+    private async Task<ChatResult> SendAsync(
         string system,
         string user,
         double temperature,

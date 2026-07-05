@@ -145,6 +145,9 @@ public sealed class OllamaBackgroundTextGenerator : IBackgroundTextGenerator
             return Failure("Background generator concurrency gate timed out.");
         }
 
+        var systemPrompt = BackgroundTextPrompt.SystemPrompt();
+        var userPrompt = BackgroundTextPrompt.UserPrompt(request);
+        var traceId = Diagnostics.LlmTrace.Begin("background", _model, systemPrompt, userPrompt);
         var raw = string.Empty;
         try
         {
@@ -163,15 +166,17 @@ public sealed class OllamaBackgroundTextGenerator : IBackgroundTextGenerator
                 },
                 messages = new[]
                 {
-                    new { role = "system", content = BackgroundTextPrompt.SystemPrompt() },
-                    new { role = "user", content = BackgroundTextPrompt.UserPrompt(request) },
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = userPrompt },
                 },
             };
             var response = await _httpClient.PostAsJsonAsync($"{_host}/api/chat", payload, timeout.Token);
             raw = await response.Content.ReadAsStringAsync(timeout.Token);
             if (!response.IsSuccessStatusCode)
             {
-                return Failure($"Ollama returned HTTP {(int)response.StatusCode}.", raw);
+                var httpError = $"Ollama returned HTTP {(int)response.StatusCode}.";
+                Diagnostics.LlmTrace.End(traceId, raw, httpError);
+                return Failure(httpError, raw);
             }
 
             using var document = JsonDocument.Parse(raw);
@@ -179,10 +184,12 @@ public sealed class OllamaBackgroundTextGenerator : IBackgroundTextGenerator
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString() ?? string.Empty;
+            Diagnostics.LlmTrace.End(traceId, content, null);
             return BackgroundTextPrompt.FromContent(content, raw, Name, _model);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException or InvalidOperationException)
         {
+            Diagnostics.LlmTrace.End(traceId, raw, ex.Message);
             return Failure(ex.Message, raw);
         }
         finally
@@ -255,7 +262,8 @@ public sealed class OpenAiCompatibleBackgroundTextGenerator : IBackgroundTextGen
                 BackgroundTextPrompt.UserPrompt(request),
                 temperature: 0.45,
                 maxTokens: 220,
-                timeout.Token);
+                timeout.Token,
+                label: "background");
             return result.Success
                 ? BackgroundTextPrompt.FromContent(result.Content, result.RawText, Name, _model)
                 : Failure(result.Error ?? "OpenAI-compatible background generation failed.", result.RawText);

@@ -45,7 +45,7 @@ public sealed class OpenAiCompatibleSpellProvider : ISpellProvider
             request.SelectedCapabilities);
         var user = $"Spell: {request.SpellText}\n\nCurrent magic context JSON:\n{contextJson}";
 
-        var first = await _chat.ChatAsync(system, user, temperature: 0.2, maxTokens: 1200, timeout.Token);
+        var first = await _chat.ChatAsync(system, user, temperature: 0.2, maxTokens: 1200, timeout.Token, label: "wild");
         if (!first.Success)
         {
             return Failure(first.RawText, first.Error ?? "OpenAI-compatible spell provider failed.");
@@ -91,7 +91,7 @@ public sealed class OpenAiCompatibleSpellProvider : ISpellProvider
             + "For hiding, cover, protection, disguise, or attention-shifting requests, prefer addStatus on the caster/target, createTile/createTiles near the caster, addTrait on an entity, or message when those operations fit. "
             + $"Spell: {request.SpellText}\n\nCurrent magic context JSON:\n{contextJson}";
 
-        var repair = await _chat.ChatAsync(repairSystem, repairUser, temperature: 0.1, maxTokens: 1200, cancellationToken);
+        var repair = await _chat.ChatAsync(repairSystem, repairUser, temperature: 0.1, maxTokens: 1200, cancellationToken, label: "wild-repair");
         if (!repair.Success)
         {
             return Failure(repair.RawText, repair.Error ?? "OpenAI-compatible spell repair failed.");

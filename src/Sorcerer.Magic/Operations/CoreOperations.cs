@@ -338,7 +338,7 @@ public sealed class SummonOperation : OperationBase
             "summon",
             new[] { "createEntity", "manifest" },
             "Create a bounded creature or construct.",
-            "Use for allies, hazards, distractions, and small creatures. Fields: name, faction, hp, attack, glyph, target, placement, tags.")
+            "Use for allies, hazards, distractions, and small creatures. Fields: name, faction, hp, attack, glyph, target, placement, tags. Default faction to 'player' (fights for the caster); only use 'enemy' or another faction for an explicitly hostile or uncontrolled summon.")
     {
     }
 

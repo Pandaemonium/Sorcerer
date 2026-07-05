@@ -151,7 +151,7 @@ public sealed class ConjureCreatureOperation : OperationBase
             "conjureCreature",
             new[] { "conjure_creature" },
             "Create one or more template-backed creatures.",
-            "Fields: template (tiny_swarm, small_beast, humanoid, construct, spirit, slime, summoned_servant, hazard_creature), name, faction, tags, count (1-12).",
+            "Fields: template (tiny_swarm, small_beast, humanoid, construct, spirit, slime, summoned_servant, hazard_creature), name, faction, tags, count (1-12). Default faction to 'player' so conjured creatures fight for the caster; only use another faction for an explicitly hostile or uncontrolled conjuration.",
             isCore: false)
     {
     }

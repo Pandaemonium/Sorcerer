@@ -39,6 +39,9 @@ public sealed class OllamaSpellRouter : ISpellRouter
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_timeout);
 
+        var system = SpellRouterPrompt.System(capabilityIndex);
+        var user = SpellRouterPrompt.User(spellText);
+        var traceId = Diagnostics.LlmTrace.Begin("wild-router", _model, system, user);
         var payload = new
         {
             model = _model,
@@ -53,8 +56,8 @@ public sealed class OllamaSpellRouter : ISpellRouter
             },
             messages = new[]
             {
-                new { role = "system", content = SpellRouterPrompt.System(capabilityIndex) },
-                new { role = "user", content = SpellRouterPrompt.User(spellText) },
+                new { role = "system", content = system },
+                new { role = "user", content = user },
             },
         };
 
@@ -65,7 +68,9 @@ public sealed class OllamaSpellRouter : ISpellRouter
             rawResponse = await response.Content.ReadAsStringAsync(timeout.Token);
             if (!response.IsSuccessStatusCode)
             {
-                return SpellRouterPrompt.Failure(rawResponse, $"Ollama router returned HTTP {(int)response.StatusCode}.");
+                var httpError = $"Ollama router returned HTTP {(int)response.StatusCode}.";
+                Diagnostics.LlmTrace.End(traceId, rawResponse, httpError);
+                return SpellRouterPrompt.Failure(rawResponse, httpError);
             }
 
             using var document = JsonDocument.Parse(rawResponse);
@@ -73,10 +78,12 @@ public sealed class OllamaSpellRouter : ISpellRouter
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString() ?? string.Empty;
+            Diagnostics.LlmTrace.End(traceId, content, null);
             return SpellRouterPrompt.From(Name, rawResponse, content);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
+            Diagnostics.LlmTrace.End(traceId, rawResponse, ex.Message);
             return SpellRouterPrompt.Failure(rawResponse, ex.Message);
         }
     }

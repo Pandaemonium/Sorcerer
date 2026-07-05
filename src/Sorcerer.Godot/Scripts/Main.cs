@@ -47,6 +47,7 @@ public partial class Main : Control
     private PanelContainer _contextMenu = null!;
     private VBoxContainer _contextMenuItems = null!;
     private RuneTraceMinigame _minigame = null!;
+    private LlmDebugPanel _llmDebug = null!;
 
     private ActionResult? _lastResult;
     private string? _lastError;
@@ -86,6 +87,15 @@ public partial class Main : Control
         if (key.Keycode == Key.Escape)
         {
             ToggleEscMenu();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        // F6 toggles the LLM debug view. Handled before the busy/menu guards on purpose: the whole
+        // point is to read prompts while a call is in flight (which is exactly when _busy is true).
+        if (key.Keycode == Key.F6)
+        {
+            _llmDebug.Toggle();
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -185,6 +195,9 @@ public partial class Main : Control
 
         _minigame = new RuneTraceMinigame();
         AddChild(FullRect(_minigame));
+
+        _llmDebug = new LlmDebugPanel { ZIndex = 90 };
+        AddChild(FullRect(_llmDebug));
     }
 
     private Control BuildContextMenu()

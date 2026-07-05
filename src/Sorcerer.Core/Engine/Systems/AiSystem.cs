@@ -33,15 +33,21 @@ public sealed class AiSystem
             .Where(entity => entity.Id != player.Id)
             .Where(entity => entity.TryGet<ControllerComponent>(out var controller)
                 && controller.Kind == ControllerKind.Ai)
-            .Where(entity => entity.TryGet<ActorComponent>(out var stats)
-                && stats.Alive
-                && IsHostile(entity, player)
-                && CanNoticeTarget(entity, player))
+            .Where(entity => entity.TryGet<ActorComponent>(out var stats) && stats.Alive)
             .OrderBy(entity => entity.Id.Value))
         {
             if (!player.Get<ActorComponent>().Alive)
             {
                 break;
+            }
+
+            // Enemies hunt the player; player-allies (e.g. summoned creatures) hunt the player's
+            // foes. Everyone else stays idle exactly as before.
+            var huntsPlayer = IsHostile(actor, player) && CanNoticeTarget(actor, player);
+            var isAlly = !huntsPlayer && IsPlayerAlly(actor);
+            if (!huntsPlayer && !isAlly)
+            {
+                continue;
             }
 
             if (IsUnableToAct(actor))
@@ -54,24 +60,28 @@ public sealed class AiSystem
                 continue;
             }
 
-            if (!actor.TryGet<PositionComponent>(out var actorPosition)
-                || !player.TryGet<PositionComponent>(out var playerPosition))
+            if (!actor.TryGet<PositionComponent>(out var actorPosition))
             {
                 continue;
             }
 
-            if (HasActiveBehavior(actor, "coward"))
+            // Coward/mimic are player-relative compulsions applied to enemies by behavior_control
+            // spells, so they only steer actors that are hunting the player.
+            if (huntsPlayer && HasActiveBehavior(actor, "coward"))
             {
-                var fleeDestination = StepAway(actorPosition.Position, playerPosition.Position);
-                if (CanEnter(fleeDestination))
+                if (player.TryGet<PositionComponent>(out var cowardFrom))
                 {
-                    AddMoveDeltas(deltas, actor, fleeDestination, "coward");
+                    var fleeDestination = StepAway(actorPosition.Position, cowardFrom.Position);
+                    if (CanEnter(fleeDestination))
+                    {
+                        AddMoveDeltas(deltas, actor, fleeDestination, "coward");
+                    }
                 }
 
                 continue;
             }
 
-            if (HasActiveBehavior(actor, "mimic"))
+            if (huntsPlayer && HasActiveBehavior(actor, "mimic"))
             {
                 if (_state.LastControlledMoveDelta is { } mimicDelta)
                 {
@@ -85,24 +95,60 @@ public sealed class AiSystem
                 continue;
             }
 
-            var distance = GameEngine.Distance(actorPosition.Position, playerPosition.Position);
+            var target = huntsPlayer ? player : NearestHostileTarget(actor);
+            if (target is null || !target.TryGet<PositionComponent>(out var targetPosition))
+            {
+                continue;
+            }
+
+            var distance = GameEngine.Distance(actorPosition.Position, targetPosition.Position);
             if (distance <= 1)
             {
-                deltas.AddRange(_engine.AttackEntity(actor, player));
+                deltas.AddRange(_engine.AttackEntity(actor, target));
                 continue;
             }
 
             if (distance <= 8)
             {
-                var destination = StepToward(actorPosition.Position, playerPosition.Position);
+                var destination = StepToward(actorPosition.Position, targetPosition.Position);
                 if (CanEnter(destination))
                 {
-                    AddMoveDeltas(deltas, actor, destination, "hostile_pursuit");
+                    AddMoveDeltas(deltas, actor, destination, huntsPlayer ? "hostile_pursuit" : "ally_pursuit");
                 }
             }
         }
 
         return deltas;
+    }
+
+    /// <summary>
+    /// A player ally is an AI actor given the "ally" policy, which summons and conjurations receive
+    /// when spawned into the player faction. Such allies hunt the player's enemies rather than the
+    /// player. Deliberately narrow: recruited followers ("follower") keep their own follow/swap
+    /// movement and are not driven into combat here.
+    /// </summary>
+    private static bool IsPlayerAlly(Entity actor) =>
+        actor.TryGet<AiComponent>(out var ai)
+        && ai.PolicyId.Equals("ally", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Nearest living entity this actor is hostile to and can perceive, or null.</summary>
+    private Entity? NearestHostileTarget(Entity actor)
+    {
+        if (!actor.TryGet<PositionComponent>(out var position))
+        {
+            return null;
+        }
+
+        return _state.Entities.Values
+            .Where(entity => entity.Id != actor.Id)
+            .Where(entity => entity.TryGet<ActorComponent>(out var stats)
+                && stats.Alive
+                && entity.TryGet<PositionComponent>(out _)
+                && IsHostile(actor, entity)
+                && CanNoticeTarget(actor, entity))
+            .OrderBy(entity => GameEngine.Distance(position.Position, entity.Get<PositionComponent>().Position))
+            .ThenBy(entity => entity.Id.Value)
+            .FirstOrDefault();
     }
 
     private void AddMoveDeltas(List<StateDelta> deltas, Entity actor, GridPoint destination, string behavior)

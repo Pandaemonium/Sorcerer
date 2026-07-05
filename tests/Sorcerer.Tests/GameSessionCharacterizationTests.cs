@@ -8380,6 +8380,41 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
+    public async Task SummonedPlayerAllyHuntsAndAttacksNearbyEnemy()
+    {
+        var session = CreateMockSession();
+        DisableImperialAi(session);
+
+        // Place an enemy soldier on an open tile with an adjacent open tile for the ally.
+        var soldierPoint = new GridPoint(10, 10);
+        var allyPoint = new GridPoint(11, 10);
+        session.Engine.State.BlockingTerrain.Remove(soldierPoint);
+        session.Engine.State.BlockingTerrain.Remove(allyPoint);
+        var soldier = session.Engine.EntityById("soldier_1")!;
+        soldier.Set(new PositionComponent(soldierPoint));
+        var soldierBefore = soldier.Get<ActorComponent>().HitPoints;
+
+        // Summon a player-faction ally (gets the "ally" AI policy) adjacent to the soldier.
+        session.Engine.ApplyConsequence(WorldConsequence.SpawnEntity(
+            "test",
+            "loyal wisp",
+            allyPoint.X,
+            allyPoint.Y,
+            prefix: "loyal_wisp",
+            faction: "player",
+            tags: new[] { "summoned", "wild_magic" },
+            summoned: true,
+            emitMessage: false));
+
+        await session.ExecuteAsync(new WaitCommand());
+
+        var soldierAfter = session.Engine.EntityById("soldier_1")!.Get<ActorComponent>().HitPoints;
+        Assert.True(
+            soldierAfter < soldierBefore,
+            $"summoned player ally should have attacked the adjacent enemy ({soldierBefore} -> {soldierAfter}).");
+    }
+
+    [Fact]
     public async Task ScriptedTextCommandsKeepInventoryTalkAndReadOpenFlowStable()
     {
         var session = CreateMockSession();

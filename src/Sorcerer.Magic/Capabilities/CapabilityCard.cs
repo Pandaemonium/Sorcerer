@@ -162,9 +162,11 @@ public sealed class CapabilityRegistry
             "summoning - create bounded creatures or helpers, including template-backed conjuration",
             new[] { "summon", "createEntity", "conjureCreature" },
             new[] { "visible_tiles", "factions" },
-            "Summons must have bounded stats, a faction, and a valid placement. conjureCreature "
-                + "additionally accepts template (tiny_swarm, small_beast, humanoid, construct, "
-                + "spirit, slime, summoned_servant, hazard_creature) and count (1-12).",
+            "Summons must have bounded stats, a faction, and a valid placement. Default faction to "
+                + "'player' so the creature fights alongside the caster; only use 'enemy' or another "
+                + "faction when the spell explicitly calls up something hostile, wild, or uncontrolled. "
+                + "conjureCreature additionally accepts template (tiny_swarm, small_beast, humanoid, "
+                + "construct, spirit, slime, summoned_servant, hazard_creature) and count (1-12).",
             Array.Empty<string>(),
             new[] { "conjure_item" });
 
