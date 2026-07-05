@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
@@ -20,14 +21,21 @@ public sealed record LivePlaytestOptions(
     int MinDialogues,
     int MinNpcs,
     int MaxSteps,
+    int BudgetSeconds,
+    string? CheckpointPath,
     string? LogPath);
 
 /// <summary>
 /// Drives many wild spells and dialogue rounds through the live providers to stress-test the game
-/// and gather feel data. Unlike EpisodeRunner it does not stop on the first invariant issue -- it
-/// collects every issue -- and it deliberately travels between zones to spawn resident NPCs so a
-/// run can reach several distinct speakers. Casts use deterministic capability routing (no LLM
-/// router) to keep per-cast latency to a single model call.
+/// and gather feel data. It targets >=MinSpells casts and >=MinDialogues dialogue rounds across
+/// >=MinNpcs distinct speakers per episode, travelling between zones to spawn resident NPCs, and
+/// collects every invariant issue instead of stopping at the first.
+///
+/// Because a live episode outlasts a single foreground window, the run is checkpoint/resumable: it
+/// works until <see cref="LivePlaytestOptions.BudgetSeconds"/> of wall-clock elapses, saves the game
+/// (via the engine's own SaveCommand) plus its counters, and exits with code 2 ("paused"). Re-running
+/// the same command resumes exactly where it left off. Per-step progress streams to stderr so a
+/// foreground caller can watch along.
 /// </summary>
 public static class LivePlaytestHarness
 {
@@ -83,6 +91,8 @@ public static class LivePlaytestHarness
         Direction.East, Direction.North, Direction.West, Direction.South,
     };
 
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = false };
+
     public static async Task<int> RunAsync(
         ISpellProvider provider,
         IDialogueProvider dialogueProvider,
@@ -96,29 +106,24 @@ public static class LivePlaytestHarness
         bool json,
         CancellationToken cancellationToken = default)
     {
-        StreamWriter? writer = null;
-        if (!string.IsNullOrWhiteSpace(options.LogPath))
-        {
-            var directory = Path.GetDirectoryName(options.LogPath);
-            if (!string.IsNullOrWhiteSpace(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+        _ = dialogueRouter;
+        _ = dialogueParserRouter;
+        var stopwatch = Stopwatch.StartNew();
+        var budget = options.BudgetSeconds > 0 ? options.BudgetSeconds : int.MaxValue;
+        var episodes = Math.Max(1, options.Episodes);
 
-            writer = new StreamWriter(options.LogPath, append: false);
-        }
+        var checkpoint = LoadCheckpoint(options.CheckpointPath);
+        var completed = checkpoint?.Completed ?? new List<PlaytestResult>();
+        var startEpisode = checkpoint?.Current?.Episode ?? checkpoint?.NextEpisode ?? 1;
 
-        var results = new List<PlaytestResult>();
+        StreamWriter? writer = OpenLog(options.LogPath, append: checkpoint is not null);
+
         try
         {
-            for (var episode = 1; episode <= Math.Max(1, options.Episodes); episode++)
+            for (var episode = startEpisode; episode <= episodes; episode++)
             {
                 var seed = options.Seed + episode - 1;
                 var session = GameSession.CreateImperialEncounter(
-                    // No LLM spell router: deterministic capability routing keeps each cast to one
-                    // model call. Dialogue routers are also left deterministic (null) so each
-                    // dialogue round is just the generator + claim parser (two calls, not four),
-                    // which keeps a heavy live playtest tractable.
                     new WildMagicController(provider, audit: audit),
                     seed: seed,
                     dialogueRouter: null,
@@ -127,15 +132,32 @@ public static class LivePlaytestHarness
                     dialogueProvider: dialogueProvider,
                     dialogueAudit: dialogueAudit,
                     backgroundTextGenerator: backgroundTextGenerator);
-                _ = dialogueRouter;
-                _ = dialogueParserRouter;
                 Program.ApplyQuickstart(session, "social");
 
-                var result = await RunOneAsync(episode, seed, session, options, writer, cancellationToken);
-                results.Add(result);
+                var resume = checkpoint?.Current?.Episode == episode ? checkpoint.Current : null;
+                if (resume is not null)
+                {
+                    await session.ExecuteAsync(new LoadCommand(resume.GameSavePath), cancellationToken);
+                    Console.Error.WriteLine($"[resume] episode {episode}: spells {resume.Spells}, dialogues {resume.Dialogues}, npcs {resume.NpcSouls.Count}");
+                }
+
+                var outcome = await RunEpisodeLoop(episode, seed, session, options, stopwatch, budget, resume, writer, cancellationToken);
+
+                if (outcome.Paused)
+                {
+                    SaveCheckpoint(options.CheckpointPath, new CheckpointState(episode, completed, outcome.Pending));
+                    Console.Error.WriteLine(
+                        $"[paused] episode {episode} after {stopwatch.Elapsed.TotalSeconds:F0}s: "
+                        + $"spells {outcome.Pending!.Spells}/{options.MinSpells} dialogues {outcome.Pending.Dialogues}/{options.MinDialogues} "
+                        + $"npcs {outcome.Pending.NpcSouls.Count}/{options.MinNpcs}. Rerun the same command to continue.");
+                    return 2;
+                }
+
+                completed.Add(outcome.Result!);
+                SaveCheckpoint(options.CheckpointPath, new CheckpointState(episode + 1, completed, null));
                 Console.Error.WriteLine(
-                    $"[playtest {episode}/{options.Episodes}] spells={result.Spells} dialogues={result.Dialogues} "
-                    + $"npcs={result.DistinctNpcs} steps={result.Steps} issues={result.Issues.Count} met={result.MetTargets}");
+                    $"[done] episode {episode}: spells {outcome.Result!.Spells} dialogues {outcome.Result.Dialogues} "
+                    + $"npcs {outcome.Result.DistinctNpcs} steps {outcome.Result.Steps} issues {outcome.Result.Issues.Count} met {outcome.Result.MetTargets}");
             }
         }
         finally
@@ -148,44 +170,61 @@ public static class LivePlaytestHarness
 
         var report = new PlaytestReport(
             provider.Name,
-            results.Count,
-            results.Count(r => r.MetTargets),
-            results.Sum(r => r.Spells),
-            results.Sum(r => r.Dialogues),
-            results.SelectMany(r => r.Issues).Count(),
-            results);
+            completed.Count,
+            completed.Count(r => r.MetTargets),
+            completed.Sum(r => r.Spells),
+            completed.Sum(r => r.Dialogues),
+            completed.SelectMany(r => r.Issues).Count(),
+            completed);
+        Console.WriteLine(JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
 
-        Console.WriteLine(JsonSerializer.Serialize(
-            report,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
-        return report.Episodes == results.Count(r => r.MetTargets) ? 0 : 1;
+        DeleteCheckpoint(options.CheckpointPath);
+        return report.Episodes == completed.Count(r => r.MetTargets) ? 0 : 1;
     }
 
-    private static async Task<PlaytestResult> RunOneAsync(
+    private static async Task<EpisodeOutcome> RunEpisodeLoop(
         int episode,
         int seed,
         GameSession session,
         LivePlaytestOptions options,
+        Stopwatch stopwatch,
+        int budgetSeconds,
+        CurrentEpisodeState? resume,
         StreamWriter? writer,
         CancellationToken cancellationToken)
     {
-        var issues = new List<string>();
-        var feel = new List<string>();
-        var npcSouls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var roundsByNpc = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var spells = 0;
-        var dialogues = 0;
-        var stepsTaken = 0;
-        var spellIdx = seed % SpellBank.Length;
-        var lineIdx = seed % DialogueLines.Length;
-        var travelIdx = 0;
+        var issues = new List<string>(resume?.Issues ?? new List<string>());
+        var feel = new List<string>(resume?.Feel ?? new List<string>());
+        var npcSouls = new HashSet<string>(resume?.NpcSouls ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        var roundsByNpc = new Dictionary<string, int>(resume?.Rounds ?? new Dictionary<string, int>(), StringComparer.OrdinalIgnoreCase);
+        var spells = resume?.Spells ?? 0;
+        var dialogues = resume?.Dialogues ?? 0;
+        var spellIdx = resume?.SpellIdx ?? seed % SpellBank.Length;
+        var lineIdx = resume?.LineIdx ?? seed % DialogueLines.Length;
+        var travelIdx = resume?.TravelIdx ?? 0;
+        var startStep = resume?.StepsTaken ?? 0;
+        var gameSavePath = resume?.GameSavePath ?? $"{options.CheckpointPath ?? Path.Combine("runs", "playtest_ckpt")}.game.json";
         var lastMessages = new Queue<string>();
+        var stepsTaken = startStep;
+        var lastWasTravel = false;
+        var lastProgressStep = startStep;
+        var progressSignature = (spells, dialogues, npcSouls.Count);
 
-        for (var step = 0; step < options.MaxSteps; step++)
+        for (var step = startStep; step < options.MaxSteps; step++)
         {
-            if (spells >= options.MinSpells && dialogues >= options.MinDialogues && npcSouls.Count >= options.MinNpcs)
+            var met = spells >= options.MinSpells && dialogues >= options.MinDialogues && npcSouls.Count >= options.MinNpcs;
+            if (met)
             {
                 break;
+            }
+
+            if (stopwatch.Elapsed.TotalSeconds >= budgetSeconds)
+            {
+                await session.ExecuteAsync(new SaveCommand(gameSavePath), cancellationToken);
+                var pending = new CurrentEpisodeState(
+                    episode, seed, spells, dialogues, stepsTaken, spellIdx, lineIdx, travelIdx,
+                    npcSouls.ToList(), new Dictionary<string, int>(roundsByNpc), issues, feel, gameSavePath);
+                return new EpisodeOutcome(true, null, pending);
             }
 
             var view = session.View();
@@ -202,9 +241,6 @@ public static class LivePlaytestHarness
 
             GameCommand command;
             EntityCard? talkTarget = null;
-
-            // Interleave: prefer talking when adjacent to a useful speaker, otherwise cast, otherwise
-            // navigate/travel toward a speaker. Bias toward whichever target is furthest behind.
             var adjacent = AdjacentTalker(view, player);
             var talkThisStep = needSocial
                 && adjacent is not null
@@ -228,6 +264,12 @@ public static class LivePlaytestHarness
                 {
                     command = new MoveCommand(DirectionToward(player, visible));
                 }
+                else if (lastWasTravel)
+                {
+                    // A resident spawns on travel but is not perceived until we look; refresh
+                    // perception before travelling onward so newly-arrived NPCs are actually found.
+                    command = new InspectCommand();
+                }
                 else
                 {
                     command = new TravelCommand(TravelCycle[travelIdx++ % TravelCycle.Length]);
@@ -242,6 +284,10 @@ public static class LivePlaytestHarness
             try
             {
                 result = await session.ExecuteAsync(command, cancellationToken);
+                if (session.Observation().PendingCast is not null)
+                {
+                    result = await session.ExecuteAsync(new AwaitCastCommand(), cancellationToken);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -250,22 +296,18 @@ public static class LivePlaytestHarness
             catch (Exception ex)
             {
                 issues.Add($"step {step} {command.GetType().Name} threw {ex.GetType().Name}: {ex.Message}");
+                stepsTaken = step + 1;
                 continue;
             }
 
-            // Resolve any pending cast immediately (CastCommand is synchronous, but be safe).
-            if (session.Observation().PendingCast is not null)
-            {
-                result = await session.ExecuteAsync(new AwaitCastCommand(), cancellationToken);
-            }
-
-            if (command is CastCommand)
+            if (command is CastCommand cast)
             {
                 spells++;
-                if (result.Success && !result.Deltas.Any(d => d.Operation.StartsWith("cost:", StringComparison.OrdinalIgnoreCase))
+                if (result.Success
+                    && !result.Deltas.Any(d => d.Operation.StartsWith("cost:", StringComparison.OrdinalIgnoreCase))
                     && !result.Messages.Any(m => m.Contains("Cost: nothing", StringComparison.OrdinalIgnoreCase)))
                 {
-                    feel.Add($"free cast: {((CastCommand)command).Text}");
+                    feel.Add($"free cast: {cast.Text}");
                 }
             }
 
@@ -279,7 +321,6 @@ public static class LivePlaytestHarness
 
             issues.AddRange(CheckInvariants(step, result, session.Engine.ValidateState()));
 
-            // Feel: flag exact-repeat spell narration (a sign of stale/templated output).
             foreach (var message in result.Messages.Take(2))
             {
                 if (lastMessages.Contains(message) && message.Length > 25)
@@ -294,24 +335,99 @@ public static class LivePlaytestHarness
                 }
             }
 
+            Console.Error.WriteLine(
+                $"[ep{episode} s{step} {stopwatch.Elapsed.TotalSeconds:F0}s sp{spells} dl{dialogues} np{npcSouls.Count}] "
+                + $"{command.GetType().Name.Replace("Command", string.Empty)} {(result.Success ? "ok" : "FAIL")}"
+                + $"{(result.Dialogue is not null ? " DLG" : string.Empty)} | {(result.Messages.FirstOrDefault() ?? string.Empty).Replace('\n', ' ')[..Math.Min(64, (result.Messages.FirstOrDefault() ?? string.Empty).Length)]}");
+
             await WriteStepAsync(writer, episode, seed, step, command, result);
             stepsTaken = step + 1;
+            lastWasTravel = command is TravelCommand;
+
+            var signature = (spells, dialogues, npcSouls.Count);
+            if (signature != progressSignature)
+            {
+                progressSignature = signature;
+                lastProgressStep = step;
+            }
+            else if (step - lastProgressStep > 80)
+            {
+                issues.Add($"no-progress breaker fired at step {step}: spells {spells}, dialogues {dialogues}, npcs {npcSouls.Count}");
+                break;
+            }
         }
 
-        // Whole-run save/load invariant.
         issues.AddRange(SaveLoadInvariant(session));
-
-        var met = spells >= options.MinSpells && dialogues >= options.MinDialogues && npcSouls.Count >= options.MinNpcs;
-        return new PlaytestResult(
-            episode,
-            seed,
-            spells,
-            dialogues,
-            npcSouls.Count,
-            met,
-            stepsTaken,
+        var metFinal = spells >= options.MinSpells && dialogues >= options.MinDialogues && npcSouls.Count >= options.MinNpcs;
+        var resultRecord = new PlaytestResult(
+            episode, seed, spells, dialogues, npcSouls.Count, metFinal, stepsTaken,
             issues.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            feel.Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray());
+            feel.Distinct(StringComparer.OrdinalIgnoreCase).Take(30).ToArray());
+        return new EpisodeOutcome(false, resultRecord, null);
+    }
+
+    private static CheckpointState? LoadCheckpoint(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<CheckpointState>(File.ReadAllText(path), JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void SaveCheckpoint(string? path, CheckpointState state)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(path, JsonSerializer.Serialize(state, JsonOptions));
+    }
+
+    private static void DeleteCheckpoint(string? path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch
+            {
+                // best effort
+            }
+        }
+    }
+
+    private static StreamWriter? OpenLog(string? path, bool append)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        return new StreamWriter(path, append);
     }
 
     private static IReadOnlyList<string> CheckInvariants(int step, ActionResult result, Core.Validation.StateValidationReport validation)
@@ -393,8 +509,6 @@ public static class LivePlaytestHarness
         await writer.FlushAsync();
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = false };
-
     private static EntityCard? AdjacentTalker(GameView view, EntityCard player) =>
         FriendlyTalkers(view, player)
             .Where(entity => Distance(player, entity) <= 1)
@@ -451,7 +565,26 @@ public static class LivePlaytestHarness
         };
     }
 
-    private sealed record PlaytestReport(
+    private sealed record EpisodeOutcome(bool Paused, PlaytestResult? Result, CurrentEpisodeState? Pending);
+
+    public sealed record CheckpointState(int NextEpisode, List<PlaytestResult> Completed, CurrentEpisodeState? Current);
+
+    public sealed record CurrentEpisodeState(
+        int Episode,
+        int Seed,
+        int Spells,
+        int Dialogues,
+        int StepsTaken,
+        int SpellIdx,
+        int LineIdx,
+        int TravelIdx,
+        List<string> NpcSouls,
+        Dictionary<string, int> Rounds,
+        List<string> Issues,
+        List<string> Feel,
+        string GameSavePath);
+
+    public sealed record PlaytestReport(
         string Provider,
         int Episodes,
         int MetTargets,
@@ -460,7 +593,7 @@ public static class LivePlaytestHarness
         int TotalIssues,
         IReadOnlyList<PlaytestResult> Results);
 
-    private sealed record PlaytestResult(
+    public sealed record PlaytestResult(
         int Episode,
         int Seed,
         int Spells,

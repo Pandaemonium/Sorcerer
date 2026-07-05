@@ -66,6 +66,8 @@ public static class Program
                     MinDialogues: 12,
                     MinNpcs: 5,
                     MaxSteps: 800,
+                    options.BudgetSeconds,
+                    options.CheckpointPath,
                     options.EpisodeLogPath),
                 options.Json);
         }
@@ -534,6 +536,8 @@ public sealed record CliOptions(
     int BackgroundConcurrency,
     bool Quickstart,
     string? QuickstartScene,
+    int BudgetSeconds,
+    string? CheckpointPath,
     IReadOnlyList<string> Commands)
 {
     public static CliOptions Parse(string[] args)
@@ -565,6 +569,8 @@ public sealed record CliOptions(
         var backgroundConcurrency = 1;
         var quickstart = true;
         string? quickstartScene = null;
+        var budgetSeconds = 500;
+        string? checkpointPath = null;
         var commands = new List<string>();
 
         for (var index = 0; index < args.Length; index++)
@@ -665,6 +671,12 @@ public sealed record CliOptions(
                 case "--command" when index + 1 < args.Length:
                     commands.Add(args[++index]);
                     break;
+                case "--budget-seconds" when index + 1 < args.Length:
+                    budgetSeconds = Math.Max(30, ReadPositiveInt(args[++index], budgetSeconds));
+                    break;
+                case "--checkpoint" when index + 1 < args.Length:
+                    checkpointPath = args[++index];
+                    break;
             }
         }
 
@@ -696,6 +708,8 @@ public sealed record CliOptions(
             backgroundConcurrency,
             quickstart,
             quickstartScene,
+            budgetSeconds,
+            checkpointPath,
             commands);
     }
 

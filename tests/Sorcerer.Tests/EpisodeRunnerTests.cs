@@ -145,6 +145,8 @@ public sealed class EpisodeRunnerTests
                 BackgroundConcurrency: 1,
                 Quickstart: false,
                 QuickstartScene: null,
+                BudgetSeconds: 500,
+                CheckpointPath: null,
                 Commands: commands);
             var session = GameSession.CreateImperialEncounter(
                 backgroundTextGenerator: new MockBackgroundTextGenerator());
