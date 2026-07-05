@@ -36,6 +36,14 @@ public partial class RuneTraceMinigame : Control
     private const float ReactionPadSeconds = 0.45f;
     private const int MaxEmbers = 720;
 
+    // Burn mark: the visible accuracy read. Scorch radius scales with off-path distance, so a
+    // faithful trace lays a tight hairline sear and a sloppy one spreads a fat ugly burn.
+    private const float BurnSpacing = 6.5f;
+    private const float BurnMinScale = 0.16f;  // × tolerance, when dead-on the rune
+    private const float BurnMaxScale = 1.25f;  // × tolerance, at the edge of the trace corridor
+    private const float BurnCoolSeconds = 0.9f;
+    private const int MaxBurns = 640;
+
     private static readonly Color DeepEmber = new(0.55f, 0.16f, 0.09f);
     private static readonly Color EmberOrange = new(1.0f, 0.47f, 0.16f);
     private static readonly Color EmberGold = new(1.0f, 0.78f, 0.40f);
@@ -43,6 +51,8 @@ public partial class RuneTraceMinigame : Control
     private static readonly Color Jade = UiTheme.Wild;
     private static readonly Color JadeDeep = new(0.20f, 0.52f, 0.42f);
     private static readonly Color WildViolet = new(0.69f, 0.48f, 1.0f);
+    private static readonly Color WarmAsh = new(0.22f, 0.13f, 0.08f);
+    private static readonly Color ColdChar = new(0.14f, 0.09f, 0.14f);
 
     private struct Ember
     {
@@ -67,6 +77,15 @@ public partial class RuneTraceMinigame : Control
         public float Width;
         public Color Color;
         public Vector2 Center;
+    }
+
+    private struct BurnStamp
+    {
+        public Vector2 Pos;
+        public float Radius;
+        public float Heat;
+        public float Offset01;
+        public float Age;
     }
 
     // Session state.
@@ -103,6 +122,8 @@ public partial class RuneTraceMinigame : Control
     private float _recentQuality = 0.7f;
     private readonly List<Vector2> _cursorTrail = new();
     private double _sputterAccumulator;
+    private readonly List<BurnStamp> _burns = new(MaxBurns);
+    private float _lastBurnS;
 
     // VFX state.
     private readonly List<Ember> _embers = new(MaxEmbers);
@@ -164,6 +185,8 @@ public partial class RuneTraceMinigame : Control
         _parSecondsEarned = 0;
         _embers.Clear();
         _rings.Clear();
+        _burns.Clear();
+        _lastBurnS = 0f;
         _ashPoints = Array.Empty<Vector2>();
         _ashAlpha = 0f;
         _shake = 0f;
@@ -348,6 +371,8 @@ public partial class RuneTraceMinigame : Control
         _parSeconds = (_runeLength / (radius * 2.1f)) + ReactionPadSeconds;
         _burnHead = 0f;
         _traceHead = 0f;
+        _lastBurnS = 0f;
+        _burns.Clear();
         _engaged = false;
         _cursorTrail.Clear();
         _beaconClock = 0.6;
@@ -523,6 +548,7 @@ public partial class RuneTraceMinigame : Control
             _parSecondsEarned += (ds / _runeLength) * _parSeconds;
             _traceHead = bestS;
             _recentQuality = Mathf.Lerp(_recentQuality, quality, 0.25f);
+            StampBurn(bestD);
             SpawnTraceSparks(PointAt(_traceHead), ds, quality);
         }
         else if (bestD > _tolerance * 1.6f)
@@ -535,6 +561,36 @@ public partial class RuneTraceMinigame : Control
                 _sputterAccumulator -= count;
                 SpawnSputter(_cursor, count);
             }
+        }
+    }
+
+    /// <summary>
+    /// Deposits scorch along the path the trace just covered. Radius scales with the player's
+    /// off-path distance, so the burn's width reads as the accuracy signal: a faithful trace
+    /// leaves a tight sear hugging the rune, a wandering one leaves a fat spreading burn.
+    /// Stamps at a fixed arclength cadence via <see cref="_lastBurnS"/> so density stays even
+    /// regardless of frame rate or trace speed.
+    /// </summary>
+    private void StampBurn(float offset)
+    {
+        var offset01 = Mathf.Clamp(offset / _tolerance, 0f, 1f);
+        var scale = Mathf.Lerp(BurnMinScale, BurnMaxScale, offset01);
+        while (_lastBurnS + BurnSpacing <= _traceHead)
+        {
+            _lastBurnS += BurnSpacing;
+            _burns.Add(new BurnStamp
+            {
+                Pos = PointAt(_lastBurnS),
+                Radius = _tolerance * scale * (0.85f + ((float)_vfxRng.NextDouble() * 0.3f)),
+                Heat = 1f - (0.55f * offset01),
+                Offset01 = offset01,
+                Age = 0f,
+            });
+        }
+
+        if (_burns.Count > MaxBurns)
+        {
+            _burns.RemoveRange(0, _burns.Count - MaxBurns);
         }
     }
 
@@ -657,6 +713,13 @@ public partial class RuneTraceMinigame : Control
         }
 
         _ashAlpha = Mathf.Max(0f, _ashAlpha - (0.55f * dt));
+
+        for (var i = 0; i < _burns.Count; i++)
+        {
+            var burn = _burns[i];
+            burn.Age += dt;
+            _burns[i] = burn;
+        }
 
         // Ambient motes drifting off the smoldering rune keep long waits alive.
         if (_phase is Phase.Trace && _vfxRng.NextDouble() < 0.35)
@@ -834,6 +897,8 @@ public partial class RuneTraceMinigame : Control
                 new Color(0.11f, 0.07f, 0.20f, 0.045f));
         }
 
+        DrawBurnChar(layer, center);
+
         if (_ashAlpha > 0.01f && _ashPoints.Length >= 2)
         {
             var ash = new Vector2[_ashPoints.Length];
@@ -857,6 +922,7 @@ public partial class RuneTraceMinigame : Control
         var radius = CanvasRadius();
 
         DrawMagicCircle(layer, center, radius);
+        DrawBurnSmolder(layer, center);
         DrawRuneStrokes(layer, center, radius);
         DrawTraceOverlay(layer, center, radius);
         DrawCursor(layer, center);
@@ -894,6 +960,63 @@ public partial class RuneTraceMinigame : Control
 
             var alpha = 1f - (float)(_phaseClock / 0.14);
             layer.DrawPolyline(flash, new Color(WhiteHot, alpha), radius * 0.02f, antialiased: true);
+        }
+    }
+
+    // Burns fade out as their rune seals so the next sigil starts on a clean field.
+    private float BurnLayerFade() => _phase switch
+    {
+        Phase.Sealed => Mathf.Clamp(1f - (float)(_phaseClock / SealSeconds), 0f, 1f),
+        Phase.Finale => 0f,
+        _ => 1f,
+    };
+
+    private void DrawBurnChar(DrawLayer layer, Vector2 center)
+    {
+        var fade = BurnLayerFade();
+        if (fade <= 0.01f || _burns.Count == 0)
+        {
+            return;
+        }
+
+        // Lingering ashy scorch, a touch warmer than the void so the size read survives after
+        // the glow cools. Warm char when tight, sickly violet-grey when the trace ran wide.
+        foreach (var burn in _burns)
+        {
+            var ash = WarmAsh.Lerp(ColdChar, burn.Offset01);
+            layer.DrawCircle(center + burn.Pos, burn.Radius * 1.4f, new Color(ash, 0.17f * fade));
+            layer.DrawCircle(center + burn.Pos, burn.Radius * 0.75f, new Color(ash, 0.20f * fade));
+        }
+    }
+
+    private void DrawBurnSmolder(DrawLayer layer, Vector2 center)
+    {
+        var fade = BurnLayerFade();
+        if (fade <= 0.01f || _burns.Count == 0)
+        {
+            return;
+        }
+
+        // Live smoldering heat, drawn additive beneath the rune so it spills visibly to the
+        // sides only when the trace strays. Color reinforces size: clean gold when tight,
+        // angry red-violet when wide.
+        foreach (var burn in _burns)
+        {
+            var cool = Mathf.Clamp(1f - (burn.Age / BurnCoolSeconds), 0f, 1f);
+            if (cool <= 0.01f)
+            {
+                continue;
+            }
+
+            var color = EmberColor(0.85f - (burn.Offset01 * 0.55f));
+            if (burn.Offset01 > 0.6f)
+            {
+                color = color.Lerp(WildViolet, (burn.Offset01 - 0.6f) * 0.7f);
+            }
+
+            var smolder = cool * burn.Heat * fade;
+            layer.DrawCircle(center + burn.Pos, burn.Radius, new Color(color, 0.22f * smolder));
+            layer.DrawCircle(center + burn.Pos, burn.Radius * 0.5f, new Color(color.Lerp(WhiteHot, 0.4f), 0.32f * smolder));
         }
     }
 
