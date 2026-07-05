@@ -38,6 +38,15 @@ public static class CurioGenerator
         "thimble",
         "idol",
         "ribbon spool",
+        // WildMagic-flavored props/curios (props.py), kept wonder-forward not dread-forward.
+        "reliquary",
+        "effigy",
+        "sigil-stone",
+        "charm",
+        "token",
+        "whistle",
+        "die",
+        "vial",
     };
 
     private static readonly string[] Textures =
@@ -50,6 +59,11 @@ public static class CurioGenerator
         "crooked",
         "hummed-thin",
         "rain-dark",
+        "chime-tuned",
+        "ember-warm",
+        "quartz-veined",
+        "brass-bright",
+        "ink-stained",
     };
 
     public static GeneratedCurio Generate(RegionDefinition region, RealmProfile realm, IRng rng)
