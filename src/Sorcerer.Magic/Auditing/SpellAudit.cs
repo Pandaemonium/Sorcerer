@@ -1,3 +1,4 @@
+using Sorcerer.Core.Commands;
 using Sorcerer.Core.Results;
 using Sorcerer.Magic.Resolution;
 
@@ -11,7 +12,8 @@ public sealed record SpellAuditEntry(
     string RawText,
     SpellResolution? ParsedResolution,
     ActionResult Result,
-    IReadOnlyList<string> ValidationErrors);
+    IReadOnlyList<string> ValidationErrors,
+    CastPerformance? Performance = null);
 
 public interface ISpellAuditSink
 {

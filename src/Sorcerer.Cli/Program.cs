@@ -334,7 +334,7 @@ public static class Program
                     ? new CastCommand(ReadString(root, "text", ""), CastPerformance.Neutral)
                     : new BeginCastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
                 "begin_cast" or "submit_cast" or "start_cast" => new BeginCastCommand(ReadString(root, "text", ""), CastPerformance.Neutral),
-                "await_cast" or "resolve_cast" => new AwaitCastCommand(),
+                "await_cast" or "resolve_cast" => new AwaitCastCommand(ReadPerformance(root)),
                 "cancel_cast" => new CancelCastCommand(),
                 "target" => new TargetCommand(new GridPoint(ReadInt(root, "x", 0), ReadInt(root, "y", 0))),
                 "untarget" or "cleartarget" => new ClearTargetCommand(),
@@ -412,6 +412,32 @@ public static class Program
     private static bool ReadBool(JsonElement root, string property, bool fallback) =>
         root.TryGetProperty(property, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? value.GetBoolean()
+            : fallback;
+
+    // Debug/agent injection of a fixed casting performance:
+    // { "type": "await_cast", "performance": { "power": 1.2, "control": 0.8, "wildness": 1.3 } }.
+    // Absent or malformed performance keeps whatever the pending cast carries.
+    private static CastPerformance? ReadPerformance(JsonElement root)
+    {
+        if (!root.TryGetProperty("performance", out var performance)
+            || performance.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return new CastPerformance(
+            Played: true,
+            PowerModifier: ReadFloat(performance, "power", 1f),
+            ControlModifier: ReadFloat(performance, "control", 1f),
+            WildnessModifier: ReadFloat(performance, "wildness", 1f),
+            Source: ReadString(performance, "source", "debug_fixed"));
+    }
+
+    private static float ReadFloat(JsonElement root, string property, float fallback) =>
+        root.TryGetProperty(property, out var value)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetDouble(out var parsed)
+            ? (float)parsed
             : fallback;
 
     private static string DefaultSavePath(string value) =>

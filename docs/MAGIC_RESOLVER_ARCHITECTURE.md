@@ -346,7 +346,9 @@ default instinct should be "yes, at a price."
 Wild magic should be unpredictable. Stronger requested spells can be more monkey-paw.
 
 Backfires should generally become most likely when the player tries a powerful spell with
-poor casting performance. See [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
+poor casting performance. The resolver contributes only the severity report; the engine
+applies performance and decides mishap escalation after the provider returns. See
+[CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
 
 ## Post-Cast Costs
 

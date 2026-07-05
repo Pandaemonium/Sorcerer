@@ -10,6 +10,7 @@ using Sorcerer.Core.Runtime;
 using Sorcerer.Core.Views;
 using Sorcerer.Llm;
 using Sorcerer.Magic;
+using Sorcerer.Magic.Auditing;
 using Sorcerer.Magic.Capabilities;
 using Sorcerer.Magic.Operations;
 using Sorcerer.Magic.Resolution;
@@ -555,6 +556,51 @@ public sealed class GameSessionTests
         Assert.True(resolved.ConsumedTurn);
         Assert.Null(session.Observation().PendingCast);
         Assert.True(soldier.Get<Sorcerer.Core.Entities.ActorComponent>().HitPoints < hpBefore);
+    }
+
+    [Fact]
+    public async Task AwaitCastStampsLateBoundPerformanceAtTheApplyBoundary()
+    {
+        // The casting minigame's score does not exist when the cast is submitted; it arrives
+        // with await_cast. The engine must stamp it onto the materialized resolution so the
+        // apply pipeline and the audit trail see the played performance, not the neutral
+        // placeholder from begin_cast.
+        var provider = new FixtureSpellProvider();
+        var audit = new RecordingSpellAuditSink();
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
+
+        var begin = await session.ExecuteAsync(new BeginCastCommand("strike the nearest soldier"));
+        Assert.True(begin.Success);
+
+        var performance = new CastPerformance(
+            Played: true,
+            PowerModifier: 1.25f,
+            ControlModifier: 0.85f,
+            WildnessModifier: 1.3f,
+            Source: "rune_trace");
+        var resolved = await session.ExecuteAsync(new AwaitCastCommand(performance));
+
+        Assert.True(resolved.Success);
+        Assert.True(resolved.ConsumedTurn);
+        var entry = Assert.Single(audit.Entries);
+        Assert.Equal(performance, entry.Performance);
+    }
+
+    [Fact]
+    public async Task AwaitCastWithoutPerformanceKeepsTheSubmittedOne()
+    {
+        var provider = new FixtureSpellProvider();
+        var audit = new RecordingSpellAuditSink();
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider, audit: audit));
+
+        var begin = await session.ExecuteAsync(new BeginCastCommand("strike the nearest soldier"));
+        Assert.True(begin.Success);
+
+        var resolved = await session.ExecuteAsync(new AwaitCastCommand());
+
+        Assert.True(resolved.Success);
+        var entry = Assert.Single(audit.Entries);
+        Assert.Equal(CastPerformance.Neutral, entry.Performance);
     }
 
     [Fact]
@@ -6443,6 +6489,13 @@ public sealed class GameSessionTests
                 TechnicalFailure: false,
                 Error: null));
         }
+    }
+
+    private sealed class RecordingSpellAuditSink : ISpellAuditSink
+    {
+        public List<SpellAuditEntry> Entries { get; } = new();
+
+        public void Record(SpellAuditEntry entry) => Entries.Add(entry);
     }
 
     private sealed class ThrowingSpellProvider : ISpellProvider

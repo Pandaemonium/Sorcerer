@@ -13,10 +13,20 @@ first-playable slice) and have been removed from this list.
 
 ## Casting Minigames
 
-- What is the first minigame: rune tracing, rhythm, path drawing, symbol matching, or something
-  else?
-- Beyond feeding the resolver prompt, when should the engine apply a deterministic performance
-  modifier?
+The application model is settled: performance is engine-applied after the provider returns,
+never a resolver input (see [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md) and
+[DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)).
+
+- Which games belong in the repertoire beyond rune tracing: rhythm, path drawing, symbol
+  matching, something else?
+- Is the initial minimum scoring window (`RuneTraceScoring.MinimumScoringWindowSeconds`,
+  2.75s) right once real provider latencies are measured?
+- Do the initial calibration constants in `RuneTraceScoring` actually make average play land
+  at neutral for real players (playing must stay EV-neutral against skipping)? Needs
+  playtest data from the audit log's performance annotations.
+- What belongs in the engine-side mishap/complication tables, and how does mishap severity
+  scale with reported spell severity?
+- If the provider call fails and the cast is retried, does a played score carry over?
 - How should accessibility options present neutral casting?
 
 ## Promises

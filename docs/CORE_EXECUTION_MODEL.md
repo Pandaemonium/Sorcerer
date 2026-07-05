@@ -329,9 +329,12 @@ ActionResult ResolvePendingCast();            // runs validate/apply pipeline, c
 - Cancel before resolution consumes no turn. This is also the natural pump point for
   background jobs (`PumpBackgroundJobs` runs at the same explicit apply boundary).
 
-`CastPerformance` is plumbed but starts with minimal mechanical effect: it may be passed to
-the provider as a flavor hint (controlled vs wild) and later bias a wildness roll. It is not
-an engine pricing input yet (auto-pricing is deferred).
+`CastPerformance` is plumbed but starts with minimal mechanical effect. It is never passed
+to the provider - the minigame plays during the provider call, so the score does not exist
+when the prompt is sent. The engine applies it at the apply boundary: deterministic
+power/control scaling, wildness bias, and (for a severe spell on a poor performance)
+escalation into a mishap. It is not an engine pricing input yet (auto-pricing is deferred).
+See [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
 
 ## 8. Audit Log
 

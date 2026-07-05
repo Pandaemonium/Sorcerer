@@ -176,7 +176,7 @@ public sealed record TravelCommand(Direction Direction) : GameCommand;
 public sealed record AtlasCommand() : GameCommand;
 public sealed record CastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
 public sealed record BeginCastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
-public sealed record AwaitCastCommand() : GameCommand;
+public sealed record AwaitCastCommand(CastPerformance? Performance = null) : GameCommand;
 public sealed record CancelCastCommand() : GameCommand;
 public sealed record InspectCommand() : GameCommand;
 public sealed record TargetCommand(GridPoint Position) : GameCommand;
@@ -206,8 +206,11 @@ Godot also exposes a read-only Journal scene backed by `GameView.Journal`, the s
 line builder used by the CLI `journal` command, so leads, claims, rumors, legend, and pressure
 summaries do not fork into a GUI-only formatter.
 
-`CastPerformance` is reserved for future GUI casting minigames. The CLI should use neutral
-performance by default. See [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
+`CastPerformance` is the casting-minigame score. The GUI plays the rune-trace minigame while
+a pending cast resolves and attaches the score to `AwaitCastCommand` (it does not exist at
+submit time). The CLI uses neutral performance by default; debug and agent testers may inject
+a fixed score (`await_cast 1.2 0.8 1.4`, or JSON `"performance": {...}`). See
+[CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
 
 ## Action Result
 

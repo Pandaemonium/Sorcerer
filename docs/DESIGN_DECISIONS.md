@@ -108,6 +108,32 @@ Locked while specifying the core execution model and adapting the inherited desi
   promise the world keeps.
 - GRAND_VISION.md is the central guiding vision and supersedes GAME_VISION.
 
+## Settled Decisions (Casting Minigames)
+
+Locked while designing the casting-minigame system. See
+[CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
+
+- Casting performance is applied by the engine after the provider returns; the resolver
+  never sees it. The minigame plays during the provider call, so the score cannot enter
+  the prompt.
+- The engine combines model-reported severity with the final performance: a powerful spell
+  cast on a poor performance can be converted into a mishap drawn from engine-side
+  complication tables. The narrator may flavor a mishap afterward; narration never blocks
+  the apply.
+- Skipping is the neutral baseline and playing is EV-neutral: on average, playing and
+  skipping produce the same power level. Minigames are a latency mask first, entertainment
+  second; skipping is never punished.
+- Scoring is rate-based (points per second) so unknown provider latency stays fair. If the
+  provider returns before a minimum scoring window, the attempt is discarded as neutral.
+  Games should support indefinite runtime and may run one or two seconds past the
+  provider's return.
+- Games may report up to two axes (e.g., speed -> power, accuracy -> control) when
+  legible; many report a single Wild-to-Strong axis.
+- The spell does not shape the minigame; the GUI pulls a random game from a repertoire
+  whose parameters are computed locally with no model call.
+- Minigames assume mouse input for now. The CLI defaults to neutral and may inject a fixed
+  `CastPerformance` for debug and agent testing.
+
 ## Architectural Biases
 
 Sorcerer should optimize for:

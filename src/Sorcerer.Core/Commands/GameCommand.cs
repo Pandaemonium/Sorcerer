@@ -14,7 +14,13 @@ public sealed record CastCommand(string Text, CastPerformance? Performance = nul
 
 public sealed record BeginCastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
 
-public sealed record AwaitCastCommand() : GameCommand;
+/// <summary>
+/// Resolves the pending cast. <paramref name="Performance"/> is the casting-minigame score,
+/// attached here because it does not exist yet when the cast is submitted: the minigame plays
+/// while the provider resolves, and the engine applies the final score at the apply boundary.
+/// Null keeps whatever performance the pending cast already carries (neutral by default).
+/// </summary>
+public sealed record AwaitCastCommand(CastPerformance? Performance = null) : GameCommand;
 
 public sealed record CancelCastCommand() : GameCommand;
 

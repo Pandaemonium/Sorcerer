@@ -34,7 +34,7 @@ public static class TextCommandParser
             "atlas" or "world" => new AtlasCommand(),
             "cast" => new CastCommand(rest, CastPerformance.Neutral),
             "begin_cast" or "submit_cast" or "start_cast" => new BeginCastCommand(rest, CastPerformance.Neutral),
-            "await_cast" or "resolve_cast" => new AwaitCastCommand(),
+            "await_cast" or "resolve_cast" => ParseAwaitCast(rest),
             "cancel_cast" => new CancelCastCommand(),
             "target" => ParseTarget(rest),
             "untarget" or "cleartarget" => new ClearTargetCommand(),
@@ -77,6 +77,32 @@ public static class TextCommandParser
 
     private static GameCommand ParseMove(string text) =>
         Parse(text) is MoveCommand move ? move : new UnknownCommand($"move {text}");
+
+    // Debug/agent injection of a fixed casting performance: `await_cast <power> <control> <wildness>`.
+    // Bare `await_cast` keeps whatever the pending cast carries (neutral by default).
+    private static GameCommand ParseAwaitCast(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new AwaitCastCommand();
+        }
+
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 3
+            && float.TryParse(parts[0], System.Globalization.CultureInfo.InvariantCulture, out var power)
+            && float.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out var control)
+            && float.TryParse(parts[2], System.Globalization.CultureInfo.InvariantCulture, out var wildness))
+        {
+            return new AwaitCastCommand(new CastPerformance(
+                Played: true,
+                PowerModifier: power,
+                ControlModifier: control,
+                WildnessModifier: wildness,
+                Source: "debug_fixed"));
+        }
+
+        return new UnknownCommand($"await_cast {text}");
+    }
 
     private static GameCommand ParseTarget(string text)
     {

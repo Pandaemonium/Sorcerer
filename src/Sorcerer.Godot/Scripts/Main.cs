@@ -5,6 +5,7 @@ using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Views;
+using Sorcerer.Godot.Minigames;
 using Sorcerer.Llm;
 using Sorcerer.Llm.Auditing;
 using Sorcerer.Llm.Configuration;
@@ -45,6 +46,7 @@ public partial class Main : Control
     private Button _cast = null!;
     private PanelContainer _contextMenu = null!;
     private VBoxContainer _contextMenuItems = null!;
+    private RuneTraceMinigame _minigame = null!;
 
     private ActionResult? _lastResult;
     private string? _lastError;
@@ -180,6 +182,9 @@ public partial class Main : Control
 
         AddChild(BuildEscMenu());
         AddChild(BuildContextMenu());
+
+        _minigame = new RuneTraceMinigame();
+        AddChild(FullRect(_minigame));
     }
 
     private Control BuildContextMenu()
@@ -714,14 +719,57 @@ public partial class Main : Control
 
     private async Task CastSpellAsync(string text)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(text) || _busy)
         {
             return;
         }
 
         var trimmed = text.Trim();
         _spellLine.Text = "";
-        await ExecuteAsync(new CastCommand(trimmed, CastPerformance.Neutral));
+        HideContextMenu();
+        _busy = true;
+        _busyStatusText = "spell resolving";
+        SetBusy(true);
+        SetProviderBusyStatus();
+        _lastError = null;
+
+        try
+        {
+            // Submit the cast, then play the rune-trace minigame while the provider thinks.
+            // The score arrives with await_cast because it does not exist at submit time.
+            var begin = await _session.ExecuteAsync(new BeginCastCommand(trimmed));
+            _lastResult = begin;
+            if (begin.Success)
+            {
+                var performance = await _minigame.PlayAsync(trimmed, PendingCastSettled);
+                _lastResult = await _session.ExecuteAsync(new AwaitCastCommand(performance));
+                RecordChronicleIfComplete(_lastResult);
+            }
+        }
+        catch (Exception ex)
+        {
+            _lastError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            _busyStatusText = null;
+            RefreshView();
+        }
+    }
+
+    private bool PendingCastSettled()
+    {
+        var pending = _session.Observation().PendingCast;
+        return pending is null || pending.State is not "resolving";
+    }
+
+    private void RecordChronicleIfComplete(ActionResult result)
+    {
+        if (result.Deltas.Any(delta => delta.Operation.Equals("runComplete", StringComparison.OrdinalIgnoreCase)))
+        {
+            CrossRunMemorialStore.AppendLatestChronicle(_session.Engine.State);
+        }
     }
 
     private async Task SubmitCommandAsync(string text)
@@ -760,10 +808,7 @@ public partial class Main : Control
         try
         {
             _lastResult = await _session.ExecuteAsync(command);
-            if (_lastResult.Deltas.Any(delta => delta.Operation.Equals("runComplete", StringComparison.OrdinalIgnoreCase)))
-            {
-                CrossRunMemorialStore.AppendLatestChronicle(_session.Engine.State);
-            }
+            RecordChronicleIfComplete(_lastResult);
         }
         catch (Exception ex)
         {
@@ -782,6 +827,7 @@ public partial class Main : Control
         {
             TalkCommand => "dialogue resolving",
             CastCommand => "spell resolving",
+            BeginCastCommand => "spell resolving",
             AwaitCastCommand => "spell resolving",
             SaveCommand => "saving",
             LoadCommand => "loading",

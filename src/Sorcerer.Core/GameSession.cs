@@ -87,7 +87,7 @@ public sealed class GameSession
             InspectCommand => Engine.Inspect(),
             CastCommand cast => await _magic.CastAsync(Engine, cast, cancellationToken),
             BeginCastCommand cast => BeginCast(cast),
-            AwaitCastCommand => await AwaitCast(cancellationToken),
+            AwaitCastCommand awaitCast => await AwaitCast(awaitCast, cancellationToken),
             CancelCastCommand => CancelCast(),
             TargetCommand target => SetTarget(target),
             ClearTargetCommand => ClearTarget(),
@@ -308,7 +308,7 @@ public sealed class GameSession
         };
     }
 
-    private async Task<ActionResult> AwaitCast(CancellationToken cancellationToken)
+    private async Task<ActionResult> AwaitCast(AwaitCastCommand command, CancellationToken cancellationToken)
     {
         var pending = _pendingCast;
         if (pending is null)
@@ -323,6 +323,13 @@ public sealed class GameSession
         }
 
         var materialized = await MaterializePendingCastAsync(pending, cancellationToken);
+        if (command.Performance is { } performance)
+        {
+            // The minigame score finalizes after the provider call started, so it arrives with
+            // await_cast and is stamped here, at the apply boundary the engine owns.
+            materialized = materialized with { Performance = performance };
+        }
+
         if (_pendingCast?.Id == pending.Id)
         {
             _pendingCast = null;

@@ -271,7 +271,6 @@ The resolver should receive compact state views:
 - active curses
 - promises and relevant world notes
 - supported operations for this cast
-- optional cast performance, once GUI minigames exist
 
 Do not dump all state into every prompt. Use routed context once the operation surface grows.
 Player perception is not the resolver's hard knowledge boundary: hidden or debug-only facts may be
@@ -281,8 +280,9 @@ what the player knows; a hidden target is not invalid merely because it is hidde
 remains authoritative about references, range, costs, curse limits, transaction safety, and whether
 a proposed operation can actually be applied.
 
-The CLI should pass neutral cast performance. See
-[CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
+Cast performance never enters the prompt: the minigame plays while the provider thinks,
+so the score does not exist when the prompt is sent. The engine applies performance after
+the provider returns. See [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
 
 ## Mock Provider
 

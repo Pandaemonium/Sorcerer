@@ -422,7 +422,8 @@ public sealed class WildMagicController : IWildMagicController
             providerResult.RawText,
             providerResult.Resolution,
             result,
-            validationErrors));
+            validationErrors,
+            command.Performance));
 
     private SpellResolution Normalize(SpellResolution resolution) =>
         resolution with

@@ -55,4 +55,58 @@ public sealed class CliCommandParserTests
 
         Assert.Equal(expectedDirection, move.Direction);
     }
+
+    [Fact]
+    public void TextAwaitCastWithoutArgsKeepsPendingPerformance()
+    {
+        var parsed = TextCommandParser.Parse("await_cast");
+        var awaitCast = Assert.IsType<AwaitCastCommand>(parsed);
+
+        Assert.Null(awaitCast.Performance);
+    }
+
+    [Fact]
+    public void TextAwaitCastParsesInjectedDebugPerformance()
+    {
+        var parsed = TextCommandParser.Parse("await_cast 1.2 0.8 1.4");
+        var awaitCast = Assert.IsType<AwaitCastCommand>(parsed);
+
+        Assert.NotNull(awaitCast.Performance);
+        Assert.True(awaitCast.Performance!.Played);
+        Assert.Equal(1.2f, awaitCast.Performance.PowerModifier, 0.001f);
+        Assert.Equal(0.8f, awaitCast.Performance.ControlModifier, 0.001f);
+        Assert.Equal(1.4f, awaitCast.Performance.WildnessModifier, 0.001f);
+        Assert.Equal("debug_fixed", awaitCast.Performance.Source);
+    }
+
+    [Fact]
+    public void TextAwaitCastRejectsMalformedPerformance()
+    {
+        var parsed = TextCommandParser.Parse("await_cast fast please");
+
+        Assert.IsType<UnknownCommand>(parsed);
+    }
+
+    [Fact]
+    public void JsonAwaitCastParsesInjectedDebugPerformance()
+    {
+        var parsed = Program.ParseCommand(
+            """{"type":"await_cast","performance":{"power":1.2,"control":0.8,"wildness":1.4}}""");
+        var awaitCast = Assert.IsType<AwaitCastCommand>(parsed);
+
+        Assert.NotNull(awaitCast.Performance);
+        Assert.Equal(1.2f, awaitCast.Performance!.PowerModifier, 0.001f);
+        Assert.Equal(0.8f, awaitCast.Performance.ControlModifier, 0.001f);
+        Assert.Equal(1.4f, awaitCast.Performance.WildnessModifier, 0.001f);
+        Assert.Equal("debug_fixed", awaitCast.Performance.Source);
+    }
+
+    [Fact]
+    public void JsonAwaitCastWithoutPerformanceKeepsPendingPerformance()
+    {
+        var parsed = Program.ParseCommand("""{"type":"await_cast"}""");
+        var awaitCast = Assert.IsType<AwaitCastCommand>(parsed);
+
+        Assert.Null(awaitCast.Performance);
+    }
 }
