@@ -160,6 +160,7 @@ public sealed class WildMagicController : IWildMagicController
         }
 
         resolution = WithSummonReferenceRepair(resolution);
+        resolution = RepairUnpayableItemCosts(engine, resolution);
         var projectedEntities = ProjectedSummonedEntities(engine, resolution);
         var effectContext = new EffectContext(
             engine,
@@ -896,6 +897,54 @@ public sealed class WildMagicController : IWildMagicController
         }
 
         return issues;
+    }
+
+    /// <summary>
+    /// The resolver sometimes charges an item the caster does not carry (a visible-but-unowned
+    /// object, or a hallucinated component). Rather than reject the player's otherwise-valid spell,
+    /// substitute an unpayable item cost with a small mana cost - the caster improvises with raw
+    /// effort instead of the missing focus. Item costs the caster can actually pay are untouched,
+    /// and treasured items are never spent on the resolver's whim.
+    /// </summary>
+    private static SpellResolution RepairUnpayableItemCosts(GameEngine engine, SpellResolution resolution)
+    {
+        if (resolution.Costs.Count == 0)
+        {
+            return resolution;
+        }
+
+        engine.State.ControlledEntity.TryGet<InventoryComponent>(out var inventory);
+        var repaired = new List<SpellCost>(resolution.Costs.Count);
+        var changed = false;
+        foreach (var cost in resolution.Costs)
+        {
+            if (!cost.Type.Equals("item", StringComparison.OrdinalIgnoreCase))
+            {
+                repaired.Add(cost);
+                continue;
+            }
+
+            var name = ReadString(cost.Fields, "item", ReadString(cost.Fields, "name", ""));
+            var quantity = Math.Max(1, ReadInt(cost.Fields, "quantity", ReadInt(cost.Fields, "amount", 1)));
+            var available = inventory is not null && inventory.Items.TryGetValue(name, out var have) ? have : 0;
+            if (!string.IsNullOrWhiteSpace(name) && available >= quantity)
+            {
+                // The caster carries it: keep the item cost. If it is a treasured item, downstream
+                // validation still fizzles the spell (protecting the player's guarded possessions);
+                // only genuinely unpayable costs are substituted below.
+                repaired.Add(cost);
+                continue;
+            }
+
+            repaired.Add(new SpellCost("mana", new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["amount"] = 3,
+                ["substitutedForItem"] = string.IsNullOrWhiteSpace(name) ? "item" : name,
+            }));
+            changed = true;
+        }
+
+        return changed ? resolution with { Costs = repaired } : resolution;
     }
 
     private static void ValidateItemCost(
