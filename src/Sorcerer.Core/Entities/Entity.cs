@@ -110,6 +110,10 @@ public sealed class Entity
             {
                 Tags = want.Tags.ToArray(),
             },
+            KnowledgeComponent knowledge => knowledge with
+            {
+                TopicTiers = new Dictionary<string, int>(knowledge.TopicTiers, StringComparer.OrdinalIgnoreCase),
+            },
             _ => component,
         };
 }

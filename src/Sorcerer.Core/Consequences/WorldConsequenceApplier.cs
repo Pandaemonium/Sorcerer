@@ -1,4 +1,5 @@
 using Sorcerer.Core.Characters;
+using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Engine.Systems;
 using Sorcerer.Core.Entities;
@@ -1170,6 +1171,12 @@ public sealed class WorldConsequenceApplier
             entity.Set(spawnedWant);
         }
 
+        if (!entity.Has<KnowledgeComponent>()
+            && ShouldSeedDialogueKnowledge(entity, tags, roles, interactableVerbs, summoned, includeMemory))
+        {
+            entity.Set(DialogueKnowledgeProfile.For(entity, _state.RegionId));
+        }
+
         var operation = ReadString(payload, "operation") ?? "summon";
         var summary = FirstNonBlank(ReadString(payload, "message"), $"{name} appears at {point.X},{point.Y}.")!;
         AddMessageIfAllowed(consequence, payload, summary);
@@ -1198,6 +1205,31 @@ public sealed class WorldConsequenceApplier
                 ("wantGenerated", entity.Has<WantComponent>() && !explicitWant)));
         return AppliedFromDelta(consequence, delta);
     }
+
+    private static bool ShouldSeedDialogueKnowledge(
+        Entity entity,
+        IReadOnlyList<string> tags,
+        IReadOnlyList<string> roles,
+        IReadOnlyList<string> interactableVerbs,
+        bool summoned,
+        bool includeMemory)
+    {
+        if (summoned && !entity.Has<WantComponent>() && interactableVerbs.Count == 0)
+        {
+            return false;
+        }
+
+        if (entity.Has<WantComponent>() || includeMemory || interactableVerbs.Contains("talk", StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return HasAny(tags, "npc", "resident", "merchant", "witness", "prisoner", "soldier", "guard", "clerk")
+            || HasAny(roles, "resident", "merchant", "witness", "prisoner", "soldier", "empire", "military", "functionary");
+    }
+
+    private static bool HasAny(IReadOnlyList<string> values, params string[] expected) =>
+        expected.Any(value => values.Contains(value, StringComparer.OrdinalIgnoreCase));
 
     private WorldConsequenceApplyResult ApplySpawnItem(WorldConsequence consequence)
     {

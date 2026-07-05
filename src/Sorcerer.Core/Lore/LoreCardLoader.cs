@@ -137,7 +137,7 @@ public static class LoreCardLoader
             if (words[index].Equals("Level", StringComparison.OrdinalIgnoreCase)
                 && int.TryParse(words[index + 1], out var level))
             {
-                return Math.Max(1, level);
+                return Math.Max(0, level);
             }
         }
 

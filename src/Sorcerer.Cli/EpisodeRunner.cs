@@ -41,7 +41,9 @@ public static class EpisodeRunner
     public static async Task<int> RunAsync(
         ISpellProvider provider,
         IDialogueProvider dialogueProvider,
-        IDialogueClaimExtractor dialogueClaimExtractor,
+        IDialogueRouter dialogueRouter,
+        IDialogueParserRouter dialogueParserRouter,
+        IDialogueParser dialogueParser,
         IDialogueAuditSink dialogueAudit,
         ISpellAuditSink audit,
         IBackgroundTextGenerator? backgroundTextGenerator,
@@ -70,7 +72,9 @@ public static class EpisodeRunner
                 var session = GameSession.CreateImperialEncounter(
                     new WildMagicController(provider, audit: audit),
                     seed: seed,
-                    claimExtractor: dialogueClaimExtractor,
+                    dialogueRouter: dialogueRouter,
+                    dialogueParserRouter: dialogueParserRouter,
+                    dialogueParser: dialogueParser,
                     dialogueProvider: dialogueProvider,
                     dialogueAudit: dialogueAudit,
                     backgroundTextGenerator: backgroundTextGenerator);

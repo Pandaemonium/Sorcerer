@@ -11,9 +11,17 @@ Ollama can be supported, but it should not be the only real path.
 Each model call should have a purpose:
 
 - `wild`: resolve typed wild-magic spells
-- `dialogue`: parse organic player speech into structured dialogue intent/proposals and voice NPC
-  responses; also run post-dialogue claim routing/structuring by default so local-model users do
-  not pay model-load thrash for a separate promise router
+- `dialogue`: foreground NPC speech generation, after dialogue context routing;
+  this lane should not receive mechanical schemas.
+- `dialogue_router`: foreground context-card routing before NPC speech; this
+  lane is short and defaults to the same model as `dialogue`.
+- `dialogue_parser_router`: post-speech parser-capability routing before
+  detailed mechanical parsing. Local Ollama defaults this lane to CPU so it does
+  not occupy the foreground GPU model.
+- `dialogue_parser`: post-speech mechanical parsing for claims, canon/promise
+  binding, merchant-stock hints, memories, actions, services, typed
+  consequences, and bond/want changes. Local Ollama defaults this lane to CPU so
+  it does not occupy the foreground GPU model.
 - `item`: identify/adapt item abilities
 - `canon`: on-demand examine/read materialization
 - `background`: non-urgent world enrichment
@@ -48,7 +56,7 @@ Background calls enrich the world:
 - far-look object details
 - lore extraction
 - promise fleshing
-- post-dialogue claim extraction, when it is not part of the foreground dialogue call
+- post-dialogue parsing/extraction after visible NPC speech
 - rumor distortion after high-salience stories have travelled far enough to plausibly change
 - town/site details
 
@@ -79,16 +87,42 @@ enrichment has the same bounded audit trail as rumor distortion. Candidate text 
 configured background provider or from the deterministic fallback; either way, durability still
 waits for the same typed consequence apply point.
 
-## Post-Dialogue Claim Extraction
+## Dialogue Call Flow
 
-Dialogue should return to the player before expensive promise work runs. A conversation may queue
-a low-latency claim extraction flow:
+Provider-backed dialogue uses an engine assembly step plus a four-call flow:
+
+1. `DialogueContextAssembler` builds NPC-knowledge-gated context cards from
+   live engine state and gives `dialogue_router` only the player line,
+   speaker/listener summary, small scene hints, and one-line card candidates.
+2. `dialogue_router` returns selected card ids. Unknown or access-denied ids are
+   ignored and audited; routing timeout/failure falls back to deterministic
+   balanced cards.
+3. `dialogue` receives only the selected context cards plus compatibility fields
+   derived from those cards, and returns speech-only JSON.
+4. `dialogue_parser_router` receives the spoken reply and compact provenance,
+   then selects parser capability cards or returns `hasMechanics: false`.
+5. `dialogue_parser` receives the spoken reply and selected mechanical guidance
+   when detail parsing is useful, then returns candidate proposals for engine
+   validation. If no mechanics are routed, the detail parser call is skipped.
+
+The first three steps block visible speech. The latter two run after the player can
+see the NPC response and may complete on the next command or save flush. If live
+context routing fails or times out, `GameSession` uses deterministic balanced
+cards and continues; the failure and request/card byte counts are materialized
+in the dialogue route record and dialogue audit entry.
+
+## Post-Dialogue Parsing
+
+Dialogue should return to the player before expensive promise work runs. A
+conversation queues a parser flow after visible speech:
 
 1. The player-facing dialogue result is shown immediately.
-2. A small router call, using the already-loaded `dialogue` model, receives the recent exchange,
-   speaker ids/cards, and a compact definition of claim/promise.
-3. If the router finds a plausible claim, a larger structuring call uses selected claim capability
-   cards and strict JSON to propose memories, canon notes, merchant-stock hints, or promises.
+2. A parser router/detail flow receives the recent exchange, speaker ids/cards,
+   selected parser families, and compact definitions of supported mechanics.
+3. If the router finds a plausible mechanical consequence, a structuring call
+   uses selected parser capability cards and strict JSON to propose claims,
+   memories, canon notes, merchant-stock hints, promises, actions, or bond/want
+   changes.
 4. The engine validates and applies the structured proposal between turns or at another explicit
    session pump point.
 5. A save command is an explicit synchronization point: the session waits for pending dialogue
@@ -103,17 +137,23 @@ Do not bind player-spoken claims as world truth. Ordinary player dialogue can as
 or manipulate, but only validated engine actions, wild magic, NPC/document claims, or authored
 world sources create durable commitments.
 
-Current implementation uses both `IDialogueProvider` and `IDialogueClaimExtractor` in
-`Sorcerer.Core`, with mock, Ollama, and OpenAI-compatible implementations in `Sorcerer.Llm`.
-Provider-generated dialogue returns `spokenText` plus structured proposals and applies accepted
-claims immediately.
-Fallback deterministic dialogue can still queue extraction after successful `talk` results and pump
-completed results on a later command. Proposals can record claims through `record_claim`, write
-memories, add existing merchant stock, bind promises, or request bounded bond deltas. Gift commands
-only create gift memories; if that gift changes a relationship, generated dialogue or claim
-extraction must propose the bond change during a later conversation.
+Current implementation uses both `IDialogueProvider` and `IDialogueParser` in
+`Sorcerer.Core`, with mock, Ollama, and OpenAI-compatible implementations in
+`Sorcerer.Llm`. Live generated dialogue is prompted for speech-only JSON. If a
+response has no proposal envelope, `GameSession` queues `IDialogueParser` and
+pumps completed results on a later command or save flush.
+`IDialogueClaimExtractor` remains as a compatibility interface and is adapted
+into the parser lane for older tests, transcripts, and claim-only providers.
+Legacy/replay/provider responses that include explicit proposals still apply
+those proposals directly and do not queue duplicate parser work. Current parser
+proposals can record claims through `record_claim`, add existing merchant stock,
+bind promises, bind canon, record memories, reveal services, offer trade, apply
+local actions, request bounded bond/want changes, or submit typed consequences
+for validation. Gift commands only create gift memories; if that gift changes a
+relationship, the parser must propose the bond change during a later
+conversation.
 
-Current generated dialogue supports validated action proposals such as
+Legacy proposal-bearing generated dialogue supports validated action proposals such as
 `step_aside`, `flee`, `call_help`, `give`, `open`, `attack`, `recruit`,
 `create_promise`, `offer_trade`, `reveal_service`, `mark_location`, and
 `spawn_fixture`. Unsupported actions are rejected with a diagnostic delta.
@@ -223,12 +263,18 @@ Current implementation:
 - Debug observations include background job cards so diagnostic episode transcripts can
   capture the queue without scraping text.
 
-`LlmConfiguration` separates purpose settings (`wild`, `dialogue`, `item`, `canon`,
-`background`, `agent`). The CLI uses the `wild` purpose for foreground spell resolution and can
+`LlmConfiguration` separates purpose settings (`wild`, `dialogue`,
+`dialogue_parser_router`, `dialogue_parser`, `item`, `canon`, `background`,
+`agent`). The CLI uses the `wild` purpose for foreground spell resolution,
+`dialogue` for foreground NPC speech, `dialogue_parser_router` for post-speech
+parser capability routing, `dialogue_parser` for post-speech parsing, and can
 wire a separate `background` text generator for non-critical enrichment. Passing
 `--background-provider`, `--background-host`, or `--background-model` opts into that provider unless
 `--disable-background` is also supplied; otherwise the turn pump uses deterministic fallback text.
 Purpose-specific environment variables use names such as `SORCERER_WILD_PROVIDER`, `SORCERER_WILD_MODEL`,
+`SORCERER_DIALOGUE_PARSER_ROUTER_PROVIDER`,
+`SORCERER_DIALOGUE_PARSER_ROUTER_NUM_GPU`,
+`SORCERER_DIALOGUE_PARSER_PROVIDER`, `SORCERER_DIALOGUE_PARSER_NUM_GPU`,
 `SORCERER_BACKGROUND_PROVIDER`, `SORCERER_BACKGROUND_MODEL`, and
 `SORCERER_BACKGROUND_ENABLED`. OpenAI-compatible endpoints can also use purpose-specific
 `SORCERER_<PURPOSE>_API_KEY` values before falling back to shared OpenAI-compatible key variables.

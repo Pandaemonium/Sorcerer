@@ -33,7 +33,9 @@ public static class Program
         var provider = SpellProviderFactory.Create(configuration, LlmPurpose.Wild);
         var router = SpellRouterFactory.Create(configuration, LlmPurpose.Router);
         var dialogueProvider = DialogueProviderFactory.Create(configuration, LlmPurpose.Dialogue);
-        var dialogueClaimExtractor = DialogueClaimExtractorFactory.Create(configuration, LlmPurpose.Dialogue);
+        var dialogueRouter = DialogueRouterFactory.Create(configuration, LlmPurpose.DialogueRouter);
+        var dialogueParserRouter = DialogueParserRouterFactory.Create(configuration, LlmPurpose.DialogueParserRouter);
+        var dialogueParser = DialogueParserFactory.Create(configuration, LlmPurpose.DialogueParser);
         var backgroundAudit = new JsonlBackgroundTextAuditSink(Path.Combine("logs", "background_audit.jsonl"));
         var backgroundTextGenerator = BackgroundTextGeneratorFactory.Create(
             configuration,
@@ -51,7 +53,9 @@ public static class Program
             return await EpisodeRunner.RunAsync(
                 provider,
                 dialogueProvider,
-                dialogueClaimExtractor,
+                dialogueRouter,
+                dialogueParserRouter,
+                dialogueParser,
                 dialogueAudit,
                 audit,
                 backgroundTextGenerator,
@@ -77,10 +81,12 @@ public static class Program
             options.OriginId,
             options.Seed,
             CrossRunMemorialStore.LoadDefault(),
-            dialogueClaimExtractor,
-            dialogueProvider,
-            dialogueAudit,
-            backgroundTextGenerator);
+            dialogueProvider: dialogueProvider,
+            dialogueRouter: dialogueRouter,
+            dialogueAudit: dialogueAudit,
+            backgroundTextGenerator: backgroundTextGenerator,
+            dialogueParser: dialogueParser,
+            dialogueParserRouter: dialogueParserRouter);
         ApplyBackgroundOptions(session, options);
         ApplyQuickstart(session, options.QuickstartScene);
         await using var transcript = TranscriptWriter.Open(options.TranscriptPath);
@@ -150,7 +156,22 @@ public static class Program
                 LlmPurpose.Dialogue,
                 options.Provider,
                 options.Host,
-                options.Model);
+                options.Model)
+            .WithPurposeOverride(
+                LlmPurpose.DialogueRouter,
+                PurposeEnvironmentOverride("DIALOGUE_ROUTER", "PROVIDER") ? null : options.Provider,
+                PurposeEnvironmentOverride("DIALOGUE_ROUTER", "HOST") ? null : options.Host,
+                PurposeEnvironmentOverride("DIALOGUE_ROUTER", "MODEL") ? null : options.Model)
+            .WithPurposeOverride(
+                LlmPurpose.DialogueParser,
+                ParserEnvironmentOverride("PROVIDER") ? null : options.Provider,
+                ParserEnvironmentOverride("HOST") ? null : options.Host,
+                ParserEnvironmentOverride("MODEL") ? null : options.Model);
+        configuration = configuration.WithPurposeOverride(
+            LlmPurpose.DialogueParserRouter,
+            ParserRouterEnvironmentOverride("PROVIDER") ? null : options.Provider,
+            ParserRouterEnvironmentOverride("HOST") ? null : options.Host,
+            ParserRouterEnvironmentOverride("MODEL") ? null : options.Model);
         if (options.BackgroundProvider is not null
             || options.BackgroundHost is not null
             || options.BackgroundModel is not null
@@ -170,6 +191,15 @@ public static class Program
 
         return configuration;
     }
+
+    private static bool ParserEnvironmentOverride(string suffix) =>
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable($"SORCERER_DIALOGUE_PARSER_{suffix}"));
+
+    private static bool ParserRouterEnvironmentOverride(string suffix) =>
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable($"SORCERER_DIALOGUE_PARSER_ROUTER_{suffix}"));
+
+    private static bool PurposeEnvironmentOverride(string purpose, string suffix) =>
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable($"SORCERER_{purpose}_{suffix}"));
 
     private static void ApplyBackgroundOptions(GameSession session, CliOptions options)
     {

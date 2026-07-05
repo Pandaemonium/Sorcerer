@@ -26,6 +26,10 @@ public sealed class LoreLayerTests
 
             # Test Reed Lore
 
+            ## Level 0
+
+            Common water warnings reach everyone.
+
             ## Level 1
 
             Public water remembers names.
@@ -41,6 +45,9 @@ public sealed class LoreLayerTests
 
         var catalog = new LoreCatalog(new[] { LoreCardLoader.LoadMarkdown("test_reed_lore", markdown) });
 
+        var commonAccess = Assert.Single(LoreRouter.Select(
+            catalog,
+            new LoreQuery(new[] { "hollowmere" }, new[] { "magic_context" }, AccessLevel: 0)));
         var lowAccess = Assert.Single(LoreRouter.Select(
             catalog,
             new LoreQuery(new[] { "hollowmere" }, new[] { "magic_context" }, AccessLevel: 1)));
@@ -48,11 +55,62 @@ public sealed class LoreLayerTests
             catalog,
             new LoreQuery(new[] { "hollowmere" }, new[] { "magic_context" }, AccessLevel: 2)));
 
+        Assert.Contains("Common water", commonAccess.Body);
+        Assert.DoesNotContain("Public water", commonAccess.Body);
+        Assert.DoesNotContain("Locked reed", commonAccess.Body);
+        Assert.DoesNotContain("Draft-only", commonAccess.Body);
+        Assert.Contains("Common water", lowAccess.Body);
         Assert.Contains("Public water", lowAccess.Body);
         Assert.DoesNotContain("Locked reed", lowAccess.Body);
         Assert.DoesNotContain("Draft-only", lowAccess.Body);
         Assert.Contains("Locked reed", highAccess.Body);
         Assert.DoesNotContain("Draft-only", highAccess.Body);
+    }
+
+    [Fact]
+    public void LoreRouterUsesSubjectSpecificAccessWithoutLiftingUnrelatedCards()
+    {
+        var catalog = new LoreCatalog(new[]
+        {
+            new LoreCard(
+                "water_secret",
+                "Water Secret",
+                new[] { "water" },
+                new[] { "magic_context" },
+                new[]
+                {
+                    new LoreSection(1, "Public water custom."),
+                    new LoreSection(4, "Secret water-name rite."),
+                }),
+            new LoreCard(
+                "law_secret",
+                "Law Secret",
+                new[] { "law" },
+                new[] { "magic_context" },
+                new[]
+                {
+                    new LoreSection(1, "Public law custom."),
+                    new LoreSection(4, "Secret censorate exception."),
+                }),
+        });
+
+        var routed = LoreRouter.Select(
+            catalog,
+            new LoreQuery(
+                new[] { "water" },
+                new[] { "magic_context" },
+                AccessLevel: 1,
+                Limit: 5,
+                SubjectAccessLevels: new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["water"] = 4,
+                }));
+
+        Assert.Contains(routed, card =>
+            card.Id == "water_secret"
+            && card.Body.Contains("Secret water-name rite.", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(routed, card =>
+            card.Body.Contains("Secret censorate exception.", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

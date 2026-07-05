@@ -97,6 +97,19 @@ public sealed class GameSessionCharacterizationTests
         Assert.Contains("missing confiscated goods", soldier.Get<WantComponent>().Text);
         Assert.Contains("paperwork intact", captain.Get<WantComponent>().Text);
         Assert.Contains("promise_source", lio.Get<WantComponent>().Tags);
+        Assert.Equal(2, lio.Get<KnowledgeComponent>().TopicTiers["region.travel"]);
+        Assert.Equal(2, lio.Get<KnowledgeComponent>().TopicTiers["promise.hooks"]);
+        Assert.Equal(2, lio.Get<KnowledgeComponent>().TopicTiers["hollowmere"]);
+        Assert.Equal(2, lio.Get<KnowledgeComponent>().TopicTiers["current_zone"]);
+        Assert.Equal(2, lio.Get<KnowledgeComponent>().TopicTiers["people.hollowmere"]);
+        Assert.Equal(1, lio.Get<KnowledgeComponent>().TopicTiers["vigovia.public_law"]);
+        Assert.Equal(4, lio.Get<KnowledgeComponent>().TopicTiers["folk_magic.water"]);
+        Assert.Equal(4, lio.Get<KnowledgeComponent>().TopicTiers["magic.water.hollowmere"]);
+        Assert.Equal(3, lio.Get<KnowledgeComponent>().TopicTiers["wild_magic"]);
+        Assert.Equal(2, lio.Get<KnowledgeComponent>().TopicTiers["services.folk_magic"]);
+        Assert.Equal(3, lio.Get<KnowledgeComponent>().TopicTiers["promises.oaths"]);
+        Assert.Equal(3, captain.Get<KnowledgeComponent>().TopicTiers["faction.law"]);
+        Assert.Equal(1, soldier.Get<KnowledgeComponent>().TopicTiers["recent.magic_deeds"]);
     }
 
     [Fact]
@@ -254,6 +267,9 @@ public sealed class GameSessionCharacterizationTests
         Assert.Contains(merchant.Deltas, delta =>
             Equals(delta.Details["wantGenerated"], true)
             && Equals(delta.Details["wantId"], merchantWant.Id));
+        Assert.True(merchantEntity.TryGet<KnowledgeComponent>(out var merchantKnowledge));
+        Assert.Equal(2, merchantKnowledge.TopicTiers["services"]);
+        Assert.Equal(2, merchantKnowledge.TopicTiers["region.travel"]);
 
         Assert.True(explicitWant.Applied);
         var witness = Assert.Single(session.Engine.State.Entities.Values, entity => entity.Name == "glass oath witness");
@@ -5531,6 +5547,341 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
+    public async Task DialogueParserAppliesFullProposalSetAfterSpeechAndReplaysIt()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "I know a quiet way to worry a lock open, if you bring grave salt.",
+            Delivery: "hushed",
+            Intent: "answer",
+            Proposals: null));
+        var proposals = new DialogueProposalSet(
+            Memories: new[]
+            {
+                new DialogueMemoryProposal(
+                    "prisoner_1",
+                    "Lio admitted a grave-salt charm could worry a lock open.",
+                    "conversation",
+                    Salience: 3),
+            },
+            Want: new DialogueWantProposal(
+                "prisoner_1",
+                Text: "Get grave salt for a quiet lock charm.",
+                Salience: 4,
+                Status: "active",
+                Stakes: "The escape now depends on whether the charm can be paid for.",
+                AddTags: new[] { "service", "grave_salt" },
+                Reason: "Lio offered a specific service in dialogue."),
+            Actions: new[]
+            {
+                new DialogueActionProposal(
+                    "reveal_service",
+                    Name: "ward-breaking",
+                    Description: "A hush-hush folk charm that worries a lock open.",
+                    ServiceId: "ward_breaking",
+                    EffectKind: "open_or_unlock",
+                    TargetHint: "cell door",
+                    ItemCost: "grave salt",
+                    Tags: new[] { "service", "folk_magic", "door" }),
+            });
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider,
+            dialogueParser: new FixtureDialogueParser(proposals),
+            seed: 23);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, can you help with the lock?"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.True(talk.Success);
+        Assert.Null(talk.Dialogue!.Response!.Proposals);
+        Assert.DoesNotContain(talk.Deltas, delta => delta.Operation == "dialogueRevealService");
+        Assert.Contains(wait.Deltas, delta => delta.Operation == "dialogueRevealService");
+        Assert.Contains(wait.Deltas, delta => delta.Operation == "dialogueMemory");
+        Assert.Contains(wait.Deltas, delta => delta.Operation == "dialogueWantShift");
+        var parse = Assert.Single(wait.DialogueParses);
+        Assert.NotNull(parse.Proposals);
+        Assert.Single(parse.Proposals!.Actions!);
+        Assert.Empty(parse.Proposals.Claims ?? Array.Empty<DialogueClaimProposal>());
+
+        var replay = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: new ReplayDialogueProvider(new[] { talk.Dialogue! }),
+            dialogueParser: new ReplayDialogueParser(wait.DialogueParses),
+            seed: 23);
+        DisableImperialAi(replay);
+        OpenCellDoorWithoutCommand(replay);
+        replay.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var replayTalk = await replay.ExecuteAsync(new TalkCommand("Lio, can you help with the lock?"));
+        var replayWait = await replay.ExecuteAsync(new WaitCommand());
+
+        Assert.True(replayTalk.Success);
+        Assert.Contains(replayWait.Deltas, delta => delta.Operation == "dialogueRevealService");
+        Assert.Contains(replayWait.Deltas, delta => delta.Operation == "dialogueMemory");
+        Assert.Contains(replayWait.Deltas, delta => delta.Operation == "dialogueWantShift");
+        Assert.Single(replayWait.DialogueParses);
+    }
+
+    [Fact]
+    public async Task DialogueContextRouterSeesOnlyKnowledgeGatedCardsAndTrimsGeneratorContext()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "I can talk about the room, not every rumor in the yard.",
+            Delivery: "plain",
+            Intent: "answer",
+            Proposals: null));
+        var router = new FixtureDialogueRouter("zone.current", "rumors.full", "scene.object_detail");
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider,
+            dialogueRouter: router,
+            seed: 31);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+        var lio = session.Engine.EntityById("prisoner_1")!;
+        lio.Set(new KnowledgeComponent(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zone.current"] = 1,
+            ["scene.object"] = 1,
+        }));
+        session.Engine.State.Rumors.Append(
+            session.Engine.State.Turn,
+            "test",
+            "rumor_source",
+            session.Engine.State.RegionId,
+            session.Engine.State.RegionId,
+            "A rumor the restricted speaker should not see.",
+            4,
+            carrierIds: new[] { "prisoner_1" },
+            tags: new[] { "test" },
+            status: "active");
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, what rumors are there about this room?"));
+
+        Assert.True(talk.Success);
+        Assert.NotNull(talk.DialogueRoute);
+        Assert.False(talk.DialogueRoute!.UsedFallback);
+        Assert.NotNull(talk.DialogueRoute.Metrics);
+        Assert.Contains("rumors.full", talk.DialogueRoute.Metrics!.DeniedCardIds);
+        Assert.Contains("rumors.full", talk.DialogueRoute.Metrics.DeniedSelectedCardIds);
+        Assert.Empty(talk.DialogueRoute.Metrics.UnknownSelectedCardIds);
+        Assert.True(talk.DialogueRoute.Metrics.RouteRequestBytes > 0);
+        Assert.True(talk.DialogueRoute.Metrics.AvailableCardBytes > 0);
+        Assert.True(talk.DialogueRoute.Metrics.SelectedCardBytes > 0);
+        Assert.True(talk.DialogueRoute.Metrics.GeneratorRequestBytes > 0);
+        Assert.DoesNotContain(router.LastRequest!.AvailableCards, card => card.Id == "rumors.full");
+        Assert.Contains(router.LastRequest.AvailableCards, card => card.Id == "zone.current");
+        Assert.Contains(router.LastRequest.AvailableCards, card => card.Id == "scene.object_detail");
+        Assert.NotNull(provider.LastRequest);
+        Assert.DoesNotContain(provider.LastRequest!.ContextCards!, card => card.Id == "rumors.full");
+        Assert.Contains(provider.LastRequest.ContextCards!, card => card.Id == "zone.current");
+        Assert.Contains(provider.LastRequest.ContextCards!, card => card.Id == "scene.object_detail");
+        Assert.Equal(provider.LastRequest.ContextCards!.Count, talk.DialogueRoute.Metrics.SelectedCardCount);
+        Assert.DoesNotContain(provider.LastRequest.RecentRumors ?? Array.Empty<string>(), line =>
+            line.Contains("restricted speaker", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DialogueContextRouterFailureFallsBackToDeterministicBalancedCards()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "The yard has rumors enough, even if the routing clerk coughed ink.",
+            Delivery: "plain",
+            Intent: "answer",
+            Proposals: null));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider,
+            dialogueRouter: new FaultingDialogueRouter(),
+            seed: 32);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, any rumors?"));
+
+        Assert.True(talk.Success);
+        Assert.NotNull(talk.DialogueRoute);
+        Assert.True(talk.DialogueRoute!.UsedFallback);
+        Assert.True(talk.DialogueRoute.TechnicalFailure);
+        Assert.Contains("fixture route timeout", talk.DialogueRoute.Error);
+        Assert.Contains("zone.current", talk.DialogueRoute.SelectedCardIds);
+        Assert.NotNull(talk.DialogueRoute.Metrics);
+        Assert.Equal(talk.DialogueRoute.SelectedCardIds.Count, talk.DialogueRoute.Metrics!.SelectedCardCount);
+        Assert.Equal(talk.DialogueRoute.FallbackCardIds.Count, talk.DialogueRoute.Metrics.FallbackCardCount);
+        Assert.True(talk.DialogueRoute.Metrics.GeneratorRequestBytes > 0);
+        Assert.True(talk.DialogueRoute.Metrics.RouterElapsedMs >= 0);
+        Assert.NotNull(provider.LastRequest);
+        Assert.Contains(provider.LastRequest!.ContextCards!, card => card.Id == "zone.current");
+    }
+
+    [Fact]
+    public async Task DialogueContextRegionalKnowledgeCardUsesLoreCatalogAtSpeakerTier()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Hollowmere keeps some names under water, and those names sometimes answer debts.",
+            Delivery: "quiet",
+            Intent: "answer",
+            Proposals: null));
+        var router = new FixtureDialogueRouter("npc.knowledge.region");
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider,
+            dialogueRouter: router,
+            seed: 33);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, what does Hollowmere remember about oaths?"));
+
+        Assert.True(talk.Success);
+        Assert.Contains(router.LastRequest!.AvailableCards, card => card.Id == "npc.knowledge.region");
+        var card = Assert.Single(provider.LastRequest!.ContextCards!, card => card.Id == "npc.knowledge.region");
+        Assert.Contains(card.Lines, line => line.Contains("Lore Hollowmere Reed-Memory", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(card.Lines, line => line.Contains("promise spoken into Hollowmere mud", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(card.Lines, line => line.Contains("hidden water-name", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(talk.DialogueRoute!.Metrics);
+        Assert.True(talk.DialogueRoute.Metrics!.SelectedCardBytes > 0);
+        Assert.Equal(new[] { "npc.knowledge.region" }, talk.DialogueRoute.SelectedCardIds);
+    }
+
+    [Fact]
+    public async Task DialogueContextRouterCanSelectHighValueRoutePromiseAndDeedCards()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "The yard is crowded with bad exits and worse witnesses.",
+            Delivery: "hushed",
+            Intent: "answer",
+            Proposals: null));
+        var router = new FixtureDialogueRouter(
+            "zone.npcs",
+            "region.travel",
+            "promise.hooks",
+            "recent.magic_deeds");
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider,
+            dialogueRouter: router,
+            seed: 34);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+        RecordDeed(
+            session,
+            session.Engine.State.ControlledEntity,
+            "wild_magic_flash",
+            3,
+            new GridPoint(13, 5),
+            new GridPoint(13, 5),
+            new[] { "magic", "containment" });
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, who else is here, which way out, and what magic did they see?"));
+
+        Assert.True(talk.Success);
+        var selectedIds = provider.LastRequest!.ContextCards!.Select(card => card.Id).ToArray();
+        Assert.Contains("zone.npcs", selectedIds);
+        Assert.Contains("region.travel", selectedIds);
+        Assert.Contains("promise.hooks", selectedIds);
+        Assert.Contains("recent.magic_deeds", selectedIds);
+        Assert.Contains(provider.LastRequest.ContextCards!, card =>
+            card.Id == "zone.npcs"
+            && card.Lines.Any(line => line.Contains("imperial", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(provider.LastRequest.ContextCards!, card =>
+            card.Id == "region.travel"
+            && card.Lines.Any(line => line.Contains("Travel south", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(provider.LastRequest.ContextCards!, card =>
+            card.Id == "promise.hooks"
+            && card.Lines.Any(line => line.Contains("dangerous gratitude", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(provider.LastRequest.ContextCards!, card =>
+            card.Id == "recent.magic_deeds"
+            && card.Lines.Any(line => line.Contains("wild_magic_flash", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(selectedIds, talk.DialogueRoute!.SelectedCardIds);
+    }
+
+    [Fact]
+    public async Task DialogueParserRouterSelectsCapabilityCardsBeforeParserDetail()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "Bring grave salt and I can sell you a quiet lock-charm for the door.",
+            Delivery: "low",
+            Intent: "offer",
+            Proposals: null));
+        var parser = new FixtureDialogueParser(new DialogueProposalSet());
+        var parserRouter = new FixtureDialogueParserRouter(
+            hasMechanics: true,
+            "services_trade",
+            "local_actions");
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider,
+            dialogueParser: parser,
+            dialogueParserRouter: parserRouter,
+            seed: 35);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, can you help with the lock?"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.True(talk.Success);
+        Assert.NotNull(parserRouter.LastRequest);
+        Assert.NotNull(parser.LastRequest);
+        Assert.Equal(new[] { "services_trade", "local_actions" }, parser.LastRequest!.SelectedParserCapabilityIds);
+        Assert.Equal(new[] { "local_actions", "services_trade" }, parser.LastRequest.ParserCapabilityCards!.Select(card => card.Id).Order().ToArray());
+        var parse = Assert.Single(wait.DialogueParses);
+        Assert.NotNull(parse.ParserRoute);
+        Assert.True(parse.ParserRoute!.HasMechanics);
+        Assert.False(parse.ParserRoute.UsedFallback);
+        Assert.Equal(new[] { "services_trade", "local_actions" }, parse.ParserRoute.SelectedCapabilityIds);
+        Assert.NotNull(parse.ParserRoute.Metrics);
+        Assert.True(parse.ParserRoute.Metrics!.ParserRequestBytes > 0);
+        Assert.True(parse.ParserRoute.Metrics.ParserElapsedMs >= 0);
+    }
+
+    [Fact]
+    public async Task DialogueParserRouterCanSkipParserDetailWhenSpeechHasNoMechanics()
+    {
+        var provider = new FixtureDialogueProvider(new DialogueResponse(
+            "I hear you. For this breath, there is nothing to mark or promise.",
+            Delivery: "plain",
+            Intent: "acknowledge",
+            Proposals: null));
+        var parser = new FixtureDialogueParser(new DialogueProposalSet(
+            Claims: new[]
+            {
+                new DialogueClaimProposal("This should not be parsed.", "rumor", "unused"),
+            }));
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            dialogueProvider: provider,
+            dialogueParser: parser,
+            dialogueParserRouter: new FixtureDialogueParserRouter(hasMechanics: false),
+            seed: 36);
+        DisableImperialAi(session);
+        OpenCellDoorWithoutCommand(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, are you all right?"));
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        Assert.True(talk.Success);
+        Assert.Null(parser.LastRequest);
+        var parse = Assert.Single(wait.DialogueParses);
+        Assert.NotNull(parse.ParserRoute);
+        Assert.False(parse.ParserRoute!.HasMechanics);
+        Assert.Empty(parse.ParserRoute.SelectedCapabilityIds);
+        Assert.NotNull(parse.Proposals);
+        Assert.Empty(parse.Proposals!.Claims ?? Array.Empty<DialogueClaimProposal>());
+        Assert.Null(parse.ParserRoute.Metrics!.ParserElapsedMs);
+    }
+
+    [Fact]
     public async Task GeneratedDialogueSkipsClaimsNotSupportedBySpokenText()
     {
         var provider = new FixtureDialogueProvider(new DialogueResponse(
@@ -5908,6 +6259,9 @@ public sealed class GameSessionCharacterizationTests
         Assert.True(talk.Success);
         Assert.Equal("fixture-dialogue", entry.Provider);
         Assert.Equal("prisoner_1", entry.SpeakerId);
+        Assert.NotNull(entry.Route);
+        Assert.Equal(talk.DialogueRoute, entry.Route);
+        Assert.True(entry.Route!.Metrics!.GeneratorRequestBytes > 0);
         Assert.Contains("Escape the containment yard", entry.Request.Speaker.Want);
         Assert.Contains(entry.Request.CapabilityCards, card =>
             card.Contains("recruit", StringComparison.OrdinalIgnoreCase)
@@ -7059,7 +7413,7 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
-    public async Task ExtractedDialogueServiceClaimReusesRevealedServiceActionBetweenTurns()
+    public async Task GeneratedDialogueServiceActionDoesNotQueueDuplicateClaimExtraction()
     {
         var provider = new FixtureDialogueProvider(new DialogueResponse(
             "Test mender says, \"I can worry a lock open if you bring grave salt.\"",
@@ -7101,11 +7455,8 @@ public sealed class GameSessionCharacterizationTests
         Assert.True(talk.Success);
         Assert.Contains(talk.Deltas, delta => delta.Operation == "dialogueRevealService");
         Assert.DoesNotContain(wait.Deltas, delta => delta.Operation == "claimOfferService");
-        Assert.Contains(wait.Deltas, delta =>
-            delta.Operation == "claimApplied"
-            && Equals(delta.Details["appliedTo"], "test_mender")
-            && Equals(delta.Details["matchedExistingService"], true)
-            && Equals(delta.Details["serviceId"], "ward_breaking"));
+        Assert.DoesNotContain(wait.Deltas, delta => delta.Operation == "claimApplied");
+        Assert.Empty(wait.DialogueClaimExtractions);
         Assert.Single(mender.Get<ServiceComponent>().Offers);
     }
 
@@ -8897,6 +9248,37 @@ public sealed class GameSessionCharacterizationTests
                 Claims: _claims));
     }
 
+    private sealed class FixtureDialogueParser : IDialogueParser
+    {
+        private readonly DialogueProposalSet? _proposals;
+        private readonly bool _requiresSpokenTextSupport;
+
+        public FixtureDialogueParser(DialogueProposalSet? proposals, bool requiresSpokenTextSupport = false)
+        {
+            _proposals = proposals;
+            _requiresSpokenTextSupport = requiresSpokenTextSupport;
+        }
+
+        public string Name => "fixture-dialogue-parser";
+
+        public bool RequiresSpokenTextSupport => _requiresSpokenTextSupport;
+
+        public DialogueClaimRequest? LastRequest { get; private set; }
+
+        public Task<DialogueParseResult> ParseAsync(
+            DialogueClaimRequest request,
+            CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return Task.FromResult(new DialogueParseResult(
+                Name,
+                RawText: "{}",
+                TechnicalFailure: false,
+                Error: null,
+                Proposals: _proposals));
+        }
+    }
+
     // Returns one single-proposal extraction result per call, in order (clamped to the last
     // entry once exhausted), so tests can simulate a speaker restating a claim across separate
     // `talk` turns rather than a single turn producing several proposals at once.
@@ -9017,10 +9399,84 @@ public sealed class GameSessionCharacterizationTests
 
         public string Name => "fixture-dialogue";
 
+        public DialogueRequest? LastRequest { get; private set; }
+
         public Task<DialogueProviderResult> ResolveAsync(
             DialogueRequest request,
+            CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return Task.FromResult(_result);
+        }
+    }
+
+    private sealed class FixtureDialogueRouter : IDialogueRouter
+    {
+        private readonly IReadOnlyList<string> _selectedCardIds;
+
+        public FixtureDialogueRouter(params string[] selectedCardIds)
+        {
+            _selectedCardIds = selectedCardIds;
+        }
+
+        public string Name => "fixture-dialogue-router";
+
+        public DialogueRouteRequest? LastRequest { get; private set; }
+
+        public Task<DialogueRouteResult> RouteAsync(
+            DialogueRouteRequest request,
+            CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return Task.FromResult(new DialogueRouteResult(
+                Name,
+                RawText: "{}",
+                TechnicalFailure: false,
+                Error: null,
+                SelectedCardIds: _selectedCardIds,
+                Reason: "fixture route"));
+        }
+    }
+
+    private sealed class FaultingDialogueRouter : IDialogueRouter
+    {
+        public string Name => "faulting-dialogue-router";
+
+        public Task<DialogueRouteResult> RouteAsync(
+            DialogueRouteRequest request,
             CancellationToken cancellationToken) =>
-            Task.FromResult(_result);
+            Task.FromException<DialogueRouteResult>(new TaskCanceledException("fixture route timeout"));
+    }
+
+    private sealed class FixtureDialogueParserRouter : IDialogueParserRouter
+    {
+        private readonly bool _hasMechanics;
+        private readonly IReadOnlyList<string> _selectedCapabilityIds;
+
+        public FixtureDialogueParserRouter(bool hasMechanics, params string[] selectedCapabilityIds)
+        {
+            _hasMechanics = hasMechanics;
+            _selectedCapabilityIds = selectedCapabilityIds;
+        }
+
+        public string Name => "fixture-dialogue-parser-router";
+
+        public DialogueParserRouteRequest? LastRequest { get; private set; }
+
+        public Task<DialogueParserRouteResult> RouteAsync(
+            DialogueParserRouteRequest request,
+            CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return Task.FromResult(new DialogueParserRouteResult(
+                Name,
+                RawText: "{}",
+                TechnicalFailure: false,
+                Error: null,
+                HasMechanics: _hasMechanics,
+                SelectedCapabilityIds: _selectedCapabilityIds,
+                Reason: "fixture parser route"));
+        }
     }
 
     private sealed class FixtureDialogueAuditSink : IDialogueAuditSink

@@ -81,11 +81,17 @@ public sealed class LoreCatalog
             new[]
             {
                 new LoreSection(
+                    0,
+                    "People around the marsh say Hollowmere names travel strangely over water, and that oaths made near reeds should not be mocked."),
+                new LoreSection(
                     1,
                     "Hollowmere keeps names in water and takes oaths seriously when the reeds are listening."),
                 new LoreSection(
                     2,
                     "A promise spoken into Hollowmere mud may later surface as a path, a witness, or a debt with wet hands."),
+                new LoreSection(
+                    4,
+                    "A hidden water-name can be stored below a moving current so dry law cannot call it cleanly; speaking it aloud creates a debt before it creates an answer."),
             }),
         new LoreCard(
             "wild_border_broken_law",

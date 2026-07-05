@@ -47,19 +47,30 @@ system is strong, not because the opening is hardcoded.
 
 ## Current Implementation Status
 
-The first generated-dialogue slice is implemented.
+The routed generated-dialogue slice is implemented.
 
-`GameSession` owns an `IDialogueProvider` alongside wild-magic and claim
-providers. When configured, `talk` now resolves a speaker through the engine,
-builds a compact `DialogueRequest`, receives generated `spokenText` plus
-structured proposals, validates the spoken line, applies accepted proposals, and
-returns the result through the same GUI/CLI backend. Mock, Ollama, and OpenAI-compatible dialogue
-providers live in `Sorcerer.Llm`; provider technical failures do not consume turns.
+`GameSession` owns an `IDialogueRouter`, `IDialogueProvider`,
+`IDialogueParserRouter`, and `IDialogueParser` alongside wild-magic providers.
+The generated-dialogue path is four steps: a short context-router selects
+NPC-knowledge-gated context cards, the foreground generator speaks as the NPC
+without mechanical schemas, a post-speech parser-router decides whether detailed
+parsing is useful, and the parser extracts supported mechanical proposals from
+the spoken reply. Mock, Ollama, and OpenAI-compatible dialogue
+routers/providers/parsers live in `Sorcerer.Llm`;
+provider technical failures do not consume turns. [Dialogue Context Routing](DIALOGUE_CONTEXT_ROUTING.md)
+defines the router/card layer for current-zone context, full rumors, focused
+object detail, relationship memory, services, faction law, travel context, and
+parser capability cards.
 
 The older deterministic `InteractionSystem.Talk` path still exists as the
-no-provider fallback and for tests. `IDialogueClaimExtractor` remains useful for
-authored or deterministic text, but generated dialogue proposals are applied
-directly and are not re-extracted a second time.
+no-provider fallback and for tests. `IDialogueParser` is now the post-speech
+mechanical lane: generated speech without a `proposals` envelope queues it after
+the player-visible response, and the parser may emit the same
+`DialogueProposalSet` grammar as legacy proposal-bearing dialogue. Existing
+`IDialogueClaimExtractor` implementations are adapted into that parser lane for
+compatibility. Legacy/replay/provider responses that still include an explicit
+`proposals` envelope are applied directly and are not parsed a second time,
+which preserves transcript compatibility while the system migrates.
 
 Implemented proposal handling covers claims/promises, memories, merchant stock,
 bounded bond shifts, and the first concrete action proposals:
@@ -105,8 +116,9 @@ creates a notable NPC without an explicit want, the applier synthesizes a defaul
 want from faction, roles, tags, interactable verbs, promise anchors, and AI policy;
 systems can pass `autoWant: false` when a spawned actor should remain creature-like
 or intentionally blank. Dialogue participant cards include an active-want summary
-so the model has direction without a scripted quest path. Generated dialogue may also propose one `want` update when the NPC's own
-active desire is materially satisfied, blocked, or redirected; `GameSession`
+so the generator has direction without a scripted quest path. The parser may
+also propose one `want` update when the NPC's spoken reply shows their own
+active desire was materially satisfied, blocked, or redirected; `GameSession`
 applies that through the shared `update_want` consequence. Dialogue want updates
 opt into a hidden `record_memory` child delta, so the NPC remembers why the desire
 changed without making the want itself player-facing truth. Bounded world-turns may also emit a
@@ -132,12 +144,12 @@ claim/promise/consequence. World-reaction deeds can also write hidden
 ordinary recent memories with `deed:<id>` provenance, so an NPC can later discuss
 what they saw without a bespoke witness dialogue path.
 
-Live-model robustness is also implemented for the Ollama dialogue provider. The
-provider preserves usable `spokenText` while normalizing common proposal shape
+Live-model robustness is also implemented for legacy proposal-bearing dialogue
+responses. The provider preserves usable `spokenText` while normalizing common proposal shape
 mistakes such as string actions (`"step_aside"`), alternate bond fields
 (`trustDelta`/`trust`), float bond deltas, listener-targeted bond proposals, and
 over-eager `playerAuthored` flags. The engine then applies another validation
-layer: generated-dialogue and claim-extraction bond proposals share one
+layer: generated-dialogue and parser/extraction bond proposals share one
 engine-side bond-apply helper, conversational deltas are dampened to ordinary
 scale, rejected generated memory/bond/want proposals produce structured
 skipped-proposal audit deltas alongside the raw `worldConsequenceRejected`
@@ -172,7 +184,8 @@ WildMagic already proved several useful patterns:
 - The NPC should speak as one character only: no narration, no markdown, no
   stage directions, no omniscient exposition.
 - The prompt should tell the model to answer the newest player message directly,
-  use remembered provenance, avoid echoing the player, and keep replies short.
+  use remembered provenance, avoid echoing the player, and keep replies
+  substantial but compact: about two short paragraphs.
 - Degenerate reply detection matters. Empty replies, player-message echoes, and
   repeated NPC lines should trigger one focused retry.
 - Talk-to-anyone is worth preserving. Enemies and odd beings can receive lazy
@@ -186,9 +199,9 @@ WildMagic already proved several useful patterns:
 Sorcerer should change the shape of the main path:
 
 - WildMagic mostly generated plain prose, then ran separate lore and trade
-  structuring calls. Sorcerer should prefer one generated dialogue response with
-  two lanes inside it: spoken text for the player and structured proposals for
-  the engine.
+  structuring calls. Sorcerer should keep that useful separation of concerns,
+  but make it disciplined: route context first, generate speech second, then
+  run one background parser for supported mechanics.
 - Trade should not copy WildMagic's LLM trade-intent path. Sorcerer already has
   a clear rule: explicit trade commands are engine-side; dialogue can create
   context, not execute bargains.
@@ -198,15 +211,24 @@ Sorcerer should change the shape of the main path:
 ## Core Flow
 
 1. The player issues a `talk` command in the GUI or CLI.
-2. The engine resolves the target entity and builds a `DialogueRequest`.
-3. The dialogue provider generates a `DialogueResponse`.
-4. The engine parses, repairs, normalizes, and validates the response.
-5. The spoken text is reported to the player.
-6. Valid proposals are applied transactionally or queued for between-turn
-   handling, depending on their cost and risk.
-7. The exchange is recorded as dialogue history and memory.
-8. The action result reports whether a turn was consumed, which proposals were
-   accepted, which were rejected, and what claims/promises entered the ledger.
+2. The engine resolves the target entity. `DialogueContextAssembler` builds
+   NPC-knowledge-gated context cards and a compact route request.
+3. The context-router result selects context cards. Unknown or access-denied
+   ids are ignored and audited; router failure falls back to deterministic
+   balanced cards.
+4. The assembler builds a speech-only `DialogueRequest` from selected cards.
+5. The dialogue provider generates a `DialogueResponse` containing visible NPC
+   speech, delivery, and intent.
+6. The engine parses, repairs, normalizes, validates, and reports the spoken
+   text to the player.
+7. The engine queues the parser lane after visible speech. A parser-router first
+   selects the smallest useful parser capability cards, then the parser extracts
+   supported mechanical proposals from the spoken reply.
+8. Parser results are applied transactionally at an explicit pump point or save
+   flush.
+9. The exchange is recorded as dialogue history and memory.
+10. The action result reports whether a turn was consumed and materializes any
+   completed parser/proposal records.
 
 Technical failures should not consume a turn. Intentional character responses
 do consume a turn: refusal, evasion, silence, threats, lies, panic, or "I will
@@ -214,17 +236,27 @@ not speak to you" are all successful dialogue outcomes.
 
 ## Generated Dialogue Response
 
-The main generated dialogue path should return structured JSON. The spoken line
-is still just prose; the surrounding fields are the model's proposals, not
-authority.
+The foreground generated dialogue path returns structured JSON, but only for
+speech metadata. It should not receive or emit mechanical proposal schemas.
 
 Example shape:
 
 ```json
 {
-  "spokenText": "Old Maren keeps a red-glass knife under the chapel floor. I saw her wrap it in lambswool after the bell cracked.",
+  "spokenText": "Old Maren keeps a red-glass knife under the chapel floor. I saw her wrap it in lambswool after the bell cracked.\n\nIf you go looking, step where the boards have been waxed. She hates squeaking more than sin.",
   "delivery": "hushed",
-  "intent": "confide",
+  "intent": "confide"
+}
+```
+
+The parser lane then receives the spoken reply, player line, speaker/listener
+ids, recent memories/claims, selected context card ids, and routed proposal
+families. Its output is proposals, not authority.
+
+Parser example shape:
+
+```json
+{
   "proposals": {
     "claims": [
       {
@@ -260,8 +292,11 @@ Example shape:
 The exact schema can evolve, but the separation is important:
 
 - `spokenText` is what the player hears.
-- `proposals` are candidate engine operations.
+- Parser `proposals` are candidate engine operations.
 - The engine can accept, clamp, transform, defer, or reject each proposal.
+- Legacy generated-dialogue responses that include `proposals` may still be
+  accepted for replay and tests, but live generator prompts should not ask for
+  them.
 
 The current provider-facing C# shape uses `DialogueClaimProposal` for claim
 proposals, with separate `DialogueMemoryProposal`, `DialogueBondProposal`, and
@@ -272,27 +307,38 @@ dialogue, documents, services, promises, AI plans, and magic.
 ## Request Context
 
 The dialogue request should be compact but rich enough for the model to make
-good choices. It should include:
+good choices. The current request shape is a first compact slice; the target
+architecture is routed context cards, described in
+[DIALOGUE_CONTEXT_ROUTING.md](DIALOGUE_CONTEXT_ROUTING.md).
 
-- Speaker entity: id, name, role, faction, body, tags, current status, inventory
-  summary, speech capability, visible temperament, and active want when present.
+The always-on base should include:
+
+- Speaker entity: id, name, role, faction, body, tags, current status, speech
+  capability, visible temperament, and active want when present.
 - Listener entity: controlled body, appearance, known reputation, visible
   equipment, active status, recent magic, and recent deeds known to the speaker.
 - Relationship: bond values, faction standing, hostility, fear, gratitude,
   debts, gifts received, and recent interactions.
-- Scene: region, local culture, current tile or room, visible entities, visible
-  items, nearby landmarks, danger state, imprisonment or combat context.
-- Memory: firsthand memories, overheard claims, gossip, previous conversation,
-  gift memories, claim-ledger references, and promise references with
-  provenance clearly labeled.
-- Rumors: heard local stories with source and salience, explicitly treated as
-  possibly distorted rather than guaranteed truth.
-- Conversation history: the last few exchanges with this NPC, clipped for
+- Scene breadcrumb: region, local culture, current tile or room, nearby anchors,
+  danger state, imprisonment or combat context.
+- Conversation history: the last one or two exchanges with this NPC, clipped for
   budget.
-- Capability cards: which proposal types are allowed in this call, with compact
-  schemas and limits.
 - Current constraints: player claims are not binding, model output is untrusted,
   do not invent unsupported engine operations, answer the latest message.
+
+Routed cards then add only the deeper state the player's line calls for:
+
+- Rumors: heard local stories with source and salience, explicitly treated as
+  possibly distorted rather than guaranteed truth.
+- Local scene and object detail: visible entities, items, fixtures, nearby
+  landmarks, claim seeds, and affordances.
+- Memory and relationship: firsthand memories, overheard claims, gifts, prior
+  conversation, deeds, and bond-relevant provenance.
+- Claims, promises, services, wares, faction law, travel routes, recent magic,
+  and other specialized lanes.
+- Parser proposal-family cards: which action/proposal schemas need full prompt
+  detail in the background parser call. These should not be sent to the
+  foreground speech generator.
 
 The request builder belongs behind the engine boundary. Renderers should not
 assemble prompt context directly.
@@ -719,20 +765,33 @@ line.
 
 Recommended behavior:
 
-- Generated dialogue call: foreground. The spoken line depends on it.
+- Dialogue router call: foreground and tiny. It selects context cards only.
+- Generated dialogue call: foreground, speech-only. The spoken line depends on
+  it.
 - Parse/repair/validate spoken text: foreground and fast.
 - Display spoken text: immediate after validation.
-- Apply simple proposals: same action if already parsed and valid.
+- Parser-router call: background and tiny. It decides whether the spoken reply
+  needs mechanical parsing and which parser capability cards to include.
+- Parser call: background. It reads the spoken line and selected mechanical
+  guidance after the player-visible response is available.
+- Apply completed parser proposals: next command, world pump, or save flush.
 - Heavy realization: between turns or background queue.
-- Claim extraction for authored or fallback text: between turns.
-- `save` is a synchronization point: if claim extraction or dialogue proposal
+- Claim/mechanical extraction for generated text without a proposal envelope:
+  between turns. Legacy or replayed generated dialogue that includes a
+  `proposals` object is treated as already parsed and is not re-extracted.
+- `save` is a synchronization point: if parser/extraction or dialogue proposal
   work is pending, the session should wait for it to complete, apply accepted
   results or record technical failures, and only then write the save.
 - Audit and eval logging: asynchronous where possible.
 
-Use the same loaded model as ordinary dialogue by default to avoid local model
-thrash. Separate provider purposes can exist, but the default local setup should
-not unload one model just to run a tiny router.
+Use the same loaded model as ordinary dialogue by default for the foreground
+router/generator unless audits prove a smaller route model improves end-to-end
+latency. The parser is different: it should run after visible speech on the
+`dialogue_parser_router` and `dialogue_parser` purposes, which both default
+local Ollama to CPU (`SORCERER_DIALOGUE_PARSER_ROUTER_NUM_GPU=0` and
+`SORCERER_DIALOGUE_PARSER_NUM_GPU=0`) so mechanical parsing does not monopolize
+the foreground GPU model. Users can override those lanes with
+`SORCERER_DIALOGUE_PARSER_ROUTER_*` and `SORCERER_DIALOGUE_PARSER_*` settings.
 
 Pending extraction tasks should not be serialized. Saves should contain the
 durable result of completed dialogue work, not live provider tasks. If an
@@ -743,11 +802,14 @@ replay can reconstruct the attempted failure without calling the live model.
 
 CLI transcripts materialize dialogue separately from save files. A generated
 `talk` result records the normalized `DialogueResponse` on the `ActionResult`,
-and any completed post-dialogue extractor result records the original request,
-claims, provider, raw text, error state, and spoken-text-support flag. Transcript
-replay feeds those records through `ReplayDialogueProvider` and
-`ReplayDialogueClaimExtractor`, so replay exercises the same `GameSession`
-proposal and consequence path without calling the live model.
+and any completed post-dialogue parser result records the original request, full
+proposal set, provider, raw text, error state, and spoken-text-support flag.
+Legacy claim extraction records are still written from the same result for old
+tooling. Transcript replay feeds materialized records through
+`ReplayDialogueProvider` and `ReplayDialogueParser` when full parse records are
+present, falling back to `ReplayDialogueClaimExtractor` for older transcripts.
+Replay therefore exercises the same `GameSession` proposal and consequence path
+without calling the live model.
 
 ## Provider Architecture
 
@@ -757,21 +819,44 @@ without depending on provider implementations.
 Suggested interfaces:
 
 - `IDialogueProvider`
-- `IDialogueClaimExtractor` (already present conceptually)
+- `IDialogueRouter` for selecting context cards before the final dialogue call.
+  The first implementation is always-on and authoritative; live router failures
+  fall back to deterministic balanced cards.
+- `IDialogueParserRouter` for selecting post-speech parser capability cards
+  before the detailed mechanical parser runs. It can return `hasMechanics:
+  false`, in which case the detail parser call is skipped and an empty proposal
+  record is materialized.
+- `IDialogueParser` for post-speech mechanical proposal extraction. It emits
+  full `DialogueProposalSet` records: claims, memories, bond/want changes,
+  local actions, service/trade offers, and typed consequences.
+- `IDialogueClaimExtractor` as a compatibility interface adapted into
+  `IDialogueParser` for older tests, transcripts, and narrow claim-only
+  providers.
 - `IDialogueAuditSink`
 
 Suggested implementations:
 
 - `MockDialogueProvider`: deterministic, schema-correct, good for tests and
   agent playthroughs.
+- `MockDialogueRouter`: deterministic card selection for tests and agent runs.
 - `OllamaDialogueProvider`: local model path, JSON response, retry on degenerate
   output.
 - `OpenAiCompatibleDialogueProvider`: OpenAI-compatible `/v1/chat/completions`
   path, using the same response parser and retry policy.
+- `OllamaDialogueRouter` and `OpenAiCompatibleDialogueRouter`: short JSON
+  context-card routers under the `dialogue_router` purpose.
+- `OllamaDialogueParserRouter` and `OpenAiCompatibleDialogueParserRouter`:
+  short JSON parser-capability routers under the `dialogue_parser_router`
+  purpose, defaulted to CPU for local Ollama.
+- `OllamaDialogueClaimExtractor` and
+  `OpenAiCompatibleDialogueClaimExtractor`: post-speech JSON parsers that also
+  implement `IDialogueParser`, preferably on the `dialogue_parser` purpose and
+  CPU for local runs.
 
-The provider should receive a purpose such as `dialogue`, but foreground
-dialogue and follow-up extraction should default to the same configured local
-model unless the user opts into separate models.
+The generator should receive the `dialogue` purpose. Follow-up routing and
+parsing should receive `dialogue_parser_router` and `dialogue_parser`, which may
+use separate models, hosts, API keys, timeouts, concurrency, or Ollama GPU layer
+counts.
 
 Current dialogue action results include a materialized dialogue record for
 generated provider calls, plus provider, raw output, delivery, intent,
@@ -782,8 +867,8 @@ result, and delta operation names.
 
 ## Validation Rules
 
-Dialogue output is untrusted. Validation should cover both the spoken line and
-all proposals.
+Dialogue and parser output are untrusted. Validation should cover both the
+spoken line and all parser or legacy proposals.
 
 Spoken text validation:
 
@@ -840,32 +925,59 @@ claims, the promise system should decide when and how the world pays them off.
 
 ## Implementation Slices
 
-1. Define the dialogue contract: request, response, proposals, validation
+1. Define the dialogue contract: request, response, parser proposals, validation
    results, and audit record. Done.
 2. Build the context builder from engine state only. Done for the first compact
    request shape.
 3. Add a deterministic `MockDialogueProvider`. Done.
-4. Add parser, repair, normalization, and validation tests. First slice done.
+4. Add parser, repair, normalization, and validation tests. Done for the
+   speech-only generator, full parser proposal records, and replay materialized
+   parser results.
 5. Wire `talk` through `GameSession` for both GUI and CLI. Done.
 6. Add action-result fields for accepted and rejected dialogue proposals. Done
    through deltas.
 7. Add live `OllamaDialogueProvider` and `OpenAiCompatibleDialogueProvider`
    paths with audit logging and degenerate reply retry. Done.
-8. Integrate accepted claim proposals with the existing `ClaimLedger`. Done.
-9. Keep `IDialogueClaimExtractor` for authored text, books, signs, and
-   fallback/mock dialogue where no generated proposal was returned. For authored
+8. Integrate accepted parser/claim proposals with the existing `ClaimLedger`. Done.
+9. Keep `IDialogueClaimExtractor` as a compatibility lane for authored text,
+   books, signs, deterministic fallback dialogue, old transcripts, and narrow
+   claim-only providers. Adapt it into `IDialogueParser` when no full parser is
+   configured. For authored
    objects with known hooks, prefer `ClaimSourceComponent`: `read`/`examine`
    records those seeds through `record_claim`, mints high-salience visible rumors
    through `record_rumor`, binds buildable hooks through `create_promise`, and
    updates claim status through `update_claim`.
-10. Add validated handlers for concrete dialogue action proposals such as
+10. Add validated handlers for concrete parser/dialogue action proposals such as
     `step_aside`, `flee`, `call_help`, `give`, `open`, `attack`,
     `create_promise`, and `offer_trade`, plus service and local scene fixture
     actions such as `reveal_service`, `mark_location`, and `spawn_fixture`.
     First handlers are done.
-11. Add opening NPC profiles that rely on the same system as the rest of the
-    game.
-12. Add live-model eval transcripts for directness, specificity, promise
+11. Move live generated-dialogue prompts to speech-only and wire parser work
+    through `dialogue_parser`, defaulting local Ollama parser calls to CPU.
+    Done for the live generator/parser split.
+12. Add dialogue context routing: card registry, deterministic assembler,
+    router request/result contracts, audit byte counts, replay records, then
+    optional live LLM router. See
+    [DIALOGUE_CONTEXT_ROUTING.md](DIALOGUE_CONTEXT_ROUTING.md). First routed
+    slice done with `IDialogueRouter`, `DialogueContextCardSpec`,
+    `DialogueContextCardPayload`, `DialogueContextAssembler`,
+    `DialogueRouteRecord`, `DialogueRouteMetrics`, `KnowledgeComponent`,
+    tier 0 common lore, subject-specific lore access through
+    `LoreCatalog`/`LoreRouter`, mock/live/replay routers, route records in
+    dialogue audits, deterministic failure fallback, and high-value cards for
+    zone NPCs, travel/routes, promise hooks, and recent magic/deeds.
+13. Widen `IDialogueClaimExtractor` into a full parser interface for memories,
+    actions, wants, services, and typed consequences. Done through
+    `IDialogueParser`; old claim extractors remain supported through an adapter.
+14. Add parser-router capability selection before the detailed parser call. Done
+    with `IDialogueParserRouter`, deterministic/live/replay parser routers,
+    parser-route metrics, CPU-default `dialogue_parser_router` configuration,
+    and parser requests trimmed to selected capability cards.
+15. Add opening NPC profiles that rely on the same system as the rest of the
+    game. First pass done for opening NPC knowledge permissions, including
+    Lio's Hollowmere/current-zone, water-magic, wild-magic, service, oath, and
+    public-law tiers; broader authored profiles remain.
+16. Add live-model eval transcripts for directness, specificity, promise
     quality, and latency.
 
 ## Tests And Evals
@@ -889,6 +1001,8 @@ Focused tests should cover:
 - Saving immediately after dialogue waits for pending extraction, applies or
   records the result, and does not lose claims on reload.
 - Replay can use recorded dialogue outputs.
+- Routed dialogue selects the expected context cards, enforces access policies,
+  respects budgets/truncation, and replays without live router calls.
 
 Live-model evals should score:
 

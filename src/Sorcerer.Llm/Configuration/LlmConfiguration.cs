@@ -5,6 +5,9 @@ public enum LlmPurpose
     Wild,
     Router,
     Dialogue,
+    DialogueRouter,
+    DialogueParserRouter,
+    DialogueParser,
     Item,
     Canon,
     Background,
@@ -18,7 +21,8 @@ public sealed record LlmPurposeSettings(
     int TimeoutSeconds,
     int MaxConcurrentCalls = 1,
     bool Enabled = true,
-    string? ApiKey = null);
+    string? ApiKey = null,
+    int? OllamaNumGpu = null);
 
 public sealed record LlmConfiguration(
     IReadOnlyDictionary<LlmPurpose, LlmPurposeSettings> Purposes)
@@ -36,7 +40,8 @@ public sealed record LlmConfiguration(
         int? timeoutSeconds = null,
         int? maxConcurrentCalls = null,
         bool? enabled = null,
-        string? apiKey = null)
+        string? apiKey = null,
+        int? ollamaNumGpu = null)
     {
         var current = SettingsFor(purpose);
         var updated = current with
@@ -48,6 +53,7 @@ public sealed record LlmConfiguration(
             MaxConcurrentCalls = maxConcurrentCalls ?? current.MaxConcurrentCalls,
             Enabled = enabled ?? current.Enabled,
             ApiKey = string.IsNullOrWhiteSpace(apiKey) ? current.ApiKey : apiKey,
+            OllamaNumGpu = ollamaNumGpu ?? current.OllamaNumGpu,
         };
         var purposes = new Dictionary<LlmPurpose, LlmPurposeSettings>(Purposes)
         {
@@ -71,6 +77,21 @@ public sealed record LlmConfiguration(
             // loaded; it is a short call, hence the tighter timeout. Override with SORCERER_ROUTER_*.
             [LlmPurpose.Router] = PurposeFromEnvironment(LlmPurpose.Router, provider, host, model, 30),
             [LlmPurpose.Dialogue] = PurposeFromEnvironment(LlmPurpose.Dialogue, provider, host, model, 180),
+            [LlmPurpose.DialogueRouter] = PurposeFromEnvironment(LlmPurpose.DialogueRouter, provider, host, model, 30),
+            [LlmPurpose.DialogueParserRouter] = PurposeFromEnvironment(
+                LlmPurpose.DialogueParserRouter,
+                provider,
+                host,
+                model,
+                30,
+                defaultOllamaNumGpu: 0),
+            [LlmPurpose.DialogueParser] = PurposeFromEnvironment(
+                LlmPurpose.DialogueParser,
+                provider,
+                host,
+                model,
+                180,
+                defaultOllamaNumGpu: 0),
             [LlmPurpose.Item] = PurposeFromEnvironment(LlmPurpose.Item, provider, host, model, 180),
             [LlmPurpose.Canon] = PurposeFromEnvironment(LlmPurpose.Canon, provider, host, model, 180),
             [LlmPurpose.Background] = PurposeFromEnvironment(
@@ -92,9 +113,10 @@ public sealed record LlmConfiguration(
         string? defaultModel,
         int defaultTimeoutSeconds,
         int maxConcurrentCalls = 1,
-        bool enabled = true)
+        bool enabled = true,
+        int? defaultOllamaNumGpu = null)
     {
-        var prefix = $"SORCERER_{purpose.ToString().ToUpperInvariant()}";
+        var prefix = $"SORCERER_{PurposeEnvironmentName(purpose)}";
         var provider = Environment.GetEnvironmentVariable($"{prefix}_PROVIDER") ?? defaultProvider;
         var host = Environment.GetEnvironmentVariable($"{prefix}_HOST") ?? defaultHost;
         var model = Environment.GetEnvironmentVariable($"{prefix}_MODEL") ?? defaultModel;
@@ -102,7 +124,8 @@ public sealed record LlmConfiguration(
         var concurrency = ReadInt($"{prefix}_MAX_CONCURRENT_CALLS", maxConcurrentCalls);
         var purposeEnabled = ReadBool($"{prefix}_ENABLED", enabled);
         var apiKey = Environment.GetEnvironmentVariable($"{prefix}_API_KEY") ?? DefaultApiKey();
-        return new LlmPurposeSettings(provider, host, model, timeout, concurrency, purposeEnabled, apiKey);
+        var ollamaNumGpu = ReadNullableInt($"{prefix}_NUM_GPU", defaultOllamaNumGpu);
+        return new LlmPurposeSettings(provider, host, model, timeout, concurrency, purposeEnabled, apiKey, ollamaNumGpu);
     }
 
     private static int ReadInt(string name, int fallback) =>
@@ -110,10 +133,33 @@ public sealed record LlmConfiguration(
             ? parsed
             : fallback;
 
+    private static int? ReadNullableInt(string name, int? fallback) =>
+        int.TryParse(Environment.GetEnvironmentVariable(name), out var parsed) && parsed >= 0
+            ? parsed
+            : fallback;
+
     private static bool ReadBool(string name, bool fallback) =>
         bool.TryParse(Environment.GetEnvironmentVariable(name), out var parsed)
             ? parsed
             : fallback;
+
+    private static string PurposeEnvironmentName(LlmPurpose purpose)
+    {
+        var name = purpose.ToString();
+        var chars = new List<char>(name.Length + 2);
+        for (var index = 0; index < name.Length; index++)
+        {
+            var ch = name[index];
+            if (index > 0 && char.IsUpper(ch))
+            {
+                chars.Add('_');
+            }
+
+            chars.Add(char.ToUpperInvariant(ch));
+        }
+
+        return new string(chars.ToArray());
+    }
 
     private static string? DefaultApiKey() =>
         Environment.GetEnvironmentVariable("SORCERER_OPENAI_API_KEY")

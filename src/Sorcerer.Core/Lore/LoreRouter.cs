@@ -4,7 +4,8 @@ public sealed record LoreQuery(
     IReadOnlyList<string> Subjects,
     IReadOnlyList<string> Triggers,
     int AccessLevel = 1,
-    int Limit = 3);
+    int Limit = 3,
+    IReadOnlyDictionary<string, int>? SubjectAccessLevels = null);
 
 public sealed record RoutedLoreCard(
     string Id,
@@ -21,11 +22,12 @@ public static class LoreRouter
     {
         var subjects = NormalizeSet(query.Subjects);
         var triggers = NormalizeSet(query.Triggers);
-        var access = Math.Max(1, query.AccessLevel);
+        var access = Math.Max(0, query.AccessLevel);
         var limit = Math.Max(1, query.Limit);
+        var subjectAccess = NormalizeAccessMap(query.SubjectAccessLevels);
 
         return catalog.Cards
-            .Select(card => Route(card, subjects, triggers, access))
+            .Select(card => Route(card, subjects, triggers, access, subjectAccess))
             .Where(card => card is not null)
             .Select(card => card!)
             .OrderByDescending(card => card.Score)
@@ -38,14 +40,21 @@ public static class LoreRouter
         LoreCard card,
         IReadOnlySet<string> subjects,
         IReadOnlySet<string> triggers,
-        int access)
+        int access,
+        IReadOnlyDictionary<string, int> subjectAccess)
     {
         var score = 0;
+        var cardAccess = access;
         foreach (var subject in card.Subjects)
         {
             if (subjects.Contains(subject))
             {
                 score += 5;
+            }
+
+            if (subjectAccess.TryGetValue(subject, out var subjectTier))
+            {
+                cardAccess = Math.Max(cardAccess, subjectTier);
             }
         }
 
@@ -69,7 +78,7 @@ public static class LoreRouter
         }
 
         var sections = card.Sections
-            .Where(section => section.Level <= access && !section.Draft)
+            .Where(section => section.Level <= cardAccess && !section.Draft)
             .OrderBy(section => section.Level)
             .ToArray();
         if (sections.Length == 0)
@@ -93,4 +102,21 @@ public static class LoreRouter
             .Select(LoreCatalog.NormalizeToken)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static IReadOnlyDictionary<string, int> NormalizeAccessMap(IReadOnlyDictionary<string, int>? values)
+    {
+        var normalized = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in values ?? new Dictionary<string, int>())
+        {
+            var key = LoreCatalog.NormalizeToken(pair.Key);
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            normalized[key] = Math.Max(normalized.TryGetValue(key, out var existing) ? existing : 0, Math.Max(0, pair.Value));
+        }
+
+        return normalized;
+    }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Consequences;
@@ -20,11 +21,15 @@ public sealed class GameSession
 {
     private const int VisibleClaimSalience = 3;
     private const int DialogueBondDeltaLimit = 2;
+    private const int DialogueRecentMemoryLimit = 5;
+    private const int DialogueRecentClaimLimit = 4;
 
     private readonly IWildMagicController _magic;
     private readonly IDialogueProvider _dialogueProvider;
+    private readonly IDialogueRouter _dialogueRouter;
     private readonly IDialogueAuditSink _dialogueAudit;
-    private readonly IDialogueClaimExtractor _claimExtractor;
+    private readonly IDialogueParser _dialogueParser;
+    private readonly IDialogueParserRouter _dialogueParserRouter;
     private readonly IBackgroundTextGenerator? _backgroundTextGenerator;
     private readonly List<PendingClaimExtraction> _pendingClaimExtractions = new();
     private PendingCast? _pendingCast;
@@ -35,14 +40,26 @@ public sealed class GameSession
         IWildMagicController? magic = null,
         IDialogueClaimExtractor? claimExtractor = null,
         IDialogueProvider? dialogueProvider = null,
+        IDialogueRouter? dialogueRouter = null,
         IDialogueAuditSink? dialogueAudit = null,
-        IBackgroundTextGenerator? backgroundTextGenerator = null)
+        IBackgroundTextGenerator? backgroundTextGenerator = null,
+        IDialogueParser? dialogueParser = null,
+        IDialogueParserRouter? dialogueParserRouter = null)
     {
         Engine = new GameEngine(state, backgroundTextGenerator);
         _magic = magic ?? NullWildMagicController.Instance;
-        _claimExtractor = claimExtractor ?? NullDialogueClaimExtractor.Instance;
+        var usesClaimExtractorAdapter = dialogueParser is null && claimExtractor is not null;
+        _dialogueParser = dialogueParser
+            ?? (claimExtractor is null
+                ? NullDialogueClaimExtractor.Instance
+                : new DialogueClaimExtractorParserAdapter(claimExtractor));
         _dialogueProvider = dialogueProvider ?? NullDialogueProvider.Instance;
+        _dialogueRouter = dialogueRouter ?? NullDialogueRouter.Instance;
         _dialogueAudit = dialogueAudit ?? NullDialogueAuditSink.Instance;
+        _dialogueParserRouter = dialogueParserRouter
+            ?? (usesClaimExtractorAdapter
+                ? ClaimExtractorCompatibilityDialogueParserRouter.Instance
+                : DeterministicDialogueParserRouter.Instance);
         _backgroundTextGenerator = backgroundTextGenerator;
     }
 
@@ -55,13 +72,16 @@ public sealed class GameSession
         IReadOnlyList<RunChronicleRecord>? memorials = null,
         IDialogueClaimExtractor? claimExtractor = null,
         IDialogueProvider? dialogueProvider = null,
+        IDialogueRouter? dialogueRouter = null,
         IDialogueAuditSink? dialogueAudit = null,
-        IBackgroundTextGenerator? backgroundTextGenerator = null)
+        IBackgroundTextGenerator? backgroundTextGenerator = null,
+        IDialogueParser? dialogueParser = null,
+        IDialogueParserRouter? dialogueParserRouter = null)
     {
         var state = TestScenarios.ImperialEncounter(originId, memorials);
         state.Seed = Math.Max(1, seed);
         state.Rng = new DeterministicRng(state.Seed);
-        return new GameSession(state, magic, claimExtractor, dialogueProvider, dialogueAudit, backgroundTextGenerator);
+        return new GameSession(state, magic, claimExtractor, dialogueProvider, dialogueRouter, dialogueAudit, backgroundTextGenerator, dialogueParser, dialogueParserRouter);
     }
 
     public async Task<ActionResult> ExecuteAsync(
@@ -143,7 +163,9 @@ public sealed class GameSession
                 "Unknown command."),
         };
 
-        if (command is TalkCommand spokenDialogue && result.Success)
+        if (command is TalkCommand spokenDialogue
+            && result.Success
+            && ShouldQueueDialogueClaimExtraction(result))
         {
             QueueDialogueClaimExtraction(spokenDialogue, result);
         }
@@ -554,7 +576,12 @@ public sealed class GameSession
                     "No one nearby is ready to talk.");
         }
 
-        var request = BuildDialogueRequest(preparation.Turn);
+        var route = await RouteDialogueContextAsync(preparation.Turn, cancellationToken);
+        var request = route.Assembly.BuildDialogueRequest(route.Selection);
+        route = route with
+        {
+            Record = AttachGeneratorRequestMetrics(route.Record, request),
+        };
         DialogueProviderResult providerResult;
         try
         {
@@ -573,8 +600,12 @@ public sealed class GameSession
                 _dialogueProvider.Name,
                 "",
                 ex.Message);
-            RecordDialogueAudit(request, providerResult, failure, new[] { ex.Message });
-            return failure with { Dialogue = ToDialogueResolutionRecord(providerResult) };
+            RecordDialogueAudit(request, providerResult, failure, new[] { ex.Message }, route.Record);
+            return failure with
+            {
+                Dialogue = ToDialogueResolutionRecord(providerResult),
+                DialogueRoute = route.Record,
+            };
         }
 
         if (providerResult.TechnicalFailure || providerResult.Response is null)
@@ -584,8 +615,12 @@ public sealed class GameSession
                 providerResult.Provider,
                 providerResult.RawText,
                 providerResult.Error ?? "Dialogue provider failed.");
-            RecordDialogueAudit(request, providerResult, failure, new[] { providerResult.Error ?? "Dialogue provider failed." });
-            return failure with { Dialogue = ToDialogueResolutionRecord(providerResult) };
+            RecordDialogueAudit(request, providerResult, failure, new[] { providerResult.Error ?? "Dialogue provider failed." }, route.Record);
+            return failure with
+            {
+                Dialogue = ToDialogueResolutionRecord(providerResult),
+                DialogueRoute = route.Record,
+            };
         }
 
         var normalized = NormalizeDialogueResponse(request, providerResult.Response, out var validationError);
@@ -596,8 +631,12 @@ public sealed class GameSession
                 providerResult.Provider,
                 providerResult.RawText,
                 validationError ?? "Dialogue provider returned invalid speech.");
-            RecordDialogueAudit(request, providerResult, failure, new[] { validationError ?? "invalid_dialogue" });
-            return failure with { Dialogue = ToDialogueResolutionRecord(providerResult) };
+            RecordDialogueAudit(request, providerResult, failure, new[] { validationError ?? "invalid_dialogue" }, route.Record);
+            return failure with
+            {
+                Dialogue = ToDialogueResolutionRecord(providerResult),
+                DialogueRoute = route.Record,
+            };
         }
 
         var result = Engine.ApplyGeneratedDialogue(
@@ -616,8 +655,9 @@ public sealed class GameSession
         result = result with
         {
             Dialogue = ToDialogueResolutionRecord(providerResult with { Response = normalized }),
+            DialogueRoute = route.Record,
         };
-        RecordDialogueAudit(request, providerResult, result, Array.Empty<string>());
+        RecordDialogueAudit(request, providerResult, result, Array.Empty<string>(), route.Record);
         return result;
     }
 
@@ -629,171 +669,61 @@ public sealed class GameSession
             providerResult.Error,
             providerResult.Response);
 
-    private DialogueRequest BuildDialogueRequest(PreparedDialogueTurn turn)
-    {
-        var speaker = Engine.EntityById(turn.SpeakerId);
-        var listener = Engine.State.ControlledEntity;
-        return new DialogueRequest(
-            turn.TurnBefore,
-            turn.PlayerText,
-            ParticipantCard(speaker, turn.BondSummary, turn.SpeakerWant),
-            ParticipantCard(listener, null),
-            new DialogueSceneCard(
-                Engine.State.RegionId,
-                Engine.State.CurrentZoneId,
-                VisibleEntityLines().ToArray(),
-                NearbyItemLines().ToArray(),
-                Engine.State.Messages.TakeLast(6).ToArray()),
-            RecentDialogueMemoryLines(turn.SpeakerId).ToArray(),
-            Engine.State.Claims.Records
-                .TakeLast(8)
-                .Select(claim => $"{claim.Subject} [{claim.Category}/{claim.Status}]: {claim.Text}")
-                .ToArray(),
-            DialogueCapabilityCards(),
-            RumorSystem.HeardRumorLines(Engine.State, turn.SpeakerId, Engine.State.RegionId, limit: 6));
-    }
+    private static bool ShouldQueueDialogueClaimExtraction(ActionResult result) =>
+        result.Dialogue?.Response?.Proposals is null;
 
-    private DialogueParticipantCard ParticipantCard(Entity? entity, string? bondSummary, string? preparedWant = null)
+    private async Task<PreparedDialogueRoute> RouteDialogueContextAsync(
+        PreparedDialogueTurn turn,
+        CancellationToken cancellationToken)
     {
-        if (entity is null)
+        var assembly = DialogueContextAssembler.Build(Engine, turn);
+        var stopwatch = Stopwatch.StartNew();
+        DialogueRouteResult result;
+        try
         {
-            return new DialogueParticipantCard(
-                "missing",
-                "missing",
-                Array.Empty<string>(),
-                BondSummary: bondSummary);
+            result = await _dialogueRouter.RouteAsync(assembly.RouteRequest, cancellationToken);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            result = new DialogueRouteResult(
+                _dialogueRouter.Name,
+                "",
+                TechnicalFailure: true,
+                Error: ex.Message,
+                SelectedCardIds: Array.Empty<string>());
         }
 
-        var tags = TagsFor(entity).ToArray();
-        var faction = entity.TryGet<ActorComponent>(out var actor) ? actor.Faction : null;
-        var profile = entity.TryGet<ProfileComponent>(out var profileComponent)
-            ? string.Join(
-                " ",
-                new[]
-                {
-                    profileComponent.PublicName,
-                    profileComponent.Appearance,
-                    profileComponent.Origin,
-                    profileComponent.MagicalSignature,
-                    profileComponent.Backstory,
-                }.Where(text => !string.IsNullOrWhiteSpace(text)))
-            : null;
-        var description = entity.TryGet<DescriptionComponent>(out var descriptionComponent)
-            ? descriptionComponent.Text
-            : null;
-        var inventory = entity.TryGet<InventoryComponent>(out var inventoryComponent)
-            ? inventoryComponent.Items
-                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(pair => $"{pair.Key} x{pair.Value}")
-                .ToArray()
-            : Array.Empty<string>();
-        var wares = entity.TryGet<MerchantComponent>(out var merchant)
-            ? merchant.Wares
-                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(pair => $"{pair.Key} x{pair.Value}")
-                .ToArray()
-            : Array.Empty<string>();
-        var services = entity.TryGet<ServiceComponent>(out var serviceComponent)
-            ? serviceComponent.Offers
-                .Where(service => service.Revealed)
-                .OrderBy(service => service.Id, StringComparer.OrdinalIgnoreCase)
-                .Select(service => $"{service.Name} [{service.EffectKind}]")
-                .ToArray()
-            : Array.Empty<string>();
-        var want = preparedWant ?? (entity.TryGet<WantComponent>(out var wantComponent)
-            ? WantSummary(wantComponent)
-            : null);
-        return new DialogueParticipantCard(
-            entity.Id.Value,
-            entity.Name,
-            tags,
-            faction,
-            profile,
-            description,
-            bondSummary,
-            inventory,
-            wares,
-            services,
-            want);
+        stopwatch.Stop();
+        var selection = assembly.Select(result);
+        var record = new DialogueRouteRecord(
+            assembly.RouteRequest,
+            result.Provider,
+            result.RawText,
+            result.TechnicalFailure,
+            result.Error,
+            selection.SelectedCardIds,
+            selection.FallbackCardIds,
+            result.Reason,
+            selection.UsedFallback,
+            assembly.CreateMetrics(selection, stopwatch.ElapsedMilliseconds));
+        return new PreparedDialogueRoute(record, assembly, selection);
     }
 
-    private IEnumerable<string> VisibleEntityLines()
+    private static DialogueRouteRecord AttachGeneratorRequestMetrics(
+        DialogueRouteRecord record,
+        DialogueRequest request)
     {
-        var controlled = Engine.State.ControlledEntity;
-        var origin = controlled.TryGet<PositionComponent>(out var controlledPosition)
-            ? controlledPosition.Position
-            : new GridPoint(0, 0);
-        return Engine.State.Entities.Values
-            .Where(entity => entity.TryGet<PositionComponent>(out _))
-            .OrderBy(entity => entity.Id.Value, StringComparer.OrdinalIgnoreCase)
-            .Take(16)
-            .Select(entity =>
-            {
-                var position = entity.Get<PositionComponent>().Position;
-                var tags = TagsFor(entity);
-                var distance = Math.Max(Math.Abs(position.X - origin.X), Math.Abs(position.Y - origin.Y));
-                return $"{entity.Name} ({entity.Id.Value}) at {position.X},{position.Y}, range {distance}, tags {string.Join(",", tags)}";
-            });
-    }
-
-    private IEnumerable<string> NearbyItemLines()
-    {
-        var controlled = Engine.State.ControlledEntity;
-        if (!controlled.TryGet<PositionComponent>(out var controlledPosition))
+        var generatorRequestBytes = DialoguePayloadSizer.JsonUtf8Bytes(request);
+        if (record.Metrics is null)
         {
-            return Array.Empty<string>();
+            return record;
         }
 
-        return Engine.State.Entities.Values
-            .Where(entity => entity.Has<ItemComponent>() && entity.TryGet<PositionComponent>(out _))
-            .Select(entity => new
-            {
-                Entity = entity,
-                Position = entity.Get<PositionComponent>().Position,
-            })
-            .Where(item => Math.Max(
-                Math.Abs(item.Position.X - controlledPosition.Position.X),
-                Math.Abs(item.Position.Y - controlledPosition.Position.Y)) <= 4)
-            .OrderBy(item => item.Entity.Id.Value, StringComparer.OrdinalIgnoreCase)
-            .Take(8)
-            .Select(item => $"{item.Entity.Name} ({item.Entity.Id.Value}) at {item.Position.X},{item.Position.Y}");
-    }
-
-    private IEnumerable<string> RecentDialogueMemoryLines(string speakerId)
-    {
-        foreach (var memory in RecentMemoriesFor(speakerId))
+        return record with
         {
-            yield return $"{memory.SubjectId} [{memory.Provenance}, salience {memory.Salience}]: {memory.Text}";
-        }
-
-        var speaker = Engine.EntityById(speakerId);
-        if (speaker is null || !speaker.TryGet<MemoryComponent>(out var entityMemory))
-        {
-            yield break;
-        }
-
-        foreach (var memory in entityMemory.Records.TakeLast(8))
-        {
-            yield return $"{speakerId} [{memory.Provenance}, salience {memory.Salience}]: {memory.Text}";
-        }
-    }
-
-    private static IReadOnlyList<string> DialogueCapabilityCards() =>
-        new[]
-        {
-            "spokenText: 1-4 short sentences spoken by the NPC only; no narration or markdown.",
-            "claims: NPC-authored reported claims about places, people, items, threats, landmarks, stock, or events. Player-spoken claims are not binding.",
-            "promise binding: bind major actionable NPC claims as promises when they name a useful later place, person, landmark, item location, merchant stock, service, threat, escape route, or prophecy.",
-            "always bind concrete useful NPC claims about named/role-specific people, route landmarks, hidden exits, item locations, direct services, concrete trades, future patrols, door rules, and omens with triggers.",
-            "bind actionable salience 3+ categories by default: site, town, landmark, person, item, merchant_stock, service, trade, threat, escape_route, prophecy, and door_rule.",
-            "claims must be plainly supported by spokenText; do not invent useful places, people, items, or threats the NPC did not actually say.",
-            "rumors: stories the speaker may have heard; they are not guaranteed true, but can color answers or be cited as rumor.",
-            "do not bind denials, jokes, child-invented monsters, tiny ambience, ordinary weather, vague mood, insults, impossible boasts, or claims only the player authored.",
-            "memories: durable memories for the speaker or listener when this exchange should be remembered later.",
-            "bond: null or an object with entityId, integer loyaltyDelta, fearDelta, admirationDelta, resentmentDelta, posture, and reason.",
-            "want: null or one object with entityId, optional text, salience, status, stakes, tags/addTags/removeTags, and reason; use only when the NPC's active desire is materially satisfied, blocked, or redirected.",
-            "actions: array of local, plausible now-actions such as none, step_aside, flee, call_help, give, open, attack, recruit, create_promise, canonize_fact/add_canon, offer_trade, reveal_service, mark_location, spawn_fixture, or consequence with consequenceType and consequencePayload. Use reveal_service to expose a service; use consequence/request_service only when the NPC is performing an already-known service now. Use aliases like give_item/open_door/follow_me only when natural; distant facts should be claims/promises, not immediate actions.",
+            Metrics = record.Metrics with { GeneratorRequestBytes = generatorRequestBytes },
         };
+    }
 
     private ActionResult ApplyGeneratedDialogueProposals(
         ActionResult result,
@@ -824,7 +754,50 @@ public sealed class GameSession
             turn.PlayerText,
             new[] { response.SpokenText },
             RecentMemoriesFor(turn.SpeakerId),
-            Engine.State.Claims.Records.TakeLast(8).ToArray());
+            Engine.State.Claims.Records.TakeLast(DialogueRecentClaimLimit).ToArray(),
+            Engine.State.ControlledEntityId.Value);
+
+        ApplyDialogueProposalSet(
+            turn,
+            claimRequest,
+            provider,
+            response.SpokenText,
+            response.Intent,
+            proposals,
+            requiresSpokenTextSupport: true,
+            parserOrigin: false,
+            messages,
+            deltas);
+
+        deltas.AddRange(AddDialogueExchangeMemory(turn, response.SpokenText));
+        if (messages.Count == 0 && deltas.Count == 0)
+        {
+            return result;
+        }
+
+        return result with
+        {
+            Messages = result.Messages.Concat(messages).ToArray(),
+            Deltas = result.Deltas.Concat(deltas).ToArray(),
+        };
+    }
+
+    private void ApplyDialogueProposalSet(
+        PreparedDialogueTurn turn,
+        DialogueClaimRequest claimRequest,
+        string provider,
+        string spokenText,
+        string? intent,
+        DialogueProposalSet? proposals,
+        bool requiresSpokenTextSupport,
+        bool parserOrigin,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        if (proposals is null)
+        {
+            return;
+        }
 
         var actions = proposals.Actions ?? Array.Empty<DialogueActionProposal>();
         var preAppliedActionIndexes = new HashSet<int>();
@@ -835,18 +808,23 @@ public sealed class GameSession
                 continue;
             }
 
-            ApplyDialogueActionProposal(provider, turn, response.Intent, response.SpokenText, actions[index], messages, deltas);
+            ApplyDialogueActionProposal(provider, turn, intent, spokenText, actions[index], messages, deltas);
             preAppliedActionIndexes.Add(index);
         }
 
         foreach (var claim in proposals.Claims ?? Array.Empty<DialogueClaimProposal>())
         {
-            if (!GeneratedClaimIsSupportedBySpokenText(claim, response.SpokenText))
+            if (requiresSpokenTextSupport
+                && !GeneratedClaimIsSupportedBySpokenText(claim, spokenText))
             {
+                var operation = parserOrigin ? "claimExtractionSkipped" : "dialogueProposalSkipped";
+                var summary = parserOrigin
+                    ? "Dialogue claim extraction skipped because it was not supported by spoken text."
+                    : "Dialogue claim proposal skipped because it was not supported by spoken text.";
                 deltas.Add(new StateDelta(
-                    "dialogueProposalSkipped",
+                    operation,
                     turn.SpeakerId,
-                    "Dialogue claim proposal skipped because it was not supported by spoken text.",
+                    summary,
                     new Dictionary<string, object?>
                     {
                         ["provider"] = provider,
@@ -885,20 +863,8 @@ public sealed class GameSession
             }
 
             var action = actions[index];
-            ApplyDialogueActionProposal(provider, turn, response.Intent, response.SpokenText, action, messages, deltas);
+            ApplyDialogueActionProposal(provider, turn, intent, spokenText, action, messages, deltas);
         }
-
-        deltas.AddRange(AddDialogueExchangeMemory(turn, response.SpokenText));
-        if (messages.Count == 0 && deltas.Count == 0)
-        {
-            return result;
-        }
-
-        return result with
-        {
-            Messages = result.Messages.Concat(messages).ToArray(),
-            Deltas = result.Deltas.Concat(deltas).ToArray(),
-        };
     }
 
     private static bool GeneratedClaimIsSupportedBySpokenText(DialogueClaimProposal claim, string spokenText)
@@ -2352,7 +2318,8 @@ public sealed class GameSession
         DialogueRequest request,
         DialogueProviderResult providerResult,
         ActionResult result,
-        IReadOnlyList<string> validationIssues)
+        IReadOnlyList<string> validationIssues,
+        DialogueRouteRecord? route = null)
     {
         _dialogueAudit.Record(new DialogueAuditEntry(
             DateTimeOffset.UtcNow,
@@ -2369,7 +2336,8 @@ public sealed class GameSession
             result.Success,
             result.ConsumedTurn,
             validationIssues,
-            result.Deltas.Select(delta => delta.Operation).ToArray()));
+            result.Deltas.Select(delta => delta.Operation).ToArray(),
+            route));
     }
 
     private ActionResult DialogueTechnicalFailure(
@@ -2426,7 +2394,7 @@ public sealed class GameSession
 
     private void QueueDialogueClaimExtraction(TalkCommand command, ActionResult result)
     {
-        if (_claimExtractor is NullDialogueClaimExtractor)
+        if (_dialogueParser is NullDialogueClaimExtractor)
         {
             return;
         }
@@ -2451,14 +2419,105 @@ public sealed class GameSession
             ReadString(dialogue.Details, "playerText") ?? command.Text,
             ReadStringList(dialogue.Details, "lines") ?? result.Messages.ToArray(),
             RecentMemoriesFor(dialogue.Target),
-            Engine.State.Claims.Records.TakeLast(8).ToArray());
+            Engine.State.Claims.Records.TakeLast(DialogueRecentClaimLimit).ToArray(),
+            Engine.State.ControlledEntityId.Value);
 
-        var task = _claimExtractor.ExtractAsync(request, CancellationToken.None);
+        var task = RunDialogueParserFlowAsync(request, CancellationToken.None);
         _pendingClaimExtractions.Add(new PendingClaimExtraction(
             request,
             task,
-            _claimExtractor.RequiresSpokenTextSupport));
+            _dialogueParser.RequiresSpokenTextSupport));
     }
+
+    private async Task<DialogueParseMaterialization> RunDialogueParserFlowAsync(
+        DialogueClaimRequest request,
+        CancellationToken cancellationToken)
+    {
+        var routeRequest = DialogueParserCapabilityCatalog.BuildRouteRequest(request);
+        var routeStopwatch = Stopwatch.StartNew();
+        DialogueParserRouteResult routeResult;
+        try
+        {
+            routeResult = await _dialogueParserRouter.RouteAsync(routeRequest, cancellationToken);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            routeResult = new DialogueParserRouteResult(
+                _dialogueParserRouter.Name,
+                "",
+                TechnicalFailure: true,
+                Error: ex.Message,
+                HasMechanics: false,
+                SelectedCapabilityIds: Array.Empty<string>());
+        }
+
+        routeStopwatch.Stop();
+        var selection = DialogueParserCapabilityCatalog.Select(routeResult, routeRequest);
+        var parserRequest = request with
+        {
+            SelectedParserCapabilityIds = selection.SelectedCapabilityIds,
+            ParserCapabilityCards = selection.SelectedCards,
+        };
+        var routeRecord = CreateDialogueParserRouteRecord(
+            routeRequest,
+            routeResult,
+            selection,
+            routeStopwatch.ElapsedMilliseconds,
+            parserRequestBytes: DialoguePayloadSizer.JsonUtf8Bytes(parserRequest),
+            parserElapsedMs: null);
+        if (!selection.HasMechanics || selection.SelectedCapabilityIds.Count == 0)
+        {
+            return new DialogueParseMaterialization(
+                parserRequest,
+                new DialogueParseResult(
+                    _dialogueParser.Name,
+                    routeResult.RawText,
+                    TechnicalFailure: routeResult.TechnicalFailure,
+                    Error: routeResult.TechnicalFailure ? routeResult.Error : null,
+                    Proposals: routeResult.TechnicalFailure ? null : new DialogueProposalSet()),
+                routeRecord);
+        }
+
+        var parserStopwatch = Stopwatch.StartNew();
+        var parse = await _dialogueParser.ParseAsync(parserRequest, cancellationToken);
+        parserStopwatch.Stop();
+        routeRecord = routeRecord with
+        {
+            Metrics = routeRecord.Metrics is null
+                ? null
+                : routeRecord.Metrics with { ParserElapsedMs = parserStopwatch.ElapsedMilliseconds },
+        };
+        return new DialogueParseMaterialization(parserRequest, parse, routeRecord);
+    }
+
+    private static DialogueParserRouteRecord CreateDialogueParserRouteRecord(
+        DialogueParserRouteRequest request,
+        DialogueParserRouteResult result,
+        DialogueParserCapabilitySelection selection,
+        long routerElapsedMs,
+        int? parserRequestBytes,
+        long? parserElapsedMs) =>
+        new(
+            request,
+            result.Provider,
+            result.RawText,
+            result.TechnicalFailure,
+            result.Error,
+            selection.HasMechanics,
+            selection.SelectedCapabilityIds,
+            selection.FallbackCapabilityIds,
+            result.Reason,
+            selection.UsedFallback,
+            new DialogueParserRouteMetrics(
+                request.AvailableCapabilities.Count,
+                selection.SelectedCapabilityIds.Count,
+                selection.FallbackCapabilityIds.Count,
+                DialoguePayloadSizer.JsonUtf8Bytes(request),
+                DialoguePayloadSizer.JsonUtf8Bytes(selection.SelectedCards),
+                parserRequestBytes,
+                Math.Max(0, routerElapsedMs),
+                parserElapsedMs,
+                selection.UnknownSelectedCapabilityIds));
 
     private async Task<ActionResult> FlushPendingClaimExtractionsAsync(ActionResult result)
     {
@@ -2490,6 +2549,7 @@ public sealed class GameSession
         var messages = new List<string>();
         var deltas = new List<StateDelta>();
         var extractionRecords = new List<DialogueClaimExtractionRecord>();
+        var parseRecords = new List<DialogueParseRecord>();
         var completed = _pendingClaimExtractions
             .Take(maxExclusive)
             .Where(pending => pending.Task.IsCompleted)
@@ -2502,7 +2562,11 @@ public sealed class GameSession
                 var error = pending.Task.Exception?.GetBaseException().Message ?? "unknown claim extraction error";
                 extractionRecords.Add(FailedClaimExtractionRecord(
                     pending,
-                    _claimExtractor.Name,
+                    _dialogueParser.Name,
+                    error));
+                parseRecords.Add(FailedDialogueParseRecord(
+                    pending,
+                    _dialogueParser.Name,
                     error));
                 deltas.Add(new StateDelta(
                     "claimExtractionFailed",
@@ -2510,7 +2574,7 @@ public sealed class GameSession
                     $"Dialogue claim extraction failed: {error}",
                     new Dictionary<string, object?>
                     {
-                        ["provider"] = _claimExtractor.Name,
+                        ["provider"] = _dialogueParser.Name,
                         ["error"] = error,
                         ["auditOnly"] = true,
                         ["playerVisible"] = false,
@@ -2522,7 +2586,11 @@ public sealed class GameSession
             {
                 extractionRecords.Add(FailedClaimExtractionRecord(
                     pending,
-                    _claimExtractor.Name,
+                    _dialogueParser.Name,
+                    "canceled"));
+                parseRecords.Add(FailedDialogueParseRecord(
+                    pending,
+                    _dialogueParser.Name,
                     "canceled"));
                 deltas.Add(new StateDelta(
                     "claimExtractionFailed",
@@ -2530,7 +2598,7 @@ public sealed class GameSession
                     "Dialogue claim extraction was canceled.",
                     new Dictionary<string, object?>
                     {
-                        ["provider"] = _claimExtractor.Name,
+                        ["provider"] = _dialogueParser.Name,
                         ["error"] = "canceled",
                         ["auditOnly"] = true,
                         ["playerVisible"] = false,
@@ -2538,20 +2606,32 @@ public sealed class GameSession
                 continue;
             }
 
-            var extraction = pending.Task.Result;
+            var materialized = pending.Task.Result;
+            var extraction = materialized.Parse;
+            var parseRequest = materialized.Request;
+            var claims = extraction.Proposals?.Claims ?? Array.Empty<DialogueClaimProposal>();
             extractionRecords.Add(new DialogueClaimExtractionRecord(
-                pending.Request,
+                parseRequest,
                 extraction.Provider,
                 extraction.RawText,
                 extraction.TechnicalFailure,
                 extraction.Error,
-                extraction.Claims,
+                claims,
                 pending.RequiresSpokenTextSupport));
+            parseRecords.Add(new DialogueParseRecord(
+                parseRequest,
+                extraction.Provider,
+                extraction.RawText,
+                extraction.TechnicalFailure,
+                extraction.Error,
+                extraction.Proposals,
+                pending.RequiresSpokenTextSupport,
+                materialized.ParserRoute));
             if (extraction.TechnicalFailure)
             {
                 deltas.Add(new StateDelta(
                     "claimExtractionFailed",
-                    pending.Request.SpeakerId,
+                    parseRequest.SpeakerId,
                     $"Dialogue claim extraction failed: {extraction.Error ?? "unknown error"}",
                     new Dictionary<string, object?>
                     {
@@ -2563,34 +2643,20 @@ public sealed class GameSession
                 continue;
             }
 
-            foreach (var claim in extraction.Claims)
-            {
-                if (pending.RequiresSpokenTextSupport
-                    && !GeneratedClaimIsSupportedBySpokenText(
-                        claim,
-                        string.Join(" ", pending.Request.DialogueLines)))
-                {
-                    deltas.Add(new StateDelta(
-                        "claimExtractionSkipped",
-                        pending.Request.SpeakerId,
-                        "Dialogue claim extraction skipped because it was not supported by spoken text.",
-                        new Dictionary<string, object?>
-                        {
-                            ["provider"] = extraction.Provider,
-                            ["proposalType"] = "claim",
-                            ["claimText"] = claim.Text,
-                            ["reason"] = "unsupported_by_spoken_text",
-                            ["auditOnly"] = true,
-                            ["playerVisible"] = false,
-                        }));
-                    continue;
-                }
-
-                ApplyClaimProposal(pending.Request, extraction.Provider, claim, messages, deltas);
-            }
+            ApplyDialogueProposalSet(
+                ParserPreparedTurn(parseRequest),
+                parseRequest,
+                extraction.Provider,
+                string.Join(" ", parseRequest.DialogueLines),
+                intent: null,
+                extraction.Proposals,
+                pending.RequiresSpokenTextSupport,
+                parserOrigin: true,
+                messages,
+                deltas);
         }
 
-        if (messages.Count == 0 && deltas.Count == 0 && extractionRecords.Count == 0)
+        if (messages.Count == 0 && deltas.Count == 0 && extractionRecords.Count == 0 && parseRecords.Count == 0)
         {
             return result;
         }
@@ -2600,6 +2666,7 @@ public sealed class GameSession
             Messages = result.Messages.Concat(messages).ToArray(),
             Deltas = result.Deltas.Concat(deltas).ToArray(),
             DialogueClaimExtractions = result.DialogueClaimExtractions.Concat(extractionRecords).ToArray(),
+            DialogueParses = result.DialogueParses.Concat(parseRecords).ToArray(),
         };
     }
 
@@ -2615,6 +2682,32 @@ public sealed class GameSession
             Error: error,
             Claims: Array.Empty<DialogueClaimProposal>(),
             pending.RequiresSpokenTextSupport);
+
+    private static DialogueParseRecord FailedDialogueParseRecord(
+        PendingClaimExtraction pending,
+        string provider,
+        string error) =>
+        new(
+            pending.Request,
+            provider,
+            RawText: "",
+            TechnicalFailure: true,
+            Error: error,
+            Proposals: null,
+            pending.RequiresSpokenTextSupport);
+
+    private static PreparedDialogueTurn ParserPreparedTurn(DialogueClaimRequest request) =>
+        new(
+            request.Turn,
+            request.PlayerText,
+            request.SpeakerId,
+            request.SpeakerName,
+            request.SpeakerTags,
+            request.ListenerSoulId,
+            SpeakerHostile: false,
+            SpeakerProfile: null,
+            SpeakerFaction: null,
+            BondSummary: null);
 
     private void ApplyClaimProposal(
         DialogueClaimRequest request,
@@ -3647,7 +3740,7 @@ public sealed class GameSession
             .Where(record => record.SubjectId.Equals(speakerId, StringComparison.OrdinalIgnoreCase)
                 || record.Provenance.StartsWith("gift", StringComparison.OrdinalIgnoreCase)
                 || record.Provenance.StartsWith("claim:", StringComparison.OrdinalIgnoreCase))
-            .TakeLast(8)
+            .TakeLast(DialogueRecentMemoryLimit)
             .ToArray();
 
     private void AddVisibleClaimMessage(
@@ -4374,8 +4467,18 @@ public sealed class GameSession
         string Id,
         MaterializedMagicResolution Resolution);
 
+    private sealed record PreparedDialogueRoute(
+        DialogueRouteRecord Record,
+        DialogueContextAssembly Assembly,
+        DialogueRouteSelection Selection);
+
+    private sealed record DialogueParseMaterialization(
+        DialogueClaimRequest Request,
+        DialogueParseResult Parse,
+        DialogueParserRouteRecord ParserRoute);
+
     private sealed record PendingClaimExtraction(
         DialogueClaimRequest Request,
-        Task<DialogueClaimExtractionResult> Task,
+        Task<DialogueParseMaterialization> Task,
         bool RequiresSpokenTextSupport);
 }

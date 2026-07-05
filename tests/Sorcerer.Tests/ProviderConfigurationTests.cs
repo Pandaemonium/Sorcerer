@@ -72,6 +72,56 @@ public sealed class ProviderConfigurationTests
     }
 
     [Fact]
+    public void DialogueParserPurposeDefaultsToCpuOllamaAndReadsUnderscoredEnvironment()
+    {
+        var previousProvider = Environment.GetEnvironmentVariable("SORCERER_PROVIDER");
+        var previousParserProvider = Environment.GetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_PROVIDER");
+        var previousGpu = Environment.GetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_NUM_GPU");
+        try
+        {
+            Environment.SetEnvironmentVariable("SORCERER_PROVIDER", "ollama");
+            Environment.SetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_PROVIDER", null);
+            Environment.SetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_NUM_GPU", "2");
+
+            var settings = LlmConfiguration.FromEnvironment().SettingsFor(LlmPurpose.DialogueParser);
+
+            Assert.Equal("ollama", settings.Provider);
+            Assert.Equal(2, settings.OllamaNumGpu);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SORCERER_PROVIDER", previousProvider);
+            Environment.SetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_PROVIDER", previousParserProvider);
+            Environment.SetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_NUM_GPU", previousGpu);
+        }
+    }
+
+    [Fact]
+    public void DialogueParserRouterPurposeDefaultsToCpuOllamaAndReadsUnderscoredEnvironment()
+    {
+        var previousProvider = Environment.GetEnvironmentVariable("SORCERER_PROVIDER");
+        var previousParserRouterProvider = Environment.GetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_ROUTER_PROVIDER");
+        var previousGpu = Environment.GetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_ROUTER_NUM_GPU");
+        try
+        {
+            Environment.SetEnvironmentVariable("SORCERER_PROVIDER", "ollama");
+            Environment.SetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_ROUTER_PROVIDER", null);
+            Environment.SetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_ROUTER_NUM_GPU", "1");
+
+            var settings = LlmConfiguration.FromEnvironment().SettingsFor(LlmPurpose.DialogueParserRouter);
+
+            Assert.Equal("ollama", settings.Provider);
+            Assert.Equal(1, settings.OllamaNumGpu);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SORCERER_PROVIDER", previousProvider);
+            Environment.SetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_ROUTER_PROVIDER", previousParserRouterProvider);
+            Environment.SetEnvironmentVariable("SORCERER_DIALOGUE_PARSER_ROUTER_NUM_GPU", previousGpu);
+        }
+    }
+
+    [Fact]
     public void BackgroundTextGeneratorWritesAuditRecords()
     {
         var audit = new CapturingBackgroundTextAuditSink();

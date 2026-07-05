@@ -37,6 +37,54 @@ public sealed record DialogueSceneCard(
     IReadOnlyList<string> NearbyItems,
     IReadOnlyList<string> RecentEvents);
 
+public sealed record DialogueContextCardPayload(
+    string Id,
+    string Kind,
+    string Title,
+    string Summary,
+    IReadOnlyList<string> Lines,
+    IReadOnlyList<string>? Topics = null,
+    bool Truncated = false);
+
+public sealed record DialogueContextCardSpec(
+    string Id,
+    string Topic,
+    string Kind,
+    string Title,
+    string Summary);
+
+public sealed record DialogueRouteCandidate(
+    string Id,
+    string Kind,
+    string Title,
+    string Summary,
+    IReadOnlyList<string>? Topics = null);
+
+public sealed record DialogueRouteRequest(
+    int Turn,
+    string PlayerText,
+    DialogueParticipantCard Speaker,
+    DialogueParticipantCard Listener,
+    DialogueSceneCard Scene,
+    IReadOnlyList<DialogueRouteCandidate> AvailableCards);
+
+public sealed record DialogueRouteResult(
+    string Provider,
+    string RawText,
+    bool TechnicalFailure,
+    string? Error,
+    IReadOnlyList<string> SelectedCardIds,
+    string? Reason = null);
+
+public interface IDialogueRouter
+{
+    string Name { get; }
+
+    Task<DialogueRouteResult> RouteAsync(
+        DialogueRouteRequest request,
+        CancellationToken cancellationToken);
+}
+
 public sealed record DialogueRequest(
     int Turn,
     string PlayerText,
@@ -46,7 +94,9 @@ public sealed record DialogueRequest(
     IReadOnlyList<string> RecentMemories,
     IReadOnlyList<string> RecentClaims,
     IReadOnlyList<string> CapabilityCards,
-    IReadOnlyList<string>? RecentRumors = null);
+    IReadOnlyList<string>? RecentRumors = null,
+    IReadOnlyList<DialogueContextCardPayload>? ContextCards = null,
+    IReadOnlyList<string>? SelectedContextCardIds = null);
 
 public sealed record DialogueProposalSet(
     IReadOnlyList<DialogueClaimProposal>? Claims = null,
@@ -164,7 +214,8 @@ public sealed record DialogueAuditEntry(
     bool ResultSuccess,
     bool ConsumedTurn,
     IReadOnlyList<string> ValidationIssues,
-    IReadOnlyList<string> DeltaOperations);
+    IReadOnlyList<string> DeltaOperations,
+    Sorcerer.Core.Results.DialogueRouteRecord? Route = null);
 
 public interface IDialogueAuditSink
 {
@@ -203,4 +254,25 @@ public sealed class NullDialogueProvider : IDialogueProvider
             TechnicalFailure: true,
             Error: "No dialogue provider is configured.",
             Response: null));
+}
+
+public sealed class NullDialogueRouter : IDialogueRouter
+{
+    public static readonly NullDialogueRouter Instance = new();
+
+    private NullDialogueRouter()
+    {
+    }
+
+    public string Name => "none";
+
+    public Task<DialogueRouteResult> RouteAsync(
+        DialogueRouteRequest request,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new DialogueRouteResult(
+            Name,
+            "",
+            TechnicalFailure: true,
+            Error: "No dialogue router is configured.",
+            SelectedCardIds: Array.Empty<string>()));
 }

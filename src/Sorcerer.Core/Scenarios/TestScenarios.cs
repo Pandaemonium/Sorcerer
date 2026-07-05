@@ -1,5 +1,6 @@
 using Sorcerer.Core.Characters;
 using Sorcerer.Core.Consequences;
+using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Runtime;
@@ -140,7 +141,7 @@ public static class TestScenarios
             .Set(new DoorComponent(IsOpen: false, KeyId: "imperial cell key"))
             .Set(new PromiseAnchorComponent(rescuePromiseId)));
 
-        Add(state, new Entity(EntityId.Create("prisoner_1"), "Lio of Hollowmere")
+        var lio = new Entity(EntityId.Create("prisoner_1"), "Lio of Hollowmere")
             .Set(new PositionComponent(new GridPoint(14, 5)))
             .Set(new RenderableComponent('p', "hollowmere"))
             .Set(new TagsComponent(new[] { "npc", "prisoner", "hollowmere", "ally_candidate" }))
@@ -163,7 +164,32 @@ public static class TestScenarios
                 salience: 5,
                 stakes: "If trust or leverage appears, Lio may trade concrete leads for a plausible escape.",
                 tags: new[] { "escape", "hollowmere", "promise_source" }))
-            .Set(StatusContainerComponent.Empty()));
+            .Set(StatusContainerComponent.Empty());
+        lio.Set(DialogueKnowledgeProfile.For(
+            lio,
+            state.RegionId,
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["rumors"] = 2,
+                ["npc.knowledge.region"] = 2,
+                ["zone.current"] = 2,
+                ["zone.npcs"] = 2,
+                ["scene.object"] = 2,
+                ["current_zone"] = 2,
+                ["hollowmere"] = 2,
+                ["region.travel"] = 2,
+                ["people.hollowmere"] = 2,
+                ["vigovia.public_law"] = 1,
+                ["folk_magic.water"] = 4,
+                ["magic.water.hollowmere"] = 4,
+                ["wild_magic"] = 3,
+                ["services"] = 2,
+                ["services.folk_magic"] = 2,
+                ["promises.oaths"] = 3,
+                ["faction.law"] = 1,
+                ["recent.magic_deeds"] = 2,
+            }));
+        Add(state, lio);
 
         AddMemorial(state, memorials);
         WorldConsequenceGuard.ApplyWithNewApplier(state, WorldConsequence.Message(
@@ -202,8 +228,9 @@ public static class TestScenarios
             .Set(new ReadableComponent("Weathered Sorcerer's Memorial", memorial.Text)));
     }
 
-    private static Entity Soldier(string id, string name, GridPoint position) =>
-        new Entity(EntityId.Create(id), name)
+    private static Entity Soldier(string id, string name, GridPoint position)
+    {
+        var soldier = new Entity(EntityId.Create(id), name)
             .Set(new PositionComponent(position))
             .Set(new RenderableComponent('i', "imperial"))
             .Set(new TagsComponent(new[] { "imperial", "soldier", "containment" }))
@@ -222,6 +249,18 @@ public static class TestScenarios
                 MagicalSignature: "law spoken as if it were weather",
                 Backstory: SoldierBackstory(name)))
             .Set(SoldierWant(id, name));
+        soldier.Set(DialogueKnowledgeProfile.For(
+            soldier,
+            "imperial_encounter",
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["rumors"] = 1,
+                ["npc.knowledge.region"] = 1,
+                ["services"] = 1,
+                ["faction.law"] = 3,
+            }));
+        return soldier;
+    }
 
     private static string SoldierAppearance(string name) =>
         name.Contains("captain", StringComparison.OrdinalIgnoreCase)

@@ -630,18 +630,10 @@ public sealed class PersistenceTests
                         ClaimedPlace: "burned oak north of here",
                         ItemName: "fine blade"),
                 }));
-        var extraction = new DialogueClaimProposal(
-            "Old Maren has a niece named Nannerl.",
-            "person",
-            "Nannerl",
-            Salience: 3,
-            Confidence: 80,
-            PlayerVisible: true,
-            BindAsPromise: false);
         var command = new TalkCommand("Lio, trust me with one useful thing.");
         var original = GameSession.CreateImperialEncounter(
             dialogueProvider: new FixtureDialogueProvider(response),
-            claimExtractor: new FixtureDialogueClaimExtractor(requiresSpokenTextSupport: false, extraction),
+            claimExtractor: new FixtureDialogueClaimExtractor(requiresSpokenTextSupport: false),
             seed: 31);
         PrepareDialogueAccess(original);
 
@@ -651,12 +643,10 @@ public sealed class PersistenceTests
         Assert.True(originalTalk.Success, string.Join("\n", originalTalk.Messages));
         Assert.NotNull(originalTalk.Dialogue);
         Assert.NotNull(originalTalk.Dialogue.Response?.Proposals?.Claims);
-        Assert.Single(originalWait.DialogueClaimExtractions);
-        Assert.NotEmpty(originalWait.DialogueClaimExtractions.Single().Claims);
+        Assert.Empty(originalWait.DialogueClaimExtractions);
 
         var replay = GameSession.CreateImperialEncounter(
             dialogueProvider: new ReplayDialogueProvider(new[] { originalTalk.Dialogue! }),
-            claimExtractor: new ReplayDialogueClaimExtractor(originalWait.DialogueClaimExtractions),
             seed: 31);
         PrepareDialogueAccess(replay);
         var replayTalk = await replay.ExecuteAsync(command);
@@ -665,7 +655,8 @@ public sealed class PersistenceTests
         Assert.True(replayTalk.Success);
         Assert.True(replayWait.Success);
         Assert.Contains(replayTalk.Deltas, delta => delta.Operation == "claimPromise");
-        Assert.Contains(replayWait.Deltas, delta => delta.Operation == "claimPromise");
+        Assert.Empty(replayWait.DialogueClaimExtractions);
+        Assert.DoesNotContain(replayWait.Deltas, delta => delta.Operation == "claimPromise");
         Assert.Equal(
             original.Engine.State.PromiseLedger.Promises.Count,
             replay.Engine.State.PromiseLedger.Promises.Count);

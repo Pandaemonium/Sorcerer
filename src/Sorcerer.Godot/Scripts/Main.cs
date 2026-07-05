@@ -74,6 +74,12 @@ public partial class Main : Control
 
     public override void _Input(InputEvent @event)
     {
+        // Handled in _Input (before the GUI) so these work even while a text box has focus.
+        if (TryConsumeCtrlCommand(@event))
+        {
+            return;
+        }
+
         TryConsumeNumpadMovement(@event);
     }
 
@@ -624,11 +630,33 @@ public partial class Main : Control
             host,
             model,
             TimeoutSeconds: 180));
-        var dialogueClaims = DialogueClaimExtractorFactory.Create(new Sorcerer.Llm.Configuration.LlmPurposeSettings(
-            providerName,
-            host,
-            model,
-            TimeoutSeconds: 180));
+        var dialogueRouterSettings = LlmConfiguration
+            .FromEnvironment()
+            .WithPurposeOverride(
+                LlmPurpose.DialogueRouter,
+                DialogueRouterEnvironmentOverride("PROVIDER") ? null : providerName,
+                DialogueRouterEnvironmentOverride("HOST") ? null : host,
+                DialogueRouterEnvironmentOverride("MODEL") ? null : model)
+            .SettingsFor(LlmPurpose.DialogueRouter);
+        var dialogueRouter = DialogueRouterFactory.Create(dialogueRouterSettings);
+        var dialogueParserSettings = LlmConfiguration
+            .FromEnvironment()
+            .WithPurposeOverride(
+                LlmPurpose.DialogueParser,
+                ParserEnvironmentOverride("PROVIDER") ? null : providerName,
+                ParserEnvironmentOverride("HOST") ? null : host,
+                ParserEnvironmentOverride("MODEL") ? null : model)
+            .SettingsFor(LlmPurpose.DialogueParser);
+        var dialogueParserRouterSettings = LlmConfiguration
+            .FromEnvironment()
+            .WithPurposeOverride(
+                LlmPurpose.DialogueParserRouter,
+                ParserRouterEnvironmentOverride("PROVIDER") ? null : providerName,
+                ParserRouterEnvironmentOverride("HOST") ? null : host,
+                ParserRouterEnvironmentOverride("MODEL") ? null : model)
+            .SettingsFor(LlmPurpose.DialogueParserRouter);
+        var dialogueParserRouter = DialogueParserRouterFactory.Create(dialogueParserRouterSettings);
+        var dialogueParser = DialogueParserFactory.Create(dialogueParserSettings);
         var backgroundAudit = new JsonlBackgroundTextAuditSink(Path.Combine("logs", "background_audit.jsonl"));
         var backgroundTextGenerator = BackgroundTextGeneratorFactory.Create(
             LlmConfiguration.FromEnvironment(),
@@ -646,10 +674,12 @@ public partial class Main : Control
             origin,
             seed,
             CrossRunMemorialStore.LoadDefault(),
-            dialogueClaims,
-            dialogueProvider,
-            dialogueAudit,
-            backgroundTextGenerator);
+            dialogueProvider: dialogueProvider,
+            dialogueRouter: dialogueRouter,
+            dialogueAudit: dialogueAudit,
+            backgroundTextGenerator: backgroundTextGenerator,
+            dialogueParser: dialogueParser,
+            dialogueParserRouter: dialogueParserRouter);
         _lastResult = null;
         _lastError = null;
         EnsureMapCells(_session.View());
@@ -676,6 +706,15 @@ public partial class Main : Control
             ?? System.Environment.GetEnvironmentVariable("OLLAMA_HOST")
             ?? "http://127.0.0.1:11434";
     }
+
+    private static bool ParserEnvironmentOverride(string suffix) =>
+        !string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable($"SORCERER_DIALOGUE_PARSER_{suffix}"));
+
+    private static bool ParserRouterEnvironmentOverride(string suffix) =>
+        !string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable($"SORCERER_DIALOGUE_PARSER_ROUTER_{suffix}"));
+
+    private static bool DialogueRouterEnvironmentOverride(string suffix) =>
+        !string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable($"SORCERER_DIALOGUE_ROUTER_{suffix}"));
 
     private string ProviderStatusText(PendingCastView? pendingCast, bool errored)
     {
@@ -871,6 +910,32 @@ public partial class Main : Control
         _lastPendingCastKey = PendingCastKey(observation.PendingCast);
         SetBusy(_busy);
         SessionHost.Session = _session;
+    }
+
+    // Ctrl + a bound game key (Ctrl+G to pick up, Ctrl+H/J/K/L to move, ...) runs that command even
+    // when a LineEdit has focus: Ctrl is the "bypass the text box" modifier. Consumed here so the
+    // letter is never typed into the focused field.
+    private bool TryConsumeCtrlCommand(InputEvent @event)
+    {
+        if (@event is not InputEventKey key || !key.Pressed || key.Echo || !key.CtrlPressed)
+        {
+            return false;
+        }
+
+        if (_session is null || _escMenu is null || _escMenu.Visible || _busy)
+        {
+            return false;
+        }
+
+        var command = CommandForKey(key.Keycode);
+        if (command is null)
+        {
+            return false;
+        }
+
+        _ = ExecuteAsync(command);
+        GetViewport().SetInputAsHandled();
+        return true;
     }
 
     private bool TryConsumeNumpadMovement(InputEvent @event)

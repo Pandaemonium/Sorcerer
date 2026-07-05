@@ -320,7 +320,7 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             OllamaDialogueProvider.SystemPrompt(),
             OllamaDialogueProvider.UserPrompt(request, retryNote: null),
             temperature: 0.35,
-            maxTokens: 1000,
+            maxTokens: 1200,
             timeout.Token,
             label: "dialogue");
         if (!first.Success)
@@ -341,7 +341,7 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             OllamaDialogueProvider.SystemPrompt() + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
             OllamaDialogueProvider.UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
             temperature: 0.2,
-            maxTokens: 1000,
+            maxTokens: 1200,
             timeout.Token,
             label: "dialogue-repair");
         if (!retry.Success)
@@ -402,7 +402,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             SystemPrompt(),
             UserPrompt(request, retryNote: null),
             temperature: 0.35,
-            maxTokens: 1000,
+            maxTokens: 1200,
             timeout.Token);
         if (!first.Success)
         {
@@ -423,7 +423,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             SystemPrompt() + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
             UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
             temperature: 0.2,
-            maxTokens: 1000,
+            maxTokens: 1200,
             timeout.Token);
         if (!retry.Success)
         {
@@ -472,7 +472,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
                 options = new
                 {
                     temperature,
-                    num_ctx = 6144,
+                    num_ctx = 4096,
                     num_predict = maxTokens,
                 },
                 messages = new[]
@@ -546,21 +546,52 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         }
     }
 
-    private static DialogueProposalSet? ParseProposals(JsonElement proposals, DialogueRequest request, string spokenText)
+    internal static bool TryParseProposalEnvelope(
+        string content,
+        DialogueRequest request,
+        string spokenText,
+        out DialogueProposalSet? proposals,
+        out string? error)
+    {
+        proposals = null;
+        error = null;
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                error = "Dialogue proposal JSON root was not an object.";
+                return false;
+            }
+
+            var proposalRoot = root.TryGetProperty("proposals", out var nested)
+                && nested.ValueKind == JsonValueKind.Object
+                    ? nested
+                    : root;
+            proposals = ParseProposals(proposalRoot, request, spokenText);
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    internal static DialogueProposalSet? ParseProposals(JsonElement proposals, DialogueRequest request, string spokenText)
     {
         var claims = ParseClaims(proposals, request, spokenText).ToArray();
         var memories = ParseMemories(proposals, request).ToArray();
         var bond = ParseBond(proposals, request);
         var want = ParseWant(proposals, request);
         var actions = ParseActions(proposals).ToArray();
-        return claims.Length == 0 && memories.Length == 0 && bond is null && want is null && actions.Length == 0
-            ? null
-            : new DialogueProposalSet(
-                Claims: claims,
-                Memories: memories,
-                Bond: bond,
-                Want: want,
-                Actions: actions);
+        return new DialogueProposalSet(
+            Claims: claims,
+            Memories: memories,
+            Bond: bond,
+            Want: want,
+            Actions: actions);
     }
 
     private static IEnumerable<DialogueClaimProposal> ParseClaims(
@@ -614,7 +645,10 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
                 ReadInt(claim, 0, "fearDelta", "fear"),
                 ReadInt(claim, 0, "admirationDelta", "admiration", "respectDelta", "respect"),
                 ReadInt(claim, 0, "resentmentDelta", "resentment"),
-                ReadString(claim, "bondPosture", "bond_posture", "posture"));
+                ReadString(claim, "bondPosture", "bond_posture", "posture"),
+                ReadBool(claim, "bindAsCanon", "bind_as_canon", "canon"),
+                ReadString(claim, "canonKind", "canon_kind"),
+                ReadString(claim, "canonSummary", "canon_summary", "summary"));
         }
     }
 
@@ -1084,25 +1118,11 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
 
     internal static string SystemPrompt() =>
         "You are Sorcerer's NPC dialogue provider. Return exactly one JSON object and no prose outside it. "
-        + "Shape: {\"spokenText\":\"NPC line\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\",\"proposals\":{\"claims\":[],\"memories\":[],\"bond\":null,\"want\":null,\"actions\":[]}}. "
-        + "Speak as the speaker only. No narration, markdown, stage directions, or omniscient exposition. Answer the newest player message directly in 1-4 short sentences. "
-        + "Use the speaker card, scene, recent memories, recent rumors, and recent claims as context. Player-spoken claims are not binding; only claims in the NPC spokenText may be proposed. "
-        + "Claims are reported, possibly wrong assertions about places, people, items, threats, landmarks, stock, or events. Use salience 1-5 and confidence 0-100. "
-        + "For generated claims, use the existing claim fields: text, category, subject, salience, confidence, playerVisible, bindAsPromise, promiseKind, realizationKind, triggerHint, claimedPlace, targetEntityId, merchantId, itemName, playerAuthored, tags, updateBond, loyaltyDelta, fearDelta, admirationDelta, resentmentDelta, bondPosture. "
-        + "Promise binding rule: if the NPC asserts a specific actionable place, person, landmark, item location, merchant stock, service, future threat, escape route, or prophecy that is not already resolved in the scene and would be useful later, include a claim with bindAsPromise true, playerVisible true, salience 3-5, promiseKind \"rumor\" unless another kind fits, realizationKind such as site, town, landmark, person, item, merchant_stock, service, threat, escape_route, door_rule, or quest, and a practical triggerHint such as travel, talk, buy, trade, services, request, open, wait, or inspect. "
-        + "Keep claim category and realizationKind aligned: merchant_stock claims should use realizationKind merchant_stock and itemName for the stock; service claims should use service; escape route claims should use escape_route; door rules should use door_rule. Do not use realizationKind person for a merchant-stock claim unless the claim is only about meeting the person and not about their wares. "
-        + "When in doubt, bind a concrete useful NPC-authored claim; the engine can keep it reported or later decide how to realize it. Do not skip binding merely because the NPC is cautious, refuses safety, speaks in rumor, or names their own service. "
-        + "Always bind: named or role-specific people to find; family relationships that introduce a person; route landmarks; hidden exits; item locations; merchant stock; direct service offers; concrete trades; future patrols or threats; true-name door rules; omens with a concrete trigger. "
-        + "If you create a claim in an actionable category such as site, town, landmark, person, item, merchant_stock, service, trade, threat, escape_route, prophecy, or door_rule with salience 3 or higher, bindAsPromise should normally be true unless the claim is excluded by the do-not-bind rules. "
-        + "Every claim must be plainly supported by spokenText; do not add a useful place, person, item, or threat that the NPC did not actually say in the line. "
-        + "Bind pattern examples using placeholders, not facts to copy: \"<merchant> can sell <item>\"; \"<elder> has a niece named <person>\"; \"<person> tends the fever-sick in <place>\"; \"<landmark> marks <road>\"; \"I can mend <item> for <price>\"; \"there is a hidden tunnel behind <fixture>\"; \"<authority> keeps <key> in <container>\"; \"<healer> keeps <medicine>\"; \"if you linger, <threat> will come\"; \"<door> opens only to <condition>\". "
-        + "The placeholder examples teach structure only; invent claim details from the current speaker's line and context, never from these examples. "
-        + "Do not bind denials, obvious jokes, imaginary or child-invented monsters, tiny ambient detail, ordinary weather, vague mood, insults, impossible boasts, or claims authored only by the player. "
-        + "Set playerAuthored true only when noting that the player said something; those claims will be ignored by the engine. Prefer not to include player-authored claims at all. "
-        + "Memories need ownerEntityId, text, provenance, salience, shareable. Bond must be null or an object with entityId, integer loyaltyDelta, fearDelta, admirationDelta, resentmentDelta, posture, and reason. "
-        + "Want may be null or one object with entityId, optional text, salience 1-5, status such as active/satisfied/blocked/abandoned, stakes, tags/addTags/removeTags, and reason; use it only when the NPC's own active desire clearly changes in spokenText or because the conversation materially satisfies, blocks, or redirects that desire. "
-        + "Actions must be objects such as {\"type\":\"none\"}, {\"type\":\"step_aside\"}, {\"type\":\"give\",\"itemName\":\"brass key\"}, {\"type\":\"open\",\"targetEntityId\":\"cell_door_1\"}, {\"type\":\"attack\",\"targetEntityId\":\"player\"}, {\"type\":\"recruit\",\"reason\":\"The NPC agrees to follow.\"}, {\"type\":\"offer_trade\",\"itemName\":\"knife\",\"quantity\":1,\"gold\":12}, {\"type\":\"reveal_service\",\"name\":\"ward-breaking\",\"description\":\"I can whisper a lock loose.\",\"effectKind\":\"open_or_unlock\",\"targetHint\":\"cell door\",\"itemCost\":\"grave salt\",\"wantStatusOnComplete\":\"satisfied\",\"wantAddTagsOnComplete\":[\"service_completed\"]}, {\"type\":\"create_promise\",\"promiseKind\":\"rumor\",\"promiseText\":\"The tower north of here has a bell with no clapper.\",\"triggerHint\":\"travel\",\"realizationKind\":\"site\",\"claimedPlace\":\"north of here\",\"salience\":4}, {\"type\":\"canonize_fact\",\"canonKind\":\"local_law\",\"canonText\":\"Folk-magic practice is punishable by execution here.\",\"canonSummary\":\"Folk magic is a capital crime\",\"tags\":[\"folk_magic\",\"vigovia\"]}, {\"type\":\"mark_location\",\"name\":\"loose floorboard\",\"fixtureType\":\"marker\",\"description\":\"A board with fresh nail-scars.\",\"x\":5,\"y\":6,\"blocksMovement\":false}, or {\"type\":\"consequence\",\"consequenceType\":\"add_tags\",\"targetEntityId\":\"prisoner_1\",\"consequenceTiming\":\"deferred\",\"consequencePayload\":{\"tags\":[\"helpful\"],\"operation\":\"dialogueConsequence\",\"delay\":1}}. For reveal_service, use wantStatusOnComplete, wantStakesOnComplete, wantAddTagsOnComplete, or wantRemoveTagsOnComplete only when completing that service would materially satisfy, block, or redirect the provider's active want. Use canonize_fact/add_canon only for a durable local fact the NPC explicitly says in spokenText that should inform later context but is not a promise, trade, service, route, or immediate action. Generic consequence actions are for local effects that already fit a typed consequence, including local fixture/prop changes through transform_entity. You may either use {\"type\":\"consequence\",\"consequenceType\":\"...\"} or put a known consequence id directly in type, such as {\"type\":\"request_service\",\"serviceId\":\"ward_breaking\"}, {\"type\":\"add_tags\",\"targetEntityId\":\"prisoner_1\",\"tags\":[\"helpful\"]}, {\"type\":\"apply_status\",\"targetEntityId\":\"prisoner_1\",\"status\":\"oath-marked\",\"duration\":2}, {\"type\":\"transform_entity\",\"targetEntityId\":\"old_bridge_1\",\"name\":\"collapsed bridge\",\"blocksMovement\":true,\"fixtureType\":\"collapsed_bridge\",\"tags\":[\"collapsed\"]}, or the same fields nested under consequencePayload; extra top-level fields on generic/typed consequence actions are preserved as payload fields. Named dialogue actions such as create_promise, add_canon, offer_trade, and spawn_fixture keep their own fields. Use consequenceTiming immediate, after_turn, world_pump, or deferred; non-immediate timing schedules one typed consequence through the shared turn pump. Use schedule_event only for broad future events such as calling help or setting a patrol, not for a simple delayed local consequence. Supported action types are none, step_aside, flee, call_help, give, open, attack, recruit, create_promise, canonize_fact, add_canon, offer_trade, reveal_service, mark_location, spawn_fixture, consequence, and known typed consequence ids; aliases such as give_item, open_door, summon_help, run_away, strike, join_me, follow_me, promise, trade, offer_service, typed_consequence, and world_consequence are accepted. Only propose an action when the speaker can plausibly do it now in the current local scene; distant places should usually be claims/promises, and create_promise is only for explicit vows, prophecies, curses, or mechanically important commitments in spokenText. "
-        + "If the speaker cannot or will not answer, still return a character refusal as spokenText with no proposals. Technical JSON mistakes are failures; character refusal is not.";
+        + "Shape: {\"spokenText\":\"NPC speech\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\"}. "
+        + "Speak as the speaker only. No narration, markdown, stage directions, or omniscient exposition. Answer the newest player message directly in about two compact paragraphs, roughly 4-7 sentences total. Put a blank line inside spokenText if it helps the reply breathe. "
+        + "Use the speaker, listener, scene, recent memories, rumors, and claims as context. Player-spoken claims are not binding; speak from the NPC's knowledge, uncertainty, motives, and relationship to the listener. "
+        + "Do not output proposals, claims arrays, mechanics, schemas, engine operations, markdown, or JSON fields beyond spokenText, delivery, and intent. A separate parser will inspect the spoken reply for supported mechanical consequences after the player sees it. "
+        + "Concrete NPC assertions are allowed when in character, but avoid inventing omniscient facts or resolving player claims as true. If the speaker cannot or will not answer, still return a character refusal as spokenText. Technical JSON mistakes are failures; character refusal is not.";
 
     internal static string UserPrompt(DialogueRequest request, string? retryNote) =>
         JsonSerializer.Serialize(new
@@ -1113,10 +1133,11 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             speaker = request.Speaker,
             listener = request.Listener,
             scene = request.Scene,
+            selectedContextCardIds = request.SelectedContextCardIds ?? Array.Empty<string>(),
+            contextCards = request.ContextCards ?? Array.Empty<DialogueContextCardPayload>(),
             recentMemories = request.RecentMemories,
             recentClaims = request.RecentClaims,
             recentRumors = request.RecentRumors ?? Array.Empty<string>(),
-            capabilityCards = request.CapabilityCards,
         }, JsonOptions);
 
     private DialogueProviderResult Success(string raw, DialogueResponse response) =>

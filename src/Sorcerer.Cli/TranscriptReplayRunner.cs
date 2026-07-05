@@ -67,10 +67,19 @@ public static class TranscriptReplayRunner
         bool assertFinal)
     {
         var provider = new ReplaySpellProvider(transcript.ResolvedMagicJson);
+        var dialogueRouter = transcript.DialogueRouteRecords.Count == 0
+            ? null
+            : new ReplayDialogueRouter(transcript.DialogueRouteRecords);
         var dialogueProvider = transcript.DialogueRecords.Count == 0
             ? null
             : new ReplayDialogueProvider(transcript.DialogueRecords);
-        var claimExtractor = transcript.ClaimExtractionRecords.Count == 0
+        var dialogueParser = transcript.DialogueParseRecords.Count == 0
+            ? null
+            : new ReplayDialogueParser(transcript.DialogueParseRecords);
+        var dialogueParserRouter = transcript.DialogueParserRouteRecords.Count == 0
+            ? null
+            : new ReplayDialogueParserRouter(transcript.DialogueParserRouteRecords);
+        var claimExtractor = dialogueParser is not null || transcript.ClaimExtractionRecords.Count == 0
             ? null
             : new ReplayDialogueClaimExtractor(transcript.ClaimExtractionRecords);
         var backgroundTextGenerator = transcript.BackgroundTextsByJobId.Count == 0
@@ -81,9 +90,12 @@ public static class TranscriptReplayRunner
             transcript.OriginId,
             transcript.Seed,
             claimExtractor: claimExtractor,
+            dialogueRouter: dialogueRouter,
             dialogueProvider: dialogueProvider,
             dialogueAudit: NullDialogueAuditSink.Instance,
-            backgroundTextGenerator: backgroundTextGenerator);
+            backgroundTextGenerator: backgroundTextGenerator,
+            dialogueParser: dialogueParser,
+            dialogueParserRouter: dialogueParserRouter);
         session.Engine.State.BackgroundSettings = new BackgroundJobSettings(
             transcript.BackgroundEnabled ?? session.Engine.State.BackgroundSettings.Enabled,
             transcript.MaxBackgroundJobs ?? session.Engine.State.BackgroundSettings.MaxQueuedJobs,
@@ -122,8 +134,10 @@ public static class TranscriptReplayRunner
             transcript.OriginId,
             transcript.Steps.Count,
             transcript.ResolvedMagicJson.Count,
+            transcript.DialogueRouteRecords.Count,
             transcript.DialogueRecords.Count,
             transcript.ClaimExtractionRecords.Count,
+            transcript.DialogueParseRecords.Count,
             transcript.BackgroundTextsByJobId.Count,
             actualFinal,
             assertFinal,
@@ -136,8 +150,10 @@ public static class TranscriptReplayRunner
     {
         Console.WriteLine($"Replayed {summary.StepCount} commands from {path}.");
         Console.WriteLine($"Materialized spell resolutions: {summary.MaterializedSpellCount}.");
+        Console.WriteLine($"Materialized dialogue routes: {summary.MaterializedDialogueRouteCount}.");
         Console.WriteLine($"Materialized dialogue responses: {summary.MaterializedDialogueCount}.");
         Console.WriteLine($"Materialized claim extractions: {summary.MaterializedClaimExtractionCount}.");
+        Console.WriteLine($"Materialized dialogue parses: {summary.MaterializedDialogueParseCount}.");
         Console.WriteLine($"Materialized background texts: {summary.MaterializedBackgroundTextCount}.");
         var actualFinal = summary.FinalSummary;
         Console.WriteLine($"Final: turn {actualFinal.Turn}, zone {actualFinal.ZoneId}, status {actualFinal.RunStatus}, entities {actualFinal.EntityCount}, promises {actualFinal.Promises}, claims {actualFinal.Claims}, rumors {actualFinal.Rumors}, validation issues {actualFinal.ValidationIssues}.");
@@ -156,8 +172,10 @@ public static class TranscriptReplayRunner
         var transcripts = new List<ReplayTranscript>();
         var steps = new List<ReplayCommandStep>();
         var resolvedMagicJson = new List<string>();
+        var dialogueRouteRecords = new List<DialogueRouteRecord>();
         var dialogueRecords = new List<DialogueResolutionRecord>();
         var claimExtractionRecords = new List<DialogueClaimExtractionRecord>();
+        var dialogueParseRecords = new List<DialogueParseRecord>();
         var backgroundTextsByJobId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         ReplayObservationSummary? final = null;
         string? originId = null;
@@ -186,8 +204,15 @@ public static class TranscriptReplayRunner
                 quickstartScene,
                 steps.ToArray(),
                 resolvedMagicJson.ToArray(),
+                dialogueRouteRecords.ToArray(),
                 dialogueRecords.ToArray(),
                 claimExtractionRecords.ToArray(),
+                dialogueParseRecords.ToArray(),
+                dialogueParseRecords
+                    .Select(record => record.ParserRoute)
+                    .Where(record => record is not null)
+                    .Select(record => record!)
+                    .ToArray(),
                 new Dictionary<string, string>(backgroundTextsByJobId, StringComparer.OrdinalIgnoreCase),
                 final));
         }
@@ -208,8 +233,10 @@ public static class TranscriptReplayRunner
                 started = true;
                 steps = new List<ReplayCommandStep>();
                 resolvedMagicJson = new List<string>();
+                dialogueRouteRecords = new List<DialogueRouteRecord>();
                 dialogueRecords = new List<DialogueResolutionRecord>();
                 claimExtractionRecords = new List<DialogueClaimExtractionRecord>();
+                dialogueParseRecords = new List<DialogueParseRecord>();
                 backgroundTextsByJobId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 final = null;
 
@@ -238,6 +265,12 @@ public static class TranscriptReplayRunner
                     resolvedMagicJson.Add(magicJson);
                 }
 
+                var route = ReadDialogueRouteRecord(root);
+                if (route is not null)
+                {
+                    dialogueRouteRecords.Add(route);
+                }
+
                 var dialogue = ReadDialogueRecord(root);
                 if (dialogue is not null)
                 {
@@ -245,6 +278,7 @@ public static class TranscriptReplayRunner
                 }
 
                 claimExtractionRecords.AddRange(ReadClaimExtractionRecords(root));
+                dialogueParseRecords.AddRange(ReadDialogueParseRecords(root));
                 continue;
             }
 
@@ -335,6 +369,18 @@ public static class TranscriptReplayRunner
         return JsonSerializer.Deserialize<DialogueResolutionRecord>(dialogue.GetRawText(), JsonOptions);
     }
 
+    private static DialogueRouteRecord? ReadDialogueRouteRecord(JsonElement root)
+    {
+        if (!root.TryGetProperty("result", out var result)
+            || !result.TryGetProperty("dialogueRoute", out var route)
+            || route.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<DialogueRouteRecord>(route.GetRawText(), JsonOptions);
+    }
+
     private static IReadOnlyList<DialogueClaimExtractionRecord> ReadClaimExtractionRecords(JsonElement root)
     {
         if (!root.TryGetProperty("result", out var result)
@@ -346,6 +392,19 @@ public static class TranscriptReplayRunner
 
         return JsonSerializer.Deserialize<List<DialogueClaimExtractionRecord>>(records.GetRawText(), JsonOptions)
             ?? new List<DialogueClaimExtractionRecord>();
+    }
+
+    private static IReadOnlyList<DialogueParseRecord> ReadDialogueParseRecords(JsonElement root)
+    {
+        if (!root.TryGetProperty("result", out var result)
+            || !result.TryGetProperty("dialogueParses", out var records)
+            || records.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return Array.Empty<DialogueParseRecord>();
+        }
+
+        return JsonSerializer.Deserialize<List<DialogueParseRecord>>(records.GetRawText(), JsonOptions)
+            ?? new List<DialogueParseRecord>();
     }
 
     private static string ReadString(JsonElement root, string property, string fallback = "") =>
@@ -400,8 +459,11 @@ public static class TranscriptReplayRunner
         string? QuickstartScene,
         IReadOnlyList<ReplayCommandStep> Steps,
         IReadOnlyList<string> ResolvedMagicJson,
+        IReadOnlyList<DialogueRouteRecord> DialogueRouteRecords,
         IReadOnlyList<DialogueResolutionRecord> DialogueRecords,
         IReadOnlyList<DialogueClaimExtractionRecord> ClaimExtractionRecords,
+        IReadOnlyList<DialogueParseRecord> DialogueParseRecords,
+        IReadOnlyList<DialogueParserRouteRecord> DialogueParserRouteRecords,
         IReadOnlyDictionary<string, string> BackgroundTextsByJobId,
         ReplayObservationSummary? FinalSummary);
 
@@ -421,8 +483,10 @@ public static class TranscriptReplayRunner
         string? OriginId,
         int StepCount,
         int MaterializedSpellCount,
+        int MaterializedDialogueRouteCount,
         int MaterializedDialogueCount,
         int MaterializedClaimExtractionCount,
+        int MaterializedDialogueParseCount,
         int MaterializedBackgroundTextCount,
         ReplayObservationSummary FinalSummary,
         bool AssertFinal,

@@ -156,6 +156,12 @@ public sealed record WantComponent : IEntityComponent
     public IReadOnlyList<string> Tags { get; init; }
 }
 
+public sealed record KnowledgeComponent(Dictionary<string, int> TopicTiers) : IEntityComponent
+{
+    public static KnowledgeComponent Empty() =>
+        new(new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
+}
+
 public sealed record StatusInstance(
     string Id,
     string DisplayName,

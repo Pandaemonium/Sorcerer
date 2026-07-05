@@ -47,6 +47,9 @@ references inside them to Python modules or the old name.
   people, items, stock, services, threats, routes, memories, and other world affordances.
 - [DIALOGUE_SYSTEM.md](DIALOGUE_SYSTEM.md): LLM-generated dialogue, claim/promise extraction,
   NPC memories, bond changes, and engine validation.
+- [DIALOGUE_CONTEXT_ROUTING.md](DIALOGUE_CONTEXT_ROUTING.md): active dialogue context routing
+  architecture: NPC-knowledge-gated cards, the short context-router call, parser-router
+  capability cards, route metrics, and replay.
 - [OPENING_SEQUENCE.md](OPENING_SEQUENCE.md): the first 20 minutes as a promise-rich,
   system-driven vertical slice rather than a scripted tutorial.
 - [SEMANTIC_EFFECTS.md](SEMANTIC_EFFECTS.md): entity descriptions/traits as dormant mechanics
@@ -103,6 +106,8 @@ references inside them to Python modules or the old name.
   playtesting.
 - [MIGRATION_NOTES.md](MIGRATION_NOTES.md): lessons to preserve or leave behind from Wild
   Magic.
+- [WILDMAGIC_IMPORT_PLAN.md](WILDMAGIC_IMPORT_PLAN.md): detailed contract-by-contract plan for
+  importing WildMagic mechanics, content, tests, and tooling into Sorcerer's C# architecture.
 
 ## Documentation Rule
 

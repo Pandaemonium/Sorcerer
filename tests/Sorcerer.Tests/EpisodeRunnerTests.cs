@@ -19,6 +19,8 @@ public sealed class EpisodeRunnerTests
             var exitCode = await EpisodeRunner.RunAsync(
                 new MockSpellProvider(),
                 new MockDialogueProvider(),
+                new MockDialogueRouter(),
+                DeterministicDialogueParserRouter.Instance,
                 new MockDialogueClaimExtractor(),
                 NullDialogueAuditSink.Instance,
                 NullSpellAuditSink.Instance,
@@ -74,9 +76,24 @@ public sealed class EpisodeRunnerTests
                 && dialogue.ValueKind == JsonValueKind.Object);
             Assert.Contains(stepRecords, root =>
                 root.TryGetProperty("result", out var result)
-                && result.TryGetProperty("dialogueClaimExtractions", out var records)
-                && records.ValueKind == JsonValueKind.Array
-                && records.GetArrayLength() > 0);
+                && result.TryGetProperty("dialogue", out var dialogue)
+                && dialogue.ValueKind == JsonValueKind.Object
+                && dialogue.TryGetProperty("response", out var response)
+                && response.ValueKind == JsonValueKind.Object
+                && response.TryGetProperty("proposals", out var proposals)
+                && proposals.ValueKind == JsonValueKind.Object
+                && proposals.TryGetProperty("claims", out var claims)
+                && claims.ValueKind == JsonValueKind.Array
+                && claims.GetArrayLength() > 0);
+            Assert.All(stepRecords, root =>
+            {
+                if (root.TryGetProperty("result", out var result)
+                    && result.TryGetProperty("dialogueClaimExtractions", out var records)
+                    && records.ValueKind == JsonValueKind.Array)
+                {
+                    Assert.Equal(0, records.GetArrayLength());
+                }
+            });
 
             var replayExitCode = await TranscriptReplayRunner.RunAsync(
                 logPath,

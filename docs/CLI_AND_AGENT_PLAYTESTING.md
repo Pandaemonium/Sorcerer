@@ -69,8 +69,9 @@ Useful live-provider outputs to inspect after a run:
 - `logs\cli_ollama_playtest.jsonl` for step-by-step diagnostic transcript
 - `logs\wild_magic_audit.jsonl` for prompt, raw model output, repaired resolution, and
   validation errors
-- `logs\dialogue_audit.jsonl` for generated dialogue requests, raw replies, parsed proposals,
-  validation issues, and resulting delta operation names
+- `logs\dialogue_audit.jsonl` for dialogue context routes, generated dialogue
+  requests, raw replies, parser routes, parsed proposals, validation issues,
+  and resulting delta operation names
 
 Report the provider, model, command sequence, transcript path, and audit symptoms when a
 playtest finds a problem.
@@ -88,8 +89,11 @@ dotnet run --project src/Sorcerer.Cli -- --provider mock --quickstart social `
   --command "bonds Lio"
 ```
 
-The `wait` step gives queued dialogue claim extraction a turn boundary to apply. The travel step
-should realize the confided site promise as a generated place when the destination zone is new.
+Generated dialogue shows speech immediately; any post-speech parser-router and
+parser work can apply on a later pump such as `wait` or `save`. Legacy
+proposal-bearing dialogue still applies its structured proposals immediately.
+The travel step should realize the confided site promise as a generated place
+when the destination zone is new.
 Debug observations also expose visible claim cards and claim ids/counts for agent diagnostics.
 
 For a focused travel/world-feel smoke, use:
@@ -496,12 +500,16 @@ Recommended CLI flags:
 
 `ollama` and `local` select the live Ollama provider. `api`, `openai`, and
 `openai-compatible` select the OpenAI-compatible `/v1/chat/completions` adapter for wild magic,
-generated dialogue, and dialogue-claim extraction; use `--host` for the base URL and `--model` for
-the model id. Hosted endpoints can read credentials from `SORCERER_OPENAI_API_KEY`,
-`SORCERER_API_KEY`, or `OPENAI_API_KEY`; purpose-specific `SORCERER_WILD_API_KEY` and
-`SORCERER_DIALOGUE_API_KEY` override the shared key for their lanes. `mock` is deterministic and
-fast enough for frequent focused checks, but it should not be treated as the ordinary playtest
-resolver.
+generated dialogue, context routing, parser routing, and dialogue parsing; use
+`--host` for the base URL and `--model` for the model id. Hosted endpoints can
+read credentials from `SORCERER_OPENAI_API_KEY`,
+`SORCERER_API_KEY`, or `OPENAI_API_KEY`; purpose-specific keys such as
+`SORCERER_WILD_API_KEY`, `SORCERER_DIALOGUE_API_KEY`,
+`SORCERER_DIALOGUE_ROUTER_API_KEY`,
+`SORCERER_DIALOGUE_PARSER_ROUTER_API_KEY`, and
+`SORCERER_DIALOGUE_PARSER_API_KEY` override the shared key for their lanes.
+`mock` is deterministic and fast enough for frequent focused checks, but it
+should not be treated as the ordinary playtest resolver.
 
 Live providers exercise the real resolver and write audit logs. They are the right choice
 when judging wild magic quality.
@@ -530,10 +538,12 @@ the parallel `episode_start`, `episode_step`, and `episode_final` shape and can 
 and quickstart scene metadata. Each step includes command text, `ActionResult`, debug observation,
 and materialized model outputs where available:
 `magic.resolvedMagicJson` for validated or pending-materialized spell resolution, `dialogue` for
-the normalized generated dialogue response, `dialogueClaimExtractions` for completed post-dialogue
-claim extraction, and background job `resultText` for provider-backed background prose. Faulted or
-canceled claim-extraction tasks are recorded as technical-failure extraction records, so replay keeps
-the attempted extraction visible even when it produced no claims.
+the normalized generated dialogue response, `dialogueRoute` for the materialized
+context route, `dialogueParses` for completed parser-route/detail records,
+`dialogueClaimExtractions` for completed legacy claim-extraction compatibility
+records, and background job `resultText` for provider-backed background prose.
+Faulted or canceled claim-extraction tasks are recorded as technical-failure extraction records, so
+replay keeps the attempted extraction visible even when it produced no claims.
 
 `--replay <path>` reads one of those transcripts or episode logs, creates a fresh `GameSession`,
 reapplies recorded quickstart setup, and uses replay providers to feed recorded spell, dialogue,

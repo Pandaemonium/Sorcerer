@@ -91,6 +91,23 @@ public sealed class OllamaDialogueProviderTests
     }
 
     [Fact]
+    public async Task DialogueParserKeepsExplicitEmptyProposalEnvelope()
+    {
+        var rawDialogue = """
+            {"spokenText":"I hear you. I have nothing useful to add yet.","proposals":{"claims":[],"memories":[],"bond":null,"want":null,"actions":[]}}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(rawDialogue));
+        var provider = new OllamaDialogueProvider(httpClient: new HttpClient(handler), model: "test-model");
+
+        var result = await provider.ResolveAsync(Request("Lio, anything else?"), CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        Assert.NotNull(result.Response!.Proposals);
+        Assert.Empty(result.Response.Proposals!.Claims!);
+        Assert.Empty(result.Response.Proposals.Actions!);
+    }
+
+    [Fact]
     public async Task DialogueParserReadsExpandedActionGrammarFields()
     {
         var rawDialogue = """
@@ -209,10 +226,10 @@ public sealed class OllamaDialogueProviderTests
     }
 
     [Fact]
-    public async Task DialoguePromptAdvertisesSharedConsequenceTiming()
+    public async Task DialoguePromptIsSpeechOnlyAndOmitsCapabilityCards()
     {
         var rawDialogue = """
-            {"spokenText":"Give me a breath and I will mark the ledger.","proposals":{"actions":[]}}
+            {"spokenText":"Give me a breath and I will answer plainly.","delivery":"plain","intent":"answer"}
             """;
         var handler = new QueueHttpHandler(ChatResponse(rawDialogue));
         var provider = new OllamaDialogueProvider(httpClient: new HttpClient(handler), model: "test-model");
@@ -220,21 +237,133 @@ public sealed class OllamaDialogueProviderTests
         var result = await provider.ResolveAsync(Request("Lio, can you mark this later?"), CancellationToken.None);
 
         Assert.False(result.TechnicalFailure);
+        Assert.Null(result.Response!.Proposals);
         var requestBody = Assert.Single(handler.RequestBodies);
         using var document = JsonDocument.Parse(requestBody);
         var systemPrompt = document.RootElement
             .GetProperty("messages")[0]
             .GetProperty("content")
             .GetString();
+        var userPrompt = document.RootElement
+            .GetProperty("messages")[1]
+            .GetProperty("content")
+            .GetString();
         Assert.NotNull(systemPrompt);
-        Assert.Contains("consequenceTiming immediate, after_turn, world_pump, or deferred", systemPrompt);
-        Assert.Contains("non-immediate timing schedules one typed consequence", systemPrompt);
-        Assert.Contains("known consequence id directly in type", systemPrompt);
-        Assert.Contains("{\"type\":\"request_service\"", systemPrompt);
-        Assert.Contains("{\"type\":\"transform_entity\"", systemPrompt);
-        Assert.Contains("known typed consequence ids", systemPrompt);
-        Assert.Contains("extra top-level fields on generic/typed consequence actions are preserved as payload fields", systemPrompt);
-        Assert.DoesNotContain("use schedule_event rather than non-immediate timing", systemPrompt);
+        Assert.Contains("Do not output proposals", systemPrompt);
+        Assert.Contains("A separate parser will inspect", systemPrompt);
+        Assert.DoesNotContain("consequenceTiming immediate, after_turn, world_pump, or deferred", systemPrompt);
+        Assert.DoesNotContain("\"capabilityCards\"", userPrompt);
+    }
+
+    [Fact]
+    public async Task DialogueClaimExtractorParseAsyncReadsFullProposalEnvelope()
+    {
+        var router = """
+            {"hasMechanics":true,"families":["memories","want","actions"],"reason":"The NPC revealed a service and a desire."}
+            """;
+        var detail = """
+            {"proposals":{"claims":[],"memories":[{"ownerEntityId":"prisoner_1","text":"Lio offered a grave-salt lock charm.","salience":3}],"want":{"entityId":"prisoner_1","text":"Get grave salt for the lock charm.","salience":4,"status":"active","addTags":["grave_salt"]},"actions":[{"type":"reveal_service","name":"ward-breaking","description":"A quiet charm for locks.","serviceId":"ward_breaking","effectKind":"open_or_unlock","targetHint":"cell door","itemCost":"grave salt"}]}}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(router), ChatResponse(detail));
+        var parser = new OllamaDialogueClaimExtractor(
+            httpClient: new HttpClient(handler),
+            model: "test-model",
+            numGpu: 0);
+
+        var result = await parser.ParseAsync(
+            ClaimRequest("I know a quiet way to worry a lock open, if you bring grave salt."),
+            CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        Assert.NotNull(result.Proposals);
+        var proposals = result.Proposals!;
+        Assert.Empty(proposals.Claims!);
+        Assert.Single(proposals.Memories!);
+        Assert.Equal("prisoner_1", proposals.Want!.EntityId);
+        var action = Assert.Single(proposals.Actions!);
+        Assert.Equal("reveal_service", action.Type);
+        Assert.Equal("ward_breaking", action.ServiceId);
+        Assert.Equal("grave salt", action.ItemCost);
+        Assert.Equal(2, handler.RequestBodies.Count);
+        using var routerBody = JsonDocument.Parse(handler.RequestBodies[0]);
+        using var detailBody = JsonDocument.Parse(handler.RequestBodies[1]);
+        Assert.Equal(0, routerBody.RootElement.GetProperty("options").GetProperty("num_gpu").GetInt32());
+        Assert.Contains(
+            "dialogue mechanics router",
+            routerBody.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+        Assert.Contains(
+            "post-speech dialogue parser",
+            detailBody.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public async Task DialogueContextRouterSelectsCardsFromAvailableCandidates()
+    {
+        var route = """
+            {"selectedCardIds":["rumors.full","zone.current"],"reason":"The player asked for rumors."}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(route));
+        var router = new OllamaDialogueRouter(
+            httpClient: new HttpClient(handler),
+            model: "test-model");
+
+        var result = await router.RouteAsync(RouteRequest("Lio, any rumors?"), CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        Assert.Equal(new[] { "rumors.full", "zone.current" }, result.SelectedCardIds);
+        Assert.Equal("The player asked for rumors.", result.Reason);
+        var requestBody = Assert.Single(handler.RequestBodies);
+        using var document = JsonDocument.Parse(requestBody);
+        var systemPrompt = document.RootElement
+            .GetProperty("messages")[0]
+            .GetProperty("content")
+            .GetString();
+        var userPrompt = document.RootElement
+            .GetProperty("messages")[1]
+            .GetProperty("content")
+            .GetString();
+        Assert.Contains("dialogue context router", systemPrompt);
+        Assert.Contains("\"availableCards\"", userPrompt);
+        Assert.Contains("\"rumors.full\"", userPrompt);
+        Assert.DoesNotContain("A rumor payload line that should not reach the router", userPrompt);
+    }
+
+    [Fact]
+    public async Task DialogueParserRouterSelectsCapabilitiesFromAvailableCatalog()
+    {
+        var route = """
+            {"hasMechanics":true,"selectedCapabilityIds":["services_trade","local_actions"],"reason":"The NPC offered a service at the door."}
+            """;
+        var handler = new QueueHttpHandler(ChatResponse(route));
+        var router = new OllamaDialogueParserRouter(
+            httpClient: new HttpClient(handler),
+            model: "test-model",
+            numGpu: 0);
+
+        var result = await router.RouteAsync(
+            DialogueParserCapabilityCatalog.BuildRouteRequest(
+                ClaimRequest("Bring grave salt and I can sell you a quiet lock-charm for the door.")),
+            CancellationToken.None);
+
+        Assert.False(result.TechnicalFailure);
+        Assert.True(result.HasMechanics);
+        Assert.Equal(new[] { "services_trade", "local_actions" }, result.SelectedCapabilityIds);
+        Assert.Equal("The NPC offered a service at the door.", result.Reason);
+        var requestBody = Assert.Single(handler.RequestBodies);
+        using var document = JsonDocument.Parse(requestBody);
+        Assert.Equal(0, document.RootElement.GetProperty("options").GetProperty("num_gpu").GetInt32());
+        var systemPrompt = document.RootElement
+            .GetProperty("messages")[0]
+            .GetProperty("content")
+            .GetString();
+        var userPrompt = document.RootElement
+            .GetProperty("messages")[1]
+            .GetProperty("content")
+            .GetString();
+        Assert.Contains("dialogue parser router", systemPrompt);
+        Assert.Contains("\"availableCapabilities\"", userPrompt);
+        Assert.Contains("\"services_trade\"", userPrompt);
+        Assert.DoesNotContain("Use reveal_service to expose a service", userPrompt);
     }
 
     private static DialogueRequest Request(string playerText) =>
@@ -260,6 +389,57 @@ public sealed class OllamaDialogueProviderTests
             Array.Empty<string>(),
             Array.Empty<string>(),
             Array.Empty<string>());
+
+    private static DialogueClaimRequest ClaimRequest(string npcDialogue) =>
+        new(
+            0,
+            "imperial_encounter",
+            "0,0",
+            "prisoner_1",
+            "Lio of Hollowmere",
+            new[] { "npc", "prisoner", "hollowmere" },
+            "player_soul",
+            "Lio, can you help with the lock?",
+            new[] { npcDialogue },
+            Array.Empty<Sorcerer.Core.World.WorldMemoryRecord>(),
+            Array.Empty<Sorcerer.Core.World.ClaimRecord>(),
+            "player");
+
+    private static DialogueRouteRequest RouteRequest(string playerText) =>
+        new(
+            0,
+            playerText,
+            new DialogueParticipantCard(
+                "prisoner_1",
+                "Lio of Hollowmere",
+                new[] { "npc", "prisoner" },
+                Faction: "hollowmere"),
+            new DialogueParticipantCard(
+                "player",
+                "You",
+                new[] { "sorcerer" },
+                Faction: "player"),
+            new DialogueSceneCard(
+                "imperial_encounter",
+                "0,0",
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>()),
+            new[]
+            {
+                new DialogueRouteCandidate(
+                    "rumors.full",
+                    "rumors",
+                    "Rumors",
+                    "Rumors this NPC is allowed to know.",
+                    new[] { "rumors" }),
+                new DialogueRouteCandidate(
+                    "zone.current",
+                    "zone",
+                    "Current Zone",
+                    "Visible zone state.",
+                    new[] { "zone.current" }),
+            });
 
     private static string ChatResponse(string content) =>
         JsonSerializer.Serialize(new { message = new { content } });

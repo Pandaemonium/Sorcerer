@@ -529,6 +529,9 @@ public sealed record EntitySave(
             case WantComponent typed:
                 entity.Set(typed);
                 break;
+            case KnowledgeComponent typed:
+                entity.Set(typed);
+                break;
             case StatusContainerComponent typed:
                 entity.Set(typed);
                 break;
@@ -639,6 +642,7 @@ public sealed record ComponentSave(
                 ("status", value.Status),
                 ("stakes", value.Stakes),
                 ("tags", value.Tags.ToArray())),
+            KnowledgeComponent value => New("knowledge", ("topicTiers", SortIntMap(value.TopicTiers))),
             StatusContainerComponent value => New("statuses", ("statuses", value.Statuses.ToArray())),
             MemoryComponent value => New("memory", ("records", value.Records.ToArray())),
             FactionComponent value => New("faction", ("factionId", value.FactionId), ("roles", value.Roles.ToArray())),
@@ -719,6 +723,7 @@ public sealed record ComponentSave(
                 ReadString(fields, "status", "active"),
                 ReadString(fields, "stakes"),
                 ReadStringList(fields, "tags")),
+            "knowledge" => new KnowledgeComponent(ReadIntMap(fields, "topicTiers")),
             "statuses" => new StatusContainerComponent(ReadStatusList(fields, "statuses")),
             "memory" => new MemoryComponent(ReadEntityMemoryList(fields, "records")),
             "faction" => new FactionComponent(ReadString(fields, "factionId"), ReadStringList(fields, "roles")),

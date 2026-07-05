@@ -38,6 +38,11 @@ Every call should have a purpose:
 
 - `wild`
 - `dialogue`
+- `dialogue_router` (pre-speech context-card router; defaults to `dialogue`
+  settings so local models do not thrash)
+- `dialogue_parser_router` (post-speech parser-capability router; defaults
+  local Ollama to CPU)
+- `dialogue_parser` (post-speech mechanical parser; defaults local Ollama to CPU)
 - `item`
 - `canon`
 - `background`
@@ -47,14 +52,26 @@ Purpose-specific settings allow the game to use different models, timeouts, host
 keys for different jobs.
 
 Current implementation has `LlmConfiguration` and `LlmPurposeSettings` for these lanes. The CLI
-creates foreground spell, generated-dialogue, and dialogue-claim providers from the `wild` and
-`dialogue` purposes, while background settings are kept separate and currently drive only
-deterministic queue/throttle controls until real background provider calls are wired in.
+creates foreground spell and generated-dialogue providers from the `wild` and
+`dialogue` purposes, creates the pre-dialogue context router from
+`dialogue_router`, creates the post-speech parser router from
+`dialogue_parser_router`, and creates post-dialogue parsing from
+`dialogue_parser`.
+Background settings are kept separate and currently drive provider-backed
+background text generation plus deterministic queue/throttle controls.
+Dialogue context routing is a separate `dialogue_router` purpose, but it falls
+back to the ordinary `dialogue` provider/model by default; using a separate tiny
+router model is an opt-in optimization only when it actually lowers end-to-end
+latency.
 Purpose-specific environment variables follow
 `SORCERER_<PURPOSE>_PROVIDER`, `SORCERER_<PURPOSE>_HOST`,
 `SORCERER_<PURPOSE>_MODEL`, `SORCERER_<PURPOSE>_TIMEOUT_SECONDS`,
 `SORCERER_<PURPOSE>_MAX_CONCURRENT_CALLS`, `SORCERER_<PURPOSE>_ENABLED`, and
-`SORCERER_<PURPOSE>_API_KEY`.
+`SORCERER_<PURPOSE>_API_KEY`. Ollama-backed purposes also honor
+`SORCERER_<PURPOSE>_NUM_GPU` where the provider exposes it. Dialogue parser
+lanes default `SORCERER_DIALOGUE_PARSER_ROUTER_NUM_GPU` and
+`SORCERER_DIALOGUE_PARSER_NUM_GPU` to `0` so parser routing/detail can run on
+CPU after visible speech instead of occupying the foreground GPU.
 
 ## Foreground Calls
 
