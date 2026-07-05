@@ -706,6 +706,11 @@ public sealed class EngineViewBuilder
 
         notes.Add(
             $"region lens: {region.Name} in {realm.Name}; realm status {realm.Status}; ruler {realm.Ruler}; tradition {region.TraditionId}; wildness {region.WildnessBase}; imperial presence {imperialPresence}");
+        if (!string.IsNullOrWhiteSpace(region.VoiceSummary))
+        {
+            notes.Add($"region voice: {region.VoiceSummary}");
+        }
+
         foreach (var affordance in affordances)
         {
             notes.Add($"region affordance {affordance.Id}: {affordance.Text}");
