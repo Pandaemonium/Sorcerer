@@ -59,6 +59,72 @@ public sealed class CapabilityRoutingTests
         Assert.True(entry.Routing.ContextPayloadBytes > 0);
     }
 
+    [Fact]
+    public async Task NeedsCapabilityAnswerLoadsCardAndReResolvesOnce()
+    {
+        // First answer asks for a capability by index name; second answer is a real resolution.
+        var provider = new NeedsCapabilityThenResolveProvider("summoning");
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider));
+
+        // Spell text that keyword-routes to nothing, so the first request genuinely lacks the card.
+        var result = await session.ExecuteAsync(new CastCommand("heal my wounds with warm green light"));
+
+        Assert.True(result.Success, result.Magic?.Error);
+        Assert.Equal(2, provider.Requests.Count);
+        // The retry request carried the requested capability that the first request lacked.
+        Assert.DoesNotContain(
+            provider.Requests[0].SelectedCapabilities ?? new List<Sorcerer.Magic.Capabilities.CapabilityCard>(),
+            card => card.Id == "summoning");
+        Assert.Contains(
+            provider.Requests[1].SelectedCapabilities ?? new List<Sorcerer.Magic.Capabilities.CapabilityCard>(),
+            card => card.Id == "summoning");
+    }
+
+    private sealed class NeedsCapabilityThenResolveProvider : Sorcerer.Magic.Resolution.ISpellProvider
+    {
+        private readonly string _capability;
+        private int _calls;
+
+        public NeedsCapabilityThenResolveProvider(string capability) => _capability = capability;
+
+        public List<Sorcerer.Magic.Resolution.SpellRequest> Requests { get; } = new();
+
+        public string Name => "needs-capability-stub";
+
+        public Task<Sorcerer.Magic.Resolution.SpellProviderResult> ResolveAsync(
+            Sorcerer.Magic.Resolution.SpellRequest request,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            Requests.Add(request);
+            if (_calls++ == 0)
+            {
+                return Task.FromResult(new Sorcerer.Magic.Resolution.SpellProviderResult(
+                    Name, $"{{\"needsCapability\":\"{_capability}\"}}", Resolution: null,
+                    TechnicalFailure: false, Error: null, Stats: null, RequestedCapability: _capability));
+            }
+
+            var resolution = new Sorcerer.Magic.Resolution.SpellResolution(
+                Accepted: true,
+                Severity: "minor",
+                OutcomeText: "A small blue helper unfolds from the air.",
+                Effects: new[]
+                {
+                    new Sorcerer.Magic.Resolution.SpellEffect("heal", new Dictionary<string, object?>
+                    {
+                        ["target"] = "player",
+                        ["amount"] = 3,
+                    }),
+                },
+                Costs: new[]
+                {
+                    new Sorcerer.Magic.Resolution.SpellCost("mana", new Dictionary<string, object?> { ["amount"] = 2 }),
+                },
+                RejectedReason: null);
+            return Task.FromResult(new Sorcerer.Magic.Resolution.SpellProviderResult(
+                Name, "{}", resolution, TechnicalFailure: false, Error: null));
+        }
+    }
+
     private sealed class CapturingSpellAuditSink : ISpellAuditSink
     {
         public List<SpellAuditEntry> Entries { get; } = new();

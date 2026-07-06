@@ -514,11 +514,11 @@ public static class RumorSystem
         return deed.Kind switch
         {
             "freed_prisoner" => $"{actor} freed a prisoner near {place}.",
-            "body_swap" => $"{actor} stole a body's certainty near {place}.",
+            "body_swap" => $"{actor} walked out wearing another face near {place}.",
             "kill" => $"{actor} left a death near {place}.",
             "attack" => $"{actor} struck first near {place}.",
             "wild_magic" => $"{actor} worked wild magic near {place}.",
-            _ => $"{actor} became a story near {place}: {deed.Kind}.",
+            _ => $"people near {place} are still talking about what {actor} did: {deed.Kind}.",
         };
     }
 

@@ -21,6 +21,12 @@ public sealed record DialogueContextAssembly(
     IReadOnlyList<DialogueContextCardPayload> AvailableCards,
     IReadOnlyList<DialogueContextCardPayload> DeniedCards)
 {
+    // Total byte budget for the selected context cards (the dominant request slice). With the
+    // fixed slices (~2 KB) this keeps the whole dialogue request near the ~6 KB target
+    // (docs/OPTIMIZATION_PLAN.md WS3.3).
+    private const int DialogueContextCardsByteBudget = 4096;
+    private const int DialogueCardLineMaxLength = 320;
+
     public DialogueRouteSelection Select(DialogueRouteResult result)
     {
         var fallbackIds = DeterministicDialogueContextCardIds(AvailableCards, RouteRequest.PlayerText);
@@ -61,7 +67,12 @@ public sealed record DialogueContextAssembly(
 
     public DialogueRequest BuildDialogueRequest(DialogueRouteSelection selection)
     {
-        var cardLines = selection.SelectedCards.ToDictionary(
+        // Enforce a total byte budget on the context cards (docs/OPTIMIZATION_PLAN.md WS3.3): keep
+        // cards in router order, cap each line's length, and stop adding lines once the budget is
+        // spent so a crowded selection can never balloon the prompt. The per-topic line lookups
+        // below read from the trimmed cards so the whole request stays within budget.
+        var budgetedCards = FitContextCardsToBudget(selection.SelectedCards);
+        var cardLines = budgetedCards.ToDictionary(
             card => card.Id,
             card => card.Lines,
             StringComparer.OrdinalIgnoreCase);
@@ -78,7 +89,8 @@ public sealed record DialogueContextAssembly(
                 RouteRequest.Scene.CurrentZoneId,
                 zoneLines.Where(line => line.StartsWith("Entity:", StringComparison.OrdinalIgnoreCase)).ToArray(),
                 zoneLines.Where(line => line.StartsWith("Item:", StringComparison.OrdinalIgnoreCase)).ToArray(),
-                zoneLines.Where(line => line.StartsWith("Event:", StringComparison.OrdinalIgnoreCase)).ToArray()),
+                zoneLines.Where(line => line.StartsWith("Event:", StringComparison.OrdinalIgnoreCase)).ToArray(),
+                RouteRequest.Scene.RegionVoice),
             cardLines.TryGetValue("npc.relationship_memory", out var memoryLines)
                 ? memoryLines
                 : Array.Empty<string>(),
@@ -89,8 +101,49 @@ public sealed record DialogueContextAssembly(
             cardLines.TryGetValue("rumors.full", out var rumorLines)
                 ? rumorLines
                 : Array.Empty<string>(),
-            selection.SelectedCards,
+            budgetedCards,
             selection.SelectedCardIds);
+    }
+
+    /// <summary>
+    /// Trims the selected cards to <see cref="DialogueContextCardsByteBudget"/>: caps each line's
+    /// length, keeps cards in router order, and stops adding lines once the budget is spent (each
+    /// affected card keeps at least one line and is marked Truncated). A card whose budget ran out
+    /// entirely keeps its header with no lines so the model still sees the topic was available.
+    /// </summary>
+    private static IReadOnlyList<DialogueContextCardPayload> FitContextCardsToBudget(
+        IReadOnlyList<DialogueContextCardPayload> cards)
+    {
+        var trimmed = new List<DialogueContextCardPayload>(cards.Count);
+        var usedBytes = 0;
+        foreach (var card in cards)
+        {
+            var keptLines = new List<string>();
+            var truncated = card.Truncated;
+            foreach (var line in card.Lines)
+            {
+                var capped = line.Length > DialogueCardLineMaxLength
+                    ? line[..DialogueCardLineMaxLength].TrimEnd() + "…"
+                    : line;
+                var lineBytes = System.Text.Encoding.UTF8.GetByteCount(capped) + 4;
+                if (usedBytes + lineBytes > DialogueContextCardsByteBudget && keptLines.Count > 0)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                keptLines.Add(capped);
+                usedBytes += lineBytes;
+            }
+
+            trimmed.Add(card with
+            {
+                Lines = keptLines,
+                Truncated = truncated || keptLines.Count < card.Lines.Count,
+            });
+        }
+
+        return trimmed;
     }
 
     public DialogueRouteMetrics CreateMetrics(
@@ -353,7 +406,8 @@ public sealed class DialogueContextAssembler
                 _engine.State.CurrentZoneId,
                 VisibleEntityLines().Take(4).ToArray(),
                 NearbyItemLines().Take(3).ToArray(),
-                _engine.State.Messages.TakeLast(2).ToArray()),
+                _engine.State.Messages.TakeLast(2).ToArray(),
+                _engine.CurrentRegionVoice),
             cards.Available
                 .Select(card => new DialogueRouteCandidate(
                     card.Id,

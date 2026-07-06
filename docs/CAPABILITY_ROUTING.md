@@ -25,8 +25,30 @@ prototype's `docs/CAPABILITY_ROUTING.md` for the current C# engine.
   `RequiredContext` contains `hidden_entities` (currently `memory_edit`). Replaces the old
   always-include-hidden behavior.
 
-Remaining / deferred: dynamic per-cast JSON schema (Lever C2) and `needs_capability`; a dedicated
+Remaining / deferred: dynamic per-cast JSON schema (Lever C2); a dedicated
 small router model; richer `RequiredContext` extractors beyond `hidden_entities`.
+
+## Update (2026-07-05, docs/OPTIMIZATION_PLAN.md)
+
+- **Recall floor.** When routing selects **zero** capabilities, `ToRoutedIndex` now advertises
+  **every** registered operation by name (lean cards, full cards for the common core) instead of
+  core-only. An unanticipated spell can therefore still reach any mechanic. Routed casts keep the
+  narrowing above.
+- **Smaller always-full core.** `CoreCommon` shrank to six ops (`damage`, `heal`, `addStatus`,
+  `removeStatus`, `message`, `createTiles`). Every demoted op has a routed home on a capability
+  card, so a spell that needs it loads its full card: `motion_kinetics` (push/pull/teleport),
+  `area_burst` (areaDamage/areaStatus), `protection_wards` (resist/weaken), `restoration`
+  (restoreMana), `curse_mark` (addCurse), `possession` (possess), and `setFlag` folded into
+  `prophecy`.
+- **`needs_capability` shipped.** The resolver may answer `{"needsCapability":"name"}`; the
+  controller loads that card and re-resolves **once** (`SpellResolutionJson.TryReadNeedsCapability`,
+  `SpellProviderResult.RequestedCapability`, `CapabilityRegistry.Find`). Bounded — a second such
+  answer is a technical failure.
+- Prompt assembly moved to `SpellPromptBuilder` (static prefix first for KV-cache reuse; operation
+  cards rendered as compact text, not context JSON). Per-cast latency stats
+  (`ProviderCallStats.PromptTokens`, `LoadMs`, …) now ride the audit; mine them with
+  `scripts/mine_wild_magic_audit.py`. Note: `SpellRoutingRecord.ContextPayloadBytes` still measures
+  the full context object, not the trimmed wire payload — prefer `ProviderStats.PromptTokens`.
 
 ## 1. Why now
 

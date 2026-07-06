@@ -157,20 +157,20 @@ public sealed class WorldReactionSystem
                 AdjustFactionStanding(messages, deltas, applyConsequence, "hollowmere", "gratitude", 2);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
                 RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
-                AddMessage(messages, deltas, applyConsequence, deed, "freed_prisoner", "Word of the prisoner's rescue finds a road.");
+                AddMessage(messages, deltas, applyConsequence, deed, "freed_prisoner", "By morning someone will have carried word of the rescue down the road.");
                 break;
             case "body_swap":
                 AddLegend(messages, deltas, applyConsequence, deed, "uncanny", 2);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", deed.Magnitude);
                 RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude - 1));
-                AddMessage(messages, deltas, applyConsequence, deed, "body_swap", "The story of stolen eyes starts looking for listeners.");
+                AddMessage(messages, deltas, applyConsequence, deed, "body_swap", "Whoever watched that will be looking for someone willing to believe them.");
                 break;
             case "kill":
                 AddLegend(messages, deltas, applyConsequence, deed, "butcher", Math.Max(1, deed.Magnitude));
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "fear", deed.Magnitude);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", deed.Magnitude);
                 RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
-                AddMessage(messages, deltas, applyConsequence, deed, "kill", "The killing will travel farther than the body.");
+                AddMessage(messages, deltas, applyConsequence, deed, "kill", "Someone will carry word of the killing to the next town before nightfall.");
                 break;
             case "attack":
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "fear", Math.Max(1, deed.Magnitude - 1));
@@ -270,7 +270,7 @@ public sealed class WorldReactionSystem
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "imperial-threat", Math.Max(1, deed.Magnitude));
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", 1);
         RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
-        AddMessage(messages, deltas, applyConsequence, deed, "public_wild_magic", "Word of your wild magic takes on a sharper color.");
+        AddMessage(messages, deltas, applyConsequence, deed, "public_wild_magic", "The people who saw the wild magic are already telling each other what they think it was.");
     }
 
     private static void AdjustEmpireBloc(

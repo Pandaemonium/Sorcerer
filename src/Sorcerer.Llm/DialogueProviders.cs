@@ -64,7 +64,7 @@ public sealed class MockDialogueProvider : IDialogueProvider
             || lower.Contains("south", StringComparison.Ordinal)
             || lower.Contains("town", StringComparison.Ordinal))
         {
-            line = $"{speaker.Name} whispers, \"South of here, past the wet road, there is a town called Hollowmere. It remembers favors longer than laws.\"";
+            line = $"{speaker.Name} whispers, \"South of here, past the wet road, there is a town called Hollowmere. The people there pay back a kindness.\"";
             claims.Add(new DialogueClaimProposal(
                 "South of here, past the wet road, there is a town called Hollowmere.",
                 "town",
@@ -320,7 +320,7 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             OllamaDialogueProvider.SystemPrompt(),
             OllamaDialogueProvider.UserPrompt(request, retryNote: null),
             temperature: 0.35,
-            maxTokens: 1200,
+            maxTokens: 1024,
             timeout.Token,
             label: "dialogue");
         if (!first.Success)
@@ -341,7 +341,7 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             OllamaDialogueProvider.SystemPrompt() + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
             OllamaDialogueProvider.UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
             temperature: 0.2,
-            maxTokens: 1200,
+            maxTokens: 1024,
             timeout.Token,
             label: "dialogue-repair");
         if (!retry.Success)
@@ -402,7 +402,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             SystemPrompt(),
             UserPrompt(request, retryNote: null),
             temperature: 0.35,
-            maxTokens: 1200,
+            maxTokens: 1024,
             timeout.Token);
         if (!first.Success)
         {
@@ -415,7 +415,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             && response is not null
             && !Degenerate(response, request.PlayerText, out degeneration))
         {
-            return Success(first.Content, response);
+            return Success(first.Content, response, first.Stats);
         }
 
         var retry = await ChatAsync(
@@ -423,7 +423,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             SystemPrompt() + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
             UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
             temperature: 0.2,
-            maxTokens: 1200,
+            maxTokens: 1024,
             timeout.Token);
         if (!retry.Success)
         {
@@ -432,7 +432,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
 
         if (TryParseResponse(retry.Content, request, out response, out parseError))
         {
-            return Success(retry.Content, response!);
+            return Success(retry.Content, response!, retry.Stats);
         }
 
         return Failure(retry.Content, parseError ?? "Dialogue provider returned invalid JSON.");
@@ -449,7 +449,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         // Log the prompt before dispatch so it is readable while the call is still in flight.
         var traceId = Diagnostics.LlmTrace.Begin(label, _model, system, user);
         var result = await SendAsync(system, user, temperature, maxTokens, cancellationToken);
-        Diagnostics.LlmTrace.End(traceId, result.Success ? result.Content : result.RawText, result.Error);
+        Diagnostics.LlmTrace.End(traceId, result.Success ? result.Content : result.RawText, result.Error, result.Stats);
         return result;
     }
 
@@ -472,7 +472,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
                 options = new
                 {
                     temperature,
-                    num_ctx = 4096,
+                    num_ctx = OllamaDefaults.NumCtx,
                     num_predict = maxTokens,
                 },
                 messages = new[]
@@ -489,13 +489,14 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             }
 
             using var document = JsonDocument.Parse(raw);
+            var stats = Diagnostics.OllamaStats.From(document.RootElement);
             var content = document.RootElement
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString() ?? string.Empty;
             return string.IsNullOrWhiteSpace(content)
-                ? new ChatResult(false, "", raw, "Ollama returned an empty message.")
-                : new ChatResult(true, content, raw, null);
+                ? new ChatResult(false, "", raw, "Ollama returned an empty message.", stats)
+                : new ChatResult(true, content, raw, null, stats);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
@@ -1121,15 +1122,21 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         + "Shape: {\"spokenText\":\"NPC speech\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\"}. "
         + "Speak as the speaker only. No narration, markdown, stage directions, or omniscient exposition. Answer the newest player message directly in about two compact paragraphs, roughly 4-7 sentences total. Put a blank line inside spokenText if it helps the reply breathe. "
         + "Use the speaker, listener, scene, recent memories, rumors, and claims as context. Player-spoken claims are not binding; speak from the NPC's knowledge, uncertainty, motives, and relationship to the listener. "
+        // Voice (docs/AESTHETICS_AND_TONE.md, narration voice): grounded and specific, not portentous.
+        + "Speak as a particular person with your own concerns, work, and history, not as an oracle or narrator of the world. "
+        + "Ground answers in concrete local detail - names, prices, roads, weather, the day's labor - and let your own want and your bond with the listener decide what you volunteer or hold back. "
+        + "Avoid portent, mystique, and cosmic phrasing (\"the world remembers\", \"the shape of you\", rumors that \"spread\") unless this character genuinely trades in such talk; most people do not. Never speak on behalf of \"the world\" or narrate consequences you could not personally know. "
+        + "If scene.regionVoice is present, let it tint your diction toward the local register. "
+        + "If recentDialogue is present, it is what you and this person just said to each other; stay consistent with it and do not reintroduce yourself. "
         + "Do not output proposals, claims arrays, mechanics, schemas, engine operations, markdown, or JSON fields beyond spokenText, delivery, and intent. A separate parser will inspect the spoken reply for supported mechanical consequences after the player sees it. "
         + "Concrete NPC assertions are allowed when in character, but avoid inventing omniscient facts or resolving player claims as true. If the speaker cannot or will not answer, still return a character refusal as spokenText. Technical JSON mistakes are failures; character refusal is not.";
 
+    // Stable context first so a local backend can reuse the KV prefix across turns of one
+    // conversation; the volatile tail (recent exchange, this turn's line, any retry note) changes
+    // every turn and so comes last (docs/OPTIMIZATION_PLAN.md WS3.5).
     internal static string UserPrompt(DialogueRequest request, string? retryNote) =>
         JsonSerializer.Serialize(new
         {
-            retryNote,
-            request.Turn,
-            request.PlayerText,
             speaker = request.Speaker,
             listener = request.Listener,
             scene = request.Scene,
@@ -1138,15 +1145,24 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             recentMemories = request.RecentMemories,
             recentClaims = request.RecentClaims,
             recentRumors = request.RecentRumors ?? Array.Empty<string>(),
+            recentDialogue = request.RecentDialogue ?? Array.Empty<string>(),
+            request.Turn,
+            retryNote,
+            request.PlayerText,
         }, JsonOptions);
 
-    private DialogueProviderResult Success(string raw, DialogueResponse response) =>
-        new(Name, raw, TechnicalFailure: false, Error: null, Response: response);
+    private DialogueProviderResult Success(string raw, DialogueResponse response, Sorcerer.Core.Telemetry.ProviderCallStats? stats = null) =>
+        new(Name, raw, TechnicalFailure: false, Error: null, Response: response, Stats: stats);
 
     private DialogueProviderResult Failure(string raw, string error) =>
         new(Name, raw, TechnicalFailure: true, Error: error, Response: null);
 
-    private sealed record ChatResult(bool Success, string Content, string RawText, string? Error);
+    private sealed record ChatResult(
+        bool Success,
+        string Content,
+        string RawText,
+        string? Error,
+        Sorcerer.Core.Telemetry.ProviderCallStats? Stats = null);
 
     private static HttpClient CreateHttpClient() =>
         new()

@@ -1,3 +1,4 @@
+using Sorcerer.Core.Telemetry;
 using Sorcerer.Magic.Capabilities;
 
 namespace Sorcerer.Magic.Resolution;
@@ -26,7 +27,11 @@ public sealed record SpellProviderResult(
     string RawText,
     SpellResolution? Resolution,
     bool TechnicalFailure,
-    string? Error);
+    string? Error,
+    ProviderCallStats? Stats = null,
+    // Set when the model answered {"needsCapability":"name"} instead of a resolution (WS1.2). The
+    // controller loads that card and re-resolves once; a second such answer is a technical failure.
+    string? RequestedCapability = null);
 
 public interface ISpellProvider
 {

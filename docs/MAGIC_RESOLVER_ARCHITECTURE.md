@@ -71,6 +71,17 @@ The resolver should receive:
 Routing should be recall-biased. Loading one extra relevant card is much less harmful than
 missing the card that would make a spell work.
 
+Prompt assembly for both live providers (Ollama, OpenAI-compatible) lives in one place,
+`SpellPromptBuilder`. The system prompt is ordered static-first — core rules, the consequence-type
+line, the capability index — then the per-cast tail (supported-operation list, operation guidance
+rendered as **compact text lines**, loaded capability blocks), so a local backend can prompt-cache
+the stable prefix across consecutive casts. The operation catalog is therefore prompt text, **not**
+serialized into the user-message context JSON (which drops it and all null fields on the wire).
+When routing selects nothing, the operation index still advertises every operation by name (recall
+floor). If the loaded mechanics don't fit, the model may answer `{"needsCapability":"name"}` and the
+controller loads that card and re-resolves once. Per-call token/timing stats
+(`ProviderCallStats`) ride the audit for latency tuning; see docs/OPTIMIZATION_PLAN.md.
+
 Current implementation:
 
 - `CapabilityRegistry.Select` ranks cards by trigger-hit count (ties broken by registry order),

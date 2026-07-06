@@ -6234,7 +6234,7 @@ public sealed class GameSessionCharacterizationTests
         Assert.Equal(1, bond.Resentment);
         Assert.Contains(session.Engine.State.Memories.Records, memory =>
             memory.SubjectId == "prisoner_1"
-            && memory.Text.Contains("remembers the shape", StringComparison.OrdinalIgnoreCase));
+            && memory.Text.Contains("will not forget it", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

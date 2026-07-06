@@ -51,6 +51,19 @@ public sealed class WildMagicController : IWildMagicController
         try
         {
             providerResult = await _provider.ResolveAsync(request, cancellationToken);
+
+            // Escape hatch (docs/OPTIMIZATION_PLAN.md WS1.2): the model may answer
+            // {"needsCapability":"name"} when the loaded mechanics don't fit. Load that card and
+            // re-resolve exactly once; a card we don't know, one already loaded, or a second such
+            // answer just falls through to the null-resolution technical-failure path below.
+            if (providerResult.RequestedCapability is { Length: > 0 } requested
+                && _capabilities.Find(requested) is { } extraCard
+                && !selectedCapabilities.Any(card => card.Id.Equals(extraCard.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                selectedCapabilities = selectedCapabilities.Append(extraCard).ToArray();
+                request = BuildSpellRequest(engine, command.Text, selectedCapabilities);
+                providerResult = await _provider.ResolveAsync(request, cancellationToken);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -72,6 +85,10 @@ public sealed class WildMagicController : IWildMagicController
 
         if (providerResult.TechnicalFailure || providerResult.Resolution is null)
         {
+            var error = providerResult.Error
+                ?? (providerResult.RequestedCapability is { Length: > 0 }
+                    ? "The resolver asked for a capability it could not use, and produced no spell."
+                    : "Spell provider failed.");
             return new MaterializedMagicResolution(
                 providerResult.Provider,
                 command.Text,
@@ -79,9 +96,10 @@ public sealed class WildMagicController : IWildMagicController
                 providerResult.RawText,
                 Accepted: false,
                 TechnicalFailure: true,
-                Error: providerResult.Error ?? "Spell provider failed.",
+                Error: error,
                 EffectTypes: Array.Empty<string>(),
-                ResolvedMagicJson: null);
+                ResolvedMagicJson: null,
+                ProviderStats: providerResult.Stats);
         }
 
         var resolution = RepairNarration(command.Text, Normalize(providerResult.Resolution));
@@ -94,7 +112,8 @@ public sealed class WildMagicController : IWildMagicController
             TechnicalFailure: false,
             Error: resolution.Accepted ? null : resolution.RejectedReason ?? "The spell refuses to become real.",
             resolution.Effects.Select(effect => effect.Type).ToArray(),
-            SerializeResolution(resolution));
+            SerializeResolution(resolution),
+            ProviderStats: providerResult.Stats);
     }
 
     public ActionResult ApplyResolved(GameEngine engine, MaterializedMagicResolution materialized)
@@ -113,7 +132,8 @@ public sealed class WildMagicController : IWildMagicController
                 materialized.RawText,
                 Resolution: null,
                 TechnicalFailure: true,
-                Error: error);
+                Error: error,
+                Stats: materialized.ProviderStats);
             var result = TechnicalFailure(engine, materialized.Provider, turnBefore, error);
             Audit(technicalProviderResult, command, request, result, Array.Empty<string>());
             return result;
@@ -131,7 +151,8 @@ public sealed class WildMagicController : IWildMagicController
                 materialized.RawText,
                 resolution,
                 TechnicalFailure: false,
-                Error: null);
+                Error: null,
+                Stats: materialized.ProviderStats);
         }
         catch (Exception ex)
         {
@@ -467,13 +488,14 @@ public sealed class WildMagicController : IWildMagicController
             result,
             validationErrors,
             command.Performance,
-            BuildRoutingRecord(request)));
+            BuildRoutingRecord(request, providerResult.Stats)));
 
-    private static SpellRoutingRecord BuildRoutingRecord(SpellRequest request) =>
+    private static SpellRoutingRecord BuildRoutingRecord(SpellRequest request, Sorcerer.Core.Telemetry.ProviderCallStats? stats) =>
         new(
             request.SelectedCapabilities?.Select(card => card.Id).ToArray() ?? Array.Empty<string>(),
             request.SupportedOperations.Count,
-            System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(request.Context, JsonOptions)));
+            System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(request.Context, JsonOptions)),
+            stats);
 
     private SpellResolution Normalize(SpellResolution resolution) =>
         resolution with

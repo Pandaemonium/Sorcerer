@@ -246,7 +246,7 @@ public sealed class OllamaDialogueRouter : IDialogueRouter
     {
         var traceId = Diagnostics.LlmTrace.Begin("dialogue-context-router", _model, system, user);
         var result = await SendAsync(system, user, temperature, maxTokens, cancellationToken);
-        Diagnostics.LlmTrace.End(traceId, result.Success ? result.Content : result.RawText, result.Error);
+        Diagnostics.LlmTrace.End(traceId, result.Success ? result.Content : result.RawText, result.Error, result.Stats);
         return result;
     }
 
@@ -269,7 +269,7 @@ public sealed class OllamaDialogueRouter : IDialogueRouter
                 options = new
                 {
                     temperature,
-                    num_ctx = 2048,
+                    num_ctx = OllamaDefaults.NumCtx,
                     num_predict = maxTokens,
                 },
                 messages = new[]
@@ -286,13 +286,14 @@ public sealed class OllamaDialogueRouter : IDialogueRouter
             }
 
             using var document = JsonDocument.Parse(raw);
+            var stats = Diagnostics.OllamaStats.From(document.RootElement);
             var content = document.RootElement
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString() ?? string.Empty;
             return string.IsNullOrWhiteSpace(content)
-                ? new ChatResult(false, "", raw, "Ollama returned an empty message.")
-                : new ChatResult(true, content, raw, null);
+                ? new ChatResult(false, "", raw, "Ollama returned an empty message.", stats)
+                : new ChatResult(true, content, raw, null, stats);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
@@ -397,7 +398,12 @@ public sealed class OllamaDialogueRouter : IDialogueRouter
             ? value.GetString()
             : null;
 
-    private sealed record ChatResult(bool Success, string Content, string RawText, string? Error);
+    private sealed record ChatResult(
+        bool Success,
+        string Content,
+        string RawText,
+        string? Error,
+        Sorcerer.Core.Telemetry.ProviderCallStats? Stats = null);
 
     private static HttpClient CreateHttpClient() =>
         new()

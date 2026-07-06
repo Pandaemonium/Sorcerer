@@ -99,28 +99,31 @@ public sealed class SpellRouterTests
         var capabilities = CapabilityRegistry.CreateDefault();
         var routable = capabilities.AllEffectTypes();
 
-        var full = registry.ToNarrowedIndex(Array.Empty<string>());
-        var routed = registry.ToRoutedIndex(Array.Empty<string>(), routable);
-
-        // Same operations are advertised; only the card detail differs.
-        Assert.Equal(full.Names, routed.Names);
-
-        var fullByName = full.Cards.ToDictionary(card => card.Name, StringComparer.OrdinalIgnoreCase);
         bool IsLean(OperationCardView card) =>
             string.IsNullOrEmpty(card.PromptGuidance) && card.Fields.Count == 0 && card.Examples.Count == 0;
 
-        // At least one operation that carried real guidance/fields is trimmed to a lean card.
-        var trimmed = routed.Cards
-            .Where(card => IsLean(card)
-                && fullByName.TryGetValue(card.Name, out var original)
-                && !IsLean(original))
-            .Select(card => card.Name)
-            .ToArray();
-        Assert.NotEmpty(trimmed);
+        // Recall floor: an unrouted cast advertises every registered operation by name, so a spell
+        // the trigger vocabulary did not anticipate can still reach any mechanic...
+        var unrouted = registry.ToRoutedIndex(Array.Empty<string>(), routable);
+        Assert.Equal(registry.ToIndex().Names, unrouted.Names);
 
-        // Selecting a capability that unlocks that operation restores its full card.
-        var restored = registry.ToRoutedIndex(new[] { trimmed[0] }, routable);
-        var restoredCard = restored.Cards.Single(card => card.Name.Equals(trimmed[0], StringComparison.OrdinalIgnoreCase));
+        // ...but only the small common core keeps full prompt guidance; the rest are lean lines.
+        var unroutedFull = unrouted.Cards.Where(card => !IsLean(card)).Select(card => card.Name).ToArray();
+        Assert.Contains("heal", unroutedFull, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("addStatus", unroutedFull, StringComparer.OrdinalIgnoreCase);
+        Assert.True(unroutedFull.Length <= 8, $"unrouted cast keeps too many full cards: {string.Join(", ", unroutedFull)}");
+        Assert.Contains(unrouted.Cards, card => IsLean(card) && card.Name.Equals("teleport", StringComparison.OrdinalIgnoreCase));
+
+        // A routed cast keeps today's narrowing: core names plus what the selection unlocked,
+        // trimmed to lean cards unless selected...
+        var routed = registry.ToRoutedIndex(new[] { "summon" }, routable);
+        Assert.True(routed.Names.Count < unrouted.Names.Count);
+        var teleport = routed.Cards.Single(card => card.Name.Equals("teleport", StringComparison.OrdinalIgnoreCase));
+        Assert.True(IsLean(teleport));
+
+        // ...and selecting the capability that unlocks an operation restores its full card.
+        var restored = registry.ToRoutedIndex(new[] { "teleport" }, routable);
+        var restoredCard = restored.Cards.Single(card => card.Name.Equals("teleport", StringComparison.OrdinalIgnoreCase));
         Assert.False(IsLean(restoredCard));
     }
 

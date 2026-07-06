@@ -858,7 +858,7 @@ public sealed class GameSessionTests
         Assert.Contains(wait.Messages, message =>
             message.Contains("but not the hand that loosed it", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(wait.Messages, message =>
-            message.Contains("sharper color", StringComparison.OrdinalIgnoreCase));
+            message.Contains("telling each other what they think it was", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(wait.Deltas, delta => delta.Operation == "addLegend");
         Assert.Contains(wait.Deltas, delta =>
             delta.Operation == "recordRumor"
@@ -902,7 +902,7 @@ public sealed class GameSessionTests
         Assert.DoesNotContain(wait.Deltas, delta => delta.Operation == "recordRumor");
         Assert.DoesNotContain(wait.Deltas, delta => delta.Operation == "deedWitnessMemory");
         Assert.DoesNotContain(wait.Messages, message =>
-            message.Contains("sharper color", StringComparison.OrdinalIgnoreCase));
+            message.Contains("telling each other what they think it was", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -933,7 +933,7 @@ public sealed class GameSessionTests
         var wait = await session.ExecuteAsync(new WaitCommand());
 
         Assert.Contains(wait.Messages, message =>
-            message.Contains("sharper color", StringComparison.OrdinalIgnoreCase));
+            message.Contains("telling each other what they think it was", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

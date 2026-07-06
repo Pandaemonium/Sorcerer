@@ -1,3 +1,5 @@
+using Sorcerer.Core.Telemetry;
+
 namespace Sorcerer.Llm.Diagnostics;
 
 /// <summary>An immutable snapshot of one LLM call for the debug view.</summary>
@@ -11,7 +13,8 @@ public sealed record LlmTraceEntry(
     bool Completed,
     string? Response,
     string? Error,
-    double ElapsedMs);
+    double ElapsedMs,
+    ProviderCallStats? Stats = null);
 
 /// <summary>
 /// Process-wide, thread-safe log of every LLM call. The prompt is recorded the instant a call is
@@ -68,7 +71,7 @@ public static class LlmTrace
     }
 
     /// <summary>Fills in the response (or error) for a previously begun call. Safe to call once per call.</summary>
-    public static void End(int id, string? response, string? error)
+    public static void End(int id, string? response, string? error, ProviderCallStats? stats = null)
     {
         lock (Gate)
         {
@@ -81,6 +84,7 @@ public static class LlmTrace
             entry.Completed = true;
             entry.Response = response;
             entry.Error = error;
+            entry.Stats = stats;
             entry.ElapsedMs = (DateTimeOffset.Now - entry.StartedAt).TotalMilliseconds;
             _revision++;
         }
@@ -111,7 +115,8 @@ public static class LlmTrace
                     entry.Completed,
                     entry.Response,
                     entry.Error,
-                    entry.ElapsedMs))
+                    entry.ElapsedMs,
+                    entry.Stats))
                 .ToList();
         }
     }
@@ -128,5 +133,6 @@ public static class LlmTrace
         public string? Response;
         public string? Error;
         public double ElapsedMs;
+        public ProviderCallStats? Stats;
     }
 }

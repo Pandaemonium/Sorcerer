@@ -49,6 +49,37 @@ public static class SpellResolutionJson
             ["blood"] = "blood",
         };
 
+    /// <summary>
+    /// Detects the resolver's escape hatch (docs/OPTIMIZATION_PLAN.md WS1.2): a
+    /// {"needsCapability":"name"} answer means the loaded mechanics did not fit and the named
+    /// capability should be loaded before re-resolving. Returns the requested name, or null for an
+    /// ordinary resolution. Conservative: only fires when the object has a non-empty capability name
+    /// and carries no effects, so a real resolution that happens to mention the key is untouched.
+    /// </summary>
+    public static string? TryReadNeedsCapability(string raw)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(ExtractFirstJsonObject(raw));
+            var root = UnwrapCommonWrapper(document.RootElement);
+            root = UnwrapOutcomeContainer(root);
+            var name = ReadString(root, "needsCapability", ReadString(root, "needs_capability", string.Empty));
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            var hasEffects = root.TryGetProperty("effects", out var effects)
+                && effects.ValueKind == JsonValueKind.Array
+                && effects.GetArrayLength() > 0;
+            return hasEffects ? null : name.Trim();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public static SpellResolution Parse(string raw, OperationRegistry registry)
     {
         using var document = JsonDocument.Parse(ExtractFirstJsonObject(raw));

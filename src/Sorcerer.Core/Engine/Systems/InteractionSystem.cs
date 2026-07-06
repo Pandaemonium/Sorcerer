@@ -1488,7 +1488,7 @@ public sealed class InteractionSystem
                 return;
             }
 
-            var message = $"{target.Name} hears the threat and remembers the shape of it.";
+            var message = $"{target.Name} hears the threat and will not forget it.";
             deltas.AddRange(bond.Deltas);
             var memory = _engine.ApplyConsequence(WorldConsequence.RecordMemory(
                 "dialogue:threat",
@@ -1932,8 +1932,8 @@ public sealed class InteractionSystem
                 : NeutralBond(targetSoulId, playerSoulId);
             var legend = PlayerLegendSummary();
             return string.IsNullOrWhiteSpace(legend)
-                ? $"{target.Name} whispers, \"If you get me out, Hollowmere will remember the color of your magic.\" {BondMoodLine(target, bond)}"
-                : $"{target.Name} whispers, \"I have heard the shape of you: {legend}. Get me out, and Hollowmere will remember.\" {BondMoodLine(target, bond)}";
+                ? $"{target.Name} whispers, \"Get me out of here and you'll have friends in Hollowmere who pay their debts. I'll make sure they know your name.\" {BondMoodLine(target, bond)}"
+                : $"{target.Name} whispers, \"People already trade stories about you - {legend}. Get me out, and I'll see the right ones in Hollowmere hear it from me.\" {BondMoodLine(target, bond)}";
         }
 
         if (target.TryGet<ProfileComponent>(out var profile))

@@ -51,11 +51,19 @@ public sealed class EngineViewBuilder
         // RequiredContext (e.g. a memory-edit spell reaching an unseen mind); otherwise they are
         // off-screen context the spell does not need. See docs/CAPABILITY_ROUTING.md Lever B.
         var includeHidden = requiredContext is not null && requiredContext.Contains("hidden_entities");
+        // Nearest-first cap: a crowded zone should not scale the resolver prompt without bound.
+        // The caster always survives the cap; relative offsets are omitted (the model has both
+        // positions, and the null is dropped from the wire). See docs/OPTIMIZATION_PLAN.md WS2.5.
         var visible = _state.Entities.Values
             .Where(entity => entity.TryGet<PositionComponent>(out _))
             .Where(entity => includeHidden
                 || entity.Id == _state.ControlledEntityId
                 || perception.VisibleEntityIds.Contains(entity.Id))
+            .OrderBy(entity => entity.Id == _state.ControlledEntityId
+                ? -1
+                : GameEngine.Distance(casterPosition, entity.Get<PositionComponent>().Position))
+            .ThenBy(entity => entity.Id.Value)
+            .Take(MagicContextVisibleEntityCap)
             .OrderBy(entity => entity.Id.Value)
             .Select(entity =>
             {
@@ -69,8 +77,8 @@ public sealed class EngineViewBuilder
                     entity.TryGet<RenderableComponent>(out var renderable) ? renderable.Glyph : '?',
                     pos.X,
                     pos.Y,
-                    pos.X - casterPosition.X,
-                    pos.Y - casterPosition.Y,
+                    RelativeX: null,
+                    RelativeY: null,
                     actor?.Faction,
                     physical?.Material ?? "unknown",
                     tags,
@@ -109,7 +117,7 @@ public sealed class EngineViewBuilder
             _state.Messages.TakeLast(8).ToArray(),
             _state.PromiseLedger.Promises
                 .Where(promise => promise.PlayerVisible)
-                .Select(ToPromiseCard)
+                .Select(ToResolverPromiseCard)
                 .ToArray(),
             operations,
             BuildResolverLens(
@@ -727,6 +735,26 @@ public sealed class EngineViewBuilder
             soulRecord.MagicalSignature,
             notes);
     }
+
+    private const int MagicContextVisibleEntityCap = 14;
+
+    /// <summary>
+    /// The resolver's view of a promise: what it says, about what, and how it might trigger.
+    /// Eligibility-debug and provenance fields stay null so the provider wire format (which omits
+    /// nulls) drops them; the player-facing GameView keeps the full card via
+    /// <see cref="ToPromiseCard"/>. See docs/OPTIMIZATION_PLAN.md WS2.4.
+    /// </summary>
+    private static PromiseCard ToResolverPromiseCard(WorldPromise promise) =>
+        new(
+            promise.Id,
+            promise.Kind,
+            promise.Status,
+            promise.Text,
+            promise.PlayerVisible,
+            promise.Source,
+            promise.Subject,
+            promise.ClaimedPlace,
+            TriggerHint: promise.TriggerHint);
 
     private static PromiseCard ToPromiseCard(WorldPromise promise) =>
         new(

@@ -51,7 +51,7 @@ public sealed class OllamaSpellRouter : ISpellRouter
             options = new
             {
                 temperature = 0.0,
-                num_ctx = 8192,
+                num_ctx = OllamaDefaults.NumCtx,
                 num_predict = 128,
             },
             messages = new[]
@@ -74,11 +74,12 @@ public sealed class OllamaSpellRouter : ISpellRouter
             }
 
             using var document = JsonDocument.Parse(rawResponse);
+            var stats = Diagnostics.OllamaStats.From(document.RootElement);
             var content = document.RootElement
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString() ?? string.Empty;
-            Diagnostics.LlmTrace.End(traceId, content, null);
+            Diagnostics.LlmTrace.End(traceId, content, null, stats);
             return SpellRouterPrompt.From(Name, rawResponse, content);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)

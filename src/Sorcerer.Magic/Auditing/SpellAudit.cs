@@ -13,7 +13,8 @@ namespace Sorcerer.Magic.Auditing;
 public sealed record SpellRoutingRecord(
     IReadOnlyList<string> SelectedCapabilities,
     int AdvertisedOperationCount,
-    int ContextPayloadBytes);
+    int ContextPayloadBytes,
+    Sorcerer.Core.Telemetry.ProviderCallStats? ProviderStats = null);
 
 public sealed record SpellAuditEntry(
     DateTimeOffset Timestamp,
