@@ -166,6 +166,35 @@ ambience, skulls-as-decor, any prose whose only flavor is menace. If a dark elem
 earns its place (an imperial containment site, a tradition's ossuary), it must be
 *specific* and culturally situated, never generic gloom.
 
+## Narration Voice: Grounded and Specific
+
+The world is vivid, but the *narration layer* — message-log lines, NPC speech, rumor text,
+spell outcomes — should sound organic and concrete, like people with their own lives reacting
+to what you did, not like an oracle intoning about your destiny. This is the register every
+prompt and every canned string should hold to.
+
+The rules:
+
+- **Name people and places; never "the world," "the story," or "word."** Not "word of your
+  magic takes on a sharper color" but "the dockhands who saw the fire are still arguing about
+  it in the taproom." A consequence has a carrier — a person, with a face and a reason to care.
+- **Attribute rumors to a teller with a mundane motive.** Gossip spreads because a drover wants
+  to seem important, a clerk is bored, a debtor is frightened — not because the world remembers.
+- **Reactions flow from wants, not cosmic significance.** An NPC helps or refuses because of a
+  sick mule, a census due, a grudge, a price — concrete stakes the character actually holds.
+- **Mystique is a character trait, not the default register.** Some people talk in omens and
+  portents; most do not. Let the seer be strange and the ferryman be plain.
+- **Concrete and sensory over portentous.** Say what is seen, heard, smelled, or owed. Wild
+  magic may be genuinely strange — that strangeness is vivid imagery ("glass grows over the
+  wound, warm to the touch"), never vague fate-speak ("the world remembers the shape of you").
+- **The Empire stays procedural.** Imperial text is dry, civic, and bored — that register
+  already works and is deliberate; this section does not soften it.
+
+This spec is the shared source of truth for three prompt sites — NPC dialogue
+(`OllamaDialogueProvider.SystemPrompt`), wild-magic `outcomeText` (`SpellPromptBuilder.CoreRules`),
+and background enrichment (`BackgroundTextPrompt.SystemPrompt`) — and for the engine's canned
+message tables (`WorldReactionSystem`, `RumorSystem`, `InteractionSystem`).
+
 ## Where This Touches the Code
 
 - `wildmagic/prompts.py` — inject region voice + tradition idiom palette into the

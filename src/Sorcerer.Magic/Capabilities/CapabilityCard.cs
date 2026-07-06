@@ -27,6 +27,10 @@ public sealed class CapabilityRegistry
 
     public IReadOnlyCollection<CapabilityCard> Cards => _cards.Values;
 
+    /// <summary>Looks up a card by exact id (case-insensitive); null if no such card is registered.</summary>
+    public CapabilityCard? Find(string id) =>
+        !string.IsNullOrWhiteSpace(id) && _cards.TryGetValue(id.Trim(), out var card) ? card : null;
+
     public void Add(CapabilityCard card)
     {
         if (!_cards.ContainsKey(card.Id))
@@ -184,7 +188,7 @@ public sealed class CapabilityRegistry
             "prophecy",
             new[] { "promise", "prophecy", "omen", "debt", "future", "tomorrow" },
             "prophecy - write a future commitment into the Promise Ledger",
-            new[] { "createPromise", "scheduleEvent", "consequence" },
+            new[] { "createPromise", "scheduleEvent", "consequence", "setFlag" },
             new[] { "promises", "region" },
             "Promises are powerful because the world may later honor them. Prefer createPromise for "
                 + "ordinary promises; effectType:'consequence' with consequenceType:'create_promise' "
@@ -287,5 +291,80 @@ public sealed class CapabilityRegistry
                 + "on a flow tile are translated by (dx, dy) if the destination is open.",
             Array.Empty<string>(),
             new[] { "terrain_shape" });
+
+        // The six cards below give the operations demoted from the always-full core
+        // (docs/OPTIMIZATION_PLAN.md WS2.2) a routed home: a spell that names them loads full
+        // guidance; every other cast carries only their lean name+summary line.
+        yield return new CapabilityCard(
+            "motion_kinetics",
+            new[] { "push", "pull", "shove", "throw", "hurl", "fling", "toss", "drag", "yank", "knock", "slam", "blink", "teleport", "step through", "swap places", "launch", "reel" },
+            "motion_kinetics - push, pull, or teleport bodies through space",
+            new[] { "push", "pull", "teleport" },
+            Array.Empty<string>(),
+            "push/pull move a target away from or toward a point (fields: target, distance, and a "
+                + "source/anchor when the spell names one). teleport moves a target to open in-zone "
+                + "coordinates (fields: target, x, y). Keep motion local; never move a target out of "
+                + "the zone or into blocking terrain.",
+            Array.Empty<string>(),
+            new[] { "environment_flow" });
+
+        yield return new CapabilityCard(
+            "area_burst",
+            new[] { "all enemies", "everyone", "everything near", "around me", "explode", "explosion", "blast", "burst", "nova", "shockwave", "wave of", "storm", "rain of", "in a circle", "radius" },
+            "area_burst - damage or statuses applied to every target in a radius",
+            new[] { "areaDamage", "areaStatus" },
+            new[] { "nearby_tiles" },
+            "areaDamage/areaStatus hit every valid target within a radius of a center point (fields: "
+                + "x/y or target, radius 1-4, then amount/damageType or status/duration). Keep the "
+                + "radius local to the encounter; a burst is not a map-wide event.",
+            Array.Empty<string>(),
+            new[] { "terrain_shape" });
+
+        yield return new CapabilityCard(
+            "protection_wards",
+            new[] { "protect", "shield", "ward me", "ward myself", "armor", "resist", "resistance", "immune", "harden", "brace", "vulnerable", "weakness", "expose", "sunder" },
+            "protection_wards - resistances and weaknesses to kinds of harm",
+            new[] { "addResistance", "addWeakness" },
+            Array.Empty<string>(),
+            "addResistance/addWeakness change how much damage of one kind a target takes (fields: "
+                + "target, damageType, amount, duration). Prefer these over inventing a bespoke "
+                + "damage-reduction status.",
+            Array.Empty<string>(),
+            new[] { "triggers_reactions" });
+
+        yield return new CapabilityCard(
+            "restoration",
+            new[] { "restore", "replenish", "recover", "refresh", "renew", "mana", "stamina", "second wind", "invigorate" },
+            "restoration - return spent mana when restoring magic is the spell's purpose",
+            new[] { "restoreMana" },
+            Array.Empty<string>(),
+            "restoreMana returns mana to a target (fields: target, amount). Use it only when "
+                + "restoring magic is the spell's stated purpose - never as a side bonus and never "
+                + "to hand back the spell's own cost.",
+            Array.Empty<string>(),
+            Array.Empty<string>());
+
+        yield return new CapabilityCard(
+            "curse_mark",
+            new[] { "curse", "hex", "doom", "brand", "mark of", "blight", "bad luck", "misfortune", "wither" },
+            "curse_mark - lay a visible curse or debt on a target",
+            new[] { "addCurse" },
+            Array.Empty<string>(),
+            "addCurse writes a visible debt/curse promise (fields: name, description, and an "
+                + "optional template close/far/narrow/straight-path/anchored when the curse should "
+                + "mechanically constrain future casts).",
+            Array.Empty<string>(),
+            new[] { "persistent_effect", "prophecy" });
+
+        yield return new CapabilityCard(
+            "possession",
+            new[] { "possess", "take over", "puppet", "inhabit", "wear his", "wear her", "wear its", "ride the mind", "body swap", "swap bodies", "steal the body" },
+            "possession - move the caster's control into another body",
+            new[] { "possess" },
+            new[] { "visible_entities" },
+            "possess moves the player's control into a target body (field: target). This is major "
+                + "magic: demand a severe cost, and expect the engine to reject impossible vessels.",
+            Array.Empty<string>(),
+            new[] { "memory_edit" });
     }
 }

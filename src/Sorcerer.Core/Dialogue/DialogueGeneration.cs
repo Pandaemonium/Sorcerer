@@ -35,7 +35,8 @@ public sealed record DialogueSceneCard(
     string CurrentZoneId,
     IReadOnlyList<string> VisibleEntities,
     IReadOnlyList<string> NearbyItems,
-    IReadOnlyList<string> RecentEvents);
+    IReadOnlyList<string> RecentEvents,
+    string? RegionVoice = null);
 
 public sealed record DialogueContextCardPayload(
     string Id,
@@ -96,7 +97,8 @@ public sealed record DialogueRequest(
     IReadOnlyList<string> CapabilityCards,
     IReadOnlyList<string>? RecentRumors = null,
     IReadOnlyList<DialogueContextCardPayload>? ContextCards = null,
-    IReadOnlyList<string>? SelectedContextCardIds = null);
+    IReadOnlyList<string>? SelectedContextCardIds = null,
+    IReadOnlyList<string>? RecentDialogue = null);
 
 public sealed record DialogueProposalSet(
     IReadOnlyList<DialogueClaimProposal>? Claims = null,
@@ -188,7 +190,8 @@ public sealed record DialogueProviderResult(
     string RawText,
     bool TechnicalFailure,
     string? Error,
-    DialogueResponse? Response);
+    DialogueResponse? Response,
+    Sorcerer.Core.Telemetry.ProviderCallStats? Stats = null);
 
 public interface IDialogueProvider
 {
@@ -215,7 +218,8 @@ public sealed record DialogueAuditEntry(
     bool ConsumedTurn,
     IReadOnlyList<string> ValidationIssues,
     IReadOnlyList<string> DeltaOperations,
-    Sorcerer.Core.Results.DialogueRouteRecord? Route = null);
+    Sorcerer.Core.Results.DialogueRouteRecord? Route = null,
+    Sorcerer.Core.Telemetry.ProviderCallStats? ProviderStats = null);
 
 public interface IDialogueAuditSink
 {

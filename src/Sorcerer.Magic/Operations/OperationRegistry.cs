@@ -68,16 +68,17 @@ public sealed class OperationRegistry
     }
 
     /// <summary>
-    /// Frequently-used operations that make up the palette of most casts. Their full cards are always
+    /// The handful of operations that make up the palette of most casts. Their full cards are always
     /// advertised so a routing miss still degrades to a recognizable spell, never a silent capability
     /// loss. Everything else is trimmed to a lean card (name + summary) unless a routed capability
-    /// unlocks it. Mirrors the WildMagic prototype's CORE_EFFECT_TYPES.
+    /// unlocks it. Deliberately small (docs/OPTIMIZATION_PLAN.md WS2.2): every operation demoted out
+    /// of this set has a home on a capability card, so a spell that needs one routes its full card
+    /// back in, and the recall floor in <see cref="ToRoutedIndex"/> keeps unrouted spells able to
+    /// see every operation by name.
     /// </summary>
     private static readonly HashSet<string> CoreCommon = new(StringComparer.OrdinalIgnoreCase)
     {
-        "damage", "areaDamage", "areaStatus", "addStatus", "removeStatus", "heal", "restoreMana",
-        "teleport", "push", "pull", "createTile", "createTiles", "addResistance", "addWeakness",
-        "setFlag", "addCurse", "message", "addTrait",
+        "damage", "heal", "addStatus", "removeStatus", "message", "createTiles",
     };
 
     private static readonly IReadOnlyDictionary<string, string> EmptyFields =
@@ -97,17 +98,29 @@ public sealed class OperationRegistry
     {
         var selected = new HashSet<string>(selectedEffectTypes.Select(Canonicalize), StringComparer.OrdinalIgnoreCase);
         var routable = new HashSet<string>(routableEffectTypes.Select(Canonicalize), StringComparer.OrdinalIgnoreCase);
+
+        // Recall floor (docs/OPTIMIZATION_PLAN.md WS1.1): when routing selected nothing, the spell
+        // is one the trigger/router vocabulary did not anticipate — exactly the cast that must not
+        // be pigeonholed into the core palette. Advertise every operation by name (lean cards
+        // except the common core) instead of hiding the gated ones; the model can then reach for
+        // any mechanic and the engine still validates as usual.
+        var recallFloor = selected.Count == 0;
         var operations = _operations.Values
-            .Where(op => op.IsCore || selected.Contains(op.Name))
+            .Where(op => recallFloor || op.IsCore || selected.Contains(op.Name))
             .OrderBy(op => op.Name)
             .ToArray();
 
         return new(
             operations.Select(op => op.Name).ToArray(),
             operations
-                .Select(op => KeepFullCard(op, selected, routable) ? op.Card.ToView() : LeanCard(op.Card))
+                .Select(op => KeepFullCard(op, selected, routable, recallFloor) ? op.Card.ToView() : LeanCard(op.Card))
                 .ToArray());
     }
+
+    private static bool KeepFullCard(IOperation op, HashSet<string> selected, HashSet<string> routable, bool recallFloor) =>
+        recallFloor
+            ? CoreCommon.Contains(op.Name)
+            : KeepFullCard(op, selected, routable);
 
     private static bool KeepFullCard(IOperation op, HashSet<string> selected, HashSet<string> routable) =>
         CoreCommon.Contains(op.Name)

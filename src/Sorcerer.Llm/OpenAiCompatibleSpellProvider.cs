@@ -32,23 +32,18 @@ public sealed class OpenAiCompatibleSpellProvider : ISpellProvider
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_timeout);
 
-        var supported = string.Join(", ", request.SupportedOperations);
-        var contextJson = JsonSerializer.Serialize(
-            request.Context,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web)
-            {
-                WriteIndented = false,
-            });
-        var system = OllamaSpellProvider.BuildSystemPrompt(
-            supported,
-            request.CapabilityIndex,
-            request.SelectedCapabilities);
-        var user = $"Spell: {request.SpellText}\n\nCurrent magic context JSON:\n{contextJson}";
+        var system = SpellPromptBuilder.System(request);
+        var user = SpellPromptBuilder.User(request);
 
         var first = await _chat.ChatAsync(system, user, temperature: 0.2, maxTokens: 1200, timeout.Token, label: "wild");
         if (!first.Success)
         {
             return Failure(first.RawText, first.Error ?? "OpenAI-compatible spell provider failed.");
+        }
+
+        if (SpellResolutionJson.TryReadNeedsCapability(first.Content) is { } requestedCapability)
+        {
+            return new SpellProviderResult(Name, first.Content, Resolution: null, TechnicalFailure: false, Error: null, Stats: null, RequestedCapability: requestedCapability);
         }
 
         try
@@ -59,8 +54,6 @@ public sealed class OpenAiCompatibleSpellProvider : ISpellProvider
         {
             return await RetryAfterInvalidJsonAsync(
                 request,
-                supported,
-                contextJson,
                 first.Content,
                 ex.Message,
                 timeout.Token);
@@ -69,27 +62,12 @@ public sealed class OpenAiCompatibleSpellProvider : ISpellProvider
 
     private async Task<SpellProviderResult> RetryAfterInvalidJsonAsync(
         SpellRequest request,
-        string supported,
-        string contextJson,
         string invalidContent,
         string parseError,
         CancellationToken cancellationToken)
     {
-        var repairSystem = OllamaSpellProvider.BuildSystemPrompt(
-                supported,
-                request.CapabilityIndex,
-                request.SelectedCapabilities)
-            + " This is a repair attempt after invalid output. Return JSON only; no prose before or after the object.";
-        var previous = invalidContent.Length > 600
-            ? invalidContent[..600]
-            : invalidContent;
-        var repairUser = "The previous resolver answer was not valid engine JSON. "
-            + $"Parse error: {parseError}\n"
-            + $"Previous invalid answer:\n{previous}\n\n"
-            + "Convert the same spell into the required JSON object using supported operations. "
-            + "Each effect must be a flat object with a type field; rewrite keyed or nested effects into separate flat effect objects. "
-            + "For hiding, cover, protection, disguise, or attention-shifting requests, prefer addStatus on the caster/target, createTile/createTiles near the caster, addTrait on an entity, or message when those operations fit. "
-            + $"Spell: {request.SpellText}\n\nCurrent magic context JSON:\n{contextJson}";
+        var repairSystem = SpellPromptBuilder.RepairSystem();
+        var repairUser = SpellPromptBuilder.RepairUser(request, invalidContent, parseError);
 
         var repair = await _chat.ChatAsync(repairSystem, repairUser, temperature: 0.1, maxTokens: 1200, cancellationToken, label: "wild-repair");
         if (!repair.Success)

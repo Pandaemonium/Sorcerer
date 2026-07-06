@@ -161,7 +161,7 @@ public sealed class OllamaBackgroundTextGenerator : IBackgroundTextGenerator
                 options = new
                 {
                     temperature = 0.45,
-                    num_ctx = 4096,
+                    num_ctx = OllamaDefaults.NumCtx,
                     num_predict = 220,
                 },
                 messages = new[]
@@ -309,8 +309,11 @@ internal static class BackgroundTextPrompt
         "You write short in-fiction background enrichment for Sorcerer, a folk-magic roguelike. "
         + "The game engine decides what is real; you only provide candidate prose. "
         + "Do not create mechanics, rewards, NPCs, locations, inventory, quests, or guaranteed facts beyond the request. "
-        + "For rumor_distortion, retell the given rumor as a plausible distorted version while preserving the core claim. "
-        + "For entity_detail or canon_detail, write one vivid sentence about the target using its tags, material, region, and routed lore. "
+        // Voice (docs/AESTHETICS_AND_TONE.md, narration voice): grounded and specific, never portentous.
+        + "Keep the voice organic and concrete - named things, plain motives, ordinary detail - not cosmic or fateful. "
+        + "Do not write that \"the world remembers\" or that stories \"spread\" on their own; consequences travel because a specific kind of person carries them. "
+        + "For rumor_distortion, retell the given rumor as a plausible distorted version while preserving the core claim, and make it sound like a particular teller - a drover, a clerk, a ferry passenger - repeating it, not an omniscient narrator. "
+        + "For entity_detail or canon_detail, write one vivid, concrete sentence about the target using its tags, material, region, and routed lore. "
         + "Return only JSON: {\"text\":\"...\"}. Keep text under 55 words.";
 
     public static string UserPrompt(BackgroundTextRequest request)

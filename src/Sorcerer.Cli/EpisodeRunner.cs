@@ -512,12 +512,17 @@ public static class EpisodeRunner
             issues.Add($"free command {result.Action} changed turn from {result.TurnBefore} to {result.TurnAfter}");
         }
 
-        if (result.Success && result.Messages.Count == 0)
+        // A plain move is intentionally silent now (the map shows it; no "You move." spam), so a
+        // successful move with no messages is expected, not a defect (message-log immersion pass).
+        if (result.Success && result.Messages.Count == 0 && !IsSilentAction(result.Action))
         {
             issues.Add($"successful command {result.Action} returned no messages");
         }
 
         return issues;
+
+        static bool IsSilentAction(string action) =>
+            string.Equals(action, "move", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<string> CheckLongRunInvariants(GameSession session)

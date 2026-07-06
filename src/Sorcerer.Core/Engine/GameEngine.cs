@@ -95,6 +95,12 @@ public sealed class GameEngine
             _generationSystem.AtlasLines().ToArray());
     }
 
+    /// <summary>
+    /// The current region's short voice spec (docs/AESTHETICS_AND_TONE.md, region-by-region voice).
+    /// Used to steer NPC dialogue toward the local register, the same block the resolver lens reads.
+    /// </summary>
+    public string CurrentRegionVoice => _generationSystem.CurrentRegion.VoiceSummary;
+
     public IReadOnlyList<StateDelta> RunActorTurns() => _aiSystem.RunActorTurns();
 
     public ActionResult Inspect()

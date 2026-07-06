@@ -34,6 +34,8 @@ public partial class Main : Control
     private Label _statusLine = null!;
     private ProgressBar _hpBar = null!;
     private Label _hpLabel = null!;
+    private ProgressBar _manaBar = null!;
+    private Label _manaLabel = null!;
     private HFlowContainer _statusChips = null!;
     private RichTextLabel _entities = null!;
     private RichTextLabel _inventory = null!;
@@ -56,6 +58,55 @@ public partial class Main : Control
     private string? _busyStatusText;
     private bool _busy;
 
+    // --- Autoplay: an AI agent drives the live session so a spectator can watch it play. ---
+    private bool _autoplay;
+    private double _autoplayTimer;
+    private int _apStep;
+    private int _apSpellIdx;
+    private int _apLineIdx;
+    private int _apTravelIdx;
+    private bool _apLastTravel;
+    private const double AutoplayStepDelay = 1.1;
+
+    private static readonly string[] AutoplaySpells =
+    {
+        "raise a wall of ice between me and the nearest enemy",
+        "strike the nearest enemy with blue fire",
+        "bind the nearest enemy in sticky blue webbing",
+        "summon a friendly brass moth to fight beside me",
+        "turn the floor beneath the nearest enemy into slick ice",
+        "heal my wounds with warm green light",
+        "push the nearest enemy away with a rude wind",
+        "conjure a shard of singing glass from nothing",
+        "grow thorned vines across the floor around me",
+        "curse me with an echoing wild debt",
+        "make the nearest enemy vulnerable to fire",
+        "reveal the nearest hidden thing by making its shadow glow blue",
+        "promise that this door will remember my name",
+        "wreath my hand in lightning and strike the nearest foe",
+        "turn the nearest soldier's teeth to glass and make him regret it",
+        "wither the nearest enemy to grey dust with a fistful of grave salt",
+        "call down a small crackling storm on all nearby enemies",
+        "teleport one step sideways through a folded room",
+    };
+
+    private static readonly string[] AutoplayLines =
+    {
+        "what do you know about this place and the people who live here?",
+        "is there a road, town, or hidden way somewhere near here?",
+        "who rules here, and do they fear the empire's censors?",
+        "have you anything to sell, or a service you can offer me?",
+        "tell me a rumor worth knowing about these parts.",
+        "what do you know of the old crystal tradition of Stalnaz?",
+        "have you ever heard of Hollowmere and its reed memory?",
+        "will you remember me kindly if I do right by you?",
+    };
+
+    private static readonly Direction[] AutoplayTravel =
+    {
+        Direction.East, Direction.South, Direction.West, Direction.North,
+    };
+
     public override void _Ready()
     {
         Theme = UiTheme.Build();
@@ -67,6 +118,12 @@ public partial class Main : Control
         else
         {
             StartNewRun();
+        }
+
+        // Opt-in autoplay-on-launch (does not change normal play): set SORCERER_AUTOPLAY=1.
+        if (System.Environment.GetEnvironmentVariable("SORCERER_AUTOPLAY") == "1")
+        {
+            _autoplay = true;
         }
 
         RefreshView();
@@ -102,6 +159,16 @@ public partial class Main : Control
         if (key.Keycode == Key.F6)
         {
             _llmDebug.Toggle();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        // P toggles autoplay: an AI agent drives the live session so you can watch it play.
+        if (key.Keycode == Key.P)
+        {
+            _autoplay = !_autoplay;
+            _autoplayTimer = 0;
+            RefreshView();
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -152,12 +219,110 @@ public partial class Main : Control
             return;
         }
 
+        if (_autoplay)
+        {
+            if (_session.Observation().PendingCast is not null)
+            {
+                _ = ExecuteAsync(new AwaitCastCommand());
+                return;
+            }
+
+            _autoplayTimer += delta;
+            if (_autoplayTimer >= AutoplayStepDelay)
+            {
+                _autoplayTimer = 0;
+                _ = ExecuteAsync(NextAutoplayCommand());
+                return;
+            }
+        }
+
         var pending = _session.Observation().PendingCast;
         var key = PendingCastKey(pending);
         if (key != _lastPendingCastKey)
         {
             RefreshView();
         }
+    }
+
+    /// <summary>
+    /// Picks the next command for autoplay: mostly varied wild spells, with dialogue when a friendly
+    /// NPC is adjacent and occasional travel (then a look-around) to meet new people. Deliberately
+    /// simple and lively so a spectator sees a bit of everything.
+    /// </summary>
+    private GameCommand NextAutoplayCommand()
+    {
+        var view = _session.View();
+        var player = view.Entities.FirstOrDefault(entity => entity.Id == view.ControlledEntityId);
+        if (player is null)
+        {
+            return new InspectCommand();
+        }
+
+        _apStep++;
+
+        if (_apLastTravel)
+        {
+            // A resident spawns on travel but is not perceived until we look.
+            _apLastTravel = false;
+            return new InspectCommand();
+        }
+
+        var adjacent = AutoplayTalkers(view, player)
+            .Where(entity => AutoplayDistance(player, entity) <= 1)
+            .OrderBy(entity => AutoplayDistance(player, entity))
+            .FirstOrDefault();
+        if (adjacent is not null && _apStep % 3 != 0)
+        {
+            return new TalkCommand($"{adjacent.Name}, {AutoplayLines[_apLineIdx++ % AutoplayLines.Length]}");
+        }
+
+        if (_apStep % 6 == 0)
+        {
+            _apLastTravel = true;
+            return new TravelCommand(AutoplayTravel[_apTravelIdx++ % AutoplayTravel.Length]);
+        }
+
+        var visible = AutoplayTalkers(view, player)
+            .Where(entity => AutoplayDistance(player, entity) > 1)
+            .OrderBy(entity => AutoplayDistance(player, entity))
+            .FirstOrDefault();
+        if (visible is not null && _apStep % 4 == 0)
+        {
+            return new MoveCommand(AutoplayDirection(player, visible));
+        }
+
+        return new CastCommand(AutoplaySpells[_apSpellIdx++ % AutoplaySpells.Length], CastPerformance.Neutral);
+    }
+
+    private static IEnumerable<EntityCard> AutoplayTalkers(GameView view, EntityCard player) =>
+        view.Entities
+            .Where(entity => entity.Id != view.ControlledEntityId)
+            .Where(entity => entity.HitPoints is null or > 0)
+            .Where(entity => entity.Tags.Any(tag =>
+                tag.Equals("npc", StringComparison.OrdinalIgnoreCase)
+                || tag.Equals("resident", StringComparison.OrdinalIgnoreCase)
+                || tag.Equals("prisoner", StringComparison.OrdinalIgnoreCase)
+                || tag.Equals("merchant", StringComparison.OrdinalIgnoreCase)))
+            .Where(entity => !string.Equals(entity.Faction, "empire", StringComparison.OrdinalIgnoreCase));
+
+    private static int AutoplayDistance(EntityCard a, EntityCard b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
+
+    private static Direction AutoplayDirection(EntityCard from, EntityCard to)
+    {
+        var dx = Math.Sign(to.X - from.X);
+        var dy = Math.Sign(to.Y - from.Y);
+        return (dx, dy) switch
+        {
+            (0, -1) => Direction.North,
+            (0, 1) => Direction.South,
+            (1, 0) => Direction.East,
+            (-1, 0) => Direction.West,
+            (1, -1) => Direction.NorthEast,
+            (-1, -1) => Direction.NorthWest,
+            (1, 1) => Direction.SouthEast,
+            (-1, 1) => Direction.SouthWest,
+            _ => Direction.East,
+        };
     }
 
     private void BuildUi()
@@ -548,6 +713,25 @@ public partial class Main : Control
         _hpLabel = SmallLabel("");
         _hpLabel.CustomMinimumSize = new Vector2(60, 0);
         hpRow.AddChild(_hpLabel);
+
+        var manaRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        manaRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        box.AddChild(manaRow);
+
+        _manaBar = new ProgressBar
+        {
+            MinValue = 0,
+            MaxValue = 1,
+            Step = 0.01,
+            ShowPercentage = false,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 16),
+        };
+        manaRow.AddChild(_manaBar);
+
+        _manaLabel = SmallLabel("");
+        _manaLabel.CustomMinimumSize = new Vector2(60, 0);
+        manaRow.AddChild(_manaLabel);
 
         _statusChips = new HFlowContainer();
         _statusChips.AddThemeConstantOverride("h_separation", UiTheme.SpaceXs);
@@ -1023,11 +1207,33 @@ public partial class Main : Control
             : $"{player.HitPoints}/{player.MaxHitPoints}";
         _hpLabel.AddThemeColorOverride("font_color", hpColor);
 
+        var mana = view.Character?.Mana;
+        var maxMana = view.Character?.MaxMana;
+        Color manaColor;
+        double manaFraction = 0;
+        if (mana is null || maxMana is null || maxMana == 0)
+        {
+            manaColor = UiTheme.Muted;
+        }
+        else
+        {
+            manaFraction = (double)mana.Value / maxMana.Value;
+            manaColor = UiTheme.Focus;
+        }
+
+        _manaBar.Value = manaFraction;
+        _manaBar.AddThemeStyleboxOverride(
+            "fill",
+            UiTheme.Box(manaColor, manaColor, borderWidth: 0, radius: 6, shadow: false, marginX: 0, marginY: 0));
+        _manaLabel.Text = mana is null || maxMana is null ? "MP ?" : $"{mana}/{maxMana}";
+        _manaLabel.AddThemeColorOverride("font_color", manaColor);
+
         var origin = view.Character?.OriginName;
         var pendingSuffix = pendingCast is null ? "" : $" | Cast {pendingCast.State}";
+        var autoplayPrefix = _autoplay ? "[AUTOPLAY ▶ press P to stop] " : "";
         _statusLine.Text = view.Character is null
-            ? $"Turn {view.Turn}{pendingSuffix}"
-            : $"Turn {view.Turn} — {origin} (VIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure}){pendingSuffix}";
+            ? $"{autoplayPrefix}Turn {view.Turn}{pendingSuffix}"
+            : $"{autoplayPrefix}Turn {view.Turn} — {origin} (VIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure}){pendingSuffix}";
 
         foreach (var child in _statusChips.GetChildren().ToArray())
         {
@@ -1089,8 +1295,10 @@ public partial class Main : Control
             var effectText = pendingCast.EffectTypes is { Count: > 0 }
                 ? $" [{string.Join(", ", pendingCast.EffectTypes)}]"
                 : "";
+            // Show the spell the player reached for, not the internal cast id.
+            var spellLabel = string.IsNullOrWhiteSpace(pendingCast.Text) ? pendingCast.State : pendingCast.Text.Trim();
             logLines.Add(UiTheme.Colorize(
-                $"Pending {pendingCast.Id}: {pendingCast.State}{effectText}",
+                $"Wild spell: {spellLabel} ({pendingCast.State}){effectText}",
                 pendingColor));
             if (!string.IsNullOrWhiteSpace(pendingCast.Error))
             {
@@ -1098,8 +1306,33 @@ public partial class Main : Control
             }
         }
 
-        logLines.AddRange(view.Messages.TakeLast(14).Select(UiTheme.Escape));
-        _log.Text = string.Join("\n", logLines);
+        var cards = view.MessageCards is { Count: > 0 }
+            ? view.MessageCards.TakeLast(14).Select(RenderMessageCard)
+            : view.Messages.TakeLast(14).Select(UiTheme.Escape);
+        logLines.AddRange(cards);
+
+        // A faint hairline between messages so colored lines read as distinct entries rather than
+        // one blurred block (message-log immersion pass).
+        _log.Text = string.Join($"\n[color=#232a33]{new string('─', 44)}[/color]\n", logLines);
+    }
+
+    /// <summary>
+    /// Renders one curated message as BBCode: each colored segment (e.g. a tinted damage type) keeps
+    /// its color, uncolored runs fall back to the line's accent, and the player's own speech is
+    /// italicized. Colors come from Core's renderer-agnostic MessageLog palette.
+    /// </summary>
+    private static string RenderMessageCard(MessageCard card)
+    {
+        var body = new System.Text.StringBuilder();
+        foreach (var segment in card.Segments)
+        {
+            var text = UiTheme.Escape(segment.Text);
+            var color = segment.Color ?? card.AccentColor;
+            body.Append(string.IsNullOrEmpty(color) ? text : $"[color=#{color}]{text}[/color]");
+        }
+
+        var rendered = body.ToString();
+        return card.Kind == MessageKind.PlayerSpeech ? $"[i]{rendered}[/i]" : rendered;
     }
 
     private void EnsureMapCells(GameView view)

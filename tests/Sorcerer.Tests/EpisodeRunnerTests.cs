@@ -125,6 +125,7 @@ public sealed class EpisodeRunnerTests
                 DebugState: true,
                 Eval: false,
                 Episode: false,
+                LivePlaytest: false,
                 Episodes: 1,
                 MaxTurns: 40,
                 Seed: 7,
@@ -133,6 +134,7 @@ public sealed class EpisodeRunnerTests
                 TranscriptPath: logPath,
                 ReplayPath: null,
                 ReplayAssertFinal: false,
+                ReparseAuditPath: null,
                 OriginId: null,
                 BackgroundProvider: "mock",
                 BackgroundHost: null,
@@ -143,6 +145,8 @@ public sealed class EpisodeRunnerTests
                 BackgroundConcurrency: 1,
                 Quickstart: false,
                 QuickstartScene: null,
+                BudgetSeconds: 500,
+                CheckpointPath: null,
                 Commands: commands);
             var session = GameSession.CreateImperialEncounter(
                 backgroundTextGenerator: new MockBackgroundTextGenerator());

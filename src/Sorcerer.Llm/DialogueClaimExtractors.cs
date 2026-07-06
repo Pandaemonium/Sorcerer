@@ -348,7 +348,7 @@ public sealed class OllamaDialogueParserRouter : IDialogueParserRouter
             var options = new Dictionary<string, object?>
             {
                 ["temperature"] = temperature,
-                ["num_ctx"] = 2048,
+                ["num_ctx"] = OllamaDefaults.NumCtx,
                 ["num_predict"] = maxTokens,
             };
             if (_numGpu.HasValue)
@@ -734,7 +734,7 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
             var options = new Dictionary<string, object?>
             {
                 ["temperature"] = temperature,
-                ["num_ctx"] = 4096,
+                ["num_ctx"] = OllamaDefaults.NumCtx,
                 ["num_predict"] = maxTokens,
             };
             if (_numGpu.HasValue)

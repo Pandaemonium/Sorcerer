@@ -15,9 +15,17 @@ internal static class SpellRouterPrompt
         + "You are given the player's spell and a menu of capabilities, one per line as 'name - description'. "
         + "Reply with ONLY a JSON object of the form {\"capabilities\":[\"name\",...]} listing the menu names "
         + "whose mechanics the spell needs. Use only names copied exactly from the menu. "
-        + "Prefer to include a capability rather than miss one the spell might need; include every capability a "
-        + "compositional spell touches. If no special capability applies, return an empty array. "
-        + "Do not explain, and do not invent names.\n\nCapabilities:\n"
+        + "Route by what the spell is trying to *accomplish* - its actual effect on the world - not by "
+        + "shared words. \"melt the guard's sword into slag\" is transformation, not a weapon summon; "
+        + "\"make them forget they saw me\" is memory_edit, not stealth. A spell with two clauses usually "
+        + "needs two capabilities: include one for each thing it does. "
+        + "Prefer to include a capability rather than miss one the spell might need. If no special "
+        + "capability applies, return an empty array. Do not explain, and do not invent names.\n\n"
+        + "Examples:\n"
+        + "Spell: \"raise a wall of ice between me and the soldiers\" -> {\"capabilities\":[\"barrier_shaping\"]}\n"
+        + "Spell: \"turn the captain against his own men and make him forget my face\" -> {\"capabilities\":[\"faction_charm\",\"memory_edit\"]}\n"
+        + "Spell: \"a fox made of embers to scout ahead\" -> {\"capabilities\":[\"summoning\"]}\n\n"
+        + "Capabilities:\n"
         + capabilityIndex;
 
     public static string User(string spellText) => $"Spell: {spellText}";

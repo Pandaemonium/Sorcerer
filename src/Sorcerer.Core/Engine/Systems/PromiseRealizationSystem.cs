@@ -2497,11 +2497,11 @@ public sealed class PromiseRealizationSystem
 
     private static bool IsTravelBuildableKind(WorldPromise promise) =>
         NormalizeToken(promise.RealizationKind ?? promise.Kind)
-            is "site" or "quest" or "prophecy" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade" or "service" or "escape_route" or "route" or "door_rule";
+            is "site" or "quest" or "prophecy" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade" or "service" or "folk_magic" or "folk_magic_service" or "escape_route" or "route" or "door_rule";
 
     private static bool IsAmbientBuildableKind(WorldPromise promise) =>
         NormalizeToken(promise.RealizationKind ?? promise.Kind)
-            is "memory" or "quest" or "prophecy" or "omen" or "event" or "item" or "person" or "threat" or "debt" or "merchant_stock" or "stock" or "trade" or "service" or "escape_route" or "route" or "door_rule";
+            is "memory" or "quest" or "prophecy" or "omen" or "event" or "item" or "person" or "threat" or "debt" or "merchant_stock" or "stock" or "trade" or "service" or "folk_magic" or "folk_magic_service" or "escape_route" or "route" or "door_rule";
 
     private static string TravelHandlerFor(WorldPromise promise) =>
         NormalizeToken(promise.RealizationKind ?? promise.Kind) switch

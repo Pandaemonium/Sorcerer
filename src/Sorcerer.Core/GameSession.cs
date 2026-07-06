@@ -32,6 +32,14 @@ public sealed class GameSession
     private readonly IDialogueParserRouter _dialogueParserRouter;
     private readonly IBackgroundTextGenerator? _backgroundTextGenerator;
     private readonly List<PendingClaimExtraction> _pendingClaimExtractions = new();
+    // Per-speaker conversation history so the speech model can call back and stay consistent
+    // (docs/OPTIMIZATION_PLAN.md WS3.4). Session-scoped and intentionally not persisted: it is a
+    // latency/continuity aid, not authoritative state — memories/bonds already carry what must
+    // survive a save. Keyed by speaker entity id; each entry is a "who: line" pair, newest last.
+    private const int RecentDialogueLineCap = 6;
+    private const int RecentDialogueLineLength = 240;
+    private readonly Dictionary<string, List<string>> _recentDialogueBySpeaker =
+        new(StringComparer.OrdinalIgnoreCase);
     private PendingCast? _pendingCast;
     private int _pendingCastSerial;
 
@@ -307,7 +315,8 @@ public sealed class GameSession
             castCommand,
             ResolutionTask: _magic.ResolveAsync(Engine, castCommand, cancellation.Token),
             Cancellation: cancellation);
-        var message = $"Pending cast {id} is resolving.";
+        // Show the player the spell they reached for while it resolves, not an internal cast id.
+        var message = $"Wild spell: {command.Text.Trim()}";
         var applied = ApplySessionMessage(
             "pending_cast",
             message,
@@ -577,7 +586,10 @@ public sealed class GameSession
         }
 
         var route = await RouteDialogueContextAsync(preparation.Turn, cancellationToken);
-        var request = route.Assembly.BuildDialogueRequest(route.Selection);
+        var request = route.Assembly.BuildDialogueRequest(route.Selection) with
+        {
+            RecentDialogue = RecentDialogueFor(preparation.Turn.SpeakerId),
+        };
         route = route with
         {
             Record = AttachGeneratorRequestMetrics(route.Record, request),
@@ -657,8 +669,43 @@ public sealed class GameSession
             Dialogue = ToDialogueResolutionRecord(providerResult with { Response = normalized }),
             DialogueRoute = route.Record,
         };
+        RememberDialogueExchange(preparation.Turn, request.PlayerText, normalized.SpokenText);
         RecordDialogueAudit(request, providerResult, result, Array.Empty<string>(), route.Record);
         return result;
+    }
+
+    private IReadOnlyList<string>? RecentDialogueFor(string speakerId) =>
+        _recentDialogueBySpeaker.TryGetValue(speakerId, out var lines) && lines.Count > 0
+            ? lines.ToArray()
+            : null;
+
+    /// <summary>
+    /// Appends this turn's player line and the NPC's reply to the speaker's rolling history, so the
+    /// next turn with the same NPC can reference what was just said. Trims each line and keeps only
+    /// the last <see cref="RecentDialogueLineCap"/> lines (docs/OPTIMIZATION_PLAN.md WS3.4).
+    /// </summary>
+    private void RememberDialogueExchange(PreparedDialogueTurn turn, string playerText, string spokenText)
+    {
+        if (!_recentDialogueBySpeaker.TryGetValue(turn.SpeakerId, out var lines))
+        {
+            lines = new List<string>();
+            _recentDialogueBySpeaker[turn.SpeakerId] = lines;
+        }
+
+        lines.Add($"player: {TrimDialogueLine(playerText)}");
+        lines.Add($"{turn.SpeakerName}: {TrimDialogueLine(spokenText)}");
+        if (lines.Count > RecentDialogueLineCap)
+        {
+            lines.RemoveRange(0, lines.Count - RecentDialogueLineCap);
+        }
+    }
+
+    private static string TrimDialogueLine(string text)
+    {
+        var collapsed = string.Join(' ', (text ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return collapsed.Length > RecentDialogueLineLength
+            ? collapsed[..RecentDialogueLineLength].TrimEnd() + "…"
+            : collapsed;
     }
 
     private static DialogueResolutionRecord ToDialogueResolutionRecord(DialogueProviderResult providerResult) =>
@@ -1735,7 +1782,7 @@ public sealed class GameSession
         var kind = imperial ? "empire_patrol" : "dialogue_help_call";
         var text = imperial
             ? $"{actor.Name}'s call for help reaches an imperial ear."
-            : $"{actor.Name}'s call for help starts looking for someone to answer.";
+            : $"{actor.Name} calls for help, loud enough that someone nearby could come.";
         var message = $"{actor.Name} calls for help.";
         var applied = Engine.ApplyConsequence(WorldConsequence.ScheduleEvent(
             $"dialogue:{provider}",
@@ -2337,7 +2384,8 @@ public sealed class GameSession
             result.ConsumedTurn,
             validationIssues,
             result.Deltas.Select(delta => delta.Operation).ToArray(),
-            route));
+            route,
+            providerResult.Stats));
     }
 
     private ActionResult DialogueTechnicalFailure(

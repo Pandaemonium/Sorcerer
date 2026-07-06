@@ -48,6 +48,30 @@ public static class Program
             return await SpellEvalHarness.RunAsync(provider, audit, options.Json);
         }
 
+        if (options.LivePlaytest)
+        {
+            return await LivePlaytestHarness.RunAsync(
+                provider,
+                dialogueProvider,
+                dialogueRouter,
+                dialogueParserRouter,
+                dialogueParser,
+                dialogueAudit,
+                audit,
+                backgroundTextGenerator,
+                new LivePlaytestOptions(
+                    options.Episodes,
+                    options.Seed,
+                    MinSpells: 20,
+                    MinDialogues: 12,
+                    MinNpcs: 5,
+                    MaxSteps: 800,
+                    options.BudgetSeconds,
+                    options.CheckpointPath,
+                    options.EpisodeLogPath),
+                options.Json);
+        }
+
         if (options.Episode)
         {
             return await EpisodeRunner.RunAsync(
@@ -74,6 +98,11 @@ public static class Program
                 options.ReplayPath,
                 options.ReplayAssertFinal,
                 options.Json);
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.ReparseAuditPath))
+        {
+            return await AuditReparseHarness.RunAsync(options.ReparseAuditPath, options.Json);
         }
 
         var session = GameSession.CreateImperialEncounter(
@@ -487,6 +516,7 @@ public sealed record CliOptions(
     bool DebugState,
     bool Eval,
     bool Episode,
+    bool LivePlaytest,
     int Episodes,
     int MaxTurns,
     int Seed,
@@ -495,6 +525,7 @@ public sealed record CliOptions(
     string? TranscriptPath,
     string? ReplayPath,
     bool ReplayAssertFinal,
+    string? ReparseAuditPath,
     string? OriginId,
     string? BackgroundProvider,
     string? BackgroundHost,
@@ -505,6 +536,8 @@ public sealed record CliOptions(
     int BackgroundConcurrency,
     bool Quickstart,
     string? QuickstartScene,
+    int BudgetSeconds,
+    string? CheckpointPath,
     IReadOnlyList<string> Commands)
 {
     public static CliOptions Parse(string[] args)
@@ -516,6 +549,7 @@ public sealed record CliOptions(
         var debugState = false;
         var eval = false;
         var episode = false;
+        var livePlaytest = false;
         var episodes = 1;
         var maxTurns = 40;
         var seed = 7;
@@ -524,6 +558,7 @@ public sealed record CliOptions(
         string? transcriptPath = null;
         string? replayPath = null;
         var replayAssertFinal = false;
+        string? reparseAuditPath = null;
         string? originId = null;
         string? backgroundProvider = null;
         string? backgroundHost = null;
@@ -534,6 +569,8 @@ public sealed record CliOptions(
         var backgroundConcurrency = 1;
         var quickstart = true;
         string? quickstartScene = null;
+        var budgetSeconds = 500;
+        string? checkpointPath = null;
         var commands = new List<string>();
 
         for (var index = 0; index < args.Length; index++)
@@ -564,6 +601,9 @@ public sealed record CliOptions(
                 case "--playtest":
                     episode = true;
                     break;
+                case "--live-playtest":
+                    livePlaytest = true;
+                    break;
                 case "--episodes" when index + 1 < args.Length:
                     episodes = Math.Max(1, ReadPositiveInt(args[++index], episodes));
                     break;
@@ -589,6 +629,9 @@ public sealed record CliOptions(
                     break;
                 case "--replay-assert-final":
                     replayAssertFinal = true;
+                    break;
+                case "--reparse-audit" when index + 1 < args.Length:
+                    reparseAuditPath = args[++index];
                     break;
                 case "--origin" when index + 1 < args.Length:
                     originId = args[++index];
@@ -628,6 +671,12 @@ public sealed record CliOptions(
                 case "--command" when index + 1 < args.Length:
                     commands.Add(args[++index]);
                     break;
+                case "--budget-seconds" when index + 1 < args.Length:
+                    budgetSeconds = Math.Max(30, ReadPositiveInt(args[++index], budgetSeconds));
+                    break;
+                case "--checkpoint" when index + 1 < args.Length:
+                    checkpointPath = args[++index];
+                    break;
             }
         }
 
@@ -639,6 +688,7 @@ public sealed record CliOptions(
             debugState,
             eval,
             episode,
+            livePlaytest,
             episodes,
             maxTurns,
             seed,
@@ -647,6 +697,7 @@ public sealed record CliOptions(
             transcriptPath,
             replayPath,
             replayAssertFinal,
+            reparseAuditPath,
             originId,
             backgroundProvider,
             backgroundHost,
@@ -657,6 +708,8 @@ public sealed record CliOptions(
             backgroundConcurrency,
             quickstart,
             quickstartScene,
+            budgetSeconds,
+            checkpointPath,
             commands);
     }
 

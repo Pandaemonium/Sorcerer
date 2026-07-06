@@ -51,6 +51,19 @@ public sealed class WildMagicController : IWildMagicController
         try
         {
             providerResult = await _provider.ResolveAsync(request, cancellationToken);
+
+            // Escape hatch (docs/OPTIMIZATION_PLAN.md WS1.2): the model may answer
+            // {"needsCapability":"name"} when the loaded mechanics don't fit. Load that card and
+            // re-resolve exactly once; a card we don't know, one already loaded, or a second such
+            // answer just falls through to the null-resolution technical-failure path below.
+            if (providerResult.RequestedCapability is { Length: > 0 } requested
+                && _capabilities.Find(requested) is { } extraCard
+                && !selectedCapabilities.Any(card => card.Id.Equals(extraCard.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                selectedCapabilities = selectedCapabilities.Append(extraCard).ToArray();
+                request = BuildSpellRequest(engine, command.Text, selectedCapabilities);
+                providerResult = await _provider.ResolveAsync(request, cancellationToken);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -72,6 +85,10 @@ public sealed class WildMagicController : IWildMagicController
 
         if (providerResult.TechnicalFailure || providerResult.Resolution is null)
         {
+            var error = providerResult.Error
+                ?? (providerResult.RequestedCapability is { Length: > 0 }
+                    ? "The resolver asked for a capability it could not use, and produced no spell."
+                    : "Spell provider failed.");
             return new MaterializedMagicResolution(
                 providerResult.Provider,
                 command.Text,
@@ -79,9 +96,10 @@ public sealed class WildMagicController : IWildMagicController
                 providerResult.RawText,
                 Accepted: false,
                 TechnicalFailure: true,
-                Error: providerResult.Error ?? "Spell provider failed.",
+                Error: error,
                 EffectTypes: Array.Empty<string>(),
-                ResolvedMagicJson: null);
+                ResolvedMagicJson: null,
+                ProviderStats: providerResult.Stats);
         }
 
         var resolution = RepairNarration(command.Text, Normalize(providerResult.Resolution));
@@ -94,7 +112,8 @@ public sealed class WildMagicController : IWildMagicController
             TechnicalFailure: false,
             Error: resolution.Accepted ? null : resolution.RejectedReason ?? "The spell refuses to become real.",
             resolution.Effects.Select(effect => effect.Type).ToArray(),
-            SerializeResolution(resolution));
+            SerializeResolution(resolution),
+            ProviderStats: providerResult.Stats);
     }
 
     public ActionResult ApplyResolved(GameEngine engine, MaterializedMagicResolution materialized)
@@ -113,9 +132,10 @@ public sealed class WildMagicController : IWildMagicController
                 materialized.RawText,
                 Resolution: null,
                 TechnicalFailure: true,
-                Error: error);
+                Error: error,
+                Stats: materialized.ProviderStats);
             var result = TechnicalFailure(engine, materialized.Provider, turnBefore, error);
-            Audit(technicalProviderResult, command, request.Context, result, Array.Empty<string>());
+            Audit(technicalProviderResult, command, request, result, Array.Empty<string>());
             return result;
         }
 
@@ -131,7 +151,8 @@ public sealed class WildMagicController : IWildMagicController
                 materialized.RawText,
                 resolution,
                 TechnicalFailure: false,
-                Error: null);
+                Error: null,
+                Stats: materialized.ProviderStats);
         }
         catch (Exception ex)
         {
@@ -142,7 +163,7 @@ public sealed class WildMagicController : IWildMagicController
                 TechnicalFailure: true,
                 Error: ex.Message);
             var result = TechnicalFailure(engine, materialized.Provider, turnBefore, ex.Message);
-            Audit(providerResult, command, request.Context, result, new[] { "materialized_parse_failed" });
+            Audit(providerResult, command, request, result, new[] { "materialized_parse_failed" });
             return result;
         }
 
@@ -155,11 +176,12 @@ public sealed class WildMagicController : IWildMagicController
                 resolution.RejectedReason ?? "The spell refuses to become real.",
                 Array.Empty<string>()),
                 resolution);
-            Audit(providerResult, command, request.Context, result, Array.Empty<string>());
+            Audit(providerResult, command, request, result, Array.Empty<string>());
             return result;
         }
 
         resolution = WithSummonReferenceRepair(resolution);
+        resolution = RepairUnpayableItemCosts(engine, resolution);
         var projectedEntities = ProjectedSummonedEntities(engine, resolution);
         var effectContext = new EffectContext(
             engine,
@@ -178,7 +200,7 @@ public sealed class WildMagicController : IWildMagicController
                     reason,
                     resolution.Effects.Select(effect => effect.Type).ToArray());
             result = WithResolutionJson(result, resolution);
-            Audit(providerResult, command, request.Context, result, validationIssues.Select(issue => issue.Code).ToArray());
+            Audit(providerResult, command, request, result, validationIssues.Select(issue => issue.Code).ToArray());
             return result;
         }
 
@@ -252,7 +274,7 @@ public sealed class WildMagicController : IWildMagicController
                     {
                         Deltas = rejectedDeltas.Concat(failure.Deltas).ToArray(),
                     };
-                    Audit(providerResult, command, request.Context, failure, new[] { "apply_consequence_rejected" });
+                    Audit(providerResult, command, request, failure, new[] { "apply_consequence_rejected" });
                     return failure;
                 }
 
@@ -274,7 +296,7 @@ public sealed class WildMagicController : IWildMagicController
                 {
                     Deltas = rejectedDeltas.Concat(rejection.Deltas).ToArray(),
                 };
-                Audit(providerResult, command, request.Context, rejection, new[] { "apply_consequence_rejected" });
+                Audit(providerResult, command, request, rejection, new[] { "apply_consequence_rejected" });
                 return rejection;
             }
 
@@ -295,7 +317,7 @@ public sealed class WildMagicController : IWildMagicController
                 var error = string.Join("; ", stateReport.Issues.Select(issue => issue.Message));
                 transaction.Rollback();
                 var failure = TechnicalFailure(engine, providerResult.Provider, turnBefore, error);
-                Audit(providerResult, command, request.Context, failure, stateReport.Issues.Select(issue => issue.Code).ToArray());
+                Audit(providerResult, command, request, failure, stateReport.Issues.Select(issue => issue.Code).ToArray());
                 return failure;
             }
 
@@ -321,14 +343,14 @@ public sealed class WildMagicController : IWildMagicController
                     ResolvedMagicJson = SerializeResolution(resolution),
                 },
             };
-            Audit(providerResult, command, request.Context, result, Array.Empty<string>());
+            Audit(providerResult, command, request, result, Array.Empty<string>());
             return result;
         }
         catch (Exception ex)
         {
             transaction.Rollback();
             var result = TechnicalFailure(engine, providerResult.Provider, turnBefore, ex.Message);
-            Audit(providerResult, command, request.Context, result, new[] { "application_exception" });
+            Audit(providerResult, command, request, result, new[] { "application_exception" });
             return result;
         }
     }
@@ -453,19 +475,27 @@ public sealed class WildMagicController : IWildMagicController
     private void Audit(
         SpellProviderResult providerResult,
         CastCommand command,
-        object context,
+        SpellRequest request,
         ActionResult result,
         IReadOnlyList<string> validationErrors) =>
         _audit.Record(new SpellAuditEntry(
             DateTimeOffset.UtcNow,
             providerResult.Provider,
             command.Text,
-            context,
+            request.Context,
             providerResult.RawText,
             providerResult.Resolution,
             result,
             validationErrors,
-            command.Performance));
+            command.Performance,
+            BuildRoutingRecord(request, providerResult.Stats)));
+
+    private static SpellRoutingRecord BuildRoutingRecord(SpellRequest request, Sorcerer.Core.Telemetry.ProviderCallStats? stats) =>
+        new(
+            request.SelectedCapabilities?.Select(card => card.Id).ToArray() ?? Array.Empty<string>(),
+            request.SupportedOperations.Count,
+            System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(request.Context, JsonOptions)),
+            stats);
 
     private SpellResolution Normalize(SpellResolution resolution) =>
         resolution with
@@ -889,6 +919,54 @@ public sealed class WildMagicController : IWildMagicController
         }
 
         return issues;
+    }
+
+    /// <summary>
+    /// The resolver sometimes charges an item the caster does not carry (a visible-but-unowned
+    /// object, or a hallucinated component). Rather than reject the player's otherwise-valid spell,
+    /// substitute an unpayable item cost with a small mana cost - the caster improvises with raw
+    /// effort instead of the missing focus. Item costs the caster can actually pay are untouched,
+    /// and treasured items are never spent on the resolver's whim.
+    /// </summary>
+    private static SpellResolution RepairUnpayableItemCosts(GameEngine engine, SpellResolution resolution)
+    {
+        if (resolution.Costs.Count == 0)
+        {
+            return resolution;
+        }
+
+        engine.State.ControlledEntity.TryGet<InventoryComponent>(out var inventory);
+        var repaired = new List<SpellCost>(resolution.Costs.Count);
+        var changed = false;
+        foreach (var cost in resolution.Costs)
+        {
+            if (!cost.Type.Equals("item", StringComparison.OrdinalIgnoreCase))
+            {
+                repaired.Add(cost);
+                continue;
+            }
+
+            var name = ReadString(cost.Fields, "item", ReadString(cost.Fields, "name", ""));
+            var quantity = Math.Max(1, ReadInt(cost.Fields, "quantity", ReadInt(cost.Fields, "amount", 1)));
+            var available = inventory is not null && inventory.Items.TryGetValue(name, out var have) ? have : 0;
+            if (!string.IsNullOrWhiteSpace(name) && available >= quantity)
+            {
+                // The caster carries it: keep the item cost. If it is a treasured item, downstream
+                // validation still fizzles the spell (protecting the player's guarded possessions);
+                // only genuinely unpayable costs are substituted below.
+                repaired.Add(cost);
+                continue;
+            }
+
+            repaired.Add(new SpellCost("mana", new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["amount"] = 3,
+                ["substitutedForItem"] = string.IsNullOrWhiteSpace(name) ? "item" : name,
+            }));
+            changed = true;
+        }
+
+        return changed ? resolution with { Costs = repaired } : resolution;
     }
 
     private static void ValidateItemCost(

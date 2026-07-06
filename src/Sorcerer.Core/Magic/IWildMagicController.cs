@@ -2,6 +2,7 @@ using Sorcerer.Core.Commands;
 using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Telemetry;
 
 namespace Sorcerer.Core.Magic;
 
@@ -14,7 +15,8 @@ public sealed record MaterializedMagicResolution(
     bool TechnicalFailure,
     string? Error,
     IReadOnlyList<string> EffectTypes,
-    string? ResolvedMagicJson);
+    string? ResolvedMagicJson,
+    ProviderCallStats? ProviderStats = null);
 
 public interface IWildMagicController
 {
