@@ -161,6 +161,9 @@ public sealed class EngineViewBuilder
         var statuses = BuildStatusCards(_state.ControlledEntity);
         var character = BuildCharacterSheet();
 
+        // The player log is curated for the renderer (chaff dropped, near-duplicates removed, damage
+        // classified). State.Messages stays the full raw record; only what the player sees is shaped.
+        var messageCards = MessageLog.Curate(_state.Messages);
         return new GameView(
             _state.Width,
             _state.Height,
@@ -168,7 +171,7 @@ public sealed class EngineViewBuilder
             _state.ControlledEntityId.Value,
             entities,
             promises,
-            _state.Messages.ToArray(),
+            messageCards.Select(card => card.Text).ToArray(),
             tiles,
             inventory,
             reagents,
@@ -178,7 +181,8 @@ public sealed class EngineViewBuilder
             BuildWorldCard(),
             claims,
             rumors,
-            JournalViewBuilder.Build(_state));
+            JournalViewBuilder.Build(_state),
+            messageCards);
     }
 
     public AgentObservation Observation(bool debug)

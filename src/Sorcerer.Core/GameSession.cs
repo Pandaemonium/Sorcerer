@@ -315,7 +315,8 @@ public sealed class GameSession
             castCommand,
             ResolutionTask: _magic.ResolveAsync(Engine, castCommand, cancellation.Token),
             Cancellation: cancellation);
-        var message = $"Pending cast {id} is resolving.";
+        // Show the player the spell they reached for while it resolves, not an internal cast id.
+        var message = $"Wild spell: {command.Text.Trim()}";
         var applied = ApplySessionMessage(
             "pending_cast",
             message,

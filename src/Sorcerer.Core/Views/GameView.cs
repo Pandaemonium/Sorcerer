@@ -206,7 +206,10 @@ public sealed record GameView(
     WorldCard? World = null,
     IReadOnlyList<ClaimCard>? Claims = null,
     IReadOnlyList<RumorCard>? Rumors = null,
-    IReadOnlyList<string>? Journal = null);
+    IReadOnlyList<string>? Journal = null,
+    // Curated, classified message log for renderers that colour (drops chaff, dedupes, tags damage).
+    // Mirrors the curated Messages above; renderers may use either.
+    IReadOnlyList<MessageCard>? MessageCards = null);
 
 public sealed record WorldCard(
     string CurrentZoneId,

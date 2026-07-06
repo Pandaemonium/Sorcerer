@@ -1295,8 +1295,10 @@ public partial class Main : Control
             var effectText = pendingCast.EffectTypes is { Count: > 0 }
                 ? $" [{string.Join(", ", pendingCast.EffectTypes)}]"
                 : "";
+            // Show the spell the player reached for, not the internal cast id.
+            var spellLabel = string.IsNullOrWhiteSpace(pendingCast.Text) ? pendingCast.State : pendingCast.Text.Trim();
             logLines.Add(UiTheme.Colorize(
-                $"Pending {pendingCast.Id}: {pendingCast.State}{effectText}",
+                $"Wild spell: {spellLabel} ({pendingCast.State}){effectText}",
                 pendingColor));
             if (!string.IsNullOrWhiteSpace(pendingCast.Error))
             {
@@ -1304,8 +1306,33 @@ public partial class Main : Control
             }
         }
 
-        logLines.AddRange(view.Messages.TakeLast(14).Select(UiTheme.Escape));
-        _log.Text = string.Join("\n", logLines);
+        var cards = view.MessageCards is { Count: > 0 }
+            ? view.MessageCards.TakeLast(14).Select(RenderMessageCard)
+            : view.Messages.TakeLast(14).Select(UiTheme.Escape);
+        logLines.AddRange(cards);
+
+        // A faint hairline between messages so colored lines read as distinct entries rather than
+        // one blurred block (message-log immersion pass).
+        _log.Text = string.Join($"\n[color=#232a33]{new string('─', 44)}[/color]\n", logLines);
+    }
+
+    /// <summary>
+    /// Renders one curated message as BBCode: each colored segment (e.g. a tinted damage type) keeps
+    /// its color, uncolored runs fall back to the line's accent, and the player's own speech is
+    /// italicized. Colors come from Core's renderer-agnostic MessageLog palette.
+    /// </summary>
+    private static string RenderMessageCard(MessageCard card)
+    {
+        var body = new System.Text.StringBuilder();
+        foreach (var segment in card.Segments)
+        {
+            var text = UiTheme.Escape(segment.Text);
+            var color = segment.Color ?? card.AccentColor;
+            body.Append(string.IsNullOrEmpty(color) ? text : $"[color=#{color}]{text}[/color]");
+        }
+
+        var rendered = body.ToString();
+        return card.Kind == MessageKind.PlayerSpeech ? $"[i]{rendered}[/i]" : rendered;
     }
 
     private void EnsureMapCells(GameView view)

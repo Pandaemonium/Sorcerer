@@ -195,16 +195,9 @@ public sealed class MovementSystem
         }
 
         var movementTurnDeltas = _engine.AdvanceTurn();
-        var moveMessage = ApplyPlayerCommandMessage(
-            "You move.",
-            "moveMessage",
-            "The controlled body moved by player command.",
-            new Dictionary<string, object?>
-            {
-                ["direction"] = direction.ToString(),
-                ["toX"] = destination.X,
-                ["toY"] = destination.Y,
-            });
+        // A plain move produces no log line: the map already shows the player moving, and a "You
+        // move." on every step buries the messages that matter (message-log immersion pass). The
+        // move itself is still recorded as a (non-message) delta above for AI and state.
         return new ActionResult
         {
             Action = "move",
@@ -212,8 +205,8 @@ public sealed class MovementSystem
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = _state.Turn,
-            Messages = moveMessage.Messages.Concat(movementTurnDeltas.PlayerMessages()).ToArray(),
-            Deltas = move.Deltas.Concat(movementTurnDeltas).Concat(moveMessage.Deltas).ToArray(),
+            Messages = movementTurnDeltas.PlayerMessages().ToArray(),
+            Deltas = move.Deltas.Concat(movementTurnDeltas).ToArray(),
         };
     }
 

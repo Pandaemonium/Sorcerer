@@ -240,10 +240,21 @@ public sealed class WorldReactionSystem
         var actor = deed.AttributionStatus.Equals("attributed", StringComparison.OrdinalIgnoreCase)
             ? deed.ActorSoulId
             : "someone unnamed";
-        return $"{CleanKind(deed.Kind)} near {deed.PlaceKey} by {actor}.";
+        return $"{CleanKind(deed.Kind)} in {ReadablePlace(deed.PlaceKey)} by {actor}.";
     }
 
     private static string CleanKind(string kind) => kind.Replace('_', ' ');
+
+    // Player-facing text must never show a raw place key like "imperial_encounter:13,29": take the
+    // region portion, drop the coordinates, title-case (message-log immersion pass).
+    private static string ReadablePlace(string placeKey)
+    {
+        var region = (placeKey ?? string.Empty).Split(':', 2, StringSplitOptions.TrimEntries).FirstOrDefault() ?? string.Empty;
+        var readable = region.Replace('_', ' ').Trim();
+        return string.IsNullOrWhiteSpace(readable)
+            ? "the frontier"
+            : System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(readable);
+    }
 
     private static void ApplyWildMagic(
         GameState state,

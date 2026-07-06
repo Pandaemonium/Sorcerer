@@ -9118,6 +9118,39 @@ public sealed class GameSessionCharacterizationTests
         && tags.Tags.Contains("curio", StringComparer.OrdinalIgnoreCase)
         && tags.Tags.Contains("generated", StringComparer.OrdinalIgnoreCase);
 
+    [Fact]
+    public async Task CuratedLogEchoesPlayerSpeechStaysSilentOnMoveAndDropsChaff()
+    {
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: new MockDialogueClaimExtractor());
+        DisableImperialAi(session);
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, what waits outside?"));
+        Assert.True(talk.Success, talk.Dialogue?.Error);
+
+        var view = session.View();
+        // A5: the player's own line is echoed into the log before the reply.
+        Assert.Contains(view.Messages, message =>
+            message.StartsWith("You say,", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("what waits outside", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(view.MessageCards);
+        Assert.Contains(view.MessageCards!, card => card.Kind == MessageKind.PlayerSpeech);
+
+        // A1: a plain move adds no "You move." line to the log.
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+        await session.ExecuteAsync(new MoveCommand(Direction.West));
+        var afterMove = session.View();
+        Assert.DoesNotContain(afterMove.Messages, message => message.Equals("You move.", StringComparison.OrdinalIgnoreCase));
+
+        // A2/A4: no rumor-propagation chaff and no raw place keys reach the curated log.
+        Assert.DoesNotContain(afterMove.Messages, MessageLog.IsChaff);
+        Assert.DoesNotContain(afterMove.Messages, message =>
+            message.Contains("imperial_encounter", StringComparison.OrdinalIgnoreCase)
+            || System.Text.RegularExpressions.Regex.IsMatch(message, @"\b\d+,\d+\b"));
+    }
+
     private static void DisableImperialAi(GameSession session)
     {
         foreach (var id in new[] { "soldier_1", "soldier_2" })

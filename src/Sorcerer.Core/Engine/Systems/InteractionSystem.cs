@@ -197,6 +197,27 @@ public sealed class InteractionSystem
                 ["auditOnly"] = true,
                 ["playerVisible"] = false,
             }));
+        // Echo the player's own spoken line into the log before the reply, so a conversation reads
+        // as a back-and-forth rather than only the NPC's half (message-log immersion pass).
+        if (!string.IsNullOrWhiteSpace(turn.PlayerText))
+        {
+            var playerLine = _engine.ApplyConsequence(WorldConsequence.Message(
+                "player_command",
+                $"You say, \"{turn.PlayerText.Trim()}\"",
+                targetEntityId: State.ControlledEntityId.Value,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: turn.PlayerText,
+                reason: "The player's spoken line, echoed into the log before the reply.",
+                operation: "playerSpeech",
+                details: new Dictionary<string, object?>
+                {
+                    ["playerVisible"] = true,
+                    ["speakerId"] = State.ControlledEntityId.Value,
+                }));
+            deltas.AddRange(playerLine.Deltas);
+        }
+
         for (var index = 0; index < dialogueLines.Length; index++)
         {
             var line = dialogueLines[index];

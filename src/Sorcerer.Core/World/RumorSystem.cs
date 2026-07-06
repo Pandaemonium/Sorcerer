@@ -510,15 +510,15 @@ public static class RumorSystem
         var actor = deed.AttributionStatus.Equals("attributed", StringComparison.OrdinalIgnoreCase)
             ? "the wild sorcerer"
             : "someone bright and unnamed";
-        var place = deed.PlaceKey.Replace(':', ' ');
+        var place = ReadablePlace(deed.PlaceKey);
         return deed.Kind switch
         {
-            "freed_prisoner" => $"{actor} freed a prisoner near {place}.",
-            "body_swap" => $"{actor} walked out wearing another face near {place}.",
-            "kill" => $"{actor} left a death near {place}.",
-            "attack" => $"{actor} struck first near {place}.",
-            "wild_magic" => $"{actor} worked wild magic near {place}.",
-            _ => $"people near {place} are still talking about what {actor} did: {deed.Kind}.",
+            "freed_prisoner" => $"{actor} freed a prisoner in {place}.",
+            "body_swap" => $"{actor} walked out wearing another face in {place}.",
+            "kill" => $"{actor} left a death in {place}.",
+            "attack" => $"{actor} struck first in {place}.",
+            "wild_magic" => $"{actor} worked wild magic in {place}.",
+            _ => $"people in {place} are still talking about what {actor} did: {deed.Kind}.",
         };
     }
 
@@ -526,6 +526,24 @@ public static class RumorSystem
     {
         var parts = placeKey.Split(':', 2, StringSplitOptions.TrimEntries);
         return parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]) ? parts[0] : fallback;
+    }
+
+    /// <summary>
+    /// Turns an internal place key like "imperial_encounter:13,29" into a readable place name
+    /// ("Imperial Encounter") for player-facing text: takes the region portion, drops the raw
+    /// coordinates, and title-cases. Message-log immersion pass — coordinates and snake_case ids
+    /// must never surface to the player.
+    /// </summary>
+    private static string ReadablePlace(string placeKey)
+    {
+        var region = RegionFromPlace(placeKey ?? string.Empty, placeKey ?? string.Empty);
+        var readable = region.Replace('_', ' ').Trim();
+        if (string.IsNullOrWhiteSpace(readable))
+        {
+            return "the frontier";
+        }
+
+        return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(readable);
     }
 
     private static string RegionCarrier(string regionId) => $"region:{regionId}";

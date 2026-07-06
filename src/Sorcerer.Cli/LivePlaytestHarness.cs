@@ -448,8 +448,9 @@ public static class LivePlaytestHarness
             issues.Add($"step {step} free {result.Action} changed the turn");
         }
 
-        if (result.Success && result.Messages.Count == 0)
+        if (result.Success && result.Messages.Count == 0 && !string.Equals(result.Action, "move", StringComparison.OrdinalIgnoreCase))
         {
+            // A plain move is intentionally silent (message-log immersion pass); no message is fine.
             issues.Add($"step {step} successful {result.Action} returned no messages");
         }
 

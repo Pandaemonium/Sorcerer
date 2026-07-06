@@ -194,17 +194,14 @@ public sealed class GameSessionTests
         Assert.True(result.ConsumedTurn);
         Assert.Equal(0, result.TurnBefore);
         Assert.Equal(1, result.TurnAfter);
-        Assert.Contains("You move.", result.Messages);
+        // A plain move no longer narrates "You move." — the map shows it, and the log stays for
+        // things that matter (message-log immersion pass). The move is still a recorded delta.
+        Assert.DoesNotContain("You move.", result.Messages);
         Assert.Contains(result.Deltas, delta =>
             delta.Operation == "move"
             && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.MoveEntity)
             && Equals(delta.Details["direction"], Direction.East.ToString()));
-        Assert.Contains(result.Deltas, delta =>
-            delta.Operation == "moveMessage"
-            && delta.Summary == "You move."
-            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.Message)
-            && Equals(delta.Details["direction"], Direction.East.ToString())
-            && Equals(delta.Details["playerVisible"], true));
+        Assert.DoesNotContain(result.Deltas, delta => delta.Operation == "moveMessage");
     }
 
     [Fact]
@@ -274,7 +271,7 @@ public sealed class GameSessionTests
         Assert.Single(session.Engine.State.Messages, message =>
             message.Equals("Target cleared.", StringComparison.Ordinal));
         Assert.Single(session.Engine.State.Messages, message =>
-            message.Equals("Pending cast cast_1 is resolving.", StringComparison.Ordinal));
+            message.Equals("Wild spell: ask the lock to remember rain", StringComparison.Ordinal));
         Assert.Single(session.Engine.State.Messages, message =>
             message.Equals("Pending cast cast_1 dissipates.", StringComparison.Ordinal));
     }
