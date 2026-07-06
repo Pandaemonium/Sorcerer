@@ -68,11 +68,39 @@ are in place.
   (prefix-cache hit). Run `--reparse-audit` to confirm the slimmer repair lane still fixes the
   historical corpus. Add a dated FEEL_NOTES section after the run.
 
+### DONE — 2026-07-06 dialogue live baseline and prompt trim
+
+- Ran three live Ollama dialogue turns through the CLI with `--provider ollama`,
+  `--model qwen3.5:9b-q4_K_M`, `--no-background`, `--quickstart social`,
+  transcript capture, and a save flush. Baseline wall time: **336.0 s** for
+  three talks plus save. Foreground context-router calls were **13.9-25.3 s**;
+  speech prompt tokens were **1070-1993**; CPU parser-router calls were
+  **10.6-16.8 s**; CPU parser detail calls were **55.0-68.6 s**.
+- Trimmed live dialogue prompts: compact foreground router wire, compact
+  speech-provider wire, no parser capability schemas in the speech request,
+  compact parser capability card summaries, lower router output caps, and a
+  successful-live parser capability cap of three ids.
+- Same three-turn after-run before the parser cap completed in **308.6 s**.
+  Speech prompt tokens were **1248-1592** on that run; one call grew because the
+  router selected an extra context card, but the object-focused call dropped
+  from **1993** to **1443** prompt tokens.
+- A shorter two-turn parser-cap check completed in **185.9 s**. Parser request
+  bytes dropped to **2457/3460** with selected capability bytes **472/807**, but
+  CPU parser detail still took **77.6 s** and **32.6 s**. The cap is a
+  token-budget guard, not a complete latency fix.
+- Next likely dialogue wins: keyword/tiny-model skip lanes for the foreground
+  context-router, a much smaller parser model or hosted parser lane, and
+  stricter parser-detail skip criteria when the NPC reply contains color but no
+  durable mechanics.
+
 ### Findings / gotchas discovered while implementing
 
-- **3.1 is a non-issue and needs no work**: `OllamaDialogueProvider.UserPrompt` never serialized
-  `capabilityCards` into the speech prompt — the ~1.9 KB only appears in the *audit record* of the
-  request object. The plan's baseline table overstated the speech payload accordingly.
+- **3.1 is now explicit**: live generated dialogue requests pass empty
+  `CapabilityCards`, and `OllamaDialogueProvider.UserPrompt` omits parser
+  schemas, recent claim ledgers, and memory detail unless a routed context card
+  carries that story context. Tune speech wire size from
+  `ProviderStats.PromptTokens`; some byte metrics still describe richer
+  authoritative request/audit objects.
 - `MagicContextView.Operations` is non-nullable for the engine/audits/mock/replay;
   `SpellPromptBuilder.WireContextJson` sets it to `null!` **only** on the provider wire copy so the
   null-omitting serializer drops it. Don't "fix" that null.
@@ -105,7 +133,7 @@ call (num_ctx 8192) + 1 resolve call (num_ctx 8192) + optional repair call.
 | slice | avg bytes | notes |
 |---|---:|---|
 | contextCards | 5,565 | routed cards (good design, payloads still heavy) |
-| capabilityCards | 1,904 | **static proposal-schema text sent to the speech call, which is explicitly forbidden from proposing mechanics** |
+| capabilityCards | 1,904 | historical pre-trim request slice; live speech requests now pass an empty `CapabilityCards` list and keep schemas in the parser lane |
 | scene + speaker + listener | 2,490 | |
 | recentMemories/rumors/claims | ~1,200 | |
 
@@ -341,15 +369,17 @@ the prompt cacheable (3.5); the payload cuts (3.1, 3.3) and continuity (3.4) are
 quality/robustness, not raw speed.
 
 ### 3.1 Stop sending proposal-schema `capabilityCards` to the speech call
-- Files: `DialogueContextAssembler.BuildDialogueRequest` / `DialogueCapabilityCards()`,
-  `OllamaDialogueProvider.UserPrompt`.
+- Files: `DialogueContextAssembler.BuildDialogueRequest` (former
+  `DialogueCapabilityCards()` helper), `OllamaDialogueProvider.UserPrompt`.
 - Problem: ~1.9 KB of claim/action schema text goes to a call whose system prompt says "Do not
   output proposals… A separate parser will inspect the reply." It costs tokens and invites schema
   leakage into speech.
 - Change: route those lines to the parser requests only (`DialogueClaimExtractors` path). The
   speech call keeps zero mechanics text.
-- Accept: dialogue request avg ≤ 6 KB; parser proposal quality unchanged on
-  `dialogue_promise_eval` fixtures.
+- Status: done on 2026-07-06. `DialogueRequest.CapabilityCards` is empty for
+  generated speech, live provider wire omits parser schema fields, and tests pin
+  that the speech prompt does not carry `capabilityCards`, `recentMemories`, or
+  `recentClaims`.
 
 ### 3.2 (Optional) Keyword-first context routing — only if measured over budget
 - Files: `GameSession.RouteDialogueContextAsync`, `DialogueRouters.cs`.

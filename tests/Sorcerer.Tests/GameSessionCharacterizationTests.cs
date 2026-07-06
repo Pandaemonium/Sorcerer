@@ -6263,12 +6263,9 @@ public sealed class GameSessionCharacterizationTests
         Assert.Equal(talk.DialogueRoute, entry.Route);
         Assert.True(entry.Route!.Metrics!.GeneratorRequestBytes > 0);
         Assert.Contains("Escape the containment yard", entry.Request.Speaker.Want);
-        Assert.Contains(entry.Request.CapabilityCards, card =>
-            card.Contains("recruit", StringComparison.OrdinalIgnoreCase)
-            && card.Contains("offer_trade", StringComparison.OrdinalIgnoreCase)
-            && card.Contains("reveal_service", StringComparison.OrdinalIgnoreCase)
-            && card.Contains("canonize_fact", StringComparison.OrdinalIgnoreCase)
-            && card.Contains("spawn_fixture", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(entry.Request.CapabilityCards);
+        Assert.NotNull(entry.Request.ContextCards);
+        Assert.NotEmpty(entry.Request.ContextCards);
         Assert.Equal("talk", entry.ResultAction);
         Assert.True(entry.ResultSuccess);
         Assert.Contains("dialogue", entry.DeltaOperations);

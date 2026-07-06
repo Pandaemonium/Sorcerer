@@ -69,29 +69,29 @@ public sealed record DialogueParserCapabilitySelection(
 
 public static class DialogueParserCapabilityCatalog
 {
+    private const int MaxRoutedCapabilityIds = 3;
+
     public static IReadOnlyList<DialogueParserCapabilityCard> All { get; } = new[]
     {
         new DialogueParserCapabilityCard(
             "claims",
             "Claims",
-            "NPC-authored or NPC-reported claims about places, people, stock, threats, laws, routes, or events.",
+            "NPC-spoken/reported facts about places, people, stock, threats, laws, routes, or events.",
             new[]
             {
-                "Use claims only for facts plainly supported by the NPC's spoken reply.",
-                "Never bind player-invented assertions as claims.",
-                "Use category values such as town, landmark, person, item, merchant_stock, threat, rumor, local_law, custom, history, relationship, or escape_route.",
-                "Each claim may include text, category, subject, salience, confidence, playerVisible, targetEntityId, merchantId, itemName, tags, and playerAuthored.",
+                "Claim only NPC-supported facts; never bind player inventions.",
+                "Fields: text, category, subject, salience, confidence, playerVisible, targetEntityId, merchantId, itemName, tags, playerAuthored.",
+                "Categories: town, landmark, person, item, merchant_stock, threat, rumor, local_law, custom, history, relationship, escape_route.",
             }),
         new DialogueParserCapabilityCard(
             "promises",
             "Promises",
-            "Claims that should later become concrete sites, people, items, stock, services, threats, routes, or other world affordances.",
+            "Actionable claims that should later become sites, people, items, stock, services, threats, routes, or doors.",
             new[]
             {
-                "Set bindAsPromise true when the world should later deliver the claim organically through ordinary systems.",
-                "Prefer triggerHint travel for distant places, landmarks, people, items, stock, services, routes, or threats.",
-                "Use realizationKind site, town, landmark, person, item, merchant_stock, service, threat, escape_route, door_rule, or route.",
-                "Use claimedPlace when the reply gives direction or place language.",
+                "Set bindAsPromise true for useful later content; use triggerHint such as travel, talk, buy, request, open, inspect.",
+                "realizationKind: site, town, landmark, person, item, merchant_stock, service, threat, escape_route, door_rule, route.",
+                "Use claimedPlace for direction/place language.",
             }),
         new DialogueParserCapabilityCard(
             "canon",
@@ -99,9 +99,8 @@ public static class DialogueParserCapabilityCatalog
             "Durable lore or local facts that should become world knowledge without promising future delivery.",
             new[]
             {
-                "Set bindAsCanon true for local law, custom, lineage, taboo, public history, public faction procedure, or known relationships.",
-                "Use canonKind and canonSummary for durable world facts.",
-                "Do not canonize an unsupported flourish.",
+                "Set bindAsCanon true for supported local law, custom, lineage, taboo, history, faction procedure, or known relationship.",
+                "Use canonKind and canonSummary; omit unsupported flourish.",
             }),
         new DialogueParserCapabilityCard(
             "memory",
@@ -109,9 +108,7 @@ public static class DialogueParserCapabilityCatalog
             "Durable memories the NPC or listener should keep because this exchange materially matters.",
             new[]
             {
-                "Use memories only for facts the NPC should later remember.",
-                "Include ownerEntityId, text, provenance, salience, and shareable when useful.",
-                "Do not record ordinary small talk unless it changes future behavior.",
+                "Record only future-relevant memories. Fields: ownerEntityId, text, provenance, salience, shareable.",
             }),
         new DialogueParserCapabilityCard(
             "bond_want",
@@ -119,9 +116,8 @@ public static class DialogueParserCapabilityCatalog
             "Material relationship changes or changes to the speaker's active desire.",
             new[]
             {
-                "Use bond only when relationship to the listener materially changes; deltas should be small.",
-                "Use want only when the speaker's notable desire/status changes, is satisfied, blocked, redirected, or escalated.",
-                "Include reason so the engine can audit why the change was proposed.",
+                "Use bond only for material relationship change; deltas small.",
+                "Use want when the speaker desire/status is satisfied, blocked, redirected, or escalated. Include reason.",
             }),
         new DialogueParserCapabilityCard(
             "local_actions",
@@ -129,9 +125,8 @@ public static class DialogueParserCapabilityCatalog
             "Immediate local actions the speaking NPC can plausibly perform now.",
             new[]
             {
-                "Allowed local actions include none, step_aside, flee, call_help, give_item, open_door, attack, recruit, mark_location, spawn_fixture, and create_promise.",
-                "Actions must be local and plausible now; distant facts should be claims or promises.",
-                "Use targetEntityId, itemName, quantity, gold, x/y, targetHint, name, description, fixtureType, material, tags, and interactableVerbs as needed.",
+                "Allowed: none, step_aside, flee, call_help, give_item, open_door, attack, recruit, mark_location, spawn_fixture, create_promise.",
+                "Only local plausible now-actions. Fields as needed: targetEntityId, itemName, quantity, gold, x/y, targetHint, name, description, fixtureType, material, tags, interactableVerbs.",
             }),
         new DialogueParserCapabilityCard(
             "services_trade",
@@ -139,10 +134,9 @@ public static class DialogueParserCapabilityCatalog
             "Services, wares, merchant stock, and trade offers revealed by speech.",
             new[]
             {
-                "Use reveal_service to expose a service for later request.",
-                "Use consequence/request_service only when the NPC is performing an already-known service now.",
-                "If an existing merchant says they can sell something, use category merchant_stock, merchantId as speakerId, itemName, and bindAsPromise false.",
-                "Use offer_trade for local trade offers, not purchases; explicit buy/sell/request commands execute transactions.",
+                "Use reveal_service for later request; request_service only for an already-known service performed now.",
+                "Merchant stock claim: category merchant_stock, merchantId speakerId, itemName, bindAsPromise false.",
+                "Use offer_trade for offers only; buy/sell/request commands execute transactions.",
             }),
         new DialogueParserCapabilityCard(
             "typed_consequences",
@@ -150,9 +144,8 @@ public static class DialogueParserCapabilityCatalog
             "Generic typed consequences when no narrower dialogue action fits.",
             new[]
             {
-                "Use action type consequence with consequenceType and consequencePayload.",
-                "The engine will normalize, validate, and apply or reject through WorldConsequence.",
-                "Prefer narrow built-in action types when possible.",
+                "Use action type consequence with consequenceType and consequencePayload only when no narrower action fits.",
+                "Engine validates through WorldConsequence.",
             }),
     };
 
@@ -185,7 +178,7 @@ public static class DialogueParserCapabilityCatalog
         var available = All.Select(card => card.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var selectedIds = requestedIds
             .Where(available.Contains)
-            .Take(8)
+            .Take(MaxRoutedCapabilityIds)
             .ToArray();
         var hasMechanics = result.HasMechanics;
         var usedFallback = result.TechnicalFailure || (hasMechanics && selectedIds.Length == 0);

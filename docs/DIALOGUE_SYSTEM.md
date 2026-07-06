@@ -60,7 +60,10 @@ routers/providers/parsers live in `Sorcerer.Llm`;
 provider technical failures do not consume turns. [Dialogue Context Routing](DIALOGUE_CONTEXT_ROUTING.md)
 defines the router/card layer for current-zone context, full rumors, focused
 object detail, relationship memory, services, faction law, travel context, and
-parser capability cards.
+parser capability cards. The live provider wire keeps the foreground speech
+prompt compact: parser capability schemas, recent claim ledgers, and memory
+detail are reserved for the post-speech parser lane unless a routed context card
+explicitly carries the relevant player-visible story context.
 
 The older deterministic `InteractionSystem.Talk` path still exists as the
 no-provider fallback and for tests. `IDialogueParser` is now the post-speech
@@ -773,7 +776,9 @@ Recommended behavior:
 - Parser-router call: background and tiny. It decides whether the spoken reply
   needs mechanical parsing and which parser capability cards to include.
 - Parser call: background. It reads the spoken line and selected mechanical
-  guidance after the player-visible response is available.
+  guidance after the player-visible response is available. Successful live
+  parser-router selections are capped to three capability cards before the
+  detail prompt is assembled; the router prompt asks for the minimum useful set.
 - Apply completed parser proposals: next command, world pump, or save flush.
 - Heavy realization: between turns or background queue.
 - Claim/mechanical extraction for generated text without a proposal envelope:
@@ -792,6 +797,11 @@ local Ollama to CPU (`SORCERER_DIALOGUE_PARSER_ROUTER_NUM_GPU=0` and
 `SORCERER_DIALOGUE_PARSER_NUM_GPU=0`) so mechanical parsing does not monopolize
 the foreground GPU model. Users can override those lanes with
 `SORCERER_DIALOGUE_PARSER_ROUTER_*` and `SORCERER_DIALOGUE_PARSER_*` settings.
+Live Ollama measurements on 2026-07-06 with `qwen3.5:9b-q4_K_M` showed that
+prompt trimming reduced speech prompt tokens on focused turns, but the CPU parser
+detail lane still took tens of seconds. Treat the parser cap as a token-budget
+guard, not a complete latency fix; smaller parser models, skip lanes, or
+separate background serving are still likely needed for humane turnaround.
 
 Pending extraction tasks should not be serialized. Saves should contain the
 durable result of completed dialogue work, not live provider tasks. If an

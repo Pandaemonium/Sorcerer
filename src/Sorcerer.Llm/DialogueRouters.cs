@@ -172,7 +172,7 @@ public sealed class OpenAiCompatibleDialogueRouter : IDialogueRouter
             OllamaDialogueRouter.SystemPrompt(),
             OllamaDialogueRouter.UserPrompt(request),
             temperature: 0.0,
-            maxTokens: 300,
+            maxTokens: 140,
             timeout.Token,
             label: "dialogue-context-router");
         if (!result.Success)
@@ -225,7 +225,7 @@ public sealed class OllamaDialogueRouter : IDialogueRouter
             SystemPrompt(),
             UserPrompt(request),
             temperature: 0.0,
-            maxTokens: 300,
+            maxTokens: 140,
             timeout.Token);
         if (!result.Success)
         {
@@ -302,40 +302,35 @@ public sealed class OllamaDialogueRouter : IDialogueRouter
     }
 
     internal static string SystemPrompt() =>
-        "You are Sorcerer's dialogue context router. Return exactly JSON with shape "
-        + "{\"selectedCardIds\":[\"card.id\"],\"reason\":\"short\"}. "
-        + "Choose only from available card ids. Choose the smallest useful set of cards the NPC needs to answer the player's latest message in character. "
-        + "The cards are already filtered by NPC knowledge; do not infer hidden facts, write dialogue, or propose mechanics. "
-        + "Prefer a balanced bundle for broad questions. If uncertain, include zone.current and npc.relationship_memory when available.";
+        "Dialogue context router. Return only JSON: {\"selectedCardIds\":[\"card.id\"],\"reason\":\"short\"}. "
+        + "Pick the smallest useful card set for the NPC's answer. Use only listed ids. "
+        + "Cards are already knowledge-gated; do not add facts, dialogue, or mechanics. "
+        + "For broad or unsure turns prefer zone.current plus npc.relationship_memory if listed.";
 
     internal static string UserPrompt(DialogueRouteRequest request) =>
         JsonSerializer.Serialize(new
         {
-            request.Turn,
-            request.PlayerText,
-            speaker = new
-            {
-                request.Speaker.EntityId,
-                request.Speaker.Name,
-                request.Speaker.Tags,
-                request.Speaker.Faction,
-                request.Speaker.Want,
-                request.Speaker.BondSummary,
-            },
-            listener = new
-            {
-                request.Listener.EntityId,
-                request.Listener.Name,
-                request.Listener.Tags,
-                request.Listener.Faction,
-            },
-            scene = new
-            {
-                request.Scene.RegionId,
-                request.Scene.CurrentZoneId,
-            },
-            availableCards = request.AvailableCards,
+            t = request.Turn,
+            text = request.PlayerText,
+            speaker = ParticipantRouteLine(request.Speaker),
+            listener = ParticipantRouteLine(request.Listener),
+            scene = $"{request.Scene.RegionId}/{request.Scene.CurrentZoneId}",
+            nearby = CompactNearbyLines(request.Scene).ToArray(),
+            cards = request.AvailableCards.Select(card => $"{card.Id}: {card.Summary}").ToArray(),
         }, JsonOptions);
+
+    private static string ParticipantRouteLine(DialogueParticipantCard participant)
+    {
+        var tags = participant.Tags.Count == 0 ? "" : $" [{string.Join(",", participant.Tags.Take(5))}]";
+        var faction = string.IsNullOrWhiteSpace(participant.Faction) ? "" : $" faction={participant.Faction}";
+        return $"{participant.Name} ({participant.EntityId}){tags}{faction}";
+    }
+
+    private static IEnumerable<string> CompactNearbyLines(DialogueSceneCard scene) =>
+        scene.VisibleEntities
+            .Concat(scene.NearbyItems)
+            .Take(6)
+            .Select(line => line.Length > 96 ? line[..96].TrimEnd() : line);
 
     internal static bool TryParseRouteResult(
         string provider,

@@ -1118,38 +1118,116 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         new(text.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
     internal static string SystemPrompt() =>
-        "You are Sorcerer's NPC dialogue provider. Return exactly one JSON object and no prose outside it. "
-        + "Shape: {\"spokenText\":\"NPC speech\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\"}. "
-        + "Speak as the speaker only. No narration, markdown, stage directions, or omniscient exposition. Answer the newest player message directly in about two compact paragraphs, roughly 4-7 sentences total. Put a blank line inside spokenText if it helps the reply breathe. "
-        + "Use the speaker, listener, scene, recent memories, rumors, and claims as context. Player-spoken claims are not binding; speak from the NPC's knowledge, uncertainty, motives, and relationship to the listener. "
+        "Sorcerer NPC dialogue. Return only JSON: "
+        + "{\"spokenText\":\"NPC speech\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\"}. "
+        + "Speak only as the speaker: no narration, markdown, stage directions, omniscience, or extra fields. "
+        + "Answer the newest player line directly in 3-6 concrete sentences; a blank line inside spokenText is okay. "
+        + "Use supplied speaker/listener/scene/cards/history only. Player claims are not truth; speak from NPC knowledge, uncertainty, motives, want, and bond. "
         // Voice (docs/AESTHETICS_AND_TONE.md, narration voice): grounded and specific, not portentous.
-        + "Speak as a particular person with your own concerns, work, and history, not as an oracle or narrator of the world. "
-        + "Ground answers in concrete local detail - names, prices, roads, weather, the day's labor - and let your own want and your bond with the listener decide what you volunteer or hold back. "
-        + "Avoid portent, mystique, and cosmic phrasing (\"the world remembers\", \"the shape of you\", rumors that \"spread\") unless this character genuinely trades in such talk; most people do not. Never speak on behalf of \"the world\" or narrate consequences you could not personally know. "
-        + "If scene.regionVoice is present, let it tint your diction toward the local register. "
-        + "If recentDialogue is present, it is what you and this person just said to each other; stay consistent with it and do not reintroduce yourself. "
-        + "Do not output proposals, claims arrays, mechanics, schemas, engine operations, markdown, or JSON fields beyond spokenText, delivery, and intent. A separate parser will inspect the spoken reply for supported mechanical consequences after the player sees it. "
-        + "Concrete NPC assertions are allowed when in character, but avoid inventing omniscient facts or resolving player claims as true. If the speaker cannot or will not answer, still return a character refusal as spokenText. Technical JSON mistakes are failures; character refusal is not.";
+        + "Sound like a particular person with local concerns. Use concrete names, roads, work, prices, weather. Avoid cosmic phrases like \"the world remembers\" unless this NPC would talk that way. "
+        + "If regionVoice/history exist, honor them. Do not output claims/proposals/mechanics; a parser runs later. Character refusal is valid spokenText.";
 
     // Stable context first so a local backend can reuse the KV prefix across turns of one
     // conversation; the volatile tail (recent exchange, this turn's line, any retry note) changes
     // every turn and so comes last (docs/OPTIMIZATION_PLAN.md WS3.5).
-    internal static string UserPrompt(DialogueRequest request, string? retryNote) =>
-        JsonSerializer.Serialize(new
+    internal static string UserPrompt(DialogueRequest request, string? retryNote)
+    {
+        var hasContextCards = request.ContextCards is { Count: > 0 };
+        var payload = new Dictionary<string, object?>
         {
-            speaker = request.Speaker,
-            listener = request.Listener,
-            scene = request.Scene,
-            selectedContextCardIds = request.SelectedContextCardIds ?? Array.Empty<string>(),
-            contextCards = request.ContextCards ?? Array.Empty<DialogueContextCardPayload>(),
-            recentMemories = request.RecentMemories,
-            recentClaims = request.RecentClaims,
-            recentRumors = request.RecentRumors ?? Array.Empty<string>(),
-            recentDialogue = request.RecentDialogue ?? Array.Empty<string>(),
-            request.Turn,
-            retryNote,
-            request.PlayerText,
-        }, JsonOptions);
+            ["speaker"] = CompactParticipant(request.Speaker),
+            ["listener"] = CompactParticipant(request.Listener),
+            ["scene"] = CompactScene(request.Scene),
+            ["turn"] = request.Turn,
+        };
+
+        AddIfAny(payload, "selectedCards", request.SelectedContextCardIds);
+        AddIfAny(payload, "cards", (request.ContextCards ?? Array.Empty<DialogueContextCardPayload>())
+            .Select(CompactContextCard));
+        if (!hasContextCards)
+        {
+            AddIfAny(payload, "memories", request.RecentMemories);
+            AddIfAny(payload, "claims", request.RecentClaims);
+            AddIfAny(payload, "rumors", request.RecentRumors);
+        }
+
+        AddIfAny(payload, "history", request.RecentDialogue);
+        AddText(payload, "retry", retryNote, 240);
+        payload["playerText"] = request.PlayerText;
+        return JsonSerializer.Serialize(payload, JsonOptions);
+    }
+
+    private static Dictionary<string, object?> CompactParticipant(DialogueParticipantCard participant)
+    {
+        var value = new Dictionary<string, object?>
+        {
+            ["id"] = participant.EntityId,
+            ["name"] = participant.Name,
+        };
+        AddIfAny(value, "tags", participant.Tags.Take(8));
+        AddText(value, "faction", participant.Faction, 80);
+        AddText(value, "profile", participant.Profile, 360);
+        AddText(value, "description", participant.Description, 240);
+        AddText(value, "bond", participant.BondSummary, 160);
+        AddText(value, "want", participant.Want, 240);
+        return value;
+    }
+
+    private static Dictionary<string, object?> CompactScene(DialogueSceneCard scene)
+    {
+        var value = new Dictionary<string, object?>
+        {
+            ["region"] = scene.RegionId,
+            ["zone"] = scene.CurrentZoneId,
+        };
+        AddText(value, "regionVoice", scene.RegionVoice, 240);
+        AddIfAny(value, "visible", TrimLines(scene.VisibleEntities, 8, 160));
+        AddIfAny(value, "items", TrimLines(scene.NearbyItems, 6, 140));
+        AddIfAny(value, "events", TrimLines(scene.RecentEvents, 4, 180));
+        return value;
+    }
+
+    private static Dictionary<string, object?> CompactContextCard(DialogueContextCardPayload card)
+    {
+        var value = new Dictionary<string, object?>
+        {
+            ["id"] = card.Id,
+            ["title"] = card.Title,
+        };
+        AddIfAny(value, "lines", TrimLines(card.Lines, 12, 260));
+        if (card.Truncated)
+        {
+            value["truncated"] = true;
+        }
+
+        return value;
+    }
+
+    private static IEnumerable<string> TrimLines(IEnumerable<string> lines, int maxLines, int maxLength) =>
+        lines.Take(maxLines).Select(line => TrimText(line, maxLength));
+
+    private static void AddIfAny<T>(Dictionary<string, object?> value, string key, IEnumerable<T>? items)
+    {
+        var array = items?.ToArray();
+        if (array is { Length: > 0 })
+        {
+            value[key] = array;
+        }
+    }
+
+    private static void AddText(Dictionary<string, object?> value, string key, string? text, int maxLength)
+    {
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            value[key] = TrimText(text, maxLength);
+        }
+    }
+
+    private static string TrimText(string text, int maxLength)
+    {
+        var collapsed = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return collapsed.Length > maxLength ? collapsed[..maxLength].TrimEnd() + "..." : collapsed;
+    }
 
     private DialogueProviderResult Success(string raw, DialogueResponse response, Sorcerer.Core.Telemetry.ProviderCallStats? stats = null) =>
         new(Name, raw, TechnicalFailure: false, Error: null, Response: response, Stats: stats);

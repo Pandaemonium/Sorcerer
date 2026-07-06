@@ -249,10 +249,12 @@ public sealed class OllamaDialogueProviderTests
             .GetProperty("content")
             .GetString();
         Assert.NotNull(systemPrompt);
-        Assert.Contains("Do not output proposals", systemPrompt);
-        Assert.Contains("A separate parser will inspect", systemPrompt);
+        Assert.Contains("Do not output claims/proposals/mechanics", systemPrompt);
+        Assert.Contains("a parser runs later", systemPrompt);
         Assert.DoesNotContain("consequenceTiming immediate, after_turn, world_pump, or deferred", systemPrompt);
         Assert.DoesNotContain("\"capabilityCards\"", userPrompt);
+        Assert.DoesNotContain("\"recentMemories\"", userPrompt);
+        Assert.DoesNotContain("\"recentClaims\"", userPrompt);
     }
 
     [Fact]
@@ -289,11 +291,14 @@ public sealed class OllamaDialogueProviderTests
         using var detailBody = JsonDocument.Parse(handler.RequestBodies[1]);
         Assert.Equal(0, routerBody.RootElement.GetProperty("options").GetProperty("num_gpu").GetInt32());
         Assert.Contains(
-            "dialogue mechanics router",
+            "Dialogue mechanics router",
             routerBody.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
         Assert.Contains(
             "post-speech dialogue parser",
             detailBody.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+        var detailUserPrompt = detailBody.RootElement.GetProperty("messages")[1].GetProperty("content").GetString();
+        Assert.Contains("\"caps\"", detailUserPrompt);
+        Assert.DoesNotContain("\"parserCapabilityCards\"", detailUserPrompt);
     }
 
     [Fact]
@@ -322,10 +327,12 @@ public sealed class OllamaDialogueProviderTests
             .GetProperty("messages")[1]
             .GetProperty("content")
             .GetString();
-        Assert.Contains("dialogue context router", systemPrompt);
-        Assert.Contains("\"availableCards\"", userPrompt);
-        Assert.Contains("\"rumors.full\"", userPrompt);
+        Assert.Contains("Dialogue context router", systemPrompt);
+        Assert.Contains("\"cards\"", userPrompt);
+        Assert.Contains("rumors.full:", userPrompt);
         Assert.DoesNotContain("A rumor payload line that should not reach the router", userPrompt);
+        Assert.DoesNotContain("\"bondSummary\"", userPrompt);
+        Assert.DoesNotContain("\"want\"", userPrompt);
     }
 
     [Fact]
@@ -360,10 +367,39 @@ public sealed class OllamaDialogueProviderTests
             .GetProperty("messages")[1]
             .GetProperty("content")
             .GetString();
-        Assert.Contains("dialogue parser router", systemPrompt);
-        Assert.Contains("\"availableCapabilities\"", userPrompt);
-        Assert.Contains("\"services_trade\"", userPrompt);
+        Assert.Contains("Dialogue parser router", systemPrompt);
+        Assert.Contains("\"caps\"", userPrompt);
+        Assert.Contains("services_trade:", userPrompt);
         Assert.DoesNotContain("Use reveal_service to expose a service", userPrompt);
+    }
+
+    [Fact]
+    public void DialogueParserCapabilityCatalogCapsSuccessfulRouterSelections()
+    {
+        var request = DialogueParserCapabilityCatalog.BuildRouteRequest(
+            ClaimRequest("I know the road, remember your kindness, and can sell you a lock charm."));
+        var result = new DialogueParserRouteResult(
+            "fixture-parser-router",
+            "{}",
+            TechnicalFailure: false,
+            Error: null,
+            HasMechanics: true,
+            SelectedCapabilityIds: new[]
+            {
+                "claims",
+                "memory",
+                "services_trade",
+                "local_actions",
+                "canon",
+                "bogus",
+            });
+
+        var selection = DialogueParserCapabilityCatalog.Select(result, request);
+
+        Assert.False(selection.UsedFallback);
+        Assert.Equal(new[] { "claims", "memory", "services_trade" }, selection.SelectedCapabilityIds);
+        Assert.Equal(new[] { "claims", "memory", "services_trade" }, selection.SelectedCards.Select(card => card.Id).ToArray());
+        Assert.Contains("bogus", selection.UnknownSelectedCapabilityIds);
     }
 
     private static DialogueRequest Request(string playerText) =>

@@ -104,46 +104,29 @@ not full ledgers.
 
 ```json
 {
-  "turn": 14,
-  "playerText": "Lio, what rumors have you heard about the road east?",
-  "speaker": {
-    "entityId": "prisoner_1",
-    "name": "Lio of Hollowmere",
-    "tags": ["npc", "prisoner", "hollowmere"],
-    "faction": "player",
-    "want": "Escape the containment yard and get word to Hollowmere."
-  },
-  "listener": {
-    "entityId": "player",
-    "name": "the sorcerer",
-    "tags": ["sorcerer", "wild_magic"]
-  },
-  "relationship": "uneasy ally; loyalty 4, admiration 2",
-  "scene": {
-    "regionId": "imperial_encounter",
-    "zoneId": "0,0",
-    "nearbyAnchors": [
-      "Lio of Hollowmere (prisoner_1), range 1",
-      "locked imperial cell door (cell_door_1), range 0",
-      "brass containment brazier (brazier_1), range 7"
-    ]
-  },
-  "cardIndex": [
-    {
-      "id": "rumors.full",
-      "summary": "Rumors the speaker or region plausibly carries."
-    },
-    {
-      "id": "scene.object_detail",
-      "summary": "Descriptions, tags, claim seeds, and affordances for a named local object."
-    }
+  "t": 14,
+  "text": "Lio, what rumors have you heard about the road east?",
+  "speaker": "Lio of Hollowmere (prisoner_1) [npc,prisoner,hollowmere]",
+  "listener": "You (player) [sorcerer,wild_magic]",
+  "scene": "imperial_encounter/0,0",
+  "nearby": [
+    "Lio of Hollowmere (prisoner_1) at 14,5, range 1",
+    "locked imperial cell door (cell_door_1) at 13,5, range 0",
+    "brass containment brazier (brazier_1) at 6,4, range 7"
+  ],
+  "cards": [
+    "rumors.full: Rumors the speaker or region plausibly carries.",
+    "scene.object_detail: Visible object, fixture, door, and item details."
   ]
 }
 ```
 
 The router request should include a small `nearbyAnchors` list so the router can
 focus object or person cards without seeing their full details. Engine reference
-binding remains authoritative; router focuses are hints.
+binding remains authoritative; router focuses are hints. Do not send bond
+ledgers, wants, inventories, services, full card payloads, or recent claim text
+to the foreground context-router; the router needs only enough state to choose
+card ids.
 
 ## Router Response
 
@@ -340,6 +323,11 @@ Implemented capability cards:
 The parser-router is authoritative for prompt detail, but the engine still
 normalizes and validates every parser proposal that arrives. If the router
 returns `hasMechanics: false`, the detail parser call is skipped.
+Successful live parser-router selections are capped to the first three valid
+capability ids before detail prompt assembly. The live prompt asks for the
+minimum useful set, normally zero to two ids, with three reserved for unmistakably
+mixed speech. Deterministic fallback remains broader because it only runs after a
+router failure or empty valid live route.
 
 Claims and memories should usually remain available because ordinary speech can
 create durable claims unexpectedly. Verb-heavy action families should be routed
@@ -695,6 +683,9 @@ Rules:
 - Log route elapsed time, final dialogue elapsed time, and final request bytes
   together. Router success is measured by end-to-end command-to-visible-text
   time, not by route-call speed alone.
+- Treat prompt-token stats as the source of truth for live wire size. Some audit
+  byte metrics describe the authoritative request object, which intentionally
+  remains richer than the compact provider wire.
 - Enforce the live LLM route when it succeeds. If the route fails, times out, or
   selects no valid knowledge-gated cards, fall back to deterministic balanced
   cards and continue to generation.

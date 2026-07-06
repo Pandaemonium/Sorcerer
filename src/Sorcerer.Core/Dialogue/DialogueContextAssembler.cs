@@ -97,7 +97,7 @@ public sealed record DialogueContextAssembly(
             cardLines.TryGetValue("claims.recent", out var claimLines)
                 ? claimLines
                 : Array.Empty<string>(),
-            DialogueCapabilityCards(),
+            Array.Empty<string>(),
             cardLines.TryGetValue("rumors.full", out var rumorLines)
                 ? rumorLines
                 : Array.Empty<string>(),
@@ -276,17 +276,6 @@ public sealed record DialogueContextAssembly(
             .ToArray();
     }
 
-    private static IReadOnlyList<string> DialogueCapabilityCards() =>
-        new[]
-        {
-            "spokenText: about two compact paragraphs spoken by the NPC only; no narration or markdown.",
-            "claims: NPC-authored reported claims about places, people, items, threats, landmarks, stock, or events. Player-spoken claims are not binding.",
-            "bind actionable salience 3+ categories by default: site, town, landmark, person, item, merchant_stock, service, trade, threat, escape_route, prophecy, and door_rule.",
-            "claims must be plainly supported by spokenText; do not invent useful places, people, items, or threats the NPC did not actually say.",
-            "rumors: stories the speaker may have heard; they are not guaranteed true, but can color answers or be cited as rumor.",
-            "memories/bond/want: use only for durable memories or material relationship/desire changes caused by this exchange.",
-            "actions: array of local, plausible now-actions such as none, step_aside, flee, call_help, give, open, attack, recruit, create_promise, canonize_fact/add_canon, offer_trade, reveal_service, mark_location, spawn_fixture, or consequence with consequenceType and consequencePayload. Use reveal_service to expose a service; use consequence/request_service only when the NPC is performing an already-known service now. Use aliases like give_item/open_door/follow_me only when natural; distant facts should be claims/promises, not immediate actions.",
-        };
 }
 
 public sealed class DialogueContextAssembler

@@ -254,7 +254,7 @@ public sealed class OpenAiCompatibleDialogueParserRouter : IDialogueParserRouter
             OllamaDialogueParserRouter.SystemPrompt(),
             OllamaDialogueParserRouter.UserPrompt(request),
             temperature: 0.0,
-            maxTokens: 240,
+            maxTokens: 120,
             timeout.Token,
             label: "dialogue-parser-router");
         if (!result.Success)
@@ -310,7 +310,7 @@ public sealed class OllamaDialogueParserRouter : IDialogueParserRouter
             SystemPrompt(),
             UserPrompt(request),
             temperature: 0.0,
-            maxTokens: 240,
+            maxTokens: 120,
             timeout.Token);
         if (!result.Success)
         {
@@ -392,23 +392,21 @@ public sealed class OllamaDialogueParserRouter : IDialogueParserRouter
     }
 
     internal static string SystemPrompt() =>
-        "You are Sorcerer's dialogue parser router. Return exactly JSON with shape "
+        "Dialogue parser router. Return only JSON: "
         + "{\"hasMechanics\":true|false,\"selectedCapabilityIds\":[\"claims\"],\"reason\":\"short\"}. "
-        + "Choose only from available capability ids. Say hasMechanics true only when the NPC's spoken reply contains something the engine may need to remember or apply. "
-        + "Player-spoken assertions are not binding. Do not extract facts or write proposals.";
+        + "Use listed ids only. Pick the minimum: usually [] or [claims], max 2; use 3 only when unmistakable. "
+        + "claims covers facts, rumors, routes, stock, places, people, threats, and laws. "
+        + "Add memory, promises, canon, bond_want, local_actions, services_trade, or typed_consequences only when the NPC explicitly creates that mechanic. "
+        + "Player claims are not binding.";
 
     internal static string UserPrompt(DialogueParserRouteRequest request) =>
         JsonSerializer.Serialize(new
         {
-            request.Turn,
-            request.RegionId,
-            request.CurrentZoneId,
-            request.SpeakerId,
-            request.SpeakerName,
-            request.SpeakerTags,
-            request.PlayerText,
-            npcDialogue = request.DialogueLines,
-            availableCapabilities = request.AvailableCapabilities,
+            speaker = $"{request.SpeakerName} ({request.SpeakerId}) [{string.Join(",", request.SpeakerTags.Take(6))}]",
+            scene = $"{request.RegionId}/{request.CurrentZoneId}",
+            player = request.PlayerText,
+            npc = request.DialogueLines,
+            caps = request.AvailableCapabilities.Select(capability => $"{capability.Id}: {capability.Summary}").ToArray(),
         }, JsonOptions);
 
     internal static bool TryParseRouteResult(
@@ -569,7 +567,7 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
             OllamaDialogueClaimExtractor.DetailSystemPrompt(),
             OllamaDialogueClaimExtractor.DetailUserPrompt(request),
             temperature: 0.1,
-            maxTokens: 900,
+            maxTokens: 650,
             cancellationToken,
             label: "dialogue-parser-detail");
         if (!detail.Success)
@@ -688,7 +686,7 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
             DetailSystemPrompt(),
             DetailUserPrompt(request),
             temperature: 0.1,
-            maxTokens: 900,
+            maxTokens: 650,
             cancellationToken);
         if (!detail.Success)
         {
@@ -813,10 +811,10 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
         && value.GetArrayLength() > 0;
 
     internal static string RouterSystemPrompt() =>
-        "You are Sorcerer's dialogue mechanics router. Return exactly JSON: "
+        "Dialogue mechanics router. Return only JSON: "
         + "{\"hasMechanics\":true|false,\"families\":[\"claims|memories|bond|want|actions|services|trade|consequence\"],\"reason\":\"short\"}. "
-        + "Say true only when the NPC's spoken reply contains something the engine may need to remember or apply: an NPC-authored/reported claim, promise, canon fact, durable memory, material bond or want shift, immediate local action, service/trade offer, or typed world consequence. "
-        + "Player-spoken assertions are not binding. Report false for greetings, pure mood, refusals without side effects, or answers that add no durable/local mechanic.";
+        + "True only for NPC-spoken facts, promises, canon, memories, bond/want shifts, local actions, services/trade, or consequences. "
+        + "Player claims are not binding. False for greetings, mood, or refusals with no durable/local effect.";
 
     internal static string RouterUserPrompt(DialogueClaimRequest request) =>
         JsonSerializer.Serialize(new
@@ -829,42 +827,40 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
         }, JsonOptions);
 
     internal static string DetailSystemPrompt() =>
-        "You are Sorcerer's post-speech dialogue parser. Return exactly JSON with shape {\"proposals\":{\"claims\":[],\"memories\":[],\"bond\":null,\"want\":null,\"actions\":[]}}. "
-        + "Parse only mechanics plainly supported by the NPC's spoken reply and provided context; do not add new facts for flavor. Extract only NPC-authored or NPC-reported claims, never player-invented claims. Reported claims may be uncertain; use confidence. "
-        + "Use only the selected parser capability cards in the user payload for schema/detail guidance. If no selected card supports a proposal family, omit that family. "
-        + "Use salience 1-5; reserve salience 3+ for claims that open a route, stock, person, secret, place, threat, or tactical opportunity. "
-        + "Keep all text concise and concrete.";
+        "Sorcerer post-speech dialogue parser. Return only JSON: {\"proposals\":{\"claims\":[],\"memories\":[],\"bond\":null,\"want\":null,\"actions\":[]}}. "
+        + "Parse only mechanics plainly supported by the NPC reply/context. Never convert player inventions into claims. "
+        + "Use only selected capability guidance; omit unsupported families. Salience 1-5; 3+ only for useful routes, stock, people, secrets, places, threats, or tactics. Keep text short.";
 
     internal static string DetailUserPrompt(DialogueClaimRequest request) =>
         JsonSerializer.Serialize(new
         {
-            request.Turn,
-            request.RegionId,
-            request.CurrentZoneId,
-            request.SpeakerId,
-            request.SpeakerName,
-            request.SpeakerTags,
-            request.ListenerSoulId,
-            request.PlayerText,
-            npcDialogue = request.DialogueLines,
-            selectedParserCapabilityIds = request.SelectedParserCapabilityIds ?? Array.Empty<string>(),
-            parserCapabilityCards = request.ParserCapabilityCards ?? DialogueParserCapabilityCatalog.All,
-            recentMemories = request.RecentMemories.Select(memory => new
-            {
-                memory.SubjectId,
-                memory.Text,
-                memory.Provenance,
-                memory.Salience,
-            }),
-            recentClaims = request.RecentClaims.Select(claim => new
-            {
-                claim.Text,
-                claim.Category,
-                claim.Subject,
-                claim.Salience,
-                claim.Status,
-            }),
+            speaker = $"{request.SpeakerName} ({request.SpeakerId}) [{string.Join(",", request.SpeakerTags.Take(6))}]",
+            listener = request.ListenerEntityId ?? request.ListenerSoulId,
+            scene = $"{request.RegionId}/{request.CurrentZoneId}",
+            player = request.PlayerText,
+            npc = request.DialogueLines,
+            capIds = request.SelectedParserCapabilityIds ?? Array.Empty<string>(),
+            caps = (request.ParserCapabilityCards ?? DialogueParserCapabilityCatalog.All)
+                .Select(CompactParserCapability)
+                .ToArray(),
+            memories = request.RecentMemories
+                .TakeLast(5)
+                .Select(memory => TrimText($"{memory.SubjectId} [{memory.Provenance},s{memory.Salience}]: {memory.Text}", 220))
+                .ToArray(),
+            claims = request.RecentClaims
+                .TakeLast(4)
+                .Select(claim => TrimText($"{claim.Category}:{claim.Subject} [{claim.Status},s{claim.Salience}]: {claim.Text}", 220))
+                .ToArray(),
         }, JsonOptions);
+
+    private static string CompactParserCapability(DialogueParserCapabilityCard card) =>
+        TrimText($"{card.Id}: {card.Summary} {string.Join(' ', card.Lines)}", 700);
+
+    private static string TrimText(string text, int maxLength)
+    {
+        var collapsed = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return collapsed.Length > maxLength ? collapsed[..maxLength].TrimEnd() + "..." : collapsed;
+    }
 
     internal static bool TryParseProposalEnvelope(
         string content,
