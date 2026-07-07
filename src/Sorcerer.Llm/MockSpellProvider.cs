@@ -59,6 +59,103 @@ public sealed class MockSpellProvider : ISpellProvider
                 }));
         }
 
+        if (HasAny(spell, "raise the fallen", "rise and fight", "raise this corpse", "wake the brazier", "animate the"))
+        {
+            var animateTarget = HasAny(spell, "brazier") ? "brazier_1" : "soldier_1";
+            return AcceptedWithCosts(
+                "major",
+                "Something that had finished being itself starts again.",
+                new[] { new SpellCost("mana", new Dictionary<string, object?> { ["amount"] = 5 }) },
+                Effect("animateEntity", new Dictionary<string, object?>
+                {
+                    ["target"] = animateTarget,
+                    ["faction"] = "player",
+                }));
+        }
+
+        if (HasAny(spell, "unravel every enchantment", "dispel the magic", "unravel the ward", "break every spell on me"))
+        {
+            return Accepted(
+                "moderate",
+                "You pull a loose thread and the weave answers.",
+                Effect("dispelMagic", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["scope"] = "all",
+                }));
+        }
+
+        if (HasAny(spell, "divine what", "what does the prisoner want", "read their heart's desire"))
+        {
+            return Accepted(
+                "minor",
+                "The question folds itself into the world and comes back written.",
+                Effect("revealTruth", new Dictionary<string, object?>
+                {
+                    ["aspect"] = "wants",
+                    ["target"] = "prisoner_1",
+                }));
+        }
+
+        if (HasAny(spell, "show me where", "compass toward", "point me toward"))
+        {
+            var subject = HasAny(spell, "captain") ? "ward-captain"
+                : HasAny(spell, "emperor") ? "emperor"
+                : "soldier";
+            return Accepted(
+                "minor",
+                "A direction becomes briefly undeniable.",
+                Effect("revealTruth", new Dictionary<string, object?>
+                {
+                    ["aspect"] = "whereabouts",
+                    ["subject"] = subject,
+                }));
+        }
+
+        if (HasAny(spell, "spread a rumor", "spread the rumor", "let the district whisper", "whisper my name through"))
+        {
+            return AcceptedWithCosts(
+                "moderate",
+                "The words leave on their own feet.",
+                new[] { new SpellCost("mana", new Dictionary<string, object?> { ["amount"] = 3 }) },
+                Effect("consequence", new Dictionary<string, object?>
+                {
+                    ["consequenceType"] = "record_rumor",
+                    ["text"] = original,
+                }));
+        }
+
+        if (HasAny(spell, "soften the prisoner's heart", "warm their heart toward me", "make them trust me a little"))
+        {
+            return AcceptedWithCosts(
+                "moderate",
+                "Something in their guard unclenches by a finger's width.",
+                new[] { new SpellCost("mana", new Dictionary<string, object?> { ["amount"] = 3 }) },
+                Effect("consequence", new Dictionary<string, object?>
+                {
+                    ["consequenceType"] = "update_bond",
+                    ["target"] = "prisoner_1",
+                    ["targetSoulId"] = "player_soul",
+                    ["loyaltyDelta"] = 2,
+                    ["posture"] = "warm",
+                }));
+        }
+
+        if (HasAny(spell, "forget its shape", "unlock the cell", "open the cell door without"))
+        {
+            return AcceptedWithCosts(
+                "major",
+                "The lock exhales and forgets what it was for.",
+                new[] { new SpellCost("mana", new Dictionary<string, object?> { ["amount"] = 4 }) },
+                Effect("consequence", new Dictionary<string, object?>
+                {
+                    ["consequenceType"] = "open_or_unlock",
+                    ["target"] = "cell_door_1",
+                    ["unlock"] = true,
+                    ["open"] = true,
+                }));
+        }
+
         if (HasAny(spell, "ring of dread", "circle of fear", "wave of dread"))
         {
             return Accepted(

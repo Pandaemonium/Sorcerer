@@ -228,6 +228,23 @@ Current implementation:
 - `createFlow` writes zone-local tile-flow fields; expiry/removal routes through `update_flow`.
   They travel with zone snapshots like terrain and terrain expirations, so environmental fields do
   not leak between places or vanish on return.
+- Group 4 closes three "can do anything" gaps found in the 2026-07 playtest arc:
+  - `animateEntity` wakes something that already exists — a defeated actor rises again, or an
+    inert fixture/prop/floor item gains a bounded body (HP 1-12, attack 0-4, faction defaults to
+    `player`, marked `animated`/summoned) — via the new `animate_entity` consequence, so dialogue
+    and triggers can animate too. `conjureCreature` stays the create-from-nothing path.
+  - `dispelMagic` ends active magic in-fiction: it plans the removable set (non-system statuses on
+    the target, triggers anchored to the target or within radius of a tile, persistent effects,
+    tile flows), rejects honestly when nothing is active, and applies through the existing
+    `remove_status`/`update_trigger`/`update_persistent_effect`/`update_flow` consequences. This
+    is the player's answer to their own wards (BUG_LOG [16] had no cancel path).
+  - `revealTruth` is engine-truth divination: `aspect` selects wants, bond-toward-caster,
+    promises, whereabouts of a named being (direction/distance), nearest threat, or a target's
+    nature (allegiance, health band, hostility, statuses; marks it `revealed`). The engine
+    composes the answer from ledgers and state, so divination can never hallucinate.
+  - Wild-magic `open_or_unlock` consequences may reach a lock up to 12 tiles away (the
+    social/engine lanes stay adjacency-bound at 2), so "the lock forgets its shape" works from
+    across a room the caster can see.
 
 This means prompt guidance can improve without creating a second source of truth for
 mechanics.

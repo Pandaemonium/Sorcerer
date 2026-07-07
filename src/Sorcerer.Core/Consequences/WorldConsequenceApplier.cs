@@ -112,6 +112,7 @@ public sealed class WorldConsequenceApplier
             WorldConsequenceTypes.OpenOrUnlock => ApplyOpenOrUnlock(consequence),
             WorldConsequenceTypes.CreateRoute => ApplyCreateRoute(consequence),
             WorldConsequenceTypes.FreeCaptive => ApplyFreeCaptive(consequence),
+            WorldConsequenceTypes.AnimateEntity => ApplyAnimateEntity(consequence),
             _ => Reject(consequence, $"Unknown world consequence type: {consequence.Type}"),
         };
     }
@@ -5088,6 +5089,147 @@ public sealed class WorldConsequenceApplier
         return false;
     }
 
+    /// <summary>
+    /// Animation makes an existing world entity act: a defeated actor rises again, or an inert
+    /// fixture/prop/floor item gains a bounded body. Stats are capped well below summoned-boss
+    /// range regardless of what the payload asks for, and the result is marked summoned so zone
+    /// rules treat it like any other conjured ally.
+    /// </summary>
+    private WorldConsequenceApplyResult ApplyAnimateEntity(WorldConsequence consequence)
+    {
+        var payload = consequence.Payload ?? new Dictionary<string, object?>();
+        var target = RequiredEntity(consequence, "Animate consequence did not include a target entity id.");
+        if (target.Result is not null)
+        {
+            return target.Result;
+        }
+
+        var entity = target.Entity!;
+        if (entity.Id == _state.ControlledEntityId)
+        {
+            return Reject(consequence, "Animation cannot seize the caster's own body.");
+        }
+
+        if (!entity.Has<PositionComponent>())
+        {
+            return Reject(consequence, "Animation needs a body or object standing in the world, not something carried.");
+        }
+
+        var wasActor = entity.TryGet<ActorComponent>(out var actor);
+        if (wasActor && actor.Alive)
+        {
+            return Reject(consequence, "That one already lives; animation works on the dead and the inert.");
+        }
+
+        var faction = NormalizeToken(FirstNonBlank(ReadString(payload, "faction"), "player")!, "player");
+        var hp = Math.Clamp(ReadInt(payload, "hp") ?? 6, 1, 12);
+        var attack = Math.Clamp(ReadInt(payload, "attack") ?? (wasActor ? Math.Min(Math.Max(actor.Attack, 1), 3) : 2), 0, 4);
+        var expiresTurn = ReadInt(payload, "expiresTurn") ?? ReadInt(payload, "expires_turn");
+        var beforeName = entity.Name;
+
+        if (wasActor)
+        {
+            entity.Set(actor with
+            {
+                HitPoints = hp,
+                MaxHitPoints = Math.Max(actor.MaxHitPoints, hp),
+                Attack = attack,
+                Faction = faction,
+            });
+            entity.Set(new RenderableComponent('z', faction));
+        }
+        else
+        {
+            entity.Set(new ActorComponent(hp, hp, 0, 0, attack, 0, faction));
+            // Once something walks, it is no longer floor loot; pickup and stacking stop applying.
+            entity.Remove<ItemComponent>();
+            entity.Remove<StackComponent>();
+        }
+
+        if (entity.TryGet<PhysicalComponent>(out var physical))
+        {
+            entity.Set(physical with { BlocksMovement = true });
+        }
+        else
+        {
+            entity.Set(new PhysicalComponent(BlocksMovement: true, Material: "animated"));
+        }
+
+        var tags = entity.TryGet<TagsComponent>(out var existingTags)
+            ? existingTags.Tags.Where(tag => !tag.Equals("defeated", StringComparison.OrdinalIgnoreCase)).ToList()
+            : new List<string>();
+        foreach (var tag in new[] { "animated", "wild_magic" })
+        {
+            if (!tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+            {
+                tags.Add(tag);
+            }
+        }
+
+        entity.Set(new TagsComponent(tags));
+        entity.Set(new FactionComponent(faction, new[] { faction }));
+        entity.Set(new ControllerComponent(ControllerKind.Ai));
+        entity.Set(new AiComponent(faction == "player" ? "ally" : "hostile_guard"));
+        if (!entity.Has<StatusContainerComponent>())
+        {
+            entity.Set(StatusContainerComponent.Empty());
+        }
+
+        if (!entity.Has<BodyStatsComponent>())
+        {
+            entity.Set(new BodyStatsComponent(2));
+        }
+
+        if (!entity.Has<SoulComponent>())
+        {
+            entity.Set(new SoulComponent($"{entity.Id.Value}_soul"));
+        }
+
+        var source = FirstNonBlank(consequence.SourceEntityId, _state.ControlledEntityId.Value)!;
+        entity.Set(new SummonedComponent(source, expiresTurn));
+
+        var rename = ReadString(payload, "name");
+        if (!string.IsNullOrWhiteSpace(rename))
+        {
+            entity.Name = rename.Trim();
+        }
+        else if (wasActor && !beforeName.StartsWith("risen ", StringComparison.OrdinalIgnoreCase))
+        {
+            entity.Name = $"risen {beforeName}";
+        }
+        else if (!wasActor && !beforeName.StartsWith("animated ", StringComparison.OrdinalIgnoreCase))
+        {
+            entity.Name = $"animated {beforeName}";
+        }
+
+        var summary = wasActor
+            ? $"{beforeName} rises, re-strung by wild magic."
+            : $"{beforeName} shudders and steps into motion.";
+        var messageText = FirstNonBlank(ReadString(payload, "message"), summary)!;
+        var emitted = AddMessageIfAllowed(consequence, payload, messageText);
+        var operation = ReadString(payload, "operation") ?? "animateEntity";
+        var delta = new StateDelta(
+            operation,
+            entity.Id.Value,
+            summary,
+            Details(
+                consequence,
+                ("name", entity.Name),
+                ("wasActor", wasActor),
+                ("faction", faction),
+                ("hp", hp),
+                ("attack", attack)));
+        return Applied(
+            consequence,
+            entity.Id.Value,
+            emitted ? new[] { messageText } : Array.Empty<string>(),
+            delta,
+            ("name", entity.Name),
+            ("faction", faction),
+            ("hp", hp),
+            ("attack", attack));
+    }
+
     private (Entity? Entity, WorldConsequenceApplyResult? Result) RequiredEntity(
         WorldConsequence consequence,
         string missingIdError)
@@ -6246,7 +6388,10 @@ public sealed class WorldConsequenceApplier
 
         var actorId = ReadString(payload, "actorId") ?? consequence.SourceEntityId;
         var actor = string.IsNullOrWhiteSpace(actorId) ? null : EntityById(actorId);
-        if (actor is not null && !CanReach(actor, door, range: 2))
+        // Wild magic may work a lock it can see across the room; social/engine paths stay
+        // adjacency-bound so dialogue proposals cannot teleport-open distant doors.
+        var reach = consequence.Source.Equals("wild_magic", StringComparison.OrdinalIgnoreCase) ? 12 : 2;
+        if (actor is not null && !CanReach(actor, door, range: reach))
         {
             return Reject(consequence, $"{actor.Name} cannot reach {door.Name}.");
         }

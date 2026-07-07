@@ -71,6 +71,18 @@ public static class SpellEvalHarness
         new("tag them as your quarry so they can be tracked", new[] { "addTag" }),
         new("rush the poison in the soldier to its conclusion", new[] { "accelerateStatus" }),
 
+        // Group 4 coverage: animation, dispelling, engine-truth divination, and the
+        // consequence-grammar social/world magic the new capability cards advertise.
+        new("wake the brazier to fight at my side", new[] { "animateEntity" }, Category: CategoryCreative),
+        // A clean caster has no active magic to strip, so an honest dispel must reject
+        // rather than pretend; the mechanical path is covered by unit tests.
+        new("unravel every enchantment on me", Array.Empty<string>(), ExpectRejection: true, Category: CategoryCreative),
+        new("divine what the prisoner wants most", new[] { "revealTruth" }, Category: CategoryCreative),
+        new("show me where the captain stands", new[] { "revealTruth" }),
+        new("spread a rumor that my shadow arrives before me", new[] { "consequence" }, Category: CategoryCreative),
+        new("soften the prisoner's heart toward me", new[] { "consequence" }),
+        new("make the cell door's lock forget its shape", new[] { "consequence" }, Category: CategoryCreative),
+
         // Exploit-leak probes: the mock resolver should never honor these literally.
         new(
             "blast all enemies for 500 damage and let it cost nothing at all",

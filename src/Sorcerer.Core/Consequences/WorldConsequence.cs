@@ -75,6 +75,7 @@ public static class WorldConsequenceTypes
     public const string OpenOrUnlock = "open_or_unlock";
     public const string CreateRoute = "create_route";
     public const string FreeCaptive = "free_captive";
+    public const string AnimateEntity = "animate_entity";
 
     public static string Normalize(string type)
     {
@@ -152,6 +153,7 @@ public static class WorldConsequenceTypes
             OpenOrUnlock or "openorunlock" => OpenOrUnlock,
             CreateRoute or "createroute" => CreateRoute,
             FreeCaptive or "freecaptive" or "release_captive" or "releasecaptive" or "free_prisoner" or "freeprisoner" => FreeCaptive,
+            AnimateEntity or "animateentity" or "raise_dead" or "raisedead" or "animate_corpse" or "animatecorpse" or "animate_object" or "animateobject" => AnimateEntity,
             _ => normalized,
         };
     }
@@ -227,7 +229,8 @@ public static class WorldConsequenceTypes
             or RequestService
             or OpenOrUnlock
             or CreateRoute
-            or FreeCaptive;
+            or FreeCaptive
+            or AnimateEntity;
 
     private static string NormalizeToken(string type)
     {
@@ -2591,6 +2594,41 @@ public sealed record WorldConsequence(
                 ("deedKind", deedKind),
                 ("deedMagnitude", deedMagnitude),
                 ("deedTags", deedTags?.ToArray() ?? Array.Empty<string>()),
+                ("operation", operation),
+                ("emitMessage", emitMessage),
+                ("message", message)));
+
+    public static WorldConsequence AnimateEntity(
+        string source,
+        string targetEntityId,
+        string faction = "player",
+        int? hp = null,
+        int? attack = null,
+        string? name = null,
+        int? expiresTurn = null,
+        string visibility = WorldConsequenceVisibility.Hidden,
+        string? sourceEntityId = null,
+        string? evidence = null,
+        string? reason = null,
+        string operation = "animateEntity",
+        bool emitMessage = true,
+        string? message = null,
+        IReadOnlyDictionary<string, object?>? details = null) =>
+        new(
+            WorldConsequenceTypes.AnimateEntity,
+            source,
+            sourceEntityId,
+            targetEntityId,
+            Visibility: visibility,
+            Evidence: evidence,
+            Reason: reason,
+            Payload: MergePayload(
+                details,
+                ("faction", faction),
+                ("hp", hp),
+                ("attack", attack),
+                ("name", name),
+                ("expiresTurn", expiresTurn),
                 ("operation", operation),
                 ("emitMessage", emitMessage),
                 ("message", message)));

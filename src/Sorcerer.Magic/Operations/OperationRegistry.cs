@@ -191,6 +191,9 @@ public sealed class OperationRegistry
             new CreatePersistentEffectOperation(),
             new SetBehaviorOperation(),
             new CreateFlowOperation(),
+            new AnimateEntityOperation(),
+            new DispelMagicOperation(),
+            new RevealTruthOperation(),
             };
         return Build(operations, OperationCardLoader.LoadDefaultContentCards());
     }

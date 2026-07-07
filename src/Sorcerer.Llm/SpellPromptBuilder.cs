@@ -170,8 +170,11 @@ internal static class SpellPromptBuilder
         + "Prefer reusable operations over custom mechanics. "
         + "Outcome text must describe only what the listed effects make true. "
         + "Write outcomeText as what is concretely seen, heard, or felt where the spell lands, in the region's voice; never as fate-speak about stories, whispers, or what the world will remember. "
-        + "Do not claim a target is immobilized, asleep, dead, transformed, summoned, moved, healed, harmed, cursed, or allied unless a matching effect operation is present. "
+        + "Do not claim a target is immobilized, asleep, dead, transformed, summoned, moved, healed, harmed, cursed, allied, raised from death, unlocked, freed, or revealed unless a matching effect operation is present. "
         + "If the spell should stop movement or action, include an addStatus effect with a binding status such as rooted, webbed, pinned, asleep, or petrified. "
+        + "If the spell's purpose is healing or restoring mana, include a heal or restoreMana effect with a real amount; a status alone restores nothing, and narrating recovery without the effect is a broken promise. "
+        + "When a spell names several distinct outcomes, emit one effect per outcome - a wall of fire that terrifies is createTiles plus addStatus, not one effect with the other half narrated. "
+        + "When a spell speaks to minds, hearts, reputations, locks, ledgers, or absent things, use the routed mechanics or a consequence effect from the list below instead of a cosmetic status. "
         + "If a spell asks a local place, room, shrine, terrain, fixture, or object to help, hide, protect, reveal, remember, or answer, convert that appeal into concrete effects on existing targets, nearby terrain, statuses, traits, summons, or messages. "
         + "Use second person only for the controlled player/caster; name non-player targets instead of calling them 'you' or 'your'. "
         + "Write outcomeText and any effect message field in grammatically correct person and number (\"you gain\", not \"you gains\"; \"the soldier gains\", not \"the soldier gain\"). "
@@ -208,6 +211,6 @@ internal static class SpellPromptBuilder
         "World effects beyond the listed operations go through effectType \"consequence\" with a consequenceType: "
         + "apply_status, create_promise, open_or_unlock, create_route, free_captive, modify_inventory, transfer_item, "
         + "add_tags, remove_tags, change_faction, edit_memory, record_memory, update_bond, update_want, "
-        + "offer_service, request_service, add_merchant_stock, offer_trade, record_rumor, add_canon, "
+        + "offer_service, request_service, add_merchant_stock, offer_trade, record_rumor, add_canon, add_legend, "
         + "spawn_fixture, spawn_item, spawn_entity, set_world_flag, adjust_faction_standing, schedule_event, message.";
 }

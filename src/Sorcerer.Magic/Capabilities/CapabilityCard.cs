@@ -171,8 +171,11 @@ public sealed class CapabilityRegistry
                 + "faction when the spell explicitly calls up something hostile, wild, or uncontrolled. "
                 + "conjureCreature additionally accepts template (tiny_swarm, small_beast, humanoid, "
                 + "construct, spirit, slime, summoned_servant, hazard_creature) and count (1-12).",
-            Array.Empty<string>(),
-            new[] { "conjure_item" });
+            new[]
+            {
+                "Example: {\"type\":\"conjureCreature\",\"template\":\"small_beast\",\"name\":\"river hound\",\"faction\":\"player\",\"count\":1}",
+            },
+            new[] { "conjure_item", "animation" });
 
         yield return new CapabilityCard(
             "transformation",
@@ -193,7 +196,10 @@ public sealed class CapabilityRegistry
             "Promises are powerful because the world may later honor them. Prefer createPromise for "
                 + "ordinary promises; effectType:'consequence' with consequenceType:'create_promise' "
                 + "is also valid when the spell is already using the shared consequence grammar. Use real costs.",
-            Array.Empty<string>(),
+            new[]
+            {
+                "Example: {\"type\":\"createPromise\",\"kind\":\"debt\",\"text\":\"In three dawns a collector arrives for what was borrowed\"}",
+            },
             new[] { "delayed_effects" });
 
         yield return new CapabilityCard(
@@ -219,7 +225,10 @@ public sealed class CapabilityRegistry
             "editMemory fields: target, op (add/remove/alter), subject ('the caster' means the "
                 + "player), text, strength (1-5). Removing the caster from a hostile NPC's memory "
                 + "also calms it. This is major magic: pair with a real cost.",
-            Array.Empty<string>(),
+            new[]
+            {
+                "Example: {\"type\":\"editMemory\",\"target\":\"soldier_1\",\"op\":\"remove\",\"subject\":\"the caster\"}",
+            },
             new[] { "faction_charm" });
 
         yield return new CapabilityCard(
@@ -250,8 +259,13 @@ public sealed class CapabilityRegistry
             "triggers_reactions - delayed effects, wards, and auras via createTrigger",
             new[] { "createTrigger" },
             Array.Empty<string>(),
-            "createTrigger is the general delayed/ward/aura primitive already in the core set.",
-            Array.Empty<string>(),
+            "createTrigger is the general delayed/ward/aura primitive already in the core set. For "
+                + "a ward or aura, set anchor, radius, and targetFilter ('enemies') and leave the "
+                + "nested effect untargeted so the radius chooses the victims.",
+            new[]
+            {
+                "Example: {\"type\":\"createTrigger\",\"kind\":\"ward\",\"anchor\":\"player\",\"radius\":2,\"targetFilter\":\"enemies\",\"effectType\":\"addStatus\",\"status\":\"webbed_thorns\",\"duration\":3,\"uses\":3}",
+            },
             new[] { "persistent_effect" });
 
         yield return new CapabilityCard(
@@ -341,7 +355,10 @@ public sealed class CapabilityRegistry
             "restoreMana returns mana to a target (fields: target, amount). Use it only when "
                 + "restoring magic is the spell's stated purpose - never as a side bonus and never "
                 + "to hand back the spell's own cost.",
-            Array.Empty<string>(),
+            new[]
+            {
+                "Example: {\"type\":\"restoreMana\",\"target\":\"player\",\"amount\":8}",
+            },
             Array.Empty<string>());
 
         yield return new CapabilityCard(
@@ -366,5 +383,104 @@ public sealed class CapabilityRegistry
                 + "magic: demand a severe cost, and expect the engine to reject impossible vessels.",
             Array.Empty<string>(),
             new[] { "memory_edit" });
+
+        yield return new CapabilityCard(
+            "animation",
+            new[] { "raise the", "raise this", "raise my", "rise", "animate", "corpse", "the dead", "bones", "skeleton", "statue", "come alive", "come to life", "wake the", "stand and", "golem", "necroman", "undead", "reanimate" },
+            "animation - wake a corpse, statue, prop, or floor object into a bounded servant",
+            new[] { "animateEntity" },
+            Array.Empty<string>(),
+            "animateEntity wakes something that already exists in the world: a defeated actor "
+                + "rises again, or an inert fixture, statue, prop, or floor object gains a body. "
+                + "Fields: target (the corpse or object), faction (default 'player' so it serves "
+                + "the caster), hp (1-12), attack (0-4), name (optional new name). Use "
+                + "conjureCreature when the spell creates something new from nothing; use "
+                + "animateEntity when it wakes something already here. Major magic: pair it with "
+                + "a real cost.",
+            new[]
+            {
+                "Example: {\"type\":\"animateEntity\",\"target\":\"soldier_1\",\"faction\":\"player\",\"name\":\"risen imperial soldier\"}",
+            },
+            new[] { "summoning" });
+
+        yield return new CapabilityCard(
+            "dispelling",
+            new[] { "dispel", "unravel", "undo the", "break the ward", "break the spell", "break the enchantment", "break the curse", "end the spell", "end the enchantment", "cancel", "counterspell", "counter the", "quiet the magic", "snuff", "strip the", "cleanse", "purge", "lift the curse", "cut the strings", "unbind", "unweave", "silence the ward" },
+            "dispelling - end active magic: statuses, wards, triggers, enchantments, and tile flows",
+            new[] { "dispelMagic", "removeStatus" },
+            Array.Empty<string>(),
+            "dispelMagic ends active magic instead of narrating it away. Fields: target (the "
+                + "entity whose magic should be stripped; default the caster) or x/y (a tile "
+                + "whose flows and anchored wards should end), scope (all, statuses, triggers, "
+                + "persistent, flows; default all), radius (0-3). It rejects when there is no "
+                + "active magic to unravel. removeStatus stays right for ending one named status.",
+            new[]
+            {
+                "Example: {\"type\":\"dispelMagic\",\"target\":\"player\",\"scope\":\"triggers\"}",
+            },
+            Array.Empty<string>());
+
+        yield return new CapabilityCard(
+            "rumor_legend",
+            new[] { "rumor", "whisper my name", "spread the word", "spread a tale", "let them tell", "let them speak", "story of me", "reputation", "legend", "infamous", "renown", "notorious", "believe", "make them fear me", "clear my name", "let it be known", "sing of", "myth" },
+            "rumor_legend - seed rumors, bend reputation, write legend and canon",
+            new[] { "consequence" },
+            Array.Empty<string>(),
+            "Reputation magic goes through effectType 'consequence'. consequenceType "
+                + "'record_rumor' (field: text) starts a rumor that travels on its own. "
+                + "consequenceType 'adjust_faction_standing' (fields: factionId, axis such as "
+                + "fear/notoriety/gratitude/legitimacy, delta -3..3) bends how a faction sees the "
+                + "caster. consequenceType 'add_legend' (fields: actorSoulId 'player_soul', tag "
+                + "such as uncanny/dangerous/merciful, weight 1-3) writes soul-bound legend. "
+                + "consequenceType 'add_canon' (fields: attachedTo, text) makes a small fact "
+                + "permanently true of a place or thing. Social magic that rewrites how the world "
+                + "sees you is major: price it honestly.",
+            new[]
+            {
+                "Example: {\"type\":\"consequence\",\"consequenceType\":\"record_rumor\",\"text\":\"A sorcerer walks the market whose shadow arrives before them\"}",
+                "Example: {\"type\":\"consequence\",\"consequenceType\":\"adjust_faction_standing\",\"factionId\":\"empire\",\"axis\":\"fear\",\"delta\":2}",
+            },
+            new[] { "prophecy" });
+
+        yield return new CapabilityCard(
+            "heart_bond",
+            new[] { "love me", "trust me", "adore", "soothe", "calm the", "calm her", "calm him", "soften", "heart", "grief", "comfort", "courage", "despair", "terrify", "dread of me", "loyalty", "devotion", "resent", "forgive" },
+            "heart_bond - shift how one being feels toward another, or plant fear and calm",
+            new[] { "consequence", "addStatus" },
+            Array.Empty<string>(),
+            "Feelings toward the caster go through effectType 'consequence' with consequenceType "
+                + "'update_bond': target is the NPC, targetSoulId is 'player_soul' for feelings "
+                + "toward the caster, and loyaltyDelta/fearDelta/admirationDelta/resentmentDelta "
+                + "are small pushes (-2..2; the engine clamps larger asks), with optional posture. "
+                + "Momentary emotion (terror, calm, awe) is addStatus with a status such as "
+                + "frightened or becalmed. Hearts move by degrees: a stranger cannot be made "
+                + "devoted in one cast, and forced feeling should carry a real cost.",
+            new[]
+            {
+                "Example: {\"type\":\"consequence\",\"consequenceType\":\"update_bond\",\"target\":\"prisoner_1\",\"targetSoulId\":\"player_soul\",\"loyaltyDelta\":2,\"posture\":\"warm\"}",
+            },
+            new[] { "memory_edit", "faction_charm" });
+
+        yield return new CapabilityCard(
+            "ways_and_seals",
+            new[] { "unlock", "open the door", "open the gate", "open the cell", "lock forgets", "forget its shape", "unbar", "unseal", "seal the", "the lock", "lock forget", "unchain", "free the", "release the", "way out", "path out", "escape route", "a way through", "no key", "steal", "snatch", "leaps to my hand", "leap to my hand", "fly to my hand", "yank the", "disarm", "pickpocket" },
+            "ways_and_seals - open, unlock, or seal doors; free captives; reveal routes",
+            new[] { "consequence" },
+            Array.Empty<string>(),
+            "Doors and ways go through effectType 'consequence'. consequenceType "
+                + "'open_or_unlock' (fields: target = the door entity, unlock true/false, open "
+                + "true/false) opens or unlocks a reachable door - the engine rejects doors out "
+                + "of reach. consequenceType 'free_captive' (field: target = the captive) frees a "
+                + "held being and lets it react. consequenceType 'transfer_item' with mode 'give' "
+                + "(fields: actorEntityId = current holder, target = who receives, item) pulls a "
+                + "carried item to a new holder - treasured possessions refuse. A route or "
+                + "passage reveal needs a backing createPromise, createTrigger, terrain change, "
+                + "or spawned-site operation, not narration.",
+            new[]
+            {
+                "Example: {\"type\":\"consequence\",\"consequenceType\":\"open_or_unlock\",\"target\":\"cell_door_1\",\"unlock\":true,\"open\":true}",
+                "Example: {\"type\":\"consequence\",\"consequenceType\":\"transfer_item\",\"mode\":\"give\",\"actorEntityId\":\"soldier_1\",\"target\":\"player\",\"item\":\"imperial cell key\"}",
+            },
+            new[] { "prophecy" });
     }
 }

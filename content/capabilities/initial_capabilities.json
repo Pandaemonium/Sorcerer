@@ -3,12 +3,15 @@
   "capabilities": [
     {
       "id": "divination",
-      "triggers": ["reveal", "sense", "detect", "locate", "find", "show me", "track", "mark the", "see through", "blind", "blinded", "scout", "vision", "glowing", "hidden", "invisible things"],
-      "indexLine": "divination - reveal, detect, or obscure sight and hidden things",
-      "effectTypes": [],
+      "triggers": ["reveal", "sense", "detect", "locate", "find", "show me", "tell me", "track", "mark the", "see through", "blind", "blinded", "scout", "vision", "glowing", "hidden", "invisible things", "where is", "what does", "how does", "the truth", "scry", "divine", "augury", "read the", "what do they want", "who is", "compass"],
+      "indexLine": "divination - ask the world a question and get engine truth; reveal or obscure sight",
+      "effectTypes": ["revealTruth"],
       "requiredContext": [],
-      "promptBlock": "Reveal/detect/track spells are addStatus on the target with a status such as revealed; blinding or shrouding sight is addStatus on the caster or target with concealed or a display name like sight_shrouded. Prefer these over inventing a new mechanic.",
-      "examples": [],
+      "promptBlock": "revealTruth answers a question with what is actually true in the world - never invent the answer in outcomeText. Fields: aspect ('nature' reads a target's condition, allegiance, and hostility and marks it revealed; 'wants' reads what a target desires; 'bond' reads how a target feels toward the caster; 'promises' reads active promises touching the target; 'whereabouts' names the direction and distance of a named being - set subject to its name; 'threats' names the nearest hostile), target, subject. Simple reveal/track glows are addStatus with revealed; blinding or shrouding sight is addStatus with concealed or a display name like sight_shrouded.",
+      "examples": [
+        "Example: {\"type\":\"revealTruth\",\"aspect\":\"wants\",\"target\":\"prisoner_1\"}",
+        "Example: {\"type\":\"revealTruth\",\"aspect\":\"whereabouts\",\"subject\":\"emperor\"}"
+      ],
       "commonCombos": []
     },
     {

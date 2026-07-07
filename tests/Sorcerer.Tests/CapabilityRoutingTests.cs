@@ -27,6 +27,17 @@ public sealed class CapabilityRoutingTests
     [InlineData("in three turns a debt collector arrives because I stole tomorrow", "delayed_effects")]
     [InlineData("make the soldier dance helplessly", "behavior_control")]
     [InlineData("reveal the nearest creature by making its shadow glow", "divination")]
+    [InlineData("raise the fallen soldier to fight for me", "animation")]
+    [InlineData("make the statue come alive and guard the door", "animation")]
+    [InlineData("unravel the ward waiting behind me", "dispelling")]
+    [InlineData("break the enchantment on the captain's blade", "dispelling")]
+    [InlineData("show me where the emperor stands", "divination")]
+    [InlineData("divine what the prisoner wants most", "divination")]
+    [InlineData("spread a rumor that my shadow arrives before me", "rumor_legend")]
+    [InlineData("let the whole district believe the captain is a traitor", "rumor_legend")]
+    [InlineData("soften the captain's heart until he trusts me", "heart_bond")]
+    [InlineData("make the cell door's lock forget its shape", "ways_and_seals")]
+    [InlineData("let the guard's sword leap to my hand", "ways_and_seals")]
     public void DeterministicSelectionRoutesSpellTextToExpectedCardFamily(string spellText, string expectedCard)
     {
         var registry = CapabilityRegistry.CreateDefault();
