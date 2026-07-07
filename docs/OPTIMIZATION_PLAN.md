@@ -60,13 +60,34 @@ are in place.
 | **1.2** needs_capability hatch | `SpellResolutionJson.TryReadNeedsCapability`; `SpellProviderResult.RequestedCapability`; detected in both live providers; `WildMagicController` loads the card and re-resolves once (`CapabilityRegistry.Find`); prompt line in `SpellPromptBuilder.CoreRules`; test `NeedsCapabilityAnswerLoadsCardAndReResolvesOnce` |
 | doc sync | this file, CAPABILITY_ROUTING.md, MAGIC_RESOLVER_ARCHITECTURE.md |
 
-### REMAINING — needs a live Ollama (not codeable in this environment)
+### DONE — 2026-07-07 live telemetry check (qwen3.5:9b-q4_K_M, CPU, targeted interleave run)
 
-- **Live telemetry check:** run `--live-playtest`, then `python scripts/mine_wild_magic_audit.py`.
-  Expect `loadMs ≈ 0` across interleaved cast/talk (num_ctx unified), prompt tokens on casts roughly
-  halved vs. the ~5,700 baseline, and prompt tokens dropping on the second consecutive cast
-  (prefix-cache hit). Run `--reparse-audit` to confirm the slimmer repair lane still fixes the
-  historical corpus. Add a dated FEEL_NOTES section after the run.
+Measured via two live CLI sessions (cast/cast/talk/cast, then talk/cast) and the audit's
+`providerStats`:
+
+| call | promptTok | loadMs | totalMs |
+|---|---:|---:|---:|
+| cast 1 (cold) | 4,159 | 23,114 | 49,103 |
+| cast 2 (consecutive) | 4,304 | 240 | 24,470 |
+| cast 3 | 4,373 | 238 | 21,313 |
+| live talk (speech call) | 1,184 | 244 | 15,974 |
+| cast after full dialogue pipeline | 4,495 | 6,805 | 76,496 |
+
+- **Consecutive-cast warm path confirmed:** after the one-time 23s model load, casts hold
+  `loadMs ≈ 240 ms` and ~21-25 s wall — roughly half the cold-cast wall time.
+- **Dialogue speech trim confirmed:** 1,184 prompt tokens, in the 2026-07-06 baseline's
+  predicted 1,070-1,993 band; a talk's speech call is ~16 s.
+- **Cast prompt tokens: ~4,200-4,500, a ~25% cut vs the ~5,700 baseline** — real but short of
+  the predicted halving; note the 2026-07-07 capability-card expansion (5 new cards, larger
+  index) added prompt bytes after the baseline was taken.
+- **One anomaly, worth a follow-up:** the cast issued after a *full* dialogue turn (speech +
+  parser lane) showed `loadMs 6.8 s` / 76 s total — not the expected ≈0. Interleaving pure
+  speech was clean (talk itself loaded warm at 244 ms), so something in the post-speech
+  parser lane still perturbs the cast lane's cache/session. Single data point; reproduce
+  before chasing.
+- Practical upshot: wild casts on the reference CPU model cost ~20-25 s warm and ~50-80 s in
+  the worst cases — the structural instant lanes (charter magic, spell echoes, both landed
+  2026-07-07) are the latency answer, not further prompt shaving alone.
 
 ### DONE — 2026-07-06 dialogue live baseline and prompt trim
 
