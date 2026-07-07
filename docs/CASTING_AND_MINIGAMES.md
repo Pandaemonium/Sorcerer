@@ -149,6 +149,106 @@ playing, and is treated exactly like one who pressed the skip button.
 Engine-side mechanical use of the performance (severity scaling, mishap escalation) is the
 next step and stays behind this seam; see "Engine Use" above.
 
+## Second Minigame: Thread & Knot (implemented)
+
+The push-your-luck entry: the spell spools out of the caster as a living thread of light.
+Hold (mouse or Space) to draw it — the longer the pull, the faster power banks and the
+faster the thread frays. Release to whip it into a knot and bank the draw onto a glowing
+necklace; pull past the fray and the thread snaps, scattering the unbanked power as embers
+and staining the chain violet. Threads chain indefinitely, each knot tied raising the fray
+rate of the next, so unknown latency is again the natural clock. Unlike rune tracing this
+game demands no aiming at all — it is pure risk judgment, which also makes it the
+low-dexterity entry in the rotation.
+
+- `Sorcerer.Godot/Scripts/Minigames/ThreadKnotMinigame.cs` owns presentation and gesture
+  reduction: a small verlet rope that sags in a catenary when slack and hums with a rising
+  standing wave under strain, seeded gust schedules (`RuneShape.SeedFor`, so recasting the
+  same phrase meets the same temperament of thread), fray fibers and a strain arc as the
+  legible warning ladder, tie/snap bursts, and the banked-knot necklace whose bead sizes
+  read out pull greed. It reduces the session to `ThreadKnotMetrics`.
+- `Sorcerer.Core/Magic/ThreadKnotScoring.cs` owns calibration: banked draw per second
+  against par feeds power, the clean-tie fraction (knots vs. snaps, mid-band at 7-of-10)
+  feeds control, and their combination damps or feeds wildness. Par banking with a par
+  share of snaps maps to exactly 1.0/1.0/1.0, pinning the EV-neutral rule; the shared
+  minimum-window discard applies, and a session that never resolved a thread (no tie, no
+  snap) is also neutral. Unit tests pin the center, the bands, monotonicity, and the
+  timid-weaver corner (small clean knots trade power for control — legitimate, not
+  degenerate).
+- If the provider settles mid-pull, the pull in hand gets the standard grace and then ties
+  itself off — a hold at the buzzer banks rather than punishes.
+
+## Third Minigame: True-Sigil (implemented)
+
+The recognition-memory entry: the wild shows the spell's true shape once — a sigil burns
+into the air inside the memory ring, holds, and crumbles to falling ash — then ghost
+sigils rise from the ashes and ask to be chosen. One is true; the rest are lies built from
+the truth itself: mirrors, rotations, whole strangers, and (as rounds chain) near-perfect
+forgeries whose single moved vertex gets subtler each tier. Flash time shortens and a
+fourth candidate appears as tiers climb, so an 80-second wait has an arc. Pure clicks, no
+dexterity and no hold-timing: this is the accessibility anchor of the suite.
+
+- `Sorcerer.Godot/Scripts/Minigames/TrueSigilMinigame.cs` owns presentation and gesture
+  reduction: seeded truths and liars (`RuneShape.SeedFor`, so recasting the same phrase
+  tests memory rather than luck, and a symmetric sigil's mirror is detected and replaced so
+  a lie is always a real lie), the burn-in/hold/ash-dissolve flash, rising ghosts on
+  pedestal rings, an honest flash-countdown arc and a soft response-timer arc (slow answers
+  are safe answers, just weaker), gold ignition on a true pick, violet shatter plus a
+  teaching glimmer of the missed truth on a false one, and a bead-row of the run's verdicts.
+  It reduces the session to `TrueSigilMetrics`.
+- `Sorcerer.Core/Magic/TrueSigilScoring.cs` owns calibration: answer speed against par
+  feeds power, accuracy feeds control (floor 0.50 ≈ chance, mid-band 0.75), and their
+  combination damps or feeds wildness. Par speed plus three-of-four accuracy maps to
+  exactly 1.0/1.0/1.0, pinning the EV-neutral rule; the shared minimum-window discard
+  applies, and a session with zero resolved rounds is also neutral. Unit tests pin the
+  center, the bands, monotonicity, and both trade corners (slow-but-sure, fast-but-guessing).
+- If the provider settles mid-round, the choice in hand gets the standard grace; an
+  unanswered round is abandoned uncounted — never scored, never punished.
+
+## Fourth Minigame: Bone-Song (implemented)
+
+The rhythm entry, and Sorcerer's first audio: Bralli scrimshaw drumming (see
+`content/lore/bone.md` / `brall.md` — boasting is hospitality). The spell's pulse runs a
+carved whalebone drum-rim like a lit fuse; strike as the ember crosses each carving. Plain
+notches feed control; tight gold accent knots feed power, and *declining* one is safe — it
+only costs power (the boast is optional); hollow rests, tier-gated in from the third bar,
+must not be struck at all. Bars chain indefinitely, re-carving faster and more syncopated,
+and every completed bar etches one more stroke of a scrimshaw whale-hunt into the drumhead —
+a long provider wait literally becomes art accumulating. Dropped beats splinter hairline
+cracks into the rim, the run's wear worn openly.
+
+- **The visual clock is the source of truth and audio is decoration on top, never the
+  reverse.** The beat is geometry (an ember approaching a notch), so the game is fully
+  playable with sound off — deaf accessibility is structural — and there is no latency
+  calibration screen, because players react to position rather than anticipating audio.
+- `Sorcerer.Godot/Scripts/Minigames/BoneSongVoice.cs` synthesizes all percussion in code
+  through an `AudioStreamGenerator` (bone tok, accent doom, rest yelp, miss crack, carving
+  scrape) over a streak drone — hummed bone-singer fifths that swell as clean hits chain and
+  drop out on a miss, so the mix itself is the feedback ladder. No sound assets ship.
+- `Sorcerer.Godot/Scripts/Minigames/BoneSongMinigame.cs` owns presentation and gesture
+  reduction: seeded bars (`RuneShape.SeedFor`, so the same phrase always sings the same
+  song — learnable, never arbitrary), tempo and syncopation escalation, hit windows
+  (±120ms plain, ±60ms accent, ±140ms rest), the scrimshaw scene, and the crack ledger. It
+  reduces the session to `BoneSongMetrics`.
+- `Sorcerer.Core/Magic/BoneSongScoring.cs` owns calibration: accuracy over resolved notches
+  feeds control (band 0.45-0.95, mid 0.70), the fraction of offered accent knots taken
+  cleanly feeds power (par = half), and their combination damps or feeds wildness. Mid-band
+  accuracy plus half the knots maps to exactly 1.0/1.0/1.0, pinning the EV-neutral rule; a
+  bar offering no knots judges power as neutral; the shared minimum-window discard applies,
+  and zero resolved notches is also neutral. Unit tests pin the center, the bands,
+  monotonicity, and both drummers (timid and boastful).
+- Swings at empty air break the streak and make a sound, but are not ledgered — enthusiasm
+  is not a crime. If the provider settles mid-bar, the standard grace applies and the bar
+  in hand ends unjudged.
+
+## The Repertoire Draw
+
+With more than one game in the suite, the GUI pulls a random game per cast and never plays
+the same game twice in a row, so every game stays in circulation (`Main.PlayCastMinigameAsync`).
+The suite now spans four distinct skills — precision pursuit (rune trace), risk judgment
+(thread & knot), recognition memory (true-sigil), and timing (bone-song) — so every player
+has at least one comfortable way to play rather than skip. A later settings toggle to
+exclude individual games is the planned accessibility answer.
+
 ## UX Rule
 
 The player must be able to skip the minigame. Skipping produces a neutral result, not a

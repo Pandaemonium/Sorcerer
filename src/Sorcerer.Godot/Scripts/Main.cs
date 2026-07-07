@@ -49,6 +49,11 @@ public partial class Main : Control
     private PanelContainer _contextMenu = null!;
     private VBoxContainer _contextMenuItems = null!;
     private RuneTraceMinigame _minigame = null!;
+    private ThreadKnotMinigame _threadKnot = null!;
+    private TrueSigilMinigame _trueSigil = null!;
+    private BoneSongMinigame _boneSong = null!;
+    private int _lastMinigame = -1;
+    private readonly Random _minigameRng = new();
     private LlmDebugPanel _llmDebug = null!;
 
     private ActionResult? _lastResult;
@@ -366,6 +371,15 @@ public partial class Main : Control
 
         _minigame = new RuneTraceMinigame();
         AddChild(FullRect(_minigame));
+
+        _threadKnot = new ThreadKnotMinigame();
+        AddChild(FullRect(_threadKnot));
+
+        _trueSigil = new TrueSigilMinigame();
+        AddChild(FullRect(_trueSigil));
+
+        _boneSong = new BoneSongMinigame();
+        AddChild(FullRect(_boneSong));
 
         _llmDebug = new LlmDebugPanel { ZIndex = 90 };
         AddChild(FullRect(_llmDebug));
@@ -972,13 +986,13 @@ public partial class Main : Control
 
         try
         {
-            // Submit the cast, then play the rune-trace minigame while the provider thinks.
+            // Submit the cast, then play a casting minigame while the provider thinks.
             // The score arrives with await_cast because it does not exist at submit time.
             var begin = await _session.ExecuteAsync(new BeginCastCommand(trimmed));
             _lastResult = begin;
             if (begin.Success)
             {
-                var performance = await _minigame.PlayAsync(trimmed, PendingCastSettled);
+                var performance = await PlayCastMinigameAsync(trimmed);
                 _lastResult = await _session.ExecuteAsync(new AwaitCastCommand(performance));
                 RecordChronicleIfComplete(_lastResult);
             }
@@ -993,6 +1007,29 @@ public partial class Main : Control
             _busyStatusText = null;
             RefreshView();
         }
+    }
+
+    /// <summary>
+    /// The repertoire draw (docs/CASTING_AND_MINIGAMES.md): the GUI pulls a random casting
+    /// game, never the same one twice in a row so every game stays in circulation.
+    /// </summary>
+    private Task<CastPerformance> PlayCastMinigameAsync(string spellText)
+    {
+        const int repertoire = 4;
+        var pick = _minigameRng.Next(repertoire);
+        if (pick == _lastMinigame)
+        {
+            pick = (pick + 1 + _minigameRng.Next(repertoire - 1)) % repertoire;
+        }
+
+        _lastMinigame = pick;
+        return pick switch
+        {
+            0 => _minigame.PlayAsync(spellText, PendingCastSettled),
+            1 => _threadKnot.PlayAsync(spellText, PendingCastSettled),
+            2 => _trueSigil.PlayAsync(spellText, PendingCastSettled),
+            _ => _boneSong.PlayAsync(spellText, PendingCastSettled),
+        };
     }
 
     private bool PendingCastSettled()
