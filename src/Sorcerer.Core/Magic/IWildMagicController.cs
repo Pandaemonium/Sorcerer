@@ -16,7 +16,11 @@ public sealed record MaterializedMagicResolution(
     string? Error,
     IReadOnlyList<string> EffectTypes,
     string? ResolvedMagicJson,
-    ProviderCallStats? ProviderStats = null);
+    ProviderCallStats? ProviderStats = null,
+    // Which deed the apply boundary records for a successful cast. Wild casts keep the
+    // default; charter casts pass "charter_magic" so witnesses read them as plausibly
+    // licensed work instead of uncanny wild magic (docs/CHARTER_MAGIC.md, witnessing).
+    string DeedKind = "wild_magic");
 
 public interface IWildMagicController
 {

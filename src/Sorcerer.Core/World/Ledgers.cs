@@ -13,7 +13,11 @@ public sealed record SoulRecord(
     string Tradition,
     string MagicalSignature,
     string Backstory,
-    IReadOnlyDictionary<string, int> FactionFirstReactions);
+    IReadOnlyDictionary<string, int> FactionFirstReactions,
+    // The soul's learned charter repertoire (docs/CHARTER_MAGIC.md): spell ids, gained
+    // diegetically. Soul-bound so body swap carries it; null-tolerant so pre-charter saves
+    // load cleanly.
+    IReadOnlyList<string>? KnownCharterSpells = null);
 
 public sealed class SoulLedger
 {
@@ -32,7 +36,35 @@ public sealed class SoulLedger
             FactionFirstReactions = new Dictionary<string, int>(
                 record.FactionFirstReactions,
                 StringComparer.OrdinalIgnoreCase),
+            KnownCharterSpells = record.KnownCharterSpells?.ToArray() ?? Array.Empty<string>(),
         };
+
+    public IReadOnlyList<string> KnownCharterSpellsFor(string soulId) =>
+        _records.TryGetValue(soulId, out var record)
+            ? record.KnownCharterSpells ?? Array.Empty<string>()
+            : Array.Empty<string>();
+
+    public bool KnowsCharterSpell(string soulId, string spellId) =>
+        KnownCharterSpellsFor(soulId).Contains(spellId, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Adds a charter spell to the soul's repertoire; false if already known or no such soul.</summary>
+    public bool LearnCharterSpell(string soulId, string spellId)
+    {
+        if (string.IsNullOrWhiteSpace(spellId)
+            || !_records.TryGetValue(soulId, out var record)
+            || KnowsCharterSpell(soulId, spellId))
+        {
+            return false;
+        }
+
+        _records[soulId] = record with
+        {
+            KnownCharterSpells = (record.KnownCharterSpells ?? Array.Empty<string>())
+                .Append(spellId.Trim())
+                .ToArray(),
+        };
+        return true;
+    }
 
     public void AdjustMana(string soulId, int mana, int maxMana)
     {
@@ -872,6 +904,120 @@ public sealed class ScheduledEventLedger
         _events.Clear();
         _events.AddRange(records);
         _nextSerial = Math.Max(_nextSerial, LedgerIds.HighestSerial(_events.Select(record => record.Id), IdPrefix));
+    }
+}
+
+/// <summary>
+/// One remembered wild cast (docs/SPELL_ECHOES.md): the recorded resolution can be re-fed
+/// through the ordinary validate/apply pipeline instantly, with no model call. Soul-bound:
+/// the repertoire is a within-run personal tradition and dies with the run.
+/// </summary>
+public sealed record EchoRecord(
+    string Id,
+    string Name,
+    string SpellText,
+    string ResolvedMagicJson,
+    IReadOnlyList<string> EffectTypes,
+    string SoulId,
+    int CreatedTurn,
+    int TimesCast);
+
+public sealed class EchoLedger
+{
+    private readonly List<EchoRecord> _records = new();
+
+    public IReadOnlyList<EchoRecord> Records => _records;
+
+    public IReadOnlyList<EchoRecord> ForSoul(string soulId) =>
+        _records.Where(record => record.SoulId.Equals(soulId, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+    /// <summary>
+    /// Records an accepted cast. Re-casting the same phrase updates the existing echo's
+    /// resolution (the freshest version of the tradition) instead of minting a duplicate.
+    /// </summary>
+    public EchoRecord Record(
+        string spellText,
+        string resolvedMagicJson,
+        IReadOnlyList<string> effectTypes,
+        string soulId,
+        int turn)
+    {
+        var existing = _records.FindIndex(record =>
+            record.SoulId.Equals(soulId, StringComparison.OrdinalIgnoreCase)
+            && record.SpellText.Equals(spellText, StringComparison.OrdinalIgnoreCase));
+        if (existing >= 0)
+        {
+            var updated = _records[existing] with
+            {
+                ResolvedMagicJson = resolvedMagicJson,
+                EffectTypes = effectTypes.ToArray(),
+            };
+            _records[existing] = updated;
+            return updated;
+        }
+
+        var record = new EchoRecord(
+            $"echo_{_records.Count + 1}",
+            EchoName(spellText),
+            spellText,
+            resolvedMagicJson,
+            effectTypes.ToArray(),
+            soulId,
+            turn,
+            TimesCast: 0);
+        _records.Add(record);
+        return record;
+    }
+
+    /// <summary>Finds a soul's echo by 1-based grimoire number, id, or name/text fragment.</summary>
+    public EchoRecord? Find(string reference, string soulId)
+    {
+        var mine = ForSoul(soulId);
+        var trimmed = (reference ?? "").Trim();
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        if (int.TryParse(trimmed, out var index) && index >= 1 && index <= mine.Count)
+        {
+            return mine[index - 1];
+        }
+
+        return mine.FirstOrDefault(record => record.Id.Equals(trimmed, StringComparison.OrdinalIgnoreCase))
+            ?? mine.FirstOrDefault(record => record.Name.Equals(trimmed, StringComparison.OrdinalIgnoreCase))
+            ?? mine.FirstOrDefault(record => record.SpellText.Contains(trimmed, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void IncrementCast(string id)
+    {
+        var index = _records.FindIndex(record => record.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0)
+        {
+            _records[index] = _records[index] with { TimesCast = _records[index].TimesCast + 1 };
+        }
+    }
+
+    public IReadOnlyList<EchoRecord> Snapshot() => _records.ToArray();
+
+    public void ReplaceAll(IEnumerable<EchoRecord>? records)
+    {
+        _records.Clear();
+        if (records is null)
+        {
+            return;
+        }
+
+        foreach (var record in records)
+        {
+            _records.Add(record with { EffectTypes = record.EffectTypes?.ToArray() ?? Array.Empty<string>() });
+        }
+    }
+
+    private static string EchoName(string spellText)
+    {
+        var words = spellText.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return words.Length <= 5 ? spellText.Trim() : string.Join(' ', words.Take(5)) + "...";
     }
 }
 

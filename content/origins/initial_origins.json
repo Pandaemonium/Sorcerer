@@ -62,7 +62,8 @@
       "publicName": "the deserter mage",
       "appearance": "a clean imperial collar ripped open at the throat",
       "magicalSignature": "legal script collapsing into birds",
-      "backstory": "You know which imperial clauses scream when cut."
+      "backstory": "You know which imperial clauses scream when cut.",
+      "startingCharterSpells": ["bolt_directive_1", "mending_writ_1", "aperture_writ_1"]
     },
     {
       "id": "desert_parn",

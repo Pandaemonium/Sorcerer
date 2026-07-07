@@ -90,6 +90,8 @@ public sealed class GameState
 
     public PersistentEffectLedger PersistentEffects { get; } = new();
 
+    public EchoLedger Echoes { get; } = new();
+
     public SuspicionLedger Suspicions { get; } = new();
 
     public BackgroundJobSettings BackgroundSettings { get; set; } = new();

@@ -1,7 +1,15 @@
 # Spell Echoes - A Within-Run Repertoire
 
-Status: proposed experiment 2026-07. Build behind a flag and validate with the probe below
-before committing. Companion to [CORE_EXECUTION_MODEL.md](CORE_EXECUTION_MODEL.md) (recorded
+Status: **implemented behind the flag 2026-07-07** (`--echoes` on the CLI, world flag
+`echoes_enabled`). Accepted wild casts are recorded soul-bound in `EchoLedger`
+(save/load-safe); `echoes` lists the grimoire, `echo <n|name>` re-feeds the recorded
+resolution through the ordinary validate/apply pipeline instantly, with references
+re-resolving against the current world. Repetition fatigue is live: each repeat of the same
+echo adds a +1-mana-per-prior-use surcharge through the normal cost pipeline. Drift
+(seeded variance re-roll) is not yet implemented. Run the probe below before removing the
+flag. Tests: `CharterAndEchoTests.cs`.
+
+Companion to [CORE_EXECUTION_MODEL.md](CORE_EXECUTION_MODEL.md) (recorded
 resolutions, replay) and [CHARTER_MAGIC.md](CHARTER_MAGIC.md) (the other latency lever).
 
 ## The Idea

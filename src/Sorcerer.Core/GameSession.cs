@@ -113,10 +113,13 @@ public sealed class GameSession
             MoveCommand move => Engine.MoveControlled(move.Direction),
             WaitCommand => Engine.Wait(),
             InspectCommand => Engine.Inspect(),
-            CastCommand cast => await _magic.CastAsync(Engine, cast, cancellationToken),
+            CastCommand cast => await CastSpellAsync(cast, cancellationToken),
             BeginCastCommand cast => BeginCast(cast),
             AwaitCastCommand awaitCast => await AwaitCast(awaitCast, cancellationToken),
             CancelCastCommand => CancelCast(),
+            CharterCommand charter => CharterMagic(charter.Spell),
+            EchoesCommand => ListEchoes(),
+            EchoCommand echo => CastEcho(echo.Reference),
             TargetCommand target => SetTarget(target),
             ClearTargetCommand => ClearTarget(),
             MapCommand map => Engine.Map(map.Radius),
@@ -367,7 +370,9 @@ public sealed class GameSession
         }
 
         DisposePendingCastResolutionOwnership(pending);
-        return _magic.ApplyResolved(Engine, materialized);
+        var result = _magic.ApplyResolved(Engine, materialized);
+        RecordEchoIfEnabled(pending.Command.Text, result);
+        return result;
     }
 
     private ActionResult CancelCast()
@@ -456,6 +461,252 @@ public sealed class GameSession
         };
     }
 
+    /// <summary>Flag key gating the spell-echo experiment (docs/SPELL_ECHOES.md).</summary>
+    public const string EchoesEnabledFlag = "echoes_enabled";
+
+    /// <summary>
+    /// Wild casting, with one instant detour: text that exactly matches a *known* charter
+    /// form's id or name casts that form with zero model calls (docs/CHARTER_MAGIC.md). The
+    /// GUI spell box and CLI `cast` both reach charter magic this way without a new verb, and
+    /// free-text wild casting is untouched because only learned forms intercept.
+    /// </summary>
+    private async Task<ActionResult> CastSpellAsync(CastCommand cast, CancellationToken cancellationToken)
+    {
+        if (CharterSpellbook.Default.Find(cast.Text) is { } charterSpell
+            && Engine.State.Souls.KnowsCharterSpell(ControlledSoulId(), charterSpell.Id))
+        {
+            return CastCharterSpell(charterSpell);
+        }
+
+        var result = await _magic.CastAsync(Engine, cast, cancellationToken);
+        RecordEchoIfEnabled(cast.Text, result);
+        return result;
+    }
+
+    private ActionResult CharterMagic(string? reference)
+    {
+        var turn = Engine.State.Turn;
+        var soulId = ControlledSoulId();
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            var known = Engine.State.Souls.KnownCharterSpellsFor(soulId)
+                .Select(id => CharterSpellbook.Default.Find(id))
+                .OfType<CharterSpell>()
+                .ToArray();
+            if (known.Length == 0)
+            {
+                return ActionResult.Simple(
+                    "charter",
+                    success: true,
+                    consumedTurn: false,
+                    turn,
+                    turn,
+                    "You know no charter forms. They are learned from manuals, warrants, and licensed paraphernalia.");
+            }
+
+            var lines = new List<string> { $"Known charter forms ({known.Length}):" };
+            lines.AddRange(known.Select(spell =>
+                $"- {spell.Id} ({spell.Name}): {spell.Summary} Cost: {spell.CostText}. Targeting: {spell.Targeting}."));
+            lines.Add("Cast one with 'charter <id>'. Charter magic is instant, weak, and precise.");
+            return ActionResult.Simple("charter", success: true, consumedTurn: false, turn, turn, lines.ToArray());
+        }
+
+        var spell = CharterSpellbook.Default.Find(reference);
+        if (spell is null)
+        {
+            return ActionResult.Simple(
+                "charter",
+                success: false,
+                consumedTurn: false,
+                turn,
+                turn,
+                $"No charter form answers to '{reference.Trim()}'.");
+        }
+
+        if (!Engine.State.Souls.KnowsCharterSpell(soulId, spell.Id))
+        {
+            return ActionResult.Simple(
+                "charter",
+                success: false,
+                consumedTurn: false,
+                turn,
+                turn,
+                $"You have not learned {spell.Name}. Charter forms are learned, not improvised.");
+        }
+
+        return CastCharterSpell(spell);
+    }
+
+    private ActionResult CastCharterSpell(CharterSpell spell) =>
+        _magic.ApplyResolved(Engine, new MaterializedMagicResolution(
+            Provider: "charter",
+            SpellText: spell.Name,
+            Performance: CastPerformance.Neutral,
+            RawText: "",
+            Accepted: true,
+            TechnicalFailure: false,
+            Error: null,
+            EffectTypes: spell.EffectTypes,
+            ResolvedMagicJson: spell.BuildResolvedMagicJson(),
+            DeedKind: "charter_magic"));
+
+    private bool EchoesEnabled
+    {
+        get
+        {
+            if (!Engine.State.WorldFlags.TryGetValue(EchoesEnabledFlag, out var raw) || raw is null)
+            {
+                return false;
+            }
+
+            if (raw is bool flag)
+            {
+                return flag;
+            }
+
+            var text = Convert.ToString(raw);
+            return string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "1";
+        }
+    }
+
+    private void RecordEchoIfEnabled(string spellText, ActionResult result)
+    {
+        if (!EchoesEnabled
+            || !result.Success
+            || string.IsNullOrWhiteSpace(spellText)
+            || result.Magic is not { Accepted: true } magic
+            || string.IsNullOrWhiteSpace(magic.ResolvedMagicJson))
+        {
+            return;
+        }
+
+        Engine.State.Echoes.Record(
+            spellText,
+            magic.ResolvedMagicJson!,
+            magic.EffectTypes,
+            ControlledSoulId(),
+            Engine.State.Turn);
+    }
+
+    private ActionResult ListEchoes()
+    {
+        var turn = Engine.State.Turn;
+        if (!EchoesEnabled)
+        {
+            return ActionResult.Simple(
+                "echoes",
+                success: false,
+                consumedTurn: false,
+                turn,
+                turn,
+                "Spell echoes are disabled for this run.");
+        }
+
+        var mine = Engine.State.Echoes.ForSoul(ControlledSoulId());
+        if (mine.Count == 0)
+        {
+            return ActionResult.Simple(
+                "echoes",
+                success: true,
+                consumedTurn: false,
+                turn,
+                turn,
+                "Your grimoire is empty. Accepted wild casts are remembered here as echoes.");
+        }
+
+        var lines = new List<string> { $"Grimoire ({mine.Count} echoes):" };
+        lines.AddRange(mine.Select((record, index) =>
+        {
+            var fatigue = record.TimesCast > 0 ? $", +{record.TimesCast} mana fatigue" : "";
+            return $"{index + 1}. {record.Name} (cast {record.TimesCast}x{fatigue})";
+        }));
+        lines.Add("Re-cast one instantly with 'echo <number>'. Repetition climbs the cost ladder.");
+        return ActionResult.Simple("echoes", success: true, consumedTurn: false, turn, turn, lines.ToArray());
+    }
+
+    private ActionResult CastEcho(string reference)
+    {
+        var turn = Engine.State.Turn;
+        if (!EchoesEnabled)
+        {
+            return ActionResult.Simple(
+                "echo",
+                success: false,
+                consumedTurn: false,
+                turn,
+                turn,
+                "Spell echoes are disabled for this run.");
+        }
+
+        var record = Engine.State.Echoes.Find(reference, ControlledSoulId());
+        if (record is null)
+        {
+            return ActionResult.Simple(
+                "echo",
+                success: false,
+                consumedTurn: false,
+                turn,
+                turn,
+                $"No echo in your grimoire answers to '{reference.Trim()}'. Use 'echoes' to list them.");
+        }
+
+        // Repetition fatigue (docs/SPELL_ECHOES.md): each repeat of the same echo adds a mana
+        // surcharge on top of the recorded costs, so improvisation stays the best deal. The
+        // surcharge rides the ordinary cost pipeline and shows up in the cost line.
+        var json = record.TimesCast > 0
+            ? WithEchoFatigue(record.ResolvedMagicJson, record.TimesCast)
+            : record.ResolvedMagicJson;
+        var result = _magic.ApplyResolved(Engine, new MaterializedMagicResolution(
+            Provider: "echo",
+            SpellText: record.SpellText,
+            Performance: CastPerformance.Neutral,
+            RawText: "",
+            Accepted: true,
+            TechnicalFailure: false,
+            Error: null,
+            EffectTypes: record.EffectTypes,
+            ResolvedMagicJson: json));
+        if (result.Success)
+        {
+            Engine.State.Echoes.IncrementCast(record.Id);
+        }
+
+        return result;
+    }
+
+    private static string WithEchoFatigue(string resolvedMagicJson, int surcharge)
+    {
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(resolvedMagicJson) is not System.Text.Json.Nodes.JsonObject root)
+            {
+                return resolvedMagicJson;
+            }
+
+            if (root["costs"] is not System.Text.Json.Nodes.JsonArray costs)
+            {
+                costs = new System.Text.Json.Nodes.JsonArray();
+                root["costs"] = costs;
+            }
+
+            costs.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["type"] = "mana",
+                ["fields"] = new System.Text.Json.Nodes.JsonObject { ["amount"] = surcharge },
+            });
+            return root.ToJsonString();
+        }
+        catch (JsonException)
+        {
+            return resolvedMagicJson;
+        }
+    }
+
+    private string ControlledSoulId() =>
+        Engine.State.ControlledEntity.TryGet<SoulComponent>(out var soul)
+            ? soul.SoulId
+            : Engine.State.ControlledEntityId.Value;
+
     private ActionResult Help() =>
         ActionResult.Simple(
             "help",
@@ -463,7 +714,7 @@ public sealed class GameSession
             consumedTurn: false,
             Engine.State.Turn,
             Engine.State.Turn,
-                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, protect, unprotect, reagents, wares, buy, sell, services, request, journal, rumors, character, standing, followers, jobs, save, load, quit.");
+                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, charter, echoes, echo, protect, unprotect, reagents, wares, buy, sell, services, request, journal, rumors, character, standing, followers, jobs, save, load, quit.");
 
     private async Task<ActionResult> SaveGameAsync(string path, CancellationToken cancellationToken)
     {

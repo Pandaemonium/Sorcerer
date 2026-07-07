@@ -178,7 +178,8 @@ public sealed record GameStateSave(
     Dictionary<string, object?>? WorldFlags = null,
     List<PersistentEffectRecord>? PersistentEffects = null,
     PointSave? LastControlledMoveDelta = null,
-    List<TileFlowSave>? TileFlows = null)
+    List<TileFlowSave>? TileFlows = null,
+    List<EchoRecord>? Echoes = null)
 {
     public static GameStateSave FromState(GameState state) =>
         new(
@@ -271,7 +272,8 @@ public sealed record GameStateSave(
                 .OrderBy(pair => pair.Key.Y)
                 .ThenBy(pair => pair.Key.X)
                 .Select(pair => new TileFlowSave(PointSave.From(pair.Key), pair.Value.Dx, pair.Value.Dy, pair.Value.ExpiresTurn))
-                .ToList());
+                .ToList(),
+            state.Echoes.Snapshot().ToList());
 
     public GameState ToState()
     {
@@ -355,6 +357,7 @@ public sealed record GameStateSave(
             state.TileFlows[flow.Point.ToGridPoint()] = new TileFlow(flow.Dx, flow.Dy, flow.ExpiresTurn);
         }
 
+        state.Echoes.ReplaceAll(Echoes);
         return state;
     }
 }

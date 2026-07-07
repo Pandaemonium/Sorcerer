@@ -14,7 +14,8 @@ public sealed record OriginDefinition(
     string PublicName,
     string Appearance,
     string MagicalSignature,
-    string Backstory);
+    string Backstory,
+    IReadOnlyList<string>? StartingCharterSpells = null);
 
 public sealed class OriginCatalog
 {
@@ -104,7 +105,8 @@ public sealed class OriginCatalog
             ReadString(root, "publicName", ReadString(root, "public_name", "the sorcerer")),
             ReadString(root, "appearance", "a fugitive bright with badly behaved magic"),
             ReadString(root, "magicalSignature", ReadString(root, "magical_signature", "color leaking through marble law")),
-            ReadString(root, "backstory", ""));
+            ReadString(root, "backstory", ""),
+            ReadStringList(root, "startingCharterSpells", "starting_charter_spells"));
 
     private static IReadOnlyDictionary<string, int> ReadStringIntMap(JsonElement root, string camel, string snake)
     {
@@ -121,6 +123,22 @@ public sealed class OriginCatalog
                 item => item.Name,
                 item => item.Value.TryGetInt32(out var value) ? value : 0,
                 StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<string> ReadStringList(JsonElement root, string camel, string snake)
+    {
+        var property = root.TryGetProperty(camel, out var camelValue) ? camelValue :
+            root.TryGetProperty(snake, out var snakeValue) ? snakeValue :
+            default;
+        if (property.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return property.EnumerateArray()
+            .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() ?? "" : "")
+            .Where(item => item.Length > 0)
+            .ToArray();
     }
 
     private static string ReadString(JsonElement root, string property, string fallback) =>

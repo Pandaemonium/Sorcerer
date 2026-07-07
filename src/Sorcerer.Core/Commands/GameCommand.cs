@@ -64,6 +64,15 @@ public sealed record ServicesCommand(string? Target = null) : GameCommand;
 
 public sealed record RequestServiceCommand(string Service, string? Target = null) : GameCommand;
 
+/// <summary>Null spell lists the known charter repertoire; a spell id/name casts it instantly.</summary>
+public sealed record CharterCommand(string? Spell = null) : GameCommand;
+
+/// <summary>Lists the run's recorded spell echoes (the grimoire).</summary>
+public sealed record EchoesCommand() : GameCommand;
+
+/// <summary>Re-casts a recorded echo by number or name fragment, instantly, no model call.</summary>
+public sealed record EchoCommand(string Reference) : GameCommand;
+
 public sealed record JournalCommand() : GameCommand;
 
 public sealed record RumorsCommand() : GameCommand;

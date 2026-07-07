@@ -94,7 +94,10 @@ public static class TestScenarios
         Add(state, new Entity(EntityId.Create("notice_1"), "posted containment notice")
             .Set(new PositionComponent(new GridPoint(5, 7)))
             .Set(new RenderableComponent('?', "imperial"))
-            .Set(new TagsComponent(new[] { "fixture", "paper", "law", "readable" }))
+            // The containment order's margins carry a printed charter form: reading the notice
+            // teaches it (docs/CHARTER_MAGIC.md - one learnable spell in the opening, proving
+            // acquisition through ordinary verbs).
+            .Set(new TagsComponent(new[] { "fixture", "paper", "law", "readable", "teaches_charter:binding_writ_1" }))
             .Set(new PhysicalComponent(BlocksMovement: false, Material: "paper"))
             .Set(new FixtureComponent(
                 "notice",

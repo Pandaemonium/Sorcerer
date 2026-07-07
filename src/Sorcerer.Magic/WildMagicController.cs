@@ -245,7 +245,7 @@ public sealed class WildMagicController : IWildMagicController
             var deed = engine.ApplyConsequence(WorldConsequence.RecordDeed(
                 "engine",
                 actor.Id.Value,
-                "wild_magic",
+                materialized.DeedKind,
                 MagnitudeFor(resolution.Severity),
                 actorPosition.X,
                 actorPosition.Y,

@@ -1,9 +1,20 @@
 # Charter Magic
 
-Status: proposed 2026-07. Companion to [GRAND_VISION.md](GRAND_VISION.md),
+Status: **first slice implemented 2026-07-07.** Bundles load from `content/charter/*.json`
+(`CharterSpellbook`), the repertoire lives on the soul (`SoulRecord.KnownCharterSpells`,
+save/load-safe, soul-bound), `charter` lists and `charter <id>` casts instantly through
+`ApplyResolved` with zero provider calls, exact-name `cast` text also routes to the charter
+lane (GUI parity via the shared parser), origins grant starting forms
+(`startingCharterSpells` — the deserter charter mage starts with three), the opening
+containment notice teaches Binding Writ I via `read` (`teaches_charter:<id>` tag), and
+witnessed charter casts record a `charter_magic` deed that reads as plausibly licensed
+(no uncanny legend/heat; +1 suspicion) in `WorldReactionSystem`. Unlicensed-context
+escalation and squadron-mage casting are future layers. Tests: `CharterAndEchoTests.cs`.
+
+Companion to [GRAND_VISION.md](GRAND_VISION.md),
 [AESTHETICS_AND_TONE.md](AESTHETICS_AND_TONE.md), [WORLDBUILDING.md](WORLDBUILDING.md), and
 [CORE_EXECUTION_MODEL.md](CORE_EXECUTION_MODEL.md). Every vision doc names charter magic as the
-reliable counterpoint to wild magic; this document is its first actual design.
+reliable counterpoint to wild magic; this document is its design.
 
 ## The Three Jobs
 

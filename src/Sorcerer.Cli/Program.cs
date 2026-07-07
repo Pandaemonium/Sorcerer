@@ -117,6 +117,11 @@ public static class Program
             dialogueParser: dialogueParser,
             dialogueParserRouter: dialogueParserRouter);
         ApplyBackgroundOptions(session, options);
+        if (options.Echoes)
+        {
+            session.Engine.State.WorldFlags[GameSession.EchoesEnabledFlag] = true;
+        }
+
         ApplyQuickstart(session, options.QuickstartScene);
         await using var transcript = TranscriptWriter.Open(options.TranscriptPath);
         if (transcript is not null)
@@ -538,7 +543,8 @@ public sealed record CliOptions(
     string? QuickstartScene,
     int BudgetSeconds,
     string? CheckpointPath,
-    IReadOnlyList<string> Commands)
+    IReadOnlyList<string> Commands,
+    bool Echoes = false)
 {
     public static CliOptions Parse(string[] args)
     {
@@ -550,6 +556,7 @@ public sealed record CliOptions(
         var eval = false;
         var episode = false;
         var livePlaytest = false;
+        var echoes = false;
         var episodes = 1;
         var maxTurns = 40;
         var seed = 7;
@@ -645,6 +652,9 @@ public sealed record CliOptions(
                 case "--background-model" when index + 1 < args.Length:
                     backgroundModel = args[++index];
                     break;
+                case "--echoes":
+                    echoes = true;
+                    break;
                 case "--enable-background":
                     backgroundEnabled = true;
                     break;
@@ -710,7 +720,8 @@ public sealed record CliOptions(
             quickstartScene,
             budgetSeconds,
             checkpointPath,
-            commands);
+            commands,
+            echoes);
     }
 
     private static int ReadPositiveInt(string value, int fallback) =>

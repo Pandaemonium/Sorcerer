@@ -180,7 +180,33 @@ public sealed class WorldReactionSystem
             case "wild_magic":
                 ApplyWildMagic(state, deed, messages, deltas, applyConsequence);
                 break;
+            case "charter_magic":
+                ApplyCharterMagic(state, deed, messages, deltas, applyConsequence);
+                break;
         }
+    }
+
+    // A witnessed charter cast reads as plausibly licensed work (docs/CHARTER_MAGIC.md):
+    // no uncanny legend, no fear, no empire heat - only a sliver of suspicion that someone
+    // might check the paperwork later. This is what makes charter magic the quiet option,
+    // at the price of its capped power. Escalation for a caster the Empire already marks
+    // as unlicensed (wanted posters, regalia checks) is a later layer.
+    private static void ApplyCharterMagic(
+        GameState state,
+        DeedRecord deed,
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
+    {
+        if (deed.Visibility.Equals("suspicious", StringComparison.OrdinalIgnoreCase))
+        {
+            AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
+            AddMessage(messages, deltas, applyConsequence, deed, "suspicious_charter_magic", "Someone glimpsed tidy, licensed-looking magic with no caster to pin it on.");
+            return;
+        }
+
+        AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
+        AddMessage(messages, deltas, applyConsequence, deed, "public_charter_magic", "The casting reads as licensed charter work; nobody reaches for an alarm bell.");
     }
 
     private static void RecordWitnessMemories(

@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "spells": [
+    {
+      "id": "bolt_directive_1",
+      "name": "Bolt Directive I",
+      "summary": "A licensed bolt. Thin, white, exact.",
+      "line": "A thin white bolt files itself against the target.",
+      "targeting": "entity",
+      "licenseTier": 1,
+      "cost": { "mana": 2 },
+      "effects": [
+        { "type": "damage", "target": "nearest_enemy", "amount": 3, "damageType": "charter" }
+      ]
+    },
+    {
+      "id": "mending_writ_1",
+      "name": "Mending Writ I",
+      "summary": "Sanctioned repair of minor tissue damage.",
+      "line": "Regulation stitches of pale light close the smallest wounds first.",
+      "targeting": "self",
+      "licenseTier": 1,
+      "cost": { "mana": 2 },
+      "effects": [
+        { "type": "heal", "target": "player", "amount": 4 }
+      ]
+    },
+    {
+      "id": "warding_form_1",
+      "name": "Warding Form I",
+      "summary": "A licensed screen against physical harm.",
+      "line": "A gray lattice settles over you, dull as paperwork and half as forgiving.",
+      "targeting": "self",
+      "licenseTier": 1,
+      "cost": { "mana": 2 },
+      "effects": [
+        { "type": "addResistance", "target": "player", "damageType": "physical", "amount": 25, "duration": 6 }
+      ]
+    },
+    {
+      "id": "binding_writ_1",
+      "name": "Binding Writ I",
+      "summary": "A short, legal restraint.",
+      "line": "The charter reads the target its obligations; its feet agree to stay.",
+      "targeting": "entity",
+      "licenseTier": 1,
+      "cost": { "mana": 3 },
+      "effects": [
+        { "type": "addStatus", "target": "nearest_enemy", "status": "rooted", "displayName": "charter-bound", "duration": 2 }
+      ]
+    },
+    {
+      "id": "aperture_writ_1",
+      "name": "Aperture Writ I",
+      "summary": "Tier-1 unlocking of licensed municipal locks. Target the lock first.",
+      "line": "The lock hears an order it was built to obey.",
+      "targeting": "tile",
+      "licenseTier": 1,
+      "cost": { "mana": 3 },
+      "effects": [
+        { "type": "consequence", "consequenceType": "open_or_unlock", "target": "selected_target", "unlock": true, "open": true }
+      ]
+    },
+    {
+      "id": "census_glass_1",
+      "name": "Census Glass I",
+      "summary": "Reads a subject's registered condition and allegiance.",
+      "line": "A pane of cold glass holds the subject's particulars for one long moment.",
+      "targeting": "entity",
+      "licenseTier": 1,
+      "cost": { "mana": 2 },
+      "effects": [
+        { "type": "revealTruth", "aspect": "nature", "target": "nearest_enemy" }
+      ]
+    },
+    {
+      "id": "lumen_edict_1",
+      "name": "Lumen Edict I",
+      "summary": "A licensed light. Steady, white, unromantic.",
+      "line": "A licensed light switches itself on above your shoulder: steady, white, unromantic.",
+      "targeting": "self",
+      "licenseTier": 1,
+      "cost": { "mana": 1 },
+      "effects": [
+        { "type": "addStatus", "target": "player", "status": "lamplit", "displayName": "charter lamplight", "duration": 12 }
+      ]
+    }
+  ]
+}

@@ -435,6 +435,10 @@ Core shared commands currently route through `GameSession`:
 - `begin_cast <spell text>`
 - `await_cast`
 - `cancel_cast`
+- `charter` (list known charter forms) / `charter <id>` (instant deterministic cast, no
+  model call; exact-name `cast` text also routes here — docs/CHARTER_MAGIC.md)
+- `echoes` (list the grimoire) / `echo <n|name>` (instant re-cast of a recorded wild spell;
+  requires the `--echoes` flag — docs/SPELL_ECHOES.md)
 - `journal`
 - `character`
 - `sheet`
@@ -493,6 +497,7 @@ Recommended CLI flags:
 --replay-assert-final
 --episode-log <path>
 --record <path>
+--echoes
 --disable-background
 --max-background-jobs <n>
 --background-jobs-per-turn <n>

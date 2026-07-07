@@ -93,7 +93,8 @@ public static class CharacterMath
             origin.Tradition,
             origin.MagicalSignature,
             origin.Backstory,
-            origin.FactionFirstReactions);
+            origin.FactionFirstReactions,
+            origin.StartingCharterSpells);
     }
 
     public static SoulRecord EnsureSoulRecord(GameState state, Entity entity)

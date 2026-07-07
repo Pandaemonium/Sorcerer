@@ -1036,6 +1036,7 @@ public sealed class InteractionSystem
             .Concat(queuedJob.Deltas)
             .Concat(ApplyClaimSeeds(entity, "read"))
             .Concat(_promiseRealizationSystem.RealizeAnchoredPromises(entity, "read", messages, alreadyPersistedMessages))
+            .Concat(TeachCharterFormsFrom(entity, messages, alreadyPersistedMessages))
             .ToList();
         deltas.AddRange(PersistUnwrittenMessages(
             messages,
@@ -1060,6 +1061,60 @@ public sealed class InteractionSystem
             Messages = messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = deltas.Concat(turnDeltas).ToArray(),
         };
+    }
+
+    /// <summary>
+    /// Charter acquisition through ordinary verbs (docs/CHARTER_MAGIC.md): a readable entity
+    /// tagged "teaches_charter:&lt;spellId&gt;" teaches that form to the reading soul the first
+    /// time it is read. Content-driven - any authored or generated manual can carry the tag.
+    /// </summary>
+    private IReadOnlyList<StateDelta> TeachCharterFormsFrom(
+        Entity entity,
+        List<string> messages,
+        List<string> alreadyPersistedMessages)
+    {
+        const string prefix = "teaches_charter:";
+        if (!entity.TryGet<TagsComponent>(out var tags))
+        {
+            return Array.Empty<StateDelta>();
+        }
+
+        var reader = State.ControlledEntity;
+        var soulId = reader.TryGet<SoulComponent>(out var soul) ? soul.SoulId : reader.Id.Value;
+        var deltas = new List<StateDelta>();
+        foreach (var tag in tags.Tags)
+        {
+            if (!tag.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var spellId = tag[prefix.Length..].Trim();
+            var spell = Sorcerer.Core.Magic.CharterSpellbook.Default.Find(spellId);
+            if (spell is null || !State.Souls.LearnCharterSpell(soulId, spell.Id))
+            {
+                continue;
+            }
+
+            var learned = _engine.ApplyConsequence(WorldConsequence.Message(
+                "read",
+                $"You memorize the charter form printed in the margins: {spell.Name}. ('charter {spell.Id}' casts it.)",
+                targetEntityId: entity.Id.Value,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: reader.Id.Value,
+                reason: "Reading licensed paraphernalia teaches its charter form.",
+                operation: "charterFormLearned",
+                details: new Dictionary<string, object?>
+                {
+                    ["spellId"] = spell.Id,
+                    ["soulId"] = soulId,
+                }));
+            deltas.AddRange(learned.Deltas);
+            messages.AddRange(learned.Messages);
+            alreadyPersistedMessages.AddRange(learned.Messages);
+        }
+
+        return deltas;
     }
 
     public ActionResult Examine(string? target)
