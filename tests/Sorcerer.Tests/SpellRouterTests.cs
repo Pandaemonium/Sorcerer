@@ -102,29 +102,35 @@ public sealed class SpellRouterTests
         bool IsLean(OperationCardView card) =>
             string.IsNullOrEmpty(card.PromptGuidance) && card.Fields.Count == 0 && card.Examples.Count == 0;
 
-        // Recall floor: an unrouted cast advertises every registered operation by name, so a spell
-        // the trigger vocabulary did not anticipate can still reach any mechanic...
+        // An unrouted cast gets only the small general palette. Exotic mechanics use routing or
+        // the bounded needsCapability retry instead of taxing every ordinary cast.
         var unrouted = registry.ToRoutedIndex(Array.Empty<string>(), routable);
-        Assert.Equal(registry.ToIndex().Names, unrouted.Names);
+        Assert.Contains("heal", unrouted.Names, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("addStatus", unrouted.Names, StringComparer.OrdinalIgnoreCase);
+        Assert.DoesNotContain("teleport", unrouted.Names, StringComparer.OrdinalIgnoreCase);
+        Assert.True(unrouted.Names.Count <= 8, $"unrouted cast advertises too many operations: {string.Join(", ", unrouted.Names)}");
 
-        // ...but only the small common core keeps full prompt guidance; the rest are lean lines.
-        var unroutedFull = unrouted.Cards.Where(card => !IsLean(card)).Select(card => card.Name).ToArray();
-        Assert.Contains("heal", unroutedFull, StringComparer.OrdinalIgnoreCase);
-        Assert.Contains("addStatus", unroutedFull, StringComparer.OrdinalIgnoreCase);
-        Assert.True(unroutedFull.Length <= 8, $"unrouted cast keeps too many full cards: {string.Join(", ", unroutedFull)}");
-        Assert.Contains(unrouted.Cards, card => IsLean(card) && card.Name.Equals("teleport", StringComparison.OrdinalIgnoreCase));
-
-        // A routed cast keeps today's narrowing: core names plus what the selection unlocked,
-        // trimmed to lean cards unless selected...
+        // A routed cast adds only the selected mechanic; unrelated operations remain absent.
         var routed = registry.ToRoutedIndex(new[] { "summon" }, routable);
-        Assert.True(routed.Names.Count < unrouted.Names.Count);
-        var teleport = routed.Cards.Single(card => card.Name.Equals("teleport", StringComparison.OrdinalIgnoreCase));
-        Assert.True(IsLean(teleport));
+        Assert.Contains("summon", routed.Names, StringComparer.OrdinalIgnoreCase);
+        Assert.DoesNotContain("teleport", routed.Names, StringComparer.OrdinalIgnoreCase);
 
-        // ...and selecting the capability that unlocks an operation restores its full card.
+        // Selecting a capability restores its full operation card.
         var restored = registry.ToRoutedIndex(new[] { "teleport" }, routable);
         var restoredCard = restored.Cards.Single(card => card.Name.Equals("teleport", StringComparison.OrdinalIgnoreCase));
         Assert.False(IsLean(restoredCard));
+    }
+
+    [Theory]
+    [InlineData("raise a wall of ice between us", false)]
+    [InlineData("heal my wounds with green light", false)]
+    [InlineData("make the fresco weep real tears", true)]
+    [InlineData("summon a moth and make the room mourn", false)]
+    public void SemanticRouterRunsOnlyWhenDeterministicRoutingIsInsufficient(string spell, bool expected)
+    {
+        var registry = CapabilityRegistry.CreateDefault();
+
+        Assert.Equal(expected, registry.ShouldConsultRouter(spell));
     }
 
     [Fact]

@@ -174,6 +174,8 @@ public abstract record GameCommand;
 public sealed record MoveCommand(Direction Direction) : GameCommand;
 public sealed record TravelCommand(Direction Direction) : GameCommand;
 public sealed record AtlasCommand() : GameCommand;
+public sealed record EnterCommand(string? Target = null) : GameCommand;
+public sealed record LeaveCommand() : GameCommand;
 public sealed record CastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
 public sealed record BeginCastCommand(string Text, CastPerformance? Performance = null) : GameCommand;
 public sealed record AwaitCastCommand(CastPerformance? Performance = null) : GameCommand;
@@ -200,16 +202,18 @@ and:
 The engine should receive typed commands after parsing.
 The Godot command line uses the same `TextCommandParser` as CLI text mode, so human-facing
 commands such as `journal`, `rumors`, `services`, `request`, `bonds`, `open`, `possess`,
-and `jobs` reach the same `GameSession` routes instead of GUI-specific handlers. CLI JSON
+`enter`, `leave`, and `jobs` reach the same `GameSession` routes instead of GUI-specific handlers. CLI JSON
 mode uses the same typed command vocabulary for agent playtesting.
 Godot also exposes a read-only Journal scene backed by `GameView.Journal`, the same shared
 line builder used by the CLI `journal` command, so leads, claims, rumors, legend, and pressure
 summaries do not fork into a GUI-only formatter.
 
-`CastPerformance` is the casting-minigame score. The GUI plays the rune-trace minigame while
-a pending cast resolves and attaches the score to `AwaitCastCommand` (it does not exist at
-submit time). The CLI uses neutral performance by default; debug and agent testers may inject
-a fixed score (`await_cast 1.2 0.8 1.4`, or JSON `"performance": {...}`). See
+`CastPerformance` is the shared casting-minigame score. While a pending cast resolves, the GUI
+selects from the implemented rune-trace, Thread & Knot, True-Sigil, and Bone-Song repertoire and
+attaches that game's normalized score to `AwaitCastCommand` (it does not exist at submit time).
+The games remain renderer-side input instruments; engine effects still pass through the ordinary
+pending-cast apply path. The CLI uses neutral performance by default; debug and agent testers may
+inject a fixed score (`await_cast 1.2 0.8 1.4`, or JSON `"performance": {...}`). See
 [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md).
 
 ## Action Result
@@ -267,6 +271,16 @@ written as `CanonRecord`s attached to an entity, place, promise, or other state 
 
 The first procedural-world seam is `GenerationSystem`. The active tactical map still lives directly
 on `GameState`, while non-active places are stored as `ZoneSnapshot`s keyed by `CurrentZoneId`.
+`RegionCatalog` loads renderer-independent region and tradition definitions from
+`content/regions/*.json`. The core assembly embeds the shipped corpus so standalone exports retain
+it; loose files found beside/in a source tree are the editable override, and
+`RegionRegistry.CreateMinimal()` is the last compile-safe fallback.
+Definitions carry voice, terrain, affordance, ambient, map-placement, prop-grammar, and population
+data. `GenerationSystem`
+derives small placement jitter from the run seed, then assigns coordinate zones by nearest regional
+anchor while preserving the authored opening/capital corridor. The regional layout is recomputed
+from content plus seed rather than serialized as a second source of world truth. Realm-border
+travel uses the same typed message/action-result path as other travel and names both realms.
 Travel snapshots the current zone, loads or lazily generates the destination, clears coordinate
 targets, places the controlled body and bond-followers at an entry edge through hidden
 `move_entity` consequences (`travelPlaceTraveler`), and advances the same turn pump used by
@@ -279,6 +293,61 @@ Lazy generation also writes region texture tiles through hidden `set_terrain` co
 (`generateZoneTerrain`) in the detached destination-state sandbox. The resulting terrain map and
 blocking set are what the zone snapshot saves, so generated terrain uses the same validation and
 audit path as spell-made terrain instead of a raw side channel.
+
+Regional prop grammar is content-owned. Each region composes weighted bases, materials, and
+conditions into names/descriptions/tags, rolls uneven density, may place a coherent relative-offset
+ensemble, and occasionally adds a readable or magic-anchor hook. The prop batch and positions use
+zone-derived RNG (`world seed + zone id + region`) rather than global generation order. Every prop
+still enters the detached generation sandbox through `spawn_fixture`; `canAnchorMagic` and optional
+readable fields are ordinary fixture payload, not raw component writes. Ordinary props are inert
+semantic affordances and may be examined or targeted without receiving AI turns.
+
+Regional population grammar is also content-owned. `initial_populations.json` attaches density
+means, settlement centers, name parts, and weighted cultural archetypes to the same region ids.
+`RegionPopulationGenerator` derives a zone-local population stream and a coarser three-zone noise
+field from world seed, zone coordinates, and region id. It samples center, near, and wild density
+Poisson-style, keeps a small crowd floor at explicit centers, and permits empty wilderness plus
+rare outliers. Archetypes contribute names, descriptions, stats, tags, wants, knowledge tiers,
+wares, and services; generation order and the mutable run RNG do not decide those rolls.
+
+`WorldPlaceGraph` is the shared deterministic geography above regions. From the run seed and the
+same jittered anchors used by region assignment, it derives one named 3×3 primary settlement per
+region, authored district identity for every footprint zone, regional hamlets, one landmark per
+region, and a Manhattan road graph whose primary-settlement edges form a spanning tree. The graph
+is recomputed rather than saved. `GenerationSystem` asks it for one `WorldPlaceProfile` per zone;
+that profile drives typed terrain deltas, a signature district/landmark fixture, population
+multiplier, prop tags, travel narration, snapshot room profiles, atlas lines, `WorldCard`, resolver
+context, and dialogue `zone.current` lines. Roads therefore reach the settlements they name, and
+renderers cannot disagree with simulation geography.
+
+Significant interiors are linked tactical zones above that graph, not renderer scenes.
+`initial_interiors.json` binds stable interior definitions to primary-settlement districts.
+Generation puts an `InteriorEntranceComponent` on the district's signature fixture and lazily
+creates a stable `interior:<region>:<interior>:<exterior>` snapshot when `enter` succeeds. The
+detached generation sandbox creates perimeter terrain through `set_terrain`, authored semantic
+fixtures and the two-way threshold through `spawn_fixture`, and local people through the same
+regional `spawn_entity` population path. The active `WorldPlaceProfile` becomes `interior`, so
+atlas, `WorldCard`, dialogue `zone.current`, and resolver-lens notes quote the same interior name,
+summary, kind, and tags.
+
+Entering and leaving capture the source snapshot without the controlled body or bond-followers,
+restore the linked destination, and place those travelers through hidden `move_entity`
+consequences before clearing stale selection through `set_selected_target`. A successful crossing
+consumes one ordinary turn and normal actor initiative, but does not run the travel world-turn
+budget because no extended time elapsed. Restricted thresholds check ordinary inventory evidence,
+permission/access world flags, or open/forced/access tags on the threshold; validated magic,
+dialogue, faction, stealth, or force systems can therefore change access without a bespoke palace
+meter. The entrance/exit components serialize with entities and both snapshots save normally, so
+interior mutations survive return and save/load. See
+[SIGNIFICANT_INTERIORS.md](SIGNIFICANT_INTERIORS.md).
+
+`QuestTemplateCatalog` loads shipped/embedded `content/quests/*.json`. The first deterministic
+journey factory runs only for the lead resident at a settlement center. It selects the region's
+real landmark from `WorldPlaceGraph`, adds the pressure to the resident's ordinary
+`WantComponent`, and supplies a `ClaimSourceComponent` through `spawn_entity`. Examining that NPC
+uses the existing claim-source transaction to record a claim and bind an exact-zone travel
+promise. `PromiseRealizationSystem` then creates the evidence item/canon and marks the promise
+realized at the destination. There is no quest ledger, acceptance state, or provider call.
 
 Tactical zones are 40 by 30 tiles. The perimeter is not a ring of wall terrain: edge tiles are
 ordinary map cells, and a cardinal move that steps past the map boundary routes through the same
@@ -324,10 +393,17 @@ Zone snapshots own zone-local tactical fields as well as entities and terrain. `
 and saved with the zone so they neither leak into other coordinates in another zone nor disappear
 when the player returns.
 
-The current world graph places the Vigovian Capital east of Hollowmere. The capital is a
-normal generated zone with region affordances and ordinary entities, including Emperor Odran as an
-actor tagged `emperor` / `win_condition`. Killing him is not a special spell path: ordinary validated
-damage marks the actor defeated, and `GameSession` observes that state to complete the run.
+The current world graph keeps the Vigovian Capital east of Hollowmere while placing the wider canon
+roster—Stalnaz, Brall, Ryolan, Vint, Threen, Monteary, Ontria, Gontark, the Parn, Rentacosta, and the
+Wild Border—around data-authored anchors. `WorldPlaceGraph` now adds settlements, districts,
+hamlets, landmarks, and roads over that regional Voronoi layer; full political territory and
+control graphs remain future work. `WorldRoll` designates exactly one of Stalnaz, Brall,
+Ryolan, and Vint as the free rival per seed and marks the other three conquered. The capital is a
+three-district footprint: Censor Gate, Inner Court, and Archive Quarter. Only its center `3,0`
+Inner Court creates Emperor Odran, preventing duplicated emperors in adjacent capital zones. It otherwise uses normal
+generation with region affordances and ordinary entities. Odran is an actor tagged `emperor` /
+`win_condition`. Killing him is not a special spell path: ordinary validated damage marks the actor
+defeated, and `GameSession` observes that state to complete the run.
 
 ## Persistence And Run Completion
 
@@ -383,15 +459,17 @@ tags, and imperial-grip deltas from `GameState.Seed` using stable hashing rather
 codes. `WorldCard`, `atlas`, and `resolverLens` expose the rolled realm profile; tactical maps still
 derive lazily from regions.
 
-The first population layer is intentionally small: generated zones create their feature fixture,
-curio item, resident, resident wares, and capital emperor through ordinary `spawn_fixture`,
-`spawn_item`, `spawn_entity`, and `offer_trade` consequences applied to a detached generated-zone
+The first regional population layer is live: generated zones create their prop batch, curio item,
+zero-to-eight residents, resident wares/services, and capital emperor through ordinary
+`spawn_fixture`, `spawn_item`, `spawn_entity`, `offer_trade`, and `offer_service` consequences
+applied to a detached generated-zone
 state. Rejected generated children return ordinary `worldConsequenceRejected` plus hidden
 `generationConsequenceSkipped` audit deltas instead of throwing out of travel; later generated
 children still run where they do not depend on the rejected content. The generated snapshot then
 commits entity serial/RNG state back to the run. Residents use
 normal `ActorComponent`, `FactionComponent`, `ProfileComponent`, `MemoryComponent`, `AiComponent`,
-`MerchantComponent`, `WantComponent`, and `InteractableComponent` data, so dialogue, gifts,
+`MerchantComponent`, `ServiceComponent`, `WantComponent`, `KnowledgeComponent`, and
+`InteractableComponent` data, so dialogue, gifts,
 recruitment, trade, hostility, and future memories use the same systems as hand-authored NPCs.
 `spawn_entity` can take an explicit engine id for rare canonical actors such as Emperor Odran while
 still using the same validation, profile, want, and audit path as ordinary generated residents.
@@ -972,6 +1050,15 @@ engine promise binder, but the engine remains authoritative about whether and wh
 promise actually binds.
 The default registry also loads matching prompt/capability cards from `content/operations`
 when available, falling back to built-in cards when content is absent.
+
+Resolver routing is latency-first. Direct capability triggers and obvious common-core intent skip
+the semantic router; only opaque zero-route spells pay for that extra model call. The resolver sees
+the six-operation general palette plus selected/unowned operations, while `RequiredContext` gates
+terrain, promises, lore, scenery, and hidden targets. `MagicContextView` remains the rich
+engine/mock/audit view, but `SpellPromptBuilder` sends live providers a separate compact projection
+with bounded targets and short resource records. Prompt tests enforce a 5 KB context ceiling and a
+12 KB combined request ceiling for representative casts. None of this narrows apply-time authority:
+materialized output is still re-parsed and validated against the full registry and current state.
 
 Important contracts:
 

@@ -523,6 +523,12 @@ public sealed record EntitySave(
             case InteractableComponent typed:
                 entity.Set(typed);
                 break;
+            case InteriorEntranceComponent typed:
+                entity.Set(typed);
+                break;
+            case InteriorExitComponent typed:
+                entity.Set(typed);
+                break;
             case SoulComponent typed:
                 entity.Set(typed);
                 break;
@@ -629,6 +635,25 @@ public sealed record ComponentSave(
             ReadableComponent value => New("readable", ("title", value.Title), ("textKey", value.TextKey)),
             ClaimSourceComponent value => New("claimSource", ("claims", value.Claims.ToArray())),
             InteractableComponent value => New("interactable", ("verbs", value.Verbs.ToArray())),
+            InteriorEntranceComponent value => New(
+                "interiorEntrance",
+                ("interiorZoneId", value.InteriorZoneId),
+                ("interiorId", value.InteriorId),
+                ("name", value.Name),
+                ("kind", value.Kind),
+                ("summary", value.Summary),
+                ("accessPolicy", value.AccessPolicy),
+                ("requiredItem", value.RequiredItem),
+                ("exteriorZoneId", value.ExteriorZoneId),
+                ("exteriorX", value.ExteriorX),
+                ("exteriorY", value.ExteriorY)),
+            InteriorExitComponent value => New(
+                "interiorExit",
+                ("exteriorZoneId", value.ExteriorZoneId),
+                ("interiorId", value.InteriorId),
+                ("interiorName", value.InteriorName),
+                ("exteriorX", value.ExteriorX),
+                ("exteriorY", value.ExteriorY)),
             SoulComponent value => New("soul", ("soulId", value.SoulId)),
             ProfileComponent value => New(
                 "profile",
@@ -712,6 +737,23 @@ public sealed record ComponentSave(
             "readable" => new ReadableComponent(ReadString(fields, "title"), ReadString(fields, "textKey")),
             "claimsource" => new ClaimSourceComponent(ReadClaimSeedList(fields, "claims")),
             "interactable" => new InteractableComponent(ReadStringList(fields, "verbs")),
+            "interiorentrance" => new InteriorEntranceComponent(
+                ReadString(fields, "interiorZoneId"),
+                ReadString(fields, "interiorId"),
+                ReadString(fields, "name"),
+                ReadString(fields, "kind"),
+                ReadString(fields, "summary"),
+                ReadString(fields, "accessPolicy", "public"),
+                ReadNullableString(fields, "requiredItem"),
+                ReadString(fields, "exteriorZoneId"),
+                ReadInt(fields, "exteriorX"),
+                ReadInt(fields, "exteriorY")),
+            "interiorexit" => new InteriorExitComponent(
+                ReadString(fields, "exteriorZoneId"),
+                ReadString(fields, "interiorId"),
+                ReadString(fields, "interiorName"),
+                ReadInt(fields, "exteriorX"),
+                ReadInt(fields, "exteriorY")),
             "soul" => new SoulComponent(ReadString(fields, "soulId")),
             "profile" => new ProfileComponent(
                 ReadString(fields, "publicName"),

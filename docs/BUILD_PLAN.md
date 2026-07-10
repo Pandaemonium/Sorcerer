@@ -658,9 +658,9 @@ layers.
 profiles (status, ruler, tradition, tags, imperial-grip delta) from `GameState.Seed` using
 process-stable hashing. `--seed` now affects normal CLI runs, `WorldCard` and `atlas` expose realm
 status/ruler/effective grip, and the resolver lens receives that same realm context. Generated zones
-also spawn a seed/profile-informed resident NPC using existing entity, faction, profile, AI, and
-interaction components. Full realm ownership graphs, town layouts, population rosters, and
-model-flavored naming remain future work.
+now sample content-authored center/near/wild population density and named cultural archetypes using
+existing entity, faction, profile, AI, want, knowledge, trade, service, and interaction components.
+Full realm ownership graphs, town/district layouts, and organizations remain future work.
 
 ### 5.3 - Promise realization during generation
 

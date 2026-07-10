@@ -1183,6 +1183,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         AddText(value, "regionVoice", scene.RegionVoice, 240);
         AddIfAny(value, "visible", TrimLines(scene.VisibleEntities, 8, 160));
         AddIfAny(value, "items", TrimLines(scene.NearbyItems, 6, 140));
+        AddIfAny(value, "scenery", TrimLines(scene.Scenery ?? Array.Empty<string>(), 10, 160));
         AddIfAny(value, "events", TrimLines(scene.RecentEvents, 4, 180));
         return value;
     }

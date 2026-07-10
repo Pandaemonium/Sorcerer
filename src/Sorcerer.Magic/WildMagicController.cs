@@ -423,14 +423,19 @@ public sealed class WildMagicController : IWildMagicController
     }
 
     /// <summary>
-    /// Runs the LLM router (if one is wired) and unions its picks with keyword routing. A router
-    /// failure, timeout, or empty answer degrades cleanly to keyword-only selection; only outer
-    /// cancellation propagates.
+    /// Uses deterministic routing first and consults the slow semantic router only for an opaque
+    /// or under-routed multi-clause spell. A router failure, timeout, or empty answer degrades
+    /// cleanly to keyword-only selection; only outer cancellation propagates.
     /// </summary>
     private async Task<IReadOnlyList<CapabilityCard>> RouteCapabilitiesAsync(
         string spellText,
         CancellationToken cancellationToken)
     {
+        if (!_capabilities.ShouldConsultRouter(spellText))
+        {
+            return _capabilities.Select(spellText);
+        }
+
         IReadOnlyList<string> routerNames = Array.Empty<string>();
         try
         {
@@ -463,13 +468,13 @@ public sealed class WildMagicController : IWildMagicController
         var requiredContext = selectedCapabilities
             .SelectMany(card => card.RequiredContext)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var contextView = engine.MagicContext(operationIndex, requiredContext);
+        var contextView = engine.MagicContext(operationIndex, requiredContext, spellText);
         return new SpellRequest(
             spellText,
             contextView,
             operationIndex.Names,
             selectedCapabilities,
-            _capabilities.CapabilityIndex());
+            _capabilities.CapabilityNames());
     }
 
     private void Audit(

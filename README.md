@@ -40,15 +40,42 @@ The short pitch:
 This repository now contains the first playable Godot/C# slice. The shared backend drives
 both the JSON-first CLI and a Godot ASCII GUI with map interaction, spell entry, command
 entry, provider/model controls, pending casts, inventory/status/promise panels, and an imperial
-encounter scenario. The current chamber also includes shared-engine item verbs,
+encounter scenario. Pending casts can be answered through a four-game casting repertoire; the
+Bone-Song rhythm entry presents one carved drum with center, edge, and rim strike marks, distinct
+swooping note approaches, and shockwave-versus-dud feedback. The current chamber also includes
+shared-engine item verbs,
 equipment/focus handling, readable and examinable fixtures, a locked cell, a prisoner
 rescue consequence, origins and soul/body stats, deeds/legend/faction pressure, first-pass
 social bonds, and a visible promise that can be realized in play. The first procedural-world
 slice is also live: travel snapshots zones, lazily generates region-flavored places, exposes
 an atlas/world card, feeds region affordances into the magic resolver, and can turn bound site
-promises into generated places. A minimal seeded world roll varies realm status, ruler, and
-effective imperial grip, and generated zones now include a resident NPC seeded from the region and
-realm profile. Early status-trait depth is live too: concealment affects hostile notice, and
+promises into generated places. Regions and traditions now load from `content/regions`: fourteen
+canon-rooted regions cover every rolled realm, deterministic seed-jittered placement makes them
+reachable on the zone grid, and crossing a realm border names both sides through the shared action
+result. A minimal seeded world roll varies realm status, ruler, and effective imperial grip, and
+keeps the canon rule that exactly one of the four old kingdoms is the free rival. Generated zones
+now compose region-authored semantic props at uneven densities: ordinary scenery, readable hooks,
+magic anchors, and coherent small ensembles all remain targetable spell material. Resolver and
+dialogue context protect actors and hooks in a full-detail lane while carrying ordinary scenery in
+a compact lane, so lushness cannot hide combatants from the model. Generated zones also include a
+deterministic regional population field: named archetypes cluster around settlement centers, thin
+out along their shoulders, and leave common empty wilderness stretches with rare outliers. Every
+generated resident has a culturally specific want and dialogue knowledge; selected archetypes also
+carry regional wares or services through the shared consequence grammar. A deterministic shared
+place graph now turns every regional anchor into a named 3×3 settlement with distinct districts,
+adds smaller hamlets and landmarks, and connects all settlements with physical road-zone paths.
+District identity changes terrain, population, signature sites, travel prose, atlas/world output,
+magic context, and dialogue context. Settlement lead residents also seed the first provider-free
+generated journeys: examine the person, receive a claim/promise pointing at a real landmark, and
+reach that exact zone to realize named evidence and canon through the existing promise system. Early
+significant interiors are live as persistent linked zones: every regional center has one culturally
+specific site, while the capital has separate palace and archive spaces. Shared `enter`/`leave`
+commands carry followers, consume ordinary turns, expose the same context actions in Godot and the
+CLI, and preserve interior people, fixtures, terrain, exploration, and magical changes across
+return trips and save/load. Restricted thresholds accept ordinary keys plus permission or
+open/forced state that validated dialogue and magic can create; they are never invisible plot
+locks. See [docs/SIGNIFICANT_INTERIORS.md](docs/SIGNIFICANT_INTERIORS.md). The early status-trait
+depth is live too: concealment affects hostile notice, and
 burning, poisoning, and mending tick through the shared turn pump. Minimal trigger depth is live as
 well: delayed effects and aura pulses are stored in a `TriggerLedger` and fire through the same
 engine turn pump. Terrain has begun reacting too: water can extinguish burning into mist, fire can
@@ -72,6 +99,11 @@ with Emperor Odran as a normal killable actor, victory/defeat run completion, ru
 chronicles, and inert cross-run memorial records. The CLI includes a spell eval harness, transcript
 replay, and an unattended episode runner with JSONL logs plus invariant checks for agent
 playtesting.
+
+Wild-magic resolution now uses a latency-first routed request: obvious spells skip the semantic
+router, selected cards expose only their operations and required state slices, and live providers
+receive compact target/resource JSON rather than the rich engine inspection view. Engine
+validation and transactional application still use the full authoritative state and registry.
 
 Recommended first read:
 
@@ -135,7 +167,8 @@ The CLI should support:
 - perfect debug state when requested
 - visible enemies, NPCs, floor items, props, and terrain
 - inventory, equipment, reagents, curses, promises, journal, rumors, standing, and messages
-- current zone/region, atlas/world affordances, and travel commands
+- current zone/region/place (including interiors), atlas/world affordances, travel, enter, and
+  leave commands
 - save/load, transcript replay, run status, and optional debug-perfect state
 - mock LLM mode for fast deterministic CLI/agent testing
 - live provider mode for resolver evaluation

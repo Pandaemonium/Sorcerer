@@ -878,7 +878,16 @@ public static class SpellResolutionJson
         y = 0;
         if (raw is System.Collections.IEnumerable outer && raw is not string)
         {
-            foreach (var first in outer)
+            var outerValues = outer.Cast<object?>().ToArray();
+            if (outerValues.Length >= 2
+                && outerValues[0] is not System.Collections.IEnumerable
+                && int.TryParse(Convert.ToString(outerValues[0]), out x)
+                && int.TryParse(Convert.ToString(outerValues[1]), out y))
+            {
+                return true;
+            }
+
+            foreach (var first in outerValues)
             {
                 if (first is System.Collections.IEnumerable inner && first is not string)
                 {

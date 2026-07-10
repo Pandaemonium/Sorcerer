@@ -40,14 +40,16 @@ public static class TextureGrammar
         {
             "hollowmere_margin" => Pick(new[] { "memory shrine", "reed ledger", "mudwise post", "listening basket" }, rng),
             "wild_border" => Pick(new[] { "boneflower marker", "rain altar", "broken-law cairn", "color snare" }, rng),
-            _ => Pick(new[] { "survey marker", "censorate plinth", "permit stone", "marble witness" }, rng),
+            _ when region.RealmId.Equals("empire", StringComparison.OrdinalIgnoreCase) =>
+                Pick(new[] { "survey marker", "censorate plinth", "permit stone", "marble witness" }, rng),
+            _ => $"{Pick(region.TerrainTags.Count > 0 ? region.TerrainTags : new[] { "road" }, rng).Replace('_', '-')} waymark",
         };
         var name = $"{adjective} {noun}";
         var localSubject = region.Id switch
         {
             "hollowmere_margin" => "hollowmere",
             "wild_border" => "wild_border",
-            _ => "vigovia",
+            _ => region.RealmId,
         };
         var description = region.Id switch
         {
@@ -55,8 +57,10 @@ public static class TextureGrammar
                 $"{name} keeps local water-memory in public view, under the careful occupation of {realm.Ruler}.",
             "wild_border" =>
                 $"{name} treats rule and weather as negotiable neighbors under {realm.Ruler}.",
-            _ =>
+            _ when region.RealmId.Equals("empire", StringComparison.OrdinalIgnoreCase) =>
                 $"{name} records the empire's polite belief that anything strange can be measured before it matters.",
+            _ =>
+                $"{name} stands in {region.Name}, ordinary local work in a realm now {realm.Status} under {realm.Ruler}.",
         };
         var subjects = region.TerrainTags
             .Concat(region.VoiceTags)
@@ -66,13 +70,22 @@ public static class TextureGrammar
         return new TextureFeature(name, description, subjects);
     }
 
-    private static IReadOnlyList<string> AdjectivesFor(RegionDefinition region) =>
-        region.Id switch
+    private static IReadOnlyList<string> AdjectivesFor(RegionDefinition region)
+    {
+        var descriptors = region.Id switch
         {
             "hollowmere_margin" => HollowmereAdjectives,
             "wild_border" => WildAdjectives,
-            _ => ImperialAdjectives,
+            _ when region.RealmId.Equals("empire", StringComparison.OrdinalIgnoreCase) => ImperialAdjectives,
+            _ => region.VoiceTags
+                .Concat(region.TerrainTags)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.Replace('_', '-'))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
         };
+        return descriptors.Length > 0 ? descriptors : new[] { "weathered" };
+    }
 
     private static string Pick(IReadOnlyList<string> values, IRng rng) =>
         values[Math.Clamp(rng.NextInt(0, values.Count), 0, values.Count - 1)];

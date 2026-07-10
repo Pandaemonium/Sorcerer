@@ -66,6 +66,8 @@ public static class TextCommandParser
             "read" => new ReadCommand(NullIfEmpty(rest)),
             "examine" or "study" => new ExamineCommand(NullIfEmpty(rest)),
             "open" => new OpenCommand(NullIfEmpty(rest)),
+            "enter" => new EnterCommand(NullIfEmpty(rest)),
+            "leave" or "exit_interior" => new LeaveCommand(),
             "possess" => new PossessCommand(NullIfEmpty(rest)),
             "standing" => new StandingCommand(),
             "followers" => new FollowersCommand(),

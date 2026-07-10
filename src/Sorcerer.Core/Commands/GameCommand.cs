@@ -93,6 +93,10 @@ public sealed record ExamineCommand(string? Target = null) : GameCommand;
 
 public sealed record OpenCommand(string? Target = null) : GameCommand;
 
+public sealed record EnterCommand(string? Target = null) : GameCommand;
+
+public sealed record LeaveCommand() : GameCommand;
+
 public sealed record PossessCommand(string? Target = null) : GameCommand;
 
 public sealed record StandingCommand() : GameCommand;

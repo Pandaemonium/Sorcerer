@@ -35,7 +35,7 @@ public sealed class OllamaSpellProviderTests
         Assert.Equal("addStatus", result.Resolution!.Effects.Single().Type);
         Assert.Equal(2, handler.RequestBodies.Count);
         Assert.Contains("\"num_ctx\":8192", handler.RequestBodies[0]);
-        Assert.Contains("Every target-taking effect", handler.RequestBodies[0]);
+        Assert.Contains("Use only supported types and exact target ids", handler.RequestBodies[0]);
         Assert.Contains("Previous invalid answer", handler.RequestBodies[1]);
         Assert.Contains("hiding, cover, protection", handler.RequestBodies[1]);
     }

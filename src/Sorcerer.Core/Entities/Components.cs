@@ -116,6 +116,25 @@ public sealed record ClaimSourceComponent(IReadOnlyList<ClaimSeed> Claims) : IEn
 
 public sealed record InteractableComponent(IReadOnlyList<string> Verbs) : IEntityComponent;
 
+public sealed record InteriorEntranceComponent(
+    string InteriorZoneId,
+    string InteriorId,
+    string Name,
+    string Kind,
+    string Summary,
+    string AccessPolicy,
+    string? RequiredItem,
+    string ExteriorZoneId,
+    int ExteriorX,
+    int ExteriorY) : IEntityComponent;
+
+public sealed record InteriorExitComponent(
+    string ExteriorZoneId,
+    string InteriorId,
+    string InteriorName,
+    int ExteriorX,
+    int ExteriorY) : IEntityComponent;
+
 public sealed record SoulComponent(string SoulId) : IEntityComponent;
 
 public sealed record ProfileComponent(

@@ -1,0 +1,107 @@
+{
+  "interiors": [
+    {"regionId":"imperial_encounter","bindings":[{"districtId":"evidence_yard","interiorId":"sealed_registry"}],"definitions":[
+      {"id":"sealed_registry","name":"Sealed Evidence Registry","kind":"archive","summary":"A cold records hall where confiscated objects are taught to become inventory numbers.","floorTerrain":"registry_tile","wallMaterial":"marble","accessPolicy":"restricted","requiredItem":"imperial cell key","tags":["archive","containment","evidence"],"features":[
+        {"name":"breathing evidence cabinet","description":"Its numbered drawers inhale whenever an undocumented wonder enters the room.","glyph":"#","material":"brass","tags":["evidence","cabinet"]},
+        {"name":"confiscation index wheel","description":"Thousands of red tabs orbit a blank category reserved for the player.","glyph":"O","material":"brass","tags":["index","law"]},
+        {"name":"scrubbed testimony desk","description":"Grooves in the marble show where witnesses gripped it before revising themselves.","glyph":"=","material":"marble","tags":["testimony","erased"]}
+      ]}
+    ]},
+    {"regionId":"vigovian_capital","bindings":[{"districtId":"inner_court","interiorId":"odran_palace"},{"districtId":"archive_quarter","interiorId":"living_archive"}],"definitions":[
+      {"id":"odran_palace","name":"Palace of Reasonable Peace","kind":"palace","summary":"White chambers turn fear into procedure before it can reach the throne.","floorTerrain":"palace_marble","wallMaterial":"marble","accessPolicy":"restricted","requiredItem":"imperial cell key","tags":["palace","court","empire"],"features":[
+        {"name":"petition weather ceiling","description":"Clouds of rejected requests drift behind charter-glass and rain only on unauthorized visitors.","glyph":"~","material":"glass","tags":["petition","weather"]},
+        {"name":"precedent throne","description":"The seat is built from rulings rather than stone; each armrest cites the other.","glyph":"T","material":"marble","tags":["throne","precedent"],"blocksMovement":true},
+        {"name":"merciful decree furnace","description":"Unissued mercies burn with a clean blue flame that warms nobody.","glyph":"F","material":"brass","tags":["decree","fire"]}
+      ]},
+      {"id":"living_archive","name":"Archive of Moving Responsibility","kind":"archive","summary":"File bridges and mobile cabinets follow whichever office is currently to blame.","floorTerrain":"archive_tile","wallMaterial":"marble","accessPolicy":"restricted","requiredItem":"imperial cell key","tags":["archive","records","empire"],"features":[
+        {"name":"ambulatory docket cabinet","description":"Brass feet carry it one room away whenever its contents become relevant.","glyph":"#","material":"brass","tags":["docket","moving"]},
+        {"name":"sealed contradiction table","description":"Two true reports lie beneath glass because filing either would invalidate the room.","glyph":"=","material":"glass","tags":["contradiction","records"]},
+        {"name":"responsibility index","description":"Every official name points carefully toward a different official name.","glyph":"I","material":"vellum","tags":["index","bureaucracy"]}
+      ]}
+    ]},
+    {"regionId":"hollowmere_margin","bindings":[{"districtId":"reed_market","interiorId":"memory_house"}],"definitions":[
+      {"id":"memory_house","name":"House of Borrowed Dryness","kind":"folk_house","summary":"Willow rooms shelter medicines, fugitives, and memories that cannot safely sleep together.","floorTerrain":"woven_reed_floor","wallMaterial":"willow","accessPolicy":"public","tags":["refuge","memory","folk_magic"],"features":[
+        {"name":"names-in-water hearth","description":"A shallow warm basin repeats household names without ever boiling.","glyph":"O","material":"clay","tags":["hearth","memory"]},
+        {"name":"three-purpose reed cupboard","description":"Its bundles are labeled roof, fever, and soldiers-at-the-door.","glyph":"#","material":"reed","tags":["medicine","shelter"]},
+        {"name":"red-thread guest bed","description":"One loose knot decides whether the sleeper is guest, kin, or hidden.","glyph":"=","material":"willow","tags":["refuge","guest"]}
+      ]}
+    ]},
+    {"regionId":"stalnaz_highlands","bindings":[{"districtId":"light_cisterns","interiorId":"afterlight_conservatory"}],"definitions":[
+      {"id":"afterlight_conservatory","name":"Afterlight Conservatory","kind":"music_hall","summary":"Blue crystal chambers store finished songs beside daylight not yet spent.","floorTerrain":"resonant_crystal","wallMaterial":"white_stone","accessPolicy":"public","tags":["music","light","crystal"],"features":[
+        {"name":"evening light organ","description":"Crystal pipes play colors the sun forgot to use.","glyph":"H","material":"crystal","tags":["instrument","light"]},
+        {"name":"patient fracture plinth","description":"A cracked royal crystal is being allowed to finish becoming something else.","glyph":"|","material":"crystal","tags":["fracture","royal"]},
+        {"name":"snow-listening gallery","description":"Open facets translate avalanche pressure into a low choral warning.","glyph":"=","material":"stone","tags":["snow","warning"]}
+      ]}
+    ]},
+    {"regionId":"brall_whaleholds","bindings":[{"districtId":"tale_hall","interiorId":"many_witness_hall"}],"definitions":[
+      {"id":"many_witness_hall","name":"Hall of Many Correct Witnesses","kind":"great_hall","summary":"Whalebone rafters preserve every improved version of Brall's favorite disasters.","floorTerrain":"bone_hall_floor","wallMaterial":"whalebone","accessPolicy":"public","tags":["story","hall","bone"],"features":[
+        {"name":"contradictory hero frieze","description":"Each carved rescuer points discreetly at a different drowning person.","glyph":"W","material":"bone","tags":["hero","story"]},
+        {"name":"storm-story cask","description":"Ale inside tastes stronger whenever thunder supplies punctuation.","glyph":"O","material":"wood","tags":["ale","storm"]},
+        {"name":"witness improving bench","description":"Seat-worn bone encourages the body toward confident exaggeration.","glyph":"=","material":"bone","tags":["witness","bench"]}
+      ]}
+    ]},
+    {"regionId":"ryolan_racefields","bindings":[{"districtId":"witness_square","interiorId":"oath_court"}],"definitions":[
+      {"id":"oath_court","name":"Court of the Unfinished Finish","kind":"oath_court","summary":"Copper rings and preserved wheel marks arbitrate races whose endings remain mobile.","floorTerrain":"red_clay_court","wallMaterial":"red_stone","accessPolicy":"public","tags":["oath","race","witness"],"features":[
+        {"name":"yesterday wheel impression","description":"The clay holds a winning wheel that will not arrive until tomorrow.","glyph":"O","material":"clay","tags":["wheel","time"]},
+        {"name":"public oath rail","description":"Copper rings tighten around any promise stated merely for applause.","glyph":"-","material":"copper","tags":["oath","public"]},
+        {"name":"disputed finish tapestry","description":"Dust-colored thread rearranges the leaders whenever nobody argues.","glyph":"#","material":"cloth","tags":["race","dispute"]}
+      ]}
+    ]},
+    {"regionId":"vint_weaveways","bindings":[{"districtId":"argument_market","interiorId":"counterloom"}],"definitions":[
+      {"id":"counterloom","name":"The Counterloom","kind":"public_workshop","summary":"A civic loom where every pattern must survive contradiction before becoming cloth.","floorTerrain":"woven_workshop","wallMaterial":"wood","accessPolicy":"public","tags":["loom","argument","public"],"features":[
+        {"name":"rebuttal shuttle","description":"It refuses any thread whose color cannot defend itself.","glyph":"/","material":"wood","tags":["shuttle","argument"]},
+        {"name":"minority-pattern frame","description":"The losing design is preserved here until fashion admits its mistake.","glyph":"#","material":"wood","tags":["pattern","memory"]},
+        {"name":"tariff-gray dye sink","description":"Official gray separates into seven prohibited colors when washed.","glyph":"O","material":"stone","tags":["dye","tariff"]}
+      ]}
+    ]},
+    {"regionId":"threen_canals","bindings":[{"districtId":"letter_square","interiorId":"civic_letterhouse"}],"definitions":[
+      {"id":"civic_letterhouse","name":"Civic Letterhouse","kind":"scriptorium","summary":"Engineers and scribes design letters capable of surviving water, law, and public use.","floorTerrain":"inked_tile","wallMaterial":"brick","accessPolicy":"public","tags":["letters","canal","scriptorium"],"features":[
+        {"name":"unapproved alphabet wall","description":"One letter repeatedly escapes its chalk box to modify nearby notices.","glyph":"L","material":"stone","tags":["alphabet","wild"]},
+        {"name":"canal-pressure writing desk","description":"Water beneath the tabletop powers a pen that never lifts.","glyph":"=","material":"brass","tags":["engineering","writing"]},
+        {"name":"drowned portfolio rack","description":"Pages drip upward toward the ceiling and remain perfectly legible.","glyph":"#","material":"wood","tags":["portfolio","water"]}
+      ]}
+    ]},
+    {"regionId":"monteary_grasslands","bindings":[{"districtId":"grass_hearth","interiorId":"mare_dreamhouse"}],"definitions":[
+      {"id":"mare_dreamhouse","name":"Mare-Dream House","kind":"healing_stable","summary":"An open-roofed stable where people wait quietly for horses to explain the roads they dreamed.","floorTerrain":"sweetgrass_floor","wallMaterial":"white_wood","accessPolicy":"public","tags":["horse","dream","healing"],"features":[
+        {"name":"unridden dream saddle","description":"Tooling maps a road no waking rider has found.","glyph":"=","material":"leather","tags":["saddle","dream"]},
+        {"name":"east-wind manger","description":"Empty wood smells of the pasture currently speaking through it.","glyph":"#","material":"wood","tags":["wind","horse"]},
+        {"name":"foal-forgiveness rail","description":"Braided grass loosens when a frightened animal chooses trust.","glyph":"-","material":"wood","tags":["foal","bond"]}
+      ]}
+    ]},
+    {"regionId":"ontrian_clanlands","bindings":[{"districtId":"many_hearths","interiorId":"ancestor_guesthouse"}],"definitions":[
+      {"id":"ancestor_guesthouse","name":"Guesthouse of the Present Dead","kind":"clan_sanctum","summary":"One large hearth seats living guests among ancestors with strong procedural opinions.","floorTerrain":"ash_warm_stone","wallMaterial":"old_wood","accessPolicy":"public","tags":["ancestor","hearth","guest"],"features":[
+        {"name":"absent-cousin chair","description":"The empty chair interrupts whenever kinship is described too simply.","glyph":"h","material":"wood","tags":["kinship","ancestor"]},
+        {"name":"many-coal hearth","description":"Each ember belongs to a clan; sparks favor families currently outside.","glyph":"O","material":"stone","tags":["hearth","clan"]},
+        {"name":"genealogy guest rope","description":"New knots appear when hospitality changes a family more than blood did.","glyph":"~","material":"fiber","tags":["guest","genealogy"]}
+      ]}
+    ]},
+    {"regionId":"gontark_crags","bindings":[{"districtId":"rope_square","interiorId":"curse_map_vault"}],"definitions":[
+      {"id":"curse_map_vault","name":"Vault of Geographically Responsible Curses","kind":"curse_vault","summary":"Black ropes connect grudges, cliffs, and households so each curse can be returned accurately.","floorTerrain":"black_shale_floor","wallMaterial":"shale","accessPolicy":"restricted","requiredItem":"grave salt","tags":["curse","vault","map"],"features":[
+        {"name":"grievance map","description":"Black cords measure injury rather than distance and cross walls freely.","glyph":"#","material":"fiber","tags":["map","grievance"]},
+        {"name":"misaddressed curse jar","description":"Something inside keeps apologizing to the wrong family.","glyph":"o","material":"clay","tags":["curse","error"]},
+        {"name":"seventh-warning shelf","description":"The empty shelf casts the shadow of a warning nobody admits removing.","glyph":"=","material":"shale","tags":["warning","missing"]}
+      ]}
+    ]},
+    {"regionId":"parn_sunroads","bindings":[{"districtId":"well_court","interiorId":"house_of_third_water"}],"definitions":[
+      {"id":"house_of_third_water","name":"House of the Third Water","kind":"well_house","summary":"A cool sandstone chamber listens to three wells, only two of which contain water.","floorTerrain":"cool_sandstone","wallMaterial":"sandstone","accessPolicy":"public","tags":["well","song","shade"],"features":[
+        {"name":"unborn-name cistern","description":"Its echo answers with a traveler's name several years too early.","glyph":"O","material":"stone","tags":["well","prophecy"]},
+        {"name":"folded noon awning","description":"A square of late afternoon waits beneath blue cloth.","glyph":"#","material":"cloth","tags":["shade","time"]},
+        {"name":"caravan thirst ledger","description":"Water debts are recorded beside the roads that caused them.","glyph":"=","material":"copper","tags":["caravan","water"]}
+      ]}
+    ]},
+    {"regionId":"rentacosta_harbor","bindings":[{"districtId":"lowtide_exchange","interiorId":"submerged_exchange"}],"definitions":[
+      {"id":"submerged_exchange","name":"Exchange Below Low Tide","kind":"tide_market","summary":"A shell-vaulted market opens between tides to trade cargo, songs, and drowned testimony.","floorTerrain":"tidepool_mosaic","wallMaterial":"shell","accessPolicy":"public","tags":["trade","tide","sound_ink"],"features":[
+        {"name":"returning-water contract table","description":"Every agreement shortens as seawater climbs its legs.","glyph":"=","material":"brass","tags":["contract","tide"]},
+        {"name":"drowned voice cabinet","description":"Shell drawers preserve testimony in the speaker's exact saltwater voice.","glyph":"#","material":"shell","tags":["voice","drowned"]},
+        {"name":"channel-score basin","description":"Ripples rewrite the safe harbor melody minute by minute.","glyph":"O","material":"stone","tags":["sound_ink","route"]}
+      ]}
+    ]},
+    {"regionId":"wild_border","bindings":[{"districtId":"festival_after","interiorId":"tent_after_festival"}],"definitions":[
+      {"id":"tent_after_festival","name":"The Tent After the Festival","kind":"impossible_interior","summary":"A jewel-bright pavilion is larger than the district outside and remembers guests who have not arrived.","floorTerrain":"remembered_confetti","wallMaterial":"living_cloth","accessPolicy":"public","tags":["festival","impossible","memory"],"features":[
+        {"name":"dance of absent feet","description":"Footprints circle the floor and make room for the player.","glyph":"~","material":"light","tags":["dance","absence"]},
+        {"name":"tomorrow mask rack","description":"Each mask resembles whoever will wear it next, badly frightened.","glyph":"#","material":"bone","tags":["mask","future"]},
+        {"name":"inside-out flower chandelier","description":"Roots drink ceiling rain while blossoms illuminate the soil below.","glyph":"*","material":"plant","tags":["flower","impossible"]}
+      ]}
+    ]}
+  ]
+}

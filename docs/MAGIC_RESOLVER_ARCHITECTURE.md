@@ -63,30 +63,29 @@ A capability card describes one family of magical expression:
 The resolver should receive:
 
 - a compact always-on core
-- a one-line index of available capabilities
+- a compact name-only capability retry menu
 - full detail for selected cards only
 - a narrowed schema or operation list when practical
-- a `resolverLens` block derived from body/soul stats and magical signature
+- a distilled `lens` block derived from body/soul stats, magical signature, and place
 
 Routing should be recall-biased. Loading one extra relevant card is much less harmful than
 missing the card that would make a spell work.
 
 Prompt assembly for both live providers (Ollama, OpenAI-compatible) lives in one place,
-`SpellPromptBuilder`. The system prompt is ordered static-first — core rules, the consequence-type
-line, the capability index — then the per-cast tail (supported-operation list, operation guidance
-rendered as **compact text lines**, loaded capability blocks), so a local backend can prompt-cache
-the stable prefix across consecutive casts. The operation catalog is therefore prompt text, **not**
-serialized into the user-message context JSON (which drops it and all null fields on the wire).
-When routing selects nothing, the operation index still advertises every operation by name (recall
-floor). If the loaded mechanics don't fit, the model may answer `{"needsCapability":"name"}` and the
-controller loads that card and re-resolves once. Per-call token/timing stats
+`SpellPromptBuilder`. The system prompt is ordered static-first — distilled core rules, the
+consequence vocabulary, and a name-only retry menu — then the per-cast supported operations and
+selected card detail, so a local backend can prompt-cache the stable prefix. The user message is a
+purpose-built compact projection, not serialized `MagicContextView`: it uses short resource/target
+records and includes only routed state slices. Operations and recent event history never appear in
+that JSON. If the loaded mechanics don't fit, the model may answer
+`{"needsCapability":"name"}` and the controller loads that card and re-resolves once. Per-call token/timing stats
 (`ProviderCallStats`) ride the audit for latency tuning; see docs/OPTIMIZATION_PLAN.md.
 
 Current implementation:
 
-- `CapabilityRegistry.Select` ranks cards by trigger-hit count (ties broken by registry order),
-  expands one hop via each card's `CommonCombos`, and applies a dynamic cap (5 with any hits else
-  3, +1 for a compositional connective like `" and "`, hard ceiling 7) instead of a flat cap.
+- `CapabilityRegistry.Select` ranks direct trigger hits (ties broken by registry order), unions
+  bounded explicit router picks, and applies a dynamic cap with a hard ceiling of five. It does not
+  expand speculative `CommonCombos`.
 - Cards load from `content/capabilities/*.json` via `CapabilityCardLoader` (same shape/loader
   pattern as `OperationCardLoader` for `content/operations`), with an in-code fallback set that
   covers the core card families (terrain_shape, summoning, transformation, prophecy, conjure_item,
@@ -94,10 +93,10 @@ Current implementation:
   behavior_control, environment_flow). Content cards can add newer routed families such as
   `fixture_manifestation`, which unlocks `conjureFixture` for discrete shrines, markers,
   landmarks, hazards, and props.
-- `WildMagicController.ResolveAsync` calls `Select` per cast and builds a narrowed `OperationIndex`
-  (core operations, per `IOperation.IsCore`, plus the effect types the routed cards unlock) instead
-  of always advertising the full registry; `OllamaSpellProvider` assembles the core prompt, the
-  always-on one-line capability index, and only the routed cards' detail blocks/examples.
+- `WildMagicController.ResolveAsync` performs deterministic selection first. It calls the semantic
+  router only when no capability trigger or common core intent fits, then builds an operation index
+  from the six-op general palette plus routed types. The full descriptive capability index goes only
+  to that rare router call; the resolver gets selected detail and compact retry names.
 - `WildMagicController.ApplyResolved` re-parses the materialized resolution and validates it against
   the current state. A materialized spell can therefore be applied after a save/load or by replay
   without trusting stale provider context as state authority.
@@ -131,6 +130,22 @@ region, entity tags, affordances, promises, and recent trigger words. Only acces
 sections are injected; draft cards/sections are excluded. The provider may use these cards for
 canon and voice, but lore still becomes mechanically true only when the model proposes supported
 operations that pass validation.
+
+## Entity And Scenery Context Lanes
+
+The engine-side `MagicContextView` retains two targetable lanes, but routed resolver requests gate
+and cap them before `SpellPromptBuilder` creates the provider wire:
+
+- important perceived actors always remain targetable (12 total cards including the caster before
+  the wire projection removes the duplicate caster); hook-bearing objects enter only when selected
+  or when the routed card asks for visible entities/spell anchors;
+- `scenery` enters only for object-aware mechanics and is capped at six;
+- terrain, promises, and lore enter only through matching `RequiredContext` keys; hidden entities
+  additionally require a name match or explicit remote intent, and are capped at four.
+
+Both lanes contain valid target ids and enter the repair target cheat sheet. The compact lane is a
+prompt-budget distinction only; scenery remains
+an ordinary entity and all application-time reference binding/visibility validation is unchanged.
 
 ## Operation Registry
 

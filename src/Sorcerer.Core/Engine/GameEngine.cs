@@ -83,6 +83,64 @@ public sealed class GameEngine
         };
     }
 
+    public ActionResult EnterInterior(string? target)
+    {
+        var turnBefore = State.Turn;
+        var transition = _generationSystem.EnterInterior(target);
+        if (!transition.Success)
+        {
+            return ActionResult.Simple(
+                "enter",
+                success: false,
+                consumedTurn: false,
+                turnBefore,
+                State.Turn,
+                transition.Error ?? "You cannot enter here.");
+        }
+
+        var turnDeltas = AdvanceTurn();
+        var deltas = transition.Deltas.Concat(turnDeltas).ToArray();
+        return new ActionResult
+        {
+            Action = "enter",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = State.Turn,
+            Messages = deltas.PlayerMessages().ToArray(),
+            Deltas = deltas,
+        };
+    }
+
+    public ActionResult LeaveInterior()
+    {
+        var turnBefore = State.Turn;
+        var transition = _generationSystem.LeaveInterior();
+        if (!transition.Success)
+        {
+            return ActionResult.Simple(
+                "leave",
+                success: false,
+                consumedTurn: false,
+                turnBefore,
+                State.Turn,
+                transition.Error ?? "You cannot leave from here.");
+        }
+
+        var turnDeltas = AdvanceTurn();
+        var deltas = transition.Deltas.Concat(turnDeltas).ToArray();
+        return new ActionResult
+        {
+            Action = "leave",
+            Success = true,
+            ConsumedTurn = true,
+            TurnBefore = turnBefore,
+            TurnAfter = State.Turn,
+            Messages = deltas.PlayerMessages().ToArray(),
+            Deltas = deltas,
+        };
+    }
+
     public ActionResult Atlas()
     {
         var turn = State.Turn;
@@ -100,6 +158,10 @@ public sealed class GameEngine
     /// Used to steer NPC dialogue toward the local register, the same block the resolver lens reads.
     /// </summary>
     public string CurrentRegionVoice => _generationSystem.CurrentRegion.VoiceSummary;
+
+    public WorldPlaceProfile CurrentPlace => _generationSystem.CurrentPlace;
+
+    public NearestSettlement CurrentNearestSettlement => _generationSystem.CurrentNearestSettlement;
 
     public IReadOnlyList<StateDelta> RunActorTurns() => _aiSystem.RunActorTurns();
 
@@ -678,8 +740,9 @@ public sealed class GameEngine
 
     public MagicContextView MagicContext(
         OperationIndex operations,
-        IReadOnlyCollection<string>? requiredContext = null) =>
-        _viewBuilder.MagicContext(operations, requiredContext);
+        IReadOnlyCollection<string>? requiredContext = null,
+        string? resolverQuery = null) =>
+        _viewBuilder.MagicContext(operations, requiredContext, resolverQuery);
 
     public GameView View() => _viewBuilder.View();
 

@@ -449,8 +449,10 @@ Recommended first caps:
   multi-question input.
 - Maximum card payload items by default: 5.
 - `rumors.full`: 12, with `truncated`.
-- `zone.current` / `zone.npcs`: 10 visible entities/items/NPCs, ordered by
-  distance and salience.
+- `zone.current` / `zone.npcs`: perceived actors and hook-bearing entities are protected and
+  ordered deterministically; up to ten nearest ordinary fixtures travel separately as compact
+  scenery lines (`name`, target id, range, material, tags). Dense markets therefore remain
+  discussable without hiding a resident, hostile, readable, service, or promise anchor.
 - `npc.relationship_memory`: 6, ordered by salience and recency.
 - `claims.recent` / `promise.hooks`: 8, ordered by relevance, promise status,
   and recency.

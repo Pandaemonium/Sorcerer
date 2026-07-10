@@ -7,8 +7,8 @@ namespace Sorcerer.Magic.Auditing;
 /// <summary>
 /// Capability-routing metrics for one cast: which capability cards were selected, how many
 /// operations the resolver prompt advertised after routing narrowed the registry, and the byte size
-/// of the serialized magic context. These make "routing trimmed the prompt" measurable (Phase 2 of
-/// the WildMagic import) so deterministic routing can be tuned before a live router is trusted.
+/// of the rich engine-side context retained in the audit. The latter is not the compact provider-wire
+/// projection; use ProviderStats.PromptTokens for live wire-size comparisons.
 /// </summary>
 public sealed record SpellRoutingRecord(
     IReadOnlyList<string> SelectedCapabilities,

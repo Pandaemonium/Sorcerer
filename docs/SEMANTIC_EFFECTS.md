@@ -1,6 +1,6 @@
 # Semantic Effects - Living Descriptions As Dormant Mechanics
 
-Status: proposed. Companion to [CORE_EXECUTION_MODEL.md](CORE_EXECUTION_MODEL.md),
+Status: first broad world-content slice implemented. Companion to [CORE_EXECUTION_MODEL.md](CORE_EXECUTION_MODEL.md),
 [MAGIC_RESOLVER_ARCHITECTURE.md](MAGIC_RESOLVER_ARCHITECTURE.md), and
 [ENTITY_MODEL.md](ENTITY_MODEL.md). Adapted from the Wild Magic prototype's design wisdom;
 rebuilt on Sorcerer's entity/operation/view architecture.
@@ -44,9 +44,11 @@ This has one hard consequence:
 
 > **Attach traits to entities and items, never to "the ambient space around things."**
 
-In Sorcerer terms: every entity surfaced into the `MagicContextView` (RFC section 4) already
-carries its name, materials, and tags. A trait on that entity rides into the resolver's
-context **for free and reliably** whenever the entity is perceived. A free-floating "semantic
+In Sorcerer terms: every entity surfaced into `MagicContextView.visible` or compact
+`MagicContextView.scenery` already carries its name, material, and tags. Full cards are reserved
+for actors and hook-bearing entities; ordinary generated props use the compact lane so dense
+scenery cannot evict the people or objects that matter tactically. A trait on an entity rides into
+the resolver's context **for free and reliably** whenever the entity is perceived. A free-floating "semantic
 field on nearby tiles" is the expensive, leaky version - we would have to actively gather and
 inject it, and it would usually be absent exactly when it mattered. Entity-attached traits
 are Chekhov's guns that stay on the mantel; ambient traits wander off before Act 3.

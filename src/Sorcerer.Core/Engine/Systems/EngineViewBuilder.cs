@@ -37,7 +37,8 @@ public sealed class EngineViewBuilder
 
     public MagicContextView MagicContext(
         OperationIndex operations,
-        IReadOnlyCollection<string>? requiredContext = null)
+        IReadOnlyCollection<string>? requiredContext = null,
+        string? resolverQuery = null)
     {
         var caster = _state.ControlledEntity;
         var casterPosition = caster.Get<PositionComponent>().Position;
@@ -46,58 +47,115 @@ public sealed class EngineViewBuilder
         var soulRecord = CharacterMath.EnsureSoulRecord(_state, caster);
         var statuses = BuildStatusCards(caster);
         var perception = _perceptionSystem.RefreshControlled();
+        var routedContext = requiredContext is not null;
         // By default the resolver only sees what the caster perceives (plus the caster). Entities the
         // player cannot perceive are included only when a routed capability asks for them via its
         // RequiredContext (e.g. a memory-edit spell reaching an unseen mind); otherwise they are
         // off-screen context the spell does not need. See docs/CAPABILITY_ROUTING.md Lever B.
-        var includeHidden = requiredContext is not null && requiredContext.Contains("hidden_entities");
-        // Nearest-first cap: a crowded zone should not scale the resolver prompt without bound.
-        // The caster always survives the cap; relative offsets are omitted (the model has both
-        // positions, and the null is dropped from the wire). See docs/OPTIMIZATION_PLAN.md WS2.5.
-        var visible = _state.Entities.Values
+        var hiddenContextRequested = requiredContext is not null && requiredContext.Contains("hidden_entities");
+        var includeContextObjects = !routedContext || RequiresContext(
+            requiredContext,
+            "visible_entities",
+            "spell_anchors",
+            "selected_target",
+            "conjurable_items");
+        // Actors and mechanically important hooks use the full-card lane. Ordinary fixtures use a
+        // separate compact scenery lane, so adding lush clutter cannot evict a hostile, resident,
+        // readable, promise anchor, item, or selected object from resolver context.
+        var perceivedCandidates = _state.Entities.Values
             .Where(entity => entity.TryGet<PositionComponent>(out _))
-            .Where(entity => includeHidden
-                || entity.Id == _state.ControlledEntityId
-                || perception.VisibleEntityIds.Contains(entity.Id))
+            .Where(entity => entity.Id == _state.ControlledEntityId
+                || perception.VisibleEntityIds.Contains(entity.Id));
+        var hiddenPool = hiddenContextRequested
+            ? _state.Entities.Values
+                .Where(entity => entity.TryGet<PositionComponent>(out _))
+                .Where(entity => entity.Id != _state.ControlledEntityId
+                    && !perception.VisibleEntityIds.Contains(entity.Id))
+                .Where(entity => ContextEntityRouting.IsActor(entity) || ContextEntityRouting.IsHookBearing(entity))
+                .OrderBy(entity => entity.Id.Value)
+                .ToArray()
+            : Array.Empty<Entity>();
+        var namedHidden = hiddenPool.Where(entity => IsNamedInQuery(entity, resolverQuery)).ToArray();
+        var hiddenCandidates = (namedHidden.Length > 0
+                ? namedHidden
+                : string.IsNullOrWhiteSpace(resolverQuery) || NamesRemoteIntent(resolverQuery)
+                    ? hiddenPool
+                    : Array.Empty<Entity>())
+            .Take(MagicContextHiddenEntityCap)
+            .ToArray();
+        var includeHidden = hiddenCandidates.Length > 0;
+        var candidates = perceivedCandidates
+            .Concat(hiddenCandidates)
+            .DistinctBy(entity => entity.Id)
+            .ToArray();
+        var orderedCandidates = candidates
             .OrderBy(entity => entity.Id == _state.ControlledEntityId
                 ? -1
                 : GameEngine.Distance(casterPosition, entity.Get<PositionComponent>().Position))
             .ThenBy(entity => entity.Id.Value)
-            .Take(MagicContextVisibleEntityCap)
-            .OrderBy(entity => entity.Id.Value)
-            .Select(entity =>
-            {
-                var pos = entity.Get<PositionComponent>().Position;
-                var actor = entity.TryGet<ActorComponent>(out var entityActor) ? entityActor : null;
-                var physical = entity.TryGet<PhysicalComponent>(out var phys) ? phys : null;
-                var tags = TagsFor(entity);
-                return new PerceivedEntity(
-                    entity.Id.Value,
-                    entity.Name,
-                    entity.TryGet<RenderableComponent>(out var renderable) ? renderable.Glyph : '?',
-                    pos.X,
-                    pos.Y,
-                    RelativeX: null,
-                    RelativeY: null,
-                    actor?.Faction,
-                    physical?.Material ?? "unknown",
-                    tags,
-                    actor?.HitPoints,
-                    actor?.MaxHitPoints,
-                    _perceptionSystem.RelationToPlayer(pos, perception));
-            })
             .ToArray();
+        var actorLane = orderedCandidates
+            .Where(entity => entity.Id == _state.ControlledEntityId || ContextEntityRouting.IsActor(entity))
+            .ToArray();
+        var fullLaneQuery = actorLane
+            .Concat(orderedCandidates
+                .Where(entity => entity.Id != _state.ControlledEntityId)
+                .Where(entity => !ContextEntityRouting.IsActor(entity))
+                .Where(entity => IsSelectedEntity(entity)
+                    || (includeContextObjects && ContextEntityRouting.IsHookBearing(entity))))
+            .DistinctBy(entity => entity.Id)
+            .OrderBy(entity => entity.Id == _state.ControlledEntityId
+                ? -2
+                : includeHidden && IsNamedInQuery(entity, resolverQuery)
+                    ? -1
+                    : GameEngine.Distance(casterPosition, entity.Get<PositionComponent>().Position))
+            .ThenBy(entity => entity.Id.Value);
+        var fullLane = (routedContext ? fullLaneQuery.Take(MagicContextEntityCap) : fullLaneQuery)
+            .Select(entity => ToPerceivedEntity(entity, perception))
+            .ToArray();
+        var scenery = includeContextObjects
+            ? orderedCandidates
+                .Where(ContextEntityRouting.IsCompactScenery)
+                .Where(entity => !IsSelectedEntity(entity))
+                .Take(routedContext ? MagicContextRoutedSceneryCap : MagicContextSceneryCap)
+                .Select(entity =>
+                {
+                    var position = entity.Get<PositionComponent>().Position;
+                    var physical = entity.TryGet<PhysicalComponent>(out var component) ? component : null;
+                    return new SceneryNote(
+                        entity.Id.Value,
+                        entity.Name,
+                        position.X,
+                        position.Y,
+                        physical?.Material ?? "unknown",
+                        TagsFor(entity));
+                })
+                .ToArray()
+            : Array.Empty<SceneryNote>();
 
         var ordinaryFloor = _generationSystem.CurrentRegion.FloorTerrain;
-        var terrain = BuildAllTiles(perception)
-            .Where(tile => tile.BlocksMovement || IsInterestingTerrain(tile.Terrain, ordinaryFloor))
-            .Select(tile => new TileNote(
-                tile.X,
-                tile.Y,
-                tile.Terrain,
-                tile.BlocksMovement ? new[] { "blocking" } : Array.Empty<string>(),
-                _perceptionSystem.RelationToPlayer(new GridPoint(tile.X, tile.Y), perception)))
-            .ToArray();
+        var includeTerrain = !routedContext || RequiresContext(
+            requiredContext,
+            "nearby_tiles",
+            "visible_tiles",
+            "selected_target");
+        var terrain = includeTerrain
+            ? BuildAllTiles(perception)
+                .Where(tile => tile.BlocksMovement || IsInterestingTerrain(tile.Terrain, ordinaryFloor))
+                .OrderBy(tile => GameEngine.Distance(casterPosition, new GridPoint(tile.X, tile.Y)))
+                .Take(routedContext ? MagicContextTerrainCap : int.MaxValue)
+                .Select(tile => new TileNote(
+                    tile.X,
+                    tile.Y,
+                    tile.Terrain,
+                    tile.BlocksMovement ? new[] { "blocking" } : Array.Empty<string>(),
+                    _perceptionSystem.RelationToPlayer(new GridPoint(tile.X, tile.Y), perception)))
+                .ToArray()
+            : Array.Empty<TileNote>();
+
+        var includePromises = !routedContext || RequiresContext(requiredContext, "promises");
+        var includeLore = !routedContext || RequiresContext(requiredContext, "region", "lore");
+        var reagents = _inventoryService.BuildReagentCards(caster);
 
         return new MagicContextView(
             new CasterView(
@@ -111,14 +169,17 @@ public sealed class EngineViewBuilder
                 casterActor.MaxMana,
                 soulId,
                 statuses),
-            visible,
+            fullLane,
             terrain,
             _state.SelectedTarget,
-            _state.Messages.TakeLast(8).ToArray(),
-            _state.PromiseLedger.Promises
-                .Where(promise => promise.PlayerVisible)
-                .Select(ToResolverPromiseCard)
-                .ToArray(),
+            routedContext ? Array.Empty<string>() : _state.Messages.TakeLast(8).ToArray(),
+            includePromises
+                ? _state.PromiseLedger.Promises
+                    .Where(promise => promise.PlayerVisible)
+                    .Take(routedContext ? MagicContextPromiseCap : int.MaxValue)
+                    .Select(ToResolverPromiseCard)
+                    .ToArray()
+                : Array.Empty<PromiseCard>(),
             operations,
             BuildResolverLens(
                 caster,
@@ -126,10 +187,73 @@ public sealed class EngineViewBuilder
                 _generationSystem.CurrentRegion,
                 _generationSystem.CurrentRealm,
                 _generationSystem.CurrentImperialPresence,
-                _generationSystem.CurrentAffordances),
-            _inventoryService.BuildReagentCards(caster),
-            BuildLoreContext(visible));
+                _generationSystem.CurrentAffordances,
+                _generationSystem.CurrentPlace,
+                compact: routedContext),
+            (routedContext ? reagents.Take(MagicContextReagentCap) : reagents).ToArray(),
+            includeLore ? BuildLoreContext(fullLane).Take(routedContext ? 1 : int.MaxValue).ToArray() : Array.Empty<LoreCardView>(),
+            scenery);
     }
+
+    private static bool RequiresContext(IReadOnlyCollection<string>? requiredContext, params string[] keys) =>
+        requiredContext is not null
+        && keys.Any(requiredContext.Contains);
+
+    private static bool IsNamedInQuery(Entity entity, string? resolverQuery)
+    {
+        if (string.IsNullOrWhiteSpace(resolverQuery))
+        {
+            return false;
+        }
+
+        var query = resolverQuery.ToLowerInvariant();
+        if (query.Contains(entity.Name.ToLowerInvariant(), StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return $"{entity.Name} {entity.Id.Value.Replace('_', ' ')}"
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(part => part.Length >= 4 && query.Contains(part.ToLowerInvariant(), StringComparison.Ordinal));
+    }
+
+    private static bool NamesRemoteIntent(string? resolverQuery)
+    {
+        if (string.IsNullOrWhiteSpace(resolverQuery))
+        {
+            return false;
+        }
+
+        var query = resolverQuery.ToLowerInvariant();
+        return new[] { "far away", "elsewhere", "not here", "absent", "offscreen", "off-screen", "towns away", "miles away", "beyond this place" }
+            .Any(query.Contains);
+    }
+
+    private PerceivedEntity ToPerceivedEntity(Entity entity, PerceptionSnapshot perception)
+    {
+        var position = entity.Get<PositionComponent>().Position;
+        var actor = entity.TryGet<ActorComponent>(out var entityActor) ? entityActor : null;
+        var physical = entity.TryGet<PhysicalComponent>(out var component) ? component : null;
+        return new PerceivedEntity(
+            entity.Id.Value,
+            entity.Name,
+            entity.TryGet<RenderableComponent>(out var renderable) ? renderable.Glyph : '?',
+            position.X,
+            position.Y,
+            RelativeX: null,
+            RelativeY: null,
+            actor?.Faction,
+            physical?.Material ?? "unknown",
+            TagsFor(entity),
+            actor?.HitPoints,
+            actor?.MaxHitPoints,
+            _perceptionSystem.RelationToPlayer(position, perception));
+    }
+
+    private bool IsSelectedEntity(Entity entity) =>
+        _state.SelectedTarget is { } selected
+        && entity.TryGet<PositionComponent>(out var position)
+        && position.Position == selected;
 
     private static bool IsInterestingTerrain(string terrain, string ordinaryFloor) =>
         !terrain.Equals("floor", StringComparison.OrdinalIgnoreCase)
@@ -310,6 +434,8 @@ public sealed class EngineViewBuilder
     {
         var region = _generationSystem.CurrentRegion;
         var realm = _generationSystem.CurrentRealm;
+        var place = _generationSystem.CurrentPlace;
+        var nearest = _generationSystem.CurrentNearestSettlement;
         return new WorldCard(
             _state.CurrentZoneId,
             region.Id,
@@ -321,7 +447,16 @@ public sealed class EngineViewBuilder
             region.TraditionId,
             _generationSystem.CurrentImperialPresence,
             region.WildnessBase,
-            _generationSystem.CurrentAffordances.ToArray());
+            _generationSystem.CurrentAffordances.ToArray(),
+            place.Kind,
+            place.Settlement?.Name,
+            place.District?.Name,
+            place.Road?.Name,
+            place.Landmark?.Name,
+            place.Interior?.Name,
+            nearest.Distance == 0
+                ? $"{nearest.Settlement.Name} (here)"
+                : $"{nearest.Settlement.Name} ({nearest.Distance} {nearest.Direction})");
     }
 
     public IReadOnlyList<BackgroundJobCard> BuildBackgroundJobCards() =>
@@ -627,6 +762,15 @@ public sealed class EngineViewBuilder
                 case "inspect":
                     Add("examine", "Inspect", $"examine {entity.Id.Value}", 2);
                     break;
+                case "enter":
+                    var entranceLabel = entity.TryGet<InteriorEntranceComponent>(out var entrance)
+                        ? $"Enter {entrance.Name}"
+                        : "Enter";
+                    Add("enter", entranceLabel, $"enter {entity.Id.Value}", 1);
+                    break;
+                case "leave":
+                    Add("leave", "Leave", "leave", 1);
+                    break;
             }
         }
     }
@@ -669,7 +813,9 @@ public sealed class EngineViewBuilder
         RegionDefinition region,
         RealmProfile realm,
         int imperialPresence,
-        IReadOnlyList<RegionAffordanceCard> affordances)
+        IReadOnlyList<RegionAffordanceCard> affordances,
+        WorldPlaceProfile place,
+        bool compact = false)
     {
         var bodyStats = caster.TryGet<BodyStatsComponent>(out var stats)
             ? stats
@@ -686,7 +832,7 @@ public sealed class EngineViewBuilder
             > 0 => "high attunement: effects may lean toward the top of their band",
             _ => "unchanged",
         };
-        if (magnitudeDelta != 0)
+        if (!compact && magnitudeDelta != 0)
         {
             notes.Add(magnitude);
         }
@@ -696,7 +842,7 @@ public sealed class EngineViewBuilder
             : composure >= 5
                 ? "high composure: wild magic answers cleanly with fewer messy flourishes"
                 : "unchanged";
-        if (!volatility.Equals("unchanged", StringComparison.OrdinalIgnoreCase))
+        if (!compact && !volatility.Equals("unchanged", StringComparison.OrdinalIgnoreCase))
         {
             notes.Add(volatility);
         }
@@ -706,24 +852,30 @@ public sealed class EngineViewBuilder
             : bodyStats.Vigor >= 5
                 ? "high vigor: physical costs are more plausible if the spell needs a price"
                 : "unchanged";
-        if (!costFraming.Equals("unchanged", StringComparison.OrdinalIgnoreCase))
+        if (!compact && !costFraming.Equals("unchanged", StringComparison.OrdinalIgnoreCase))
         {
             notes.Add(costFraming);
         }
 
-        if (!string.IsNullOrWhiteSpace(soulRecord.MagicalSignature))
+        if (!compact && !string.IsNullOrWhiteSpace(soulRecord.MagicalSignature))
         {
             notes.Add($"signature lens: {soulRecord.MagicalSignature}");
         }
 
-        notes.Add(
-            $"region lens: {region.Name} in {realm.Name}; realm status {realm.Status}; ruler {realm.Ruler}; tradition {region.TraditionId}; wildness {region.WildnessBase}; imperial presence {imperialPresence}");
-        if (!string.IsNullOrWhiteSpace(region.VoiceSummary))
+        notes.Add(compact
+            ? $"place: {place.DisplayName} in {region.Name}; {place.Kind}; voice: {region.VoiceSummary}"
+            : $"region lens: {region.Name} in {realm.Name}; realm status {realm.Status}; ruler {realm.Ruler}; tradition {region.TraditionId}; wildness {region.WildnessBase}; imperial presence {imperialPresence}");
+        if (!compact)
+        {
+            notes.Add(
+                $"place lens: {place.DisplayName}; kind {place.Kind}; {place.Summary}; tags {string.Join(", ", place.Tags)}");
+        }
+        if (!compact && !string.IsNullOrWhiteSpace(region.VoiceSummary))
         {
             notes.Add($"region voice: {region.VoiceSummary}");
         }
 
-        foreach (var affordance in affordances)
+        foreach (var affordance in compact ? Array.Empty<RegionAffordanceCard>() : affordances)
         {
             notes.Add($"region affordance {affordance.Id}: {affordance.Text}");
         }
@@ -740,7 +892,13 @@ public sealed class EngineViewBuilder
             notes);
     }
 
-    private const int MagicContextVisibleEntityCap = 14;
+    private const int MagicContextEntityCap = 12;
+    private const int MagicContextHiddenEntityCap = 4;
+    private const int MagicContextTerrainCap = 16;
+    private const int MagicContextPromiseCap = 4;
+    private const int MagicContextReagentCap = 4;
+    private const int MagicContextRoutedSceneryCap = 6;
+    private const int MagicContextSceneryCap = 10;
 
     /// <summary>
     /// The resolver's view of a promise: what it says, about what, and how it might trigger.

@@ -1,0 +1,172 @@
+{
+  "settlements": [
+    {
+      "regionId": "imperial_encounter",
+      "settlementNames": ["Containment Annex Nine", "The West Intake", "Marble Holding Ward"],
+      "hamletNames": ["Survey Camp Seven", "The Quiet Checkpoint"],
+      "primaryRadius": 1, "hamletCount": 0, "roadName": "the measured road", "roadTerrain": "scored_marble_road",
+      "districts": [
+        {"id":"intake_gate","name":"Intake Gate","summary":"Carts, confiscated wonders, and frightened clerks queue beneath numbered arches.","terrain":"intake_marble","featureName":"confiscation arch","featureDescription":"Brass measures in the arch record every object entering and leave a deliberate blank for those that escape.","featureGlyph":"A","featureMaterial":"marble","tags":["gate","containment","traffic"],"populationPercent":115},
+        {"id":"evidence_yard","name":"Evidence Yard","summary":"White lanes divide dangerous objects into categories whose boundaries keep changing.","terrain":"evidence_grid","featureName":"rotating evidence frame","featureDescription":"A charter-glass frame turns slowly toward whichever nearby thing is least documented.","featureGlyph":"#","featureMaterial":"glass","tags":["evidence","inspection","yard"],"populationPercent":90},
+        {"id":"clerks_row","name":"Clerks' Row","summary":"Narrow offices exchange forms through slots smaller than a human apology.","terrain":"office_tile","featureName":"after-hours docket hatch","featureDescription":"The hatch is shut, but fresh paper breathes through its seams.","featureGlyph":"=","featureMaterial":"brass","tags":["office","clerks","records"],"populationPercent":135}
+      ],
+      "landmarks": [{"id":"burned_registry","name":"the burned registry tower","description":"A survey tower burned from the inside; its brass index still calmly lists the missing flames.","glyph":"T","material":"charred_marble","tags":["tower","burned","records"]}]
+    },
+    {
+      "regionId": "vigovian_capital",
+      "settlementNames": ["Vigovia", "The Reasonable City", "Odran's Marble Peace"],
+      "hamletNames": ["Outer Petition Camp", "Licensed Cart Rest"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the Imperial Processional", "roadTerrain": "processional_marble",
+      "districts": [
+        {"id":"censor_gate","name":"Censor Gate","summary":"Inspection queues braid through white arches while charter lamps search carts for metaphor.","terrain":"gate_marble","featureName":"civic inspection arch","featureDescription":"Its lenses compare each passerby against a person the state would find easier.","featureGlyph":"A","featureMaterial":"marble","tags":["gate","censorate","inspection"],"populationPercent":125},
+        {"id":"inner_court","name":"Inner Court","summary":"Petitions, precedents, and palace traffic circle the calm center of imperial power.","terrain":"court_marble","featureName":"precedent fountain","featureDescription":"Licensed water repeats the shape of every ruling made within earshot.","featureGlyph":"O","featureMaterial":"marble","tags":["court","palace","petition"],"populationPercent":155},
+        {"id":"archive_quarter","name":"Archive Quarter","summary":"File bridges join sealed offices above alleys where copyists sell yesterday's official truth.","terrain":"archive_paving","featureName":"walking archive cabinet","featureDescription":"Brass feet let this cabinet follow the office currently responsible for it.","featureGlyph":"#","featureMaterial":"brass","tags":["archive","records","offices"],"populationPercent":145}
+      ],
+      "landmarks": [{"id":"withdrawn_monument","name":"the withdrawn monument","description":"An empty plinth commemorates a victory removed so thoroughly that pigeons avoid remembering it.","glyph":"!","material":"marble","tags":["monument","erased","capital"]}]
+    },
+    {
+      "regionId": "hollowmere_margin",
+      "settlementNames": ["Hushwater", "Nine-Reed Ferry", "Maren's Low Village"],
+      "hamletNames": ["Eelwise", "Under-Willow", "Red Thread Houses"],
+      "primaryRadius": 1, "hamletCount": 2, "roadName": "the willow causeway", "roadTerrain": "reed_causeway",
+      "districts": [
+        {"id":"ferryward","name":"Ferryward","summary":"Punts knock against oath-posts while travelers negotiate which bank they promised to reach.","terrain":"wet_planks","featureName":"many-notched ferry bell","featureDescription":"Each notch records a crossing; one fresh notch records a boat that has not arrived.","featureGlyph":"b","featureMaterial":"bog_iron","tags":["ferry","gate","water"],"populationPercent":110},
+        {"id":"reed_market","name":"Reed Market","summary":"Green bundles, smoked eels, remedies, and quiet warnings change hands beneath patched awnings.","terrain":"market_mud","featureName":"eelglass market lantern","featureDescription":"Cloudy light makes every offered object briefly reveal who needs it most.","featureGlyph":"i","featureMaterial":"eelglass","tags":["market","reeds","trade"],"populationPercent":155},
+        {"id":"water_shrines","name":"Water-Shrine Quarter","summary":"Household bowls and willow screens make a neighborhood of small, stubborn sanctuaries.","terrain":"shrine_silt","featureName":"communal memory basin","featureDescription":"Rain in the basin repeats the names of households that sheltered strangers.","featureGlyph":"O","featureMaterial":"willow","tags":["shrine","memory","refuge"],"populationPercent":85}
+      ],
+      "landmarks": [{"id":"drowned_mill","name":"the drowned memory mill","description":"A millwheel turns below still water, grinding forgotten names into silver silt.","glyph":"M","material":"waterlogged_wood","tags":["mill","drowned","memory"]}]
+    },
+    {
+      "regionId": "stalnaz_highlands",
+      "settlementNames": ["Bluecrown", "Afterlight Stair", "Queen's Resonance"],
+      "hamletNames": ["Frost Third", "Cistern Choir"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the singing stair", "roadTerrain": "resonant_stone",
+      "districts": [
+        {"id":"echo_gate","name":"Echo Gate","summary":"Porters tune their loads before the mountain is allowed to hear them.","terrain":"echo_stone","featureName":"gate tuning fork","featureDescription":"The blue fork hums the true weight of every burden passing beneath it.","featureGlyph":"Y","featureMaterial":"crystal","tags":["gate","echo","porters"],"populationPercent":105},
+        {"id":"light_cisterns","name":"Light-Cistern Court","summary":"Faceted towers store afternoon for workshops, concerts, and royal emergencies.","terrain":"afterlit_crystal","featureName":"public light cistern","featureDescription":"Amber daylight sleeps behind blue facets and rolls over in response to song.","featureGlyph":"O","featureMaterial":"crystal","tags":["light","court","cistern"],"populationPercent":140},
+        {"id":"tuner_steps","name":"Tuners' Steps","summary":"Open workshops test cracked crystal against snow, bells, and opinionated wind.","terrain":"workshop_scree","featureName":"communal resonance bench","featureDescription":"Graduated hollows compare a crystal's answer to the mountain's oldest note.","featureGlyph":"=","featureMaterial":"white_stone","tags":["craft","music","workshop"],"populationPercent":125}
+      ],
+      "landmarks": [{"id":"silent_avalanche","name":"the silent avalanche","description":"A white wall of snow hangs motionless above the path until somebody sings the missing note.","glyph":"^","material":"snow","tags":["avalanche","silence","omen"]}]
+    },
+    {
+      "regionId": "brall_whaleholds",
+      "settlementNames": ["Deep-Tale Hold", "Harpoon Hall", "Ragna's Whalehouse"],
+      "hamletNames": ["Tarhand Quay", "Third Cask"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the bone-post road", "roadTerrain": "whalebone_cobbles",
+      "districts": [
+        {"id":"harpoon_quay","name":"Harpoon Quay","summary":"Winches, black rope, and returning boats make every arrival sound heroic.","terrain":"tarred_quay","featureName":"communal harpoon winch","featureDescription":"The drum is broad enough to haul a whale or an especially stubborn version of events.","featureGlyph":"&","featureMaterial":"wood","tags":["harbor","gate","harpoon"],"populationPercent":120},
+        {"id":"tale_hall","name":"Tale-Hall Ward","summary":"Ale benches and carved rafters hold several mutually incompatible civic histories.","terrain":"hall_bone","featureName":"many-witness tale chair","featureDescription":"Every back-slat depicts a different person taking credit for the same rescue.","featureGlyph":"H","featureMaterial":"bone","tags":["hall","story","ale"],"populationPercent":150},
+        {"id":"scrimshaw_yards","name":"Scrimshaw Yards","summary":"Bone dust whitens busy workshops where debts become pictures and pictures become evidence.","terrain":"bone_chip_floor","featureName":"public carving rack","featureDescription":"Half-finished scenes wait for witnesses to argue them into completion.","featureGlyph":"#","featureMaterial":"bone","tags":["craft","scrimshaw","yard"],"populationPercent":115}
+      ],
+      "landmarks": [{"id":"walking_rib","name":"the walking whale rib","description":"A single enormous rib advances one finger-width inland after every storm.","glyph":"R","material":"bone","tags":["whale","bone","moving"]}]
+    },
+    {
+      "regionId": "ryolan_racefields",
+      "settlementNames": ["Redwheel", "The Witnessed Finish", "Copper Rein"],
+      "hamletNames": ["Second Lap", "Dust Oath"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the public race-road", "roadTerrain": "packed_red_earth",
+      "districts": [
+        {"id":"starting_gate","name":"Starting Gate","summary":"Horses, wagers, and sworn witnesses crowd beneath copper starting bars.","terrain":"trampled_red_earth","featureName":"oath-starting frame","featureDescription":"Copper rings tighten when a rider intends to break the declared terms.","featureGlyph":"A","featureMaterial":"copper","tags":["gate","race","oath"],"populationPercent":135},
+        {"id":"witness_square","name":"Witness Square","summary":"Umpires hear disputes in public while dust preserves its own account underfoot.","terrain":"witness_clay","featureName":"finish testimony plinth","featureDescription":"Wheel marks appear across the clay top whenever somebody describes the disputed finish.","featureGlyph":"|","featureMaterial":"clay","tags":["court","witness","race"],"populationPercent":145},
+        {"id":"chariot_yards","name":"Chariot Yards","summary":"Axles, reins, horse-song, and competitive advice fill long red workshops.","terrain":"axle_ruts","featureName":"communal axle cradle","featureDescription":"The cradle rocks gently whenever a nearby wheel remembers speed.","featureGlyph":"=","featureMaterial":"wood","tags":["craft","chariot","horse"],"populationPercent":120}
+      ],
+      "landmarks": [{"id":"yesterdays_finish","name":"yesterday's finish line","description":"A white line crosses empty grass; hoofbeats arrive each dusk from a race nobody saw begin.","glyph":"-","material":"chalk","tags":["race","time","witness"]}]
+    },
+    {
+      "regionId": "vint_weaveways",
+      "settlementNames": ["Manycolor", "Counterknot", "The Public Loom"],
+      "hamletNames": ["Blue Sleeve", "Nine Dyes"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the red-thread way", "roadTerrain": "woven_paving",
+      "districts": [
+        {"id":"cloth_gate","name":"Cloth Gate","summary":"Travel cloaks and tariff banners argue in color before anyone opens their mouth.","terrain":"banner_paving","featureName":"tariff color-frame","featureDescription":"Every imported cloth looks briefly guilty beneath the frame's imperial gray thread.","featureGlyph":"A","featureMaterial":"wood","tags":["gate","cloth","tariff"],"populationPercent":120},
+        {"id":"argument_market","name":"Argument Market","summary":"Dyers and brokers sell thread by defending it loudly against every neighboring color.","terrain":"dyed_cobbles","featureName":"public rebuttal loom","featureDescription":"Anyone may add one row, provided it contradicts the pattern intelligently.","featureGlyph":"#","featureMaterial":"wood","tags":["market","argument","dye"],"populationPercent":165},
+        {"id":"loom_quarter","name":"Loom Quarter","summary":"Shuttle-rods clatter behind bright walls where patterns carry gossip faster than speech.","terrain":"thread_lanes","featureName":"street message loom","featureDescription":"Its cloth updates whenever a runner knots new information into the warp.","featureGlyph":"=","featureMaterial":"wood","tags":["craft","loom","messages"],"populationPercent":125}
+      ],
+      "landmarks": [{"id":"unraveling_road","name":"the unraveling road","description":"A strip of woven paving comes loose at sunset and is rolled back into place by dawn.","glyph":"~","material":"cloth","tags":["road","woven","impossible"]}]
+    },
+    {
+      "regionId": "threen_canals",
+      "settlementNames": ["Three Locks", "Letterwater", "Copper Serif"],
+      "hamletNames": ["Low Bridge", "Wet Ink"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the lockkeeper walk", "roadTerrain": "canal_brick",
+      "districts": [
+        {"id":"lock_gate","name":"Lock Gate","summary":"Barges wait under lettering that explains water's obligations in exquisite detail.","terrain":"lockside_brick","featureName":"speaking depth gauge","featureDescription":"Copper numerals announce the water level in a voice borrowed from the last engineer.","featureGlyph":"|","featureMaterial":"copper","tags":["gate","canal","engineering"],"populationPercent":115},
+        {"id":"letter_square","name":"Letter Square","summary":"Public inscriptions, apprentices, and legal copyists make civic language physically crowded.","terrain":"inscribed_stone","featureName":"unfinished civic alphabet","featureDescription":"One open space in the inscription waits for a letter nobody has designed safely.","featureGlyph":"L","featureMaterial":"stone","tags":["letters","square","civic"],"populationPercent":145},
+        {"id":"canal_workshops","name":"Canal Workshops","summary":"Gate teeth, reed pens, pumps, and bright brass parts occupy every dry surface.","terrain":"workshop_brick","featureName":"demonstration lock model","featureDescription":"Miniature gates redirect a thumb-width canal that nonetheless has a tide.","featureGlyph":"#","featureMaterial":"brass","tags":["craft","canal","workshop"],"populationPercent":125}
+      ],
+      "landmarks": [{"id":"drowned_alphabet","name":"the drowned alphabet","description":"Stone letters lie beneath clear canal water; fish arrange themselves into missing punctuation.","glyph":"?","material":"stone","tags":["letters","drowned","canal"]}]
+    },
+    {
+      "regionId": "monteary_grasslands",
+      "settlementNames": ["White Rein", "Longgrass Hearth", "Mare's Listening"],
+      "hamletNames": ["Foal-Kin", "West Wind"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the herd road", "roadTerrain": "short_grass_track",
+      "districts": [
+        {"id":"herd_gate","name":"Herd Gate","summary":"Low rails guide horses gently while humans queue with considerably less dignity.","terrain":"hoof_packed_grass","featureName":"listening rail","featureDescription":"White wood carries the unease of every horse touching the far end.","featureGlyph":"-","featureMaterial":"wood","tags":["gate","horse","herd"],"populationPercent":105},
+        {"id":"grass_hearth","name":"Grass-Hearth Common","summary":"Herb wine, horse counsel, and open cooking fires gather beneath an enormous sky.","terrain":"common_grass","featureName":"wind tasting mast","featureDescription":"Braided herbs identify which pasture the arriving wind crossed last.","featureGlyph":"Y","featureMaterial":"wood","tags":["common","herbs","wind"],"populationPercent":135},
+        {"id":"tack_quarter","name":"Tack Quarter","summary":"Soft leatherwork and grass braid are fitted to animals consulted before customers.","terrain":"braided_floor","featureName":"communal dream saddle","featureDescription":"No horse has worn it, but each sleeping nearby adds a new road to the tooling.","featureGlyph":"=","featureMaterial":"leather","tags":["craft","horse","dream"],"populationPercent":110}
+      ],
+      "landmarks": [{"id":"standing_gallop","name":"the standing gallop","description":"A herd-shaped fold in the grass races east without changing location.","glyph":"G","material":"grass","tags":["horse","wind","impossible"]}]
+    },
+    {
+      "regionId": "ontrian_clanlands",
+      "settlementNames": ["Many-Hearth", "Ash Cousins", "The Guest Rope"],
+      "hamletNames": ["Old Branch", "Third Ember"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the cousin road", "roadTerrain": "hearthstone_path",
+      "districts": [
+        {"id":"guest_gate","name":"Guest Gate","summary":"Arrival cords sort strangers into guest, debtor, cousin, danger, and unresolved.","terrain":"cord_marked_stone","featureName":"kinship tying-post","featureDescription":"Old cords tighten or loosen as people state their names beneath them.","featureGlyph":"Y","featureMaterial":"wood","tags":["gate","kinship","guest"],"populationPercent":115},
+        {"id":"many_hearths","name":"Many Hearths","summary":"Clan fires share one broad court while ancestors compete to improve the arrangements.","terrain":"ash_court","featureName":"council ember bowl","featureDescription":"Each clan contributes one coal; sparks consistently favor the absent families.","featureGlyph":"O","featureMaterial":"clay","tags":["court","hearth","ancestor"],"populationPercent":145},
+        {"id":"ancestor_lane","name":"Ancestor Lane","summary":"Shrines, genealogists, and discreet family arguments occupy houses built around old trees.","terrain":"root_paving","featureName":"branch-family shrine","featureDescription":"Carved faces change their resemblance according to who is currently apologizing.","featureGlyph":"+","featureMaterial":"wood","tags":["shrine","ancestor","family"],"populationPercent":115}
+      ],
+      "landmarks": [{"id":"orphan_hearth","name":"the orphan hearth","description":"A warm stone hearth waits in open country for a family nobody remembers losing.","glyph":"O","material":"stone","tags":["hearth","lost","ancestor"]}]
+    },
+    {
+      "regionId": "gontark_crags",
+      "settlementNames": ["Seven Warnings", "Shaletooth", "The Black Rope"],
+      "hamletNames": ["No Echo", "Goat Debt"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the warning path", "roadTerrain": "marked_shale",
+      "districts": [
+        {"id":"warning_gate","name":"Warning Gate","summary":"Travelers compare charms beneath signs that disagree about the safest direction.","terrain":"warning_shale","featureName":"seventh warning frame","featureDescription":"Six warnings hang visibly; the frame casts the shadow of a seventh.","featureGlyph":"A","featureMaterial":"shale","tags":["gate","warning","curse"],"populationPercent":95},
+        {"id":"rope_square","name":"Black-Rope Square","summary":"Guides, curse brokers, and goat disputes meet on a ledge wider than local honesty.","terrain":"rope_scored_stone","featureName":"communal curse map","featureDescription":"Black cords connect places by grievance rather than distance.","featureGlyph":"#","featureMaterial":"stone","tags":["square","curse","guides"],"populationPercent":125},
+        {"id":"shale_yards","name":"Shale Yards","summary":"Herder pens and charm workshops cling to terraces cut around older prohibitions.","terrain":"goat_worn_shale","featureName":"apology cairn","featureDescription":"Every stone bears an apology to a different cliff, several of them sarcastic.","featureGlyph":"^","featureMaterial":"shale","tags":["craft","goat","cairn"],"populationPercent":100}
+      ],
+      "landmarks": [{"id":"backward_watchtower","name":"the backward watchtower","description":"Its arrow slits face the mountain, watching for something expected to emerge from stone.","glyph":"T","material":"shale","tags":["tower","watch","curse"]}]
+    },
+    {
+      "regionId": "parn_sunroads",
+      "settlementNames": ["Third Well", "Noonshade", "Copper Sun"],
+      "hamletNames": ["White Scarf", "Long Horizon"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the caravan sun-road", "roadTerrain": "sun_baked_road",
+      "districts": [
+        {"id":"caravan_gate","name":"Caravan Gate","summary":"Shade contracts, water tallies, and arriving animals pass beneath mirrored sun-cloths.","terrain":"gate_sandstone","featureName":"sun-debt mirror","featureDescription":"The copper face shows how much noon each traveler still owes the road.","featureGlyph":"O","featureMaterial":"copper","tags":["gate","caravan","sun"],"populationPercent":115},
+        {"id":"shade_market","name":"Shade Market","summary":"Awnings sell distinct temperatures while well-singers test every jar of water.","terrain":"awning_shadow","featureName":"public folded afternoon","featureDescription":"A blue awning holds a square of late day even at noon.","featureGlyph":"#","featureMaterial":"cloth","tags":["market","shade","water"],"populationPercent":145},
+        {"id":"well_court","name":"Well Court","summary":"Caravan news and royal water law circulate around a deep, opinionated well.","terrain":"well_stone","featureName":"third singing well","featureDescription":"Its echo returns a traveler name instead of the sound offered.","featureGlyph":"O","featureMaterial":"stone","tags":["court","well","song"],"populationPercent":120}
+      ],
+      "landmarks": [{"id":"departed_camp","name":"the camp that departed yesterday","description":"Warm coals and taut tent shadows remain after every person, animal, and tent has gone.","glyph":"C","material":"canvas","tags":["caravan","absence","time"]}]
+    },
+    {
+      "regionId": "rentacosta_harbor",
+      "settlementNames": ["Bell-Shell Harbor", "Lowtide Exchange", "Black Ink Quay"],
+      "hamletNames": ["Pearl Ear", "Second Voice"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the bell-shell coastway", "roadTerrain": "shell_cobbles",
+      "districts": [
+        {"id":"tide_gate","name":"Tide Gate","summary":"Pilots sing arrivals through shell arches while customs clerks race the returning water.","terrain":"tide_wet_stone","featureName":"channel bell arch","featureDescription":"Different shells ring according to which hidden channel is currently honest.","featureGlyph":"A","featureMaterial":"shell","tags":["gate","tide","pilot"],"populationPercent":125},
+        {"id":"lowtide_exchange","name":"Low-Tide Exchange","summary":"Cargo, pearls, favors, and sung contracts trade hands on ground available for one hour.","terrain":"exchange_sand","featureName":"tide bargain scale","featureDescription":"One pan holds goods; the other fills slowly with seawater and urgency.","featureGlyph":"%","featureMaterial":"brass","tags":["market","trade","tide"],"populationPercent":165},
+        {"id":"notation_quay","name":"Notation Quay","summary":"Sound-ink pilots paint routes on black boards between workshops full of tuned hulls.","terrain":"inked_quay","featureName":"public harbor score","featureDescription":"Wave notes rewrite themselves as ships choose channels offshore.","featureGlyph":"#","featureMaterial":"wood","tags":["craft","sound_ink","harbor"],"populationPercent":135}
+      ],
+      "landmarks": [{"id":"drowned_bell","name":"the drowned argument bell","description":"A bronze bell below the tide rings whenever two ships disagree about right of way.","glyph":"B","material":"bronze","tags":["bell","drowned","argument"]}]
+    },
+    {
+      "regionId": "wild_border",
+      "settlementNames": ["Festival-Left", "No Fixed Door", "Tomorrow's Garden"],
+      "hamletNames": ["Late Shadow", "Wrong Season"],
+      "primaryRadius": 1, "hamletCount": 1, "roadName": "the path that answers", "roadTerrain": "responsive_flowers",
+      "districts": [
+        {"id":"moving_gate","name":"Moving Gate","summary":"A flower arch relocates between arrivals and insists this has always been the entrance.","terrain":"gate_blossom","featureName":"migratory flower arch","featureDescription":"Roots gather their soil into little bags whenever the road grows too certain.","featureGlyph":"A","featureMaterial":"living_wood","tags":["gate","flowers","moving"],"populationPercent":75},
+        {"id":"festival_after","name":"Festival After","summary":"Stalls, ribbons, and music remain vividly present despite the absence of any agreed festival.","terrain":"confetti_grass","featureName":"self-remembering dance floor","featureDescription":"Footprints perform last night's dances without feet.","featureGlyph":"=","featureMaterial":"wood","tags":["festival","market","memory"],"populationPercent":120},
+        {"id":"lawless_gardens","name":"Lawless Gardens","summary":"Gardeners cultivate colors, distances, and minor repeals of natural law.","terrain":"impossible_loam","featureName":"ordinance-eating topiary","featureDescription":"Its clipped mouth chews paper laws into bright migrating beetles.","featureGlyph":"&","featureMaterial":"plant","tags":["garden","broken_law","wild_magic"],"populationPercent":85}
+      ],
+      "landmarks": [{"id":"bone_circle_rain","name":"the bone circle where rain waits","description":"Bright rain hangs motionless inside a ring of antlers until somebody tells it where to fall.","glyph":"O","material":"bone","tags":["bone","rain","circle"]}]
+    }
+  ]
+}

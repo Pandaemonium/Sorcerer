@@ -18,9 +18,16 @@ public sealed class CapabilityRegistry
         " and ", " while ", " then ", "but also", " except ", " into ", " after ", " before ",
     };
 
-    private const int BaseCapWithHits = 5;
+    private static readonly string[] CommonCoreIntent =
+    {
+        "heal", "mend", "wound", "hurt", "harm", "damage", "strike", "burn", "freeze",
+        "bind", "web", "sleep", "poison", "stun", "root", "petrif", "cure", "small light",
+        "spark", "message",
+    };
+
+    private const int BaseCapWithHits = 4;
     private const int BaseCapWithoutHits = 3;
-    private const int HardCeiling = 7;
+    private const int HardCeiling = 5;
 
     private readonly Dictionary<string, CapabilityCard> _cards = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _registryOrder = new();
@@ -42,11 +49,10 @@ public sealed class CapabilityRegistry
     }
 
     /// <summary>
-    /// Tier-1 keyword routing + one-hop combo expansion, recall-biased and capped. Mirrors the
-    /// Wild Magic prototype's `select_cards`: rank by trigger hit count (ties broken by registry
-    /// order), expand one hop via CommonCombos, then apply a dynamic cap that favors false
-    /// positives (an extra loaded card) over false negatives (a missing card that would have made
-    /// the spell work).
+    /// Tier-1 keyword routing, recall-biased and capped. Direct trigger hits are ranked by hit count
+    /// with registry order as the stable tie-break. CommonCombos are discovery metadata, not an
+    /// instruction to eagerly load adjacent cards: speculative expansion made a simple heart spell
+    /// load memory, faction, transformation, and hidden-entity context.
     /// </summary>
     public IReadOnlyList<CapabilityCard> Select(string spellText) =>
         Select(spellText, Array.Empty<string>());
@@ -55,21 +61,14 @@ public sealed class CapabilityRegistry
     /// Keyword routing unioned with an LLM router's explicit picks. Keyword hits are ranked and
     /// capped exactly as before; <paramref name="routerCardNames"/> are added as high-confidence
     /// seeds right after the keyword hits (validated against the registry, so unknown names are
-    /// ignored). Combo expansion and the recall-biased cap then run over the union. When
-    /// <paramref name="routerCardNames"/> is empty this is byte-for-byte the old keyword behavior.
+    /// ignored). The recall-biased cap then runs over the union. An empty router answer leaves the
+    /// deterministic selection unchanged.
     /// </summary>
     public IReadOnlyList<CapabilityCard> Select(string spellText, IEnumerable<string> routerCardNames)
     {
         var text = $" {(spellText ?? string.Empty).ToLowerInvariant()} ";
 
-        var ranked = _registryOrder
-            .Select(id => _cards[id])
-            .Select(card => (Card: card, Hits: card.Triggers.Count(trigger => text.Contains(trigger, StringComparison.OrdinalIgnoreCase))))
-            .Where(entry => entry.Hits > 0)
-            .OrderByDescending(entry => entry.Hits)
-            .ThenBy(entry => _registryOrder.IndexOf(entry.Card.Id))
-            .Select(entry => entry.Card)
-            .ToList();
+        var ranked = RankedKeywordCards(text).ToList();
 
         var routerCards = (routerCardNames ?? Array.Empty<string>())
             .Select(name => name?.Trim())
@@ -77,8 +76,9 @@ public sealed class CapabilityRegistry
             .Select(name => _cards[name!])
             .ToList();
 
-        // Explicit picks (keyword hits, then router picks) come before combo expansions so the cap
-        // trims speculative combos first and never a deliberately-selected card.
+        // Keyword hits come first because they are deterministic evidence in the player's actual
+        // wording. Router picks fill gaps after them; both paths remain bounded so an over-eager
+        // router cannot reconstruct the old all-capabilities prompt.
         var selected = new List<CapabilityCard>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var card in ranked.Concat(routerCards))
@@ -89,18 +89,6 @@ public sealed class CapabilityRegistry
             }
         }
 
-        var explicitCount = selected.Count;
-        foreach (var card in selected.Take(explicitCount).ToArray())
-        {
-            foreach (var comboId in card.CommonCombos)
-            {
-                if (_cards.TryGetValue(comboId, out var combo) && seen.Add(combo.Id))
-                {
-                    selected.Add(combo);
-                }
-            }
-        }
-
         var cap = ranked.Count > 0 || routerCards.Count > 0 ? BaseCapWithHits : BaseCapWithoutHits;
         if (Connectives.Any(connective => text.Contains(connective, StringComparison.OrdinalIgnoreCase)))
         {
@@ -108,14 +96,21 @@ public sealed class CapabilityRegistry
         }
 
         cap = Math.Min(cap, HardCeiling);
-        if (routerCards.Count > 0)
-        {
-            // Router picks are deliberate: never let the cap drop an explicit pick, only speculative
-            // combos. (Keyword-only selection keeps its original cap so its behavior is unchanged.)
-            cap = Math.Max(cap, explicitCount);
-        }
-
         return selected.Take(cap).ToArray();
+    }
+
+    /// <summary>
+    /// The slow router is useful only when deterministic routing cannot name any plausible
+    /// mechanics. Obvious capability spells and ordinary core damage/heal/status casts skip it.
+    /// Direct keyword routing can already select several cards for multi-clause spells; accepting
+    /// an occasional missed secondary flourish is preferable to adding a serial model call.
+    /// </summary>
+    public bool ShouldConsultRouter(string spellText)
+    {
+        var text = $" {(spellText ?? string.Empty).ToLowerInvariant()} ";
+        var directMatches = RankedKeywordCards(text).Count;
+        return directMatches == 0
+            && !CommonCoreIntent.Any(trigger => text.Contains(trigger, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -131,6 +126,19 @@ public sealed class CapabilityRegistry
 
     public string CapabilityIndex() =>
         string.Join("\n", _registryOrder.Select(id => $"- {_cards[id].IndexLine}"));
+
+    /// <summary>A compact escape-hatch menu for the resolver; the semantic router gets the full index.</summary>
+    public string CapabilityNames() => string.Join(",", _registryOrder);
+
+    private IReadOnlyList<CapabilityCard> RankedKeywordCards(string paddedLowerText) =>
+        _registryOrder
+            .Select(id => _cards[id])
+            .Select(card => (Card: card, Hits: card.Triggers.Count(trigger => paddedLowerText.Contains(trigger, StringComparison.OrdinalIgnoreCase))))
+            .Where(entry => entry.Hits > 0)
+            .OrderByDescending(entry => entry.Hits)
+            .ThenBy(entry => _registryOrder.IndexOf(entry.Card.Id))
+            .Select(entry => entry.Card)
+            .ToArray();
 
     public static CapabilityRegistry CreateDefault()
     {
@@ -300,7 +308,7 @@ public sealed class CapabilityRegistry
             new[] { "conveyor", "current", "flow", "river of force", "gust", "pushes every turn", "pulls every turn", "shifting sand", "tilt", "tilted", "slide", "drift", "gravity well", "black hole", "vortex", "whirlpool", "magnet", "magnetic" },
             "environment_flow - standing tile fields that move whoever stands on them each turn",
             new[] { "createFlow" },
-            Array.Empty<string>(),
+            new[] { "nearby_tiles" },
             "createFlow fields: target/x/y, radius, dx, dy, duration. Every turn, actors standing "
                 + "on a flow tile are translated by (dx, dy) if the destination is open.",
             Array.Empty<string>(),
@@ -314,7 +322,7 @@ public sealed class CapabilityRegistry
             new[] { "push", "pull", "shove", "throw", "hurl", "fling", "toss", "drag", "yank", "knock", "slam", "blink", "teleport", "step through", "swap places", "launch", "reel" },
             "motion_kinetics - push, pull, or teleport bodies through space",
             new[] { "push", "pull", "teleport" },
-            Array.Empty<string>(),
+            new[] { "visible_entities", "nearby_tiles" },
             "push/pull move a target away from or toward a point (fields: target, distance, and a "
                 + "source/anchor when the spell names one). teleport moves a target to open in-zone "
                 + "coordinates (fields: target, x, y). Keep motion local; never move a target out of "
@@ -389,7 +397,7 @@ public sealed class CapabilityRegistry
             new[] { "raise the", "raise this", "raise my", "rise", "animate", "corpse", "the dead", "bones", "skeleton", "statue", "come alive", "come to life", "wake the", "stand and", "golem", "necroman", "undead", "reanimate" },
             "animation - wake a corpse, statue, prop, or floor object into a bounded servant",
             new[] { "animateEntity" },
-            Array.Empty<string>(),
+            new[] { "visible_entities", "spell_anchors" },
             "animateEntity wakes something that already exists in the world: a defeated actor "
                 + "rises again, or an inert fixture, statue, prop, or floor object gains a body. "
                 + "Fields: target (the corpse or object), faction (default 'player' so it serves "
@@ -408,7 +416,7 @@ public sealed class CapabilityRegistry
             new[] { "dispel", "unravel", "undo the", "break the ward", "break the spell", "break the enchantment", "break the curse", "end the spell", "end the enchantment", "cancel", "counterspell", "counter the", "quiet the magic", "snuff", "strip the", "cleanse", "purge", "lift the curse", "cut the strings", "unbind", "unweave", "silence the ward" },
             "dispelling - end active magic: statuses, wards, triggers, enchantments, and tile flows",
             new[] { "dispelMagic", "removeStatus" },
-            Array.Empty<string>(),
+            new[] { "visible_entities", "nearby_tiles" },
             "dispelMagic ends active magic instead of narrating it away. Fields: target (the "
                 + "entity whose magic should be stripped; default the caster) or x/y (a tile "
                 + "whose flows and anchored wards should end), scope (all, statuses, triggers, "
@@ -466,7 +474,7 @@ public sealed class CapabilityRegistry
             new[] { "unlock", "open the door", "open the gate", "open the cell", "lock forgets", "forget its shape", "unbar", "unseal", "seal the", "the lock", "lock forget", "unchain", "free the", "release the", "way out", "path out", "escape route", "a way through", "no key", "steal", "snatch", "leaps to my hand", "leap to my hand", "fly to my hand", "yank the", "disarm", "pickpocket" },
             "ways_and_seals - open, unlock, or seal doors; free captives; reveal routes",
             new[] { "consequence" },
-            Array.Empty<string>(),
+            new[] { "visible_entities", "spell_anchors" },
             "Doors and ways go through effectType 'consequence'. consequenceType "
                 + "'open_or_unlock' (fields: target = the door entity, unlock true/false, open "
                 + "true/false) opens or unlocks a reachable door - the engine rejects doors out "

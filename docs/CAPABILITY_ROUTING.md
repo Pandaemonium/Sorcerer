@@ -1,14 +1,46 @@
 # Capability Routing — Adding a Routing Call to the Wild-Magic Resolver
 
-Status: **implemented** — the LLM router (unioned with keyword routing on every cast), Lever A
-(operation-card gating), and Lever B (capability-gated off-screen entity context) have shipped.
+Status: **implemented and latency-hardened** — deterministic routing owns the common path; the LLM
+router is an ambiguity fallback; both operation detail and state slices are capability-gated.
 Owner: resolver. Companion to [MAGIC_RESOLVER_ARCHITECTURE.md](MAGIC_RESOLVER_ARCHITECTURE.md) and
 [LLM_AND_BACKGROUND_JOBS.md](LLM_AND_BACKGROUND_JOBS.md). Ports and updates the WildMagic
 prototype's `docs/CAPABILITY_ROUTING.md` for the current C# engine.
 
-## Implemented (2026-07-04)
+## Latency-first refinement (2026-07-09)
 
-- **LLM router on every cast, unioned with keyword routing.** `ISpellRouter`
+The original implementation still paid too much on every cast. It called the semantic router
+unconditionally, expanded speculative `CommonCombos`, advertised most operations even after a
+successful route, assembled most state slices unconditionally, and sent the resolver a rich view
+whose JSON shape was designed for engine inspection rather than inference speed.
+
+The live contract is now:
+
+- `CapabilityRegistry.Select` loads only direct keyword hits plus bounded explicit router picks
+  (maximum five). `CommonCombos` remains useful design/discovery metadata but does not load cards.
+- `ShouldConsultRouter` skips the model router whenever direct capability triggers or the six-op
+  general palette can plausibly answer. Only opaque zero-route spells pay for semantic routing.
+- `ToRoutedIndex` advertises the six common operations (`damage`, `heal`, `addStatus`,
+  `removeStatus`, `message`, `createTiles`), selected effect types, and any operation no card owns.
+  The old all-operation recall floor is gone. A missed exotic route uses the bounded
+  `needsCapability` retry from a compact name-only menu.
+- `RequiredContext` now controls provider state assembly. All casts get the caster and a bounded
+  important-target roster. Terrain, promises, lore, ordinary scenery, and off-screen entities are
+  absent unless a selected card requests them. Hidden candidates are added only when the spell
+  names one or clearly expresses remote intent, then capped at 4. Routed requests cap total targets
+  at 12, terrain notes at 16, scenery at 6, promises/reagents at 4,
+  and lore at one distilled card.
+- `SpellPromptBuilder` projects the engine view into terse `caster`/`targets`/`terrain`/`lens`/
+  `reagents` records. It never serializes operations or recent event history, clips remaining prose,
+  and uses a distilled core rules block. Tests enforce ≤5 KB context JSON and ≤12 KB total prompt
+  bytes across representative healing, terrain, memory, and social casts.
+
+This deliberately trades a little exotic-mechanic recall for much lower prompt-evaluation time.
+Engine parsing, validation, transactional application, and the full operation registry are
+unchanged; routing limits what the model reads, never what the engine considers real.
+
+## Earlier implementation (2026-07-04)
+
+- **The first version used an LLM router on every cast, unioned with keyword routing.** `ISpellRouter`
   ([ISpellRouter.cs](../src/Sorcerer.Magic/Capabilities/ISpellRouter.cs)) with Ollama / OpenAI /
   Null implementations, a `SpellRouterFactory`, and a new `LlmPurpose.Router` config route
   (defaults to the resolver's model, `SORCERER_ROUTER_*` overrides, 30s timeout).
@@ -25,8 +57,7 @@ prototype's `docs/CAPABILITY_ROUTING.md` for the current C# engine.
   `RequiredContext` contains `hidden_entities` (currently `memory_edit`). Replaces the old
   always-include-hidden behavior.
 
-Remaining / deferred: dynamic per-cast JSON schema (Lever C2); a dedicated
-small router model; richer `RequiredContext` extractors beyond `hidden_entities`.
+Remaining / deferred: dynamic per-cast JSON schema (Lever C2) and a dedicated small router model.
 
 ## Update (2026-07-05, docs/OPTIMIZATION_PLAN.md)
 

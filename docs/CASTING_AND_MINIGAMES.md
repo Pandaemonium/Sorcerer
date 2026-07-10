@@ -2,8 +2,8 @@
 
 Sorcerer uses quick casting minigames while the model resolves a wild spell. The minigame is
 an input to the engine's apply step - never a separate rules path, and never a resolver
-input. This doc records the settled design. The first minigame, rune tracing, is implemented
-(see "First Minigame: Rune Trace" below).
+input. This doc records the settled design. The implemented repertoire currently includes rune
+tracing, Thread & Knot, True-Sigil, and Bone-Song.
 
 ## Design Goal
 
@@ -118,8 +118,9 @@ Body changes are extremely severe and should be rare.
 
 ## Input
 
-Minigames assume mouse input for now. Gamepad and touch are out of scope until a real
-need appears.
+Minigames support the smallest suitable mix of mouse and keyboard input. Bone-Song, for example,
+accepts A/S/D or direct clicks on its three strike marks. Gamepad and touch are out of scope until
+a real need appears.
 
 ## First Minigame: Rune Trace (implemented)
 
@@ -206,39 +207,72 @@ dexterity and no hold-timing: this is the accessibility anchor of the suite.
 
 ## Fourth Minigame: Bone-Song (implemented)
 
-The rhythm entry, and Sorcerer's first audio: Bralli scrimshaw drumming (see
-`content/lore/bone.md` / `brall.md` — boasting is hospitality). The spell's pulse runs a
-carved whalebone drum-rim like a lit fuse; strike as the ember crosses each carving. Plain
-notches feed control; tight gold accent knots feed power, and *declining* one is safe — it
-only costs power (the boast is optional); hollow rests, tier-gated in from the third bar,
-must not be struck at all. Bars chain indefinitely, re-carving faster and more syncopated,
-and every completed bar etches one more stroke of a scrimshaw whale-hunt into the drumhead —
-a long provider wait literally becomes art accumulating. Dropped beats splinter hairline
-cracks into the rim, the run's wear worn openly.
+The rhythm entry, redesigned 2026-07-09 after the original circular orbit looked good but felt
+unsatisfying. Bone-Song keeps that strong Bralli carved-drum composition (see
+`content/lore/bone.md` / `brall.md` — boasting is hospitality) and gives the skin three visible X
+marks: center, near-edge, and rim. Curated ivory notes enter from outside and swoop onto their
+respective mark. Center notes begin horizontally left-to-right, edge notes descend diagonally,
+and rim notes fall vertically before each path hooks into its X. The player answers with A/S/D
+mirroring the marks left-to-right on screen — A rim (lower left), S center, D edge (Space also
+strikes center) — or clicks the mark. Gold notes are optional flourishes: landing one adds power,
+ignoring it does nothing, and attempting it badly risks the groove. There are no ambiguous
+“hollow rests” and no 60 ms accent cliff.
+
+A two-beat visual count-in teaches the speed; taps along with the count-in knocks are free
+practice, and an early press near the first downbeat is judged against the coming beat instead of
+being swallowed. Phrases flow without a recarving pause, and notes from the next phrase begin
+their approaches before its downbeat arrives. The phrase book is twelve two-bar tribal grooves
+(heartbeat, tresillo, son and rumba clave on the rim, kuku march, gallop, call-and-answer runs)
+with fixed drum roles — the deep duum anchors downbeats, the rim tick rides offbeats, the doo
+answers — rather than random note soup; the spell text selects a stable starting groove, while
+long waits walk the groove book, add one syncopated answer, and rise gradually from 92 to 124
+BPM.
+Completed phrases reveal a scrimshaw whale stroke by stroke, and a circle of nine bone-singer
+silhouettes rings the drum — each streak note lights another singer's ember, a broken groove dims
+them, and aurora ribbons over the hall breathe with the streak, so latency still accumulates art.
+A hot streak (6+) also earns an upcoming phrase one extra gold flourish: clean play is rewarded
+with more optional upside, never direct score, preserving the EV-neutral contract.
 
 - **The visual clock is the source of truth and audio is decoration on top, never the
-  reverse.** The beat is geometry (an ember approaching a notch), so the game is fully
-  playable with sound off — deaf accessibility is structural — and there is no latency
-  calibration screen, because players react to position rather than anticipating audio.
+  reverse.** Every note visibly converges on a stationary X; the game is fully playable with
+  sound off, and no latency calibration screen is needed.
 - `Sorcerer.Godot/Scripts/Minigames/BoneSongVoice.cs` synthesizes all percussion in code
-  through an `AudioStreamGenerator` (bone tok, accent doom, rest yelp, miss crack, carving
-  scrape) over a streak drone — hummed bone-singer fifths that swell as clean hits chain and
-  drop out on a miss, so the mix itself is the feedback ladder. No sound assets ship.
+  through an `AudioStreamGenerator`, modeling struck membranes rather than raw tones: a deep
+  "duum" (58 Hz, pitch-scooped, overtone, mallet thump) for the center, an open "doo" a perfect
+  twelfth above (174 Hz) for the edge, a dry inharmonic woodblock "tick" for the rim, a
+  hall-sized flourish with a fifth in it for boasts, count-in knocks, dull miss cracks, and a
+  streak-fed bone-singer drone humming the drum's octave. Phase is integrated per voice through
+  the pitch scoop (naive `sin(2π·f(t)·t)` chirps twice as far and sounds synthetic). All
+  registers share one chord so a groove rings like one instrument. No sound assets ship.
 - `Sorcerer.Godot/Scripts/Minigames/BoneSongMinigame.cs` owns presentation and gesture
-  reduction: seeded bars (`RuneShape.SeedFor`, so the same phrase always sings the same
-  song — learnable, never arbitrary), tempo and syncopation escalation, hit windows
-  (±120ms plain, ±60ms accent, ±140ms rest), the scrimshaw scene, and the crack ledger. It
-  reduces the session to `BoneSongMetrics`.
-- `Sorcerer.Core/Magic/BoneSongScoring.cs` owns calibration: accuracy over resolved notches
-  feeds control (band 0.45-0.95, mid 0.70), the fraction of offered accent knots taken
-  cleanly feeds power (par = half), and their combination damps or feeds wildness. Mid-band
-  accuracy plus half the knots maps to exactly 1.0/1.0/1.0, pinning the EV-neutral rule; a
-  bar offering no knots judges power as neutral; the shared minimum-window discard applies,
-  and zero resolved notches is also neutral. Unit tests pin the center, the bands,
-  monotonicity, and both drummers (timid and boastful).
-- Swings at empty air break the streak and make a sound, but are not ledgered — enthusiasm
-  is not a crime. If the provider settles mid-bar, the standard grace applies and the bar
-  in hand ends unjudged.
+  reduction. Each lane uses a deterministic varied cubic trajectory with a late swoop. Timing is
+  graded rather than binary: true (≤75 ms), held (≤150 ms), and caught (≤220 ms). Strikes are
+  timed sub-frame — the visual clock is advanced by the real time elapsed since the last process
+  tick — so grading is not quantized to the frame rate, and imperfect hits show a small
+  early/late direction cue so the player can calibrate. The hit window scales down with tempo
+  (min of 220 ms and 0.45 beats) so faster phrases never let one window swallow a neighbor.
+  A clean strike rebounds the note and throws a concentric shockwave from the X; a miss arrives
+  dark and produces no wave—a dud. Wrong-mark input names the error immediately but only consumes
+  the neighboring note when the press was clearly meant for it (≤80 ms); farther out the note
+  survives so one slip cannot cost two notes. Empty-water input is likewise named. Once a groove
+  is hot, the first Escape only arms the skip and asks again, protecting a strong run from a
+  reflexive press. It reduces the session to `BoneSongMetrics`.
+- `Sorcerer.Core/Magic/BoneSongPattern.cs` owns the deterministic groove book, tempo bounds,
+  density escalation, and optional-flourish placement (boasts sit in each groove's rests). Lanes
+  are never rotated: each groove's voicing is part of its identity, and rotating would put the
+  bass line on the rim tick. Pattern tests keep note density, unique beat positions, determinism,
+  and tempo bounded independently of Godot.
+- `Sorcerer.Core/Magic/BoneSongScoring.cs` owns calibration. Required-note accuracy establishes
+  groove and power; graded timing plus accuracy feeds control; clean optional flourishes use only
+  remaining power headroom; combined quality damps or feeds wildness. Accuracy 0.70 with average
+  timing 0.625 maps to exactly 1.0/1.0/1.0 even when every gold note is declined. The shared
+  minimum-window and passive-skip rules still return neutral.
+- If the provider settles mid-phrase, only notes already reached are judged. A player who began
+  answering gets up to two seconds of grace; an untouched response ends neutral immediately.
+
+Set `SORCERER_MINIGAME_PREVIEW=bone_song` before launching the Godot project to open this game
+directly against an indefinite local preview phrase. This developer-only path does not create or
+apply a cast.
 
 ## The Repertoire Draw
 

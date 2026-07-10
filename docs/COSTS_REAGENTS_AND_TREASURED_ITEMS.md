@@ -38,6 +38,11 @@ legality:
 Engine-side spell scoring can arrive much later if playtesting shows underpaid or overpaid
 spells are a persistent problem.
 
+Owner calibration (2026-07-09): early development should be too permissive rather than too
+protective. A surprisingly cheap or powerful spell is useful evidence and often a better story
+than a precautionary refusal. Validate legality, consent, references, transactionality, and state
+coherence now; tighten power balance only after repeated play demonstrates a real failure mode.
+
 ## Every Object Can Matter
 
 Objects should be potential magical grammar.
@@ -106,9 +111,11 @@ Sorcerer should eventually support many cost families:
 - reputation exposure
 - faction attention
 - memory
-- body change
+- body or identity change
 
-Body changes are extremely severe and should be rare.
+Body and identity changes are extremely severe, but severity alone is not an early-development
+reason to reject them. Let them happen when the player intent and validated resolution support
+them; use the resulting runs to learn where later balance or clearer consent is actually needed.
 
 ## The Cost Palette And The Overreach Ladder
 

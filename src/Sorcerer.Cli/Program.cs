@@ -432,6 +432,8 @@ public static class Program
                 "read" => new ReadCommand(ReadNullableString(root, "target")),
                 "examine" or "study" => new ExamineCommand(ReadNullableString(root, "target")),
                 "open" => new OpenCommand(ReadNullableString(root, "target")),
+                "enter" => new EnterCommand(ReadNullableString(root, "target")),
+                "leave" or "exit_interior" => new LeaveCommand(),
                 "possess" => new PossessCommand(ReadNullableString(root, "target")),
                 "standing" => new StandingCommand(),
                 "followers" => new FollowersCommand(),

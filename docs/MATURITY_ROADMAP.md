@@ -224,9 +224,18 @@ Current status: the minimal multi-zone slice exists. The engine can snapshot zon
 coordinate zones, lazily generate region-flavored interiors, carry recruited followers, expose an
 atlas/world card, feed region affordances into the magic resolver, and realize a bound travel/site
 promise as a generated place. A minimal seeded `WorldRoll` also varies realm status, ruler, and
-effective imperial grip by run seed, and generated zones seed one resident NPC from region/realm
-profile. Full geopolitical ownership graphs, town layouts, population rosters, and rich
-promise-site archetypes are still future Phase 5 work.
+effective imperial grip by run seed. Fourteen content-loaded regions and thirteen traditions now
+cover every rolled realm; exactly one old kingdom is rolled as the free rival, seed-jittered data
+anchors place regions on the zone grid, and region-authored population grammars now produce
+settlement crowds, thinning shoulders, common peopleless wild zones, named cultural archetypes,
+wants, knowledge, wares, and services. Regional prop grammars now create variable-density semantic scenery, readables, magic
+anchors, and ensembles through shared fixture consequences; protected context routing prevents
+that clutter from evicting actors or hooks in magic/dialogue prompts. The deterministic place graph
+adds a named 3×3 settlement, hamlets, a landmark, authored districts, and connected physical roads
+for every region; atlas, travel, generation, resolver, and dialogue share it. The first generated
+journey binds resident pressure to a real landmark through claims and promises. Full geopolitical
+ownership/control graphs, organizations, interiors, and the remaining journey families are still
+future Phase 5 work.
 
 - **Zone graph** beyond the single chamber: regions with identity, imperial grip, tradition lean,
   and discoverable sources of strangeness. Zone transition is a reaction pump point.

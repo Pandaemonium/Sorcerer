@@ -128,6 +128,33 @@ dotnet run --project src/Sorcerer.Cli -- --provider mock --json --debug-state `
 The atlas should surface local lore, generated fixtures should have concrete region-colored names
 and subjects, the second examine should show applied known detail, and the spell context should
 include routed lore without requiring the player-visible view to reveal hidden debug state.
+Inside generated geography, the same `atlas` output also names the current settlement/district or
+road/landmark/interior and gives the nearest same-region settlement with zone distance and direction. A
+settlement lead can be discovered with `inspect` + `examine <resident>`; `journal` then exposes the
+exact-place generated journey without debug state.
+
+Significant settlement thresholds are ordinary visible entities. When adjacent, observations and
+`GameView` entity cards expose an `enter` context action naming the destination; inside, the return
+threshold exposes `leave`. Text and JSON use the same typed commands:
+
+```text
+enter district_site_12
+leave
+```
+
+```json
+{"type":"enter","target":"district_site_12"}
+{"type":"leave"}
+```
+
+A successful crossing consumes one normal turn and carries bond-followers. It does not spend a
+travel world-turn budget. Restricted thresholds reject without consuming a turn and state the
+general access routes; carrying the authored key, receiving permission, or changing the
+threshold's access/open tags through ordinary consequences can admit the player. Debug state may
+inspect both the active interior and its exterior snapshot, but ordinary play can verify
+persistence by changing or moving something, leaving, and returning. `view.world.placeKind` is
+`interior` and `view.world.interiorName` identifies the active site. See
+[SIGNIFICANT_INTERIORS.md](SIGNIFICANT_INTERIORS.md).
 
 For a focused narrator/legend smoke, create reputation, then travel:
 
@@ -398,7 +425,7 @@ Important observation details:
 - adjacent tile affordances
 - visible enemies, NPCs, props, and items
 - world card fields in `view.world`: current zone, region, realm, tradition, imperial
-  presence, wildness, and affordances
+  presence, wildness, place kind/name (including interiors), and affordances
 - floor items and carried items
 - selected target
 - active curses
@@ -422,6 +449,8 @@ Core shared commands currently route through `GameSession`:
 - direction aliases: `north`, `south`, `east`, `west`, etc.
 - `wait`
 - `open [target]`
+- `enter [target]`
+- `leave`
 - `pickup [target]`
 - `drop <item>`
 - `use <item>`

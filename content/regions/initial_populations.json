@@ -1,0 +1,412 @@
+{
+  "populations": [
+    {
+      "regionId": "imperial_encounter",
+      "centerMean": 2.8, "nearMean": 1.2, "wildMean": 0.2,
+      "centerRadius": 0, "nearRadius": 1, "maxResidents": 5, "hermitChance": 1,
+      "names": {
+        "given": ["Adra", "Beren", "Cassa", "Damas", "Elian", "Fara", "Galen", "Hesta"],
+        "bynames": ["Ninth-Desk", "Gray Ribbon", "of Intake", "Quiet Seal", "Three Copies", "Bell-Witness"]
+      },
+      "archetypes": [
+        {
+          "id": "intake_clerk", "title": "intake clerk", "glyph": "c", "tags": ["empire", "clerk", "containment"], "roles": ["functionary", "empire"],
+          "descriptions": ["A gray-sleeved clerk counts confiscated marvels without looking directly at them.", "Three sharpened pencils and one private terror ride in the clerk's breast pocket."],
+          "wants": ["Make this intake look routine enough that no superior asks what escaped.", "Find the missing docket before the objects it describes become somebody else's promotion."],
+          "centerWeight": 4, "nearWeight": 2, "wildWeight": 0, "knowledgeTier": 2
+        },
+        {
+          "id": "censor_aide", "title": "junior censor aide", "glyph": "a", "tags": ["empire", "censorate", "inspection"], "roles": ["censorate", "empire"],
+          "descriptions": ["Charter-glass spectacles make the aide's blinking look geometric.", "Red sealing wax stains two fingers; the third stain is not wax."],
+          "wants": ["Identify one containable truth about the sorcerer before the senior censor arrives.", "Keep wonder measurable, especially the wonder currently breathing nearby."],
+          "centerWeight": 3, "nearWeight": 2, "wildWeight": 1, "knowledgeTier": 2
+        }
+      ]
+    },
+    {
+      "regionId": "vigovian_capital",
+      "centerMean": 5.8, "nearMean": 2.6, "wildMean": 0.35,
+      "centerRadius": 1, "nearRadius": 3, "maxResidents": 8, "hermitChance": 1,
+      "names": {
+        "given": ["Aster", "Bela", "Corin", "Davia", "Edras", "Felice", "Gavr", "Iona", "Maro", "Neris"],
+        "bynames": ["White Ledger", "Seventh Arch", "Proper Measure", "Blue Docket", "of the Queue", "Narrow Seal", "Civic Bell", "Petition-Worn"]
+      },
+      "archetypes": [
+        {
+          "id": "bone_broker", "title": "licensed bone-broker", "glyph": "b", "tags": ["merchant", "bone", "licensed", "empire"], "roles": ["merchant", "resident"],
+          "descriptions": ["An ivory license hangs beside a tray of legal fragments and one fragment that keeps humming.", "The broker prices every bone by provenance, resonance, and likelihood of scandal."],
+          "wants": ["Acquire a singing fragment whose paperwork is cleaner than its history.", "Keep the stall licensed without surrendering the contraband ancestor-knuckle under the scale."],
+          "wares": [{"item": "grave salt", "min": 1, "max": 3}, {"item": "moon pearl", "min": 1, "max": 1}],
+          "centerWeight": 5, "nearWeight": 1, "wildWeight": 0, "requiredAtCenter": true, "knowledgeTier": 2
+        },
+        {
+          "id": "petition_clerk", "title": "petition clerk", "glyph": "c", "tags": ["clerk", "petition", "empire"], "roles": ["functionary", "empire"],
+          "descriptions": ["A ribboned clerk can estimate a petition's rejection date by touch.", "Marble dust whitens the clerk's cuffs where citizens lean too close."],
+          "wants": ["Move one impossible petition through the correct impossible office.", "Prevent the queue from becoming a crowd and the crowd from becoming history."],
+          "centerWeight": 5, "nearWeight": 3, "wildWeight": 0, "knowledgeTier": 2
+        },
+        {
+          "id": "censor_clerk", "title": "censor-clerk", "glyph": "C", "tags": ["censorate", "law", "empire"], "roles": ["censorate", "functionary", "empire"],
+          "descriptions": ["A portable brass frame waits to classify whatever the clerk fears next.", "The clerk's calm voice has the practiced softness of a cell door closing."],
+          "wants": ["Turn the latest magical incident into a category narrow enough to punish.", "Find out which superior quietly profits from unlicensed wonders."],
+          "centerWeight": 4, "nearWeight": 2, "wildWeight": 1, "knowledgeTier": 3
+        },
+        {
+          "id": "squadron_mage", "title": "off-duty squadron mage", "glyph": "m", "tags": ["charter_mage", "military", "empire"], "roles": ["military", "empire"],
+          "descriptions": ["Regulation sigils still glow faintly under the mage's loosened collar.", "One hand drums the exact casting cadence of a spell the mage pretends to hate."],
+          "wants": ["Hear one piece of magic that does not sound like marching orders.", "Avoid being recalled to a squadron whose last mission has been removed from the roster."],
+          "centerWeight": 2, "nearWeight": 3, "wildWeight": 1, "hitPoints": [10, 14], "attack": [2, 4], "knowledgeTier": 3
+        },
+        {
+          "id": "petitioner", "title": "provincial petitioner", "glyph": "p", "tags": ["petitioner", "outsider"], "roles": ["resident", "witness"],
+          "descriptions": ["Road dust survives stubbornly on clothes brushed for an imperial audience.", "A sealed petition has been held so long that sweat has blurred the ruler's title."],
+          "wants": ["Make somebody with a desk admit that {realm} has heard the petition.", "Find a quicker route through the capital than obedience."],
+          "centerWeight": 4, "nearWeight": 4, "wildWeight": 1, "knowledgeTier": 1
+        }
+      ]
+    },
+    {
+      "regionId": "hollowmere_margin",
+      "centerMean": 4.5, "nearMean": 1.7, "wildMean": 0.22,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 6,
+      "centers": [{"x": 1, "y": 0}, {"x": 0, "y": 4}],
+      "names": {
+        "given": ["Lio", "Maren", "Sella", "Tovin", "Edda", "Rusk", "Iven", "Nim", "Pella", "Orra"],
+        "bynames": ["Reed-Memory", "Eelwise", "Wet Hem", "Nine Knots", "Under-Willow", "Silt-Hand", "Ferry-Sworn", "Red Thread"]
+      },
+      "archetypes": [
+        {
+          "id": "reed_apothecary", "title": "reed apothecary", "glyph": "h", "tags": ["merchant", "healer", "folk_magic", "hollowmere"], "roles": ["merchant", "service_provider", "resident"],
+          "descriptions": ["Bundles at the apothecary's belt distinguish fever-reed, roof-reed, and the reed burned when soldiers ask questions.", "Wet green perfume follows the apothecary, with grave salt underneath."],
+          "wants": ["Keep Hollowmere's quiet shelters supplied without teaching the occupiers which reeds hide doors.", "Trade enough medicine to replace what the last patrol tipped into the water."],
+          "wares": [{"item": "red tincture", "min": 1, "max": 2}, {"item": "grave salt", "min": 1, "max": 3}],
+          "services": [{"id": "reed_remedy", "name": "reed remedy", "description": "A private preparation for pain, fever, and the memory of pursuit.", "effectKind": "record_memory", "goldCost": 3, "tags": ["healing", "folk_magic"]}],
+          "centerWeight": 5, "nearWeight": 2, "wildWeight": 0, "requiredAtCenter": true, "knowledgeTier": 3
+        },
+        {
+          "id": "ferry_oathkeeper", "title": "ferry oathkeeper", "glyph": "f", "tags": ["ferry", "route", "hollowmere"], "roles": ["service_provider", "resident"],
+          "descriptions": ["Crossing-notches run up both forearms, interrupted where one name was carefully cut away.", "The oathkeeper smells of willow tar and water that has traveled farther than maps."],
+          "wants": ["Guide dangerous travelers by crossings that cost the village least.", "Learn who has been taking the unmarked ferry after moonset."],
+          "services": [{"id": "quiet_crossing", "name": "quiet crossing", "description": "The oathkeeper marks a reed-hidden route that avoids the loud bridges.", "effectKind": "create_route", "goldCost": 2, "targetHint": "a reed-hidden Hollowmere crossing", "tags": ["route", "refuge"]}],
+          "centerWeight": 3, "nearWeight": 5, "wildWeight": 2, "knowledgeTier": 3
+        },
+        {
+          "id": "eel_cutter", "title": "eel-cutter", "glyph": "e", "tags": ["eel", "worker", "hollowmere"], "roles": ["resident", "witness"],
+          "descriptions": ["Silver scales freckle an oilskin apron; none belong to an ordinary eel.", "A crescent knife moves between practical work and household omen."],
+          "wants": ["Find what has been teaching the trap-eels to return imperial tags instead of fish.", "Get one dry night to mend the household roof before the next occupation search."],
+          "centerWeight": 3, "nearWeight": 4, "wildWeight": 2, "knowledgeTier": 2
+        },
+        {
+          "id": "shelter_aunt", "title": "shelter-aunt", "glyph": "a", "tags": ["refuge", "household", "hollowmere"], "roles": ["resident", "witness"],
+          "descriptions": ["The aunt carries three door keys and denies that any fit a door.", "Red thread at the cuff means hospitality; the knot in it means not yet."],
+          "wants": ["Decide whether this fugitive is worth risking three hidden beds and a nephew in custody.", "Get a warning to the next household before the inspection punt arrives."],
+          "centerWeight": 2, "nearWeight": 3, "wildWeight": 3, "knowledgeTier": 3
+        }
+      ]
+    },
+    {
+      "regionId": "stalnaz_highlands",
+      "centerMean": 4.2, "nearMean": 1.5, "wildMean": 0.18,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 5,
+      "names": {"given": ["Asta", "Bryn", "Celyn", "Dara", "Eiran", "Fenn", "Gala", "Iri"], "bynames": ["Blue Note", "Afterlight", "Snow-Tuned", "Glass Palm", "Third Echo", "Cistern-Born"]},
+      "archetypes": [
+        {
+          "id": "light_tuner", "title": "light tuner", "glyph": "t", "tags": ["crystal", "music", "artisan", "merchant"], "roles": ["merchant", "resident"],
+          "descriptions": ["A tuning fork of blue crystal makes old sunlight stir in nearby pockets.", "The tuner's coat is stitched with tiny pockets for notes too bright to carry barehanded."],
+          "wants": ["Tune a cracked cistern before its stored summer becomes weather.", "Hear whether the queen's unnamed heir has begun answering the mountain."],
+          "wares": [{"item": "moon pearl", "min": 1, "max": 1}],
+          "centerWeight": 5, "nearWeight": 2, "wildWeight": 0, "requiredAtCenter": true, "knowledgeTier": 3
+        },
+        {
+          "id": "chorus_porter", "title": "chorus porter", "glyph": "p", "tags": ["porter", "chorus", "mountain"], "roles": ["resident", "service_provider"],
+          "descriptions": ["The porter carries crystal cases in a frame that hums against each footstep.", "Frost beads along a load-rope whenever somebody nearby lies about music."],
+          "wants": ["Deliver a dangerous harmony uphill without waking the avalanche that knows it.", "Find a missing singer before rehearsal becomes a succession omen."],
+          "services": [{"id": "chorus_path", "name": "chorus path", "description": "A resonant path where safe footholds answer in thirds.", "effectKind": "create_route", "targetHint": "the singing stair toward Stalnaz", "tags": ["route", "music"]}],
+          "centerWeight": 3, "nearWeight": 5, "wildWeight": 2, "knowledgeTier": 2
+        },
+        {
+          "id": "snow_listener", "title": "snow listener", "glyph": "l", "tags": ["snow", "hermit", "omens"], "roles": ["resident", "witness"],
+          "descriptions": ["The listener's hood is full of tiny bells muted with wool.", "One ear is painted blue to hear light; the other is bare for ordinary danger."],
+          "wants": ["Learn why tonight's snow is repeating a royal cradle-song.", "Keep the high quiet from being measured into an imperial resource."],
+          "centerWeight": 1, "nearWeight": 2, "wildWeight": 5, "knowledgeTier": 3
+        }
+      ]
+    },
+    {
+      "regionId": "brall_whaleholds",
+      "centerMean": 4.6, "nearMean": 1.8, "wildMean": 0.2,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 4,
+      "names": {"given": ["Aven", "Bera", "Hakon", "Jori", "Nio", "Ragna", "Siv", "Tor"], "bynames": ["Deep-Laugh", "Bone-Tale", "Tarhand", "Three Harpoons", "Ale-Oath", "Storm-Sworn"]},
+      "archetypes": [
+        {
+          "id": "bone_carver", "title": "whalebone carver", "glyph": "b", "tags": ["bone", "artisan", "merchant"], "roles": ["merchant", "resident"],
+          "descriptions": ["Scrimshaw dust pales the carver's beard and every story improves under the knife.", "A half-carved whale on the workboard appears to be judging the harbor."],
+          "wants": ["Carve the true ending of a tale before its surviving witness improves it again.", "Find bone that still remembers a song no charter inspector can classify."],
+          "wares": [{"item": "grave salt", "min": 1, "max": 3}],
+          "centerWeight": 5, "nearWeight": 2, "wildWeight": 0, "requiredAtCenter": true, "knowledgeTier": 2
+        },
+        {
+          "id": "tale_witness", "title": "hall tale-witness", "glyph": "w", "tags": ["story", "witness", "ale"], "roles": ["resident", "witness"],
+          "descriptions": ["A whale-tooth tally marks every version of the witness's favorite disaster.", "The witness laughs first, then checks who in the hall has earned the frightening part."],
+          "wants": ["Find a stranger willing to improve a local story by surviving it.", "Keep the occupation from replacing a ridiculous victory with an accurate loss."],
+          "centerWeight": 4, "nearWeight": 3, "wildWeight": 1, "knowledgeTier": 3
+        },
+        {
+          "id": "harpoon_mender", "title": "harpoon mender", "glyph": "m", "tags": ["harpoon", "worker", "harbor"], "roles": ["resident"],
+          "descriptions": ["Tar-black cord circles both wrists where a snapped line once chose not to kill.", "The mender tests each barb against an old heroic lie."],
+          "wants": ["Mend the communal harpoon before the singing shadow returns offshore.", "Recover a brass barb confiscated as prohibited military nostalgia."],
+          "centerWeight": 3, "nearWeight": 5, "wildWeight": 2, "knowledgeTier": 1
+        }
+      ]
+    },
+    {
+      "regionId": "ryolan_racefields",
+      "centerMean": 4.8, "nearMean": 1.9, "wildMean": 0.22,
+      "centerRadius": 0, "nearRadius": 3, "maxResidents": 8, "hermitChance": 4,
+      "names": {"given": ["Ari", "Boros", "Cyra", "Deyan", "Esen", "Kavi", "Mira", "Rolan"], "bynames": ["Red Wheel", "Dust-Oath", "Second Lap", "Copper Rein", "Sun Witness", "Broken Axle"]},
+      "archetypes": [
+        {
+          "id": "chariot_groom", "title": "chariot groom", "glyph": "g", "tags": ["horse", "chariot", "merchant"], "roles": ["merchant", "resident"],
+          "descriptions": ["Red earth cakes the groom to the knees; the horses are cleaner and know it.", "A split-second scar across the cheek records somebody else's famous finish."],
+          "wants": ["Get a skittish oath-horse to accept a new driver before the public trial.", "Replace a forbidden axle charm without admitting the old one worked."],
+          "wares": [{"item": "red tincture", "min": 1, "max": 2}],
+          "centerWeight": 5, "nearWeight": 4, "wildWeight": 1, "requiredAtCenter": true, "knowledgeTier": 2
+        },
+        {
+          "id": "oath_umpire", "title": "race-oath umpire", "glyph": "u", "tags": ["oath", "witness", "race"], "roles": ["resident", "witness"],
+          "descriptions": ["Copper oath-rings click up one arm, each tied to a disputed finish.", "The umpire watches feet, wheels, weather, and promises with equal suspicion."],
+          "wants": ["Settle a race whose winner arrived yesterday and whose horse arrives tomorrow.", "Keep imperial betting law from deciding a question the dust already answered."],
+          "centerWeight": 4, "nearWeight": 2, "wildWeight": 1, "knowledgeTier": 3
+        },
+        {
+          "id": "field_rider", "title": "field rider", "glyph": "r", "tags": ["horse", "road", "scout"], "roles": ["resident", "service_provider"],
+          "descriptions": ["The rider's small horse wears witness-ribbons from villages beyond the visible road.", "Dust has written a second map over the rider's red cloak."],
+          "wants": ["Carry news across the fields before the road patrol edits it.", "Find who cut the old race-road into a shape that points underground."],
+          "services": [{"id": "race_road", "name": "fast field road", "description": "A hard red-earth line used by riders who owe the main road nothing.", "effectKind": "create_route", "targetHint": "a fast Ryolan field road", "tags": ["route", "horse"]}],
+          "centerWeight": 2, "nearWeight": 4, "wildWeight": 5, "knowledgeTier": 2
+        }
+      ]
+    },
+    {
+      "regionId": "vint_weaveways",
+      "centerMean": 5.0, "nearMean": 2.0, "wildMean": 0.2,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 8, "hermitChance": 3,
+      "names": {"given": ["Amra", "Bex", "Cira", "Dovin", "Eli", "Fara", "Jessa", "Varo"], "bynames": ["Red Thread", "Loud Loom", "Nine Colors", "Counter-Knot", "Blue Sleeve", "Market Mouth"]},
+      "archetypes": [
+        {
+          "id": "thread_broker", "title": "thread broker", "glyph": "t", "tags": ["thread", "merchant", "market"], "roles": ["merchant", "resident"],
+          "descriptions": ["Sample knots crowd the broker's sleeves, each expressing a price and an objection.", "The broker can insult four rival dyes without repeating a color."],
+          "wants": ["Corner the market in a red thread that has started tying itself around liars.", "Win an argument about whether imperial gray counts as a color or a threat."],
+          "wares": [{"item": "charcoal wand", "min": 1, "max": 1}, {"item": "red tincture", "min": 1, "max": 2}],
+          "centerWeight": 6, "nearWeight": 2, "wildWeight": 0, "requiredAtCenter": true, "knowledgeTier": 2
+        },
+        {
+          "id": "argumentative_dyer", "title": "public dyer", "glyph": "d", "tags": ["dye", "argument", "artisan"], "roles": ["resident", "witness"],
+          "descriptions": ["Both hands are purple today; yesterday's position was apparently yellow.", "Steam from a dye pot gives every sentence a different colored halo."],
+          "wants": ["Prove in public that the new imperial tariff is chemically illiterate.", "Find the thief who stole a vat of blue and left behind an excellent rebuttal."],
+          "centerWeight": 5, "nearWeight": 3, "wildWeight": 1, "knowledgeTier": 3
+        },
+        {
+          "id": "loom_runner", "title": "loom-runner", "glyph": "l", "tags": ["loom", "courier", "woven"], "roles": ["resident", "service_provider"],
+          "descriptions": ["Messages woven into the runner's sash change emphasis whenever the wind disagrees.", "A bundle of shuttle-rods knocks together like impatient teeth."],
+          "wants": ["Deliver a disputed pattern before its meaning is voted into something safer.", "Trace a loose red thread that keeps crossing roads before the runner does."],
+          "services": [{"id": "weaveway", "name": "weaveway directions", "description": "A route remembered as a sequence of cloth colors instead of turns.", "effectKind": "create_route", "targetHint": "a color-marked Vintan weaveway", "tags": ["route", "thread"]}],
+          "centerWeight": 2, "nearWeight": 5, "wildWeight": 4, "knowledgeTier": 2
+        }
+      ]
+    },
+    {
+      "regionId": "threen_canals",
+      "centerMean": 4.5, "nearMean": 1.8, "wildMean": 0.18,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 4,
+      "names": {"given": ["Alo", "Beni", "Caro", "Dessa", "Enn", "Fio", "Luma", "Tern"], "bynames": ["Canal Letter", "Copper Serif", "Lockside", "Wet Ink", "Third Bridge", "Patient Hand"]},
+      "archetypes": [
+        {
+          "id": "canal_engineer", "title": "canal engineer", "glyph": "e", "tags": ["canal", "engineer", "service_provider"], "roles": ["resident", "service_provider"],
+          "descriptions": ["Brass dividers span the engineer's belt beside a piece of chalk kept inexplicably dry.", "The engineer listens to gate hinges as if they are dictating revisions."],
+          "wants": ["Repair a lock whose water level has begun spelling accusations.", "Keep one useful canal plan out of the occupation archive."],
+          "services": [{"id": "canal_route", "name": "lockkeeper's passage", "description": "A working route through service walks and low canal gates.", "effectKind": "create_route", "goldCost": 2, "targetHint": "a Threen service-canal passage", "tags": ["route", "canal"]}],
+          "centerWeight": 5, "nearWeight": 4, "wildWeight": 1, "requiredAtCenter": true, "knowledgeTier": 3
+        },
+        {
+          "id": "lettering_apprentice", "title": "lettering apprentice", "glyph": "a", "tags": ["letters", "artisan", "ink"], "roles": ["resident", "witness"],
+          "descriptions": ["Practice alphabets climb both forearms, including one letter that refuses to stay put.", "The apprentice's reed pen has been repaired with a sliver of canal-gate brass."],
+          "wants": ["Design a public letterform the censors cannot read without speaking it aloud.", "Recover a master's drowned portfolio before the ink learns the whole canal."],
+          "centerWeight": 5, "nearWeight": 3, "wildWeight": 1, "knowledgeTier": 2
+        },
+        {
+          "id": "mudlark_scribe", "title": "mudlark scribe", "glyph": "s", "tags": ["mudlark", "scribe", "canal"], "roles": ["resident"],
+          "descriptions": ["Recovered letters dry from a rack-pack, addressed to houses pulled down decades ago.", "Canal mud blackens the scribe's knees and preserves every discarded signature."],
+          "wants": ["Return one waterlogged letter to a recipient officially dead but locally busy.", "Find who is throwing fresh imperial orders into old canal mud."],
+          "centerWeight": 2, "nearWeight": 4, "wildWeight": 5, "knowledgeTier": 2
+        }
+      ]
+    },
+    {
+      "regionId": "monteary_grasslands",
+      "centerMean": 3.8, "nearMean": 1.4, "wildMean": 0.24,
+      "centerRadius": 0, "nearRadius": 3, "maxResidents": 6, "hermitChance": 6,
+      "names": {"given": ["Aila", "Bran", "Cero", "Dari", "Elo", "Maia", "Naro", "Suna"], "bynames": ["Long Grass", "White Rein", "Quiet Hoof", "Herb-Song", "West Wind", "Foal-Kin"]},
+      "archetypes": [
+        {
+          "id": "horse_listener", "title": "horse listener", "glyph": "h", "tags": ["horse", "healer", "service_provider"], "roles": ["resident", "service_provider"],
+          "descriptions": ["The listener waits through human speech but answers the horses immediately.", "Braided grass at one wrist names every mare that has forgiven them."],
+          "wants": ["Learn what frightened the whole western herd without leaving tracks.", "Keep an imperial remount officer from buying the foal that dreams routes."],
+          "services": [{"id": "herd_path", "name": "herd path", "description": "A quiet grass route chosen by horses before roads were negotiated.", "effectKind": "create_route", "targetHint": "a Monteary herd path", "tags": ["route", "horse"]}],
+          "centerWeight": 5, "nearWeight": 4, "wildWeight": 3, "requiredAtCenter": true, "knowledgeTier": 3
+        },
+        {
+          "id": "grass_vintner", "title": "grass vintner", "glyph": "v", "tags": ["herbs", "merchant", "fermentation"], "roles": ["merchant", "resident"],
+          "descriptions": ["Clay tasting cups hang from a sash stained every green the plain can make.", "The vintner smells of crushed sweetgrass and a thunderstorm bottled too early."],
+          "wants": ["Bottle this year's east wind before it turns bitter with marching dust.", "Find why one pasture's herb-wine makes drinkers remember the same stranger."],
+          "wares": [{"item": "red tincture", "min": 1, "max": 2}],
+          "centerWeight": 4, "nearWeight": 2, "wildWeight": 1, "knowledgeTier": 2
+        },
+        {
+          "id": "foal_guard", "title": "foal guard", "glyph": "g", "tags": ["horse", "pasture", "scout"], "roles": ["resident", "witness"],
+          "descriptions": ["A short grass spear is useful mostly for pointing out weather and bad ideas.", "The guard's cloak imitates the plain well enough that butterflies land on it."],
+          "wants": ["Bring a wandering foal home without teaching it that people can be caught.", "Warn the next pasture about riders whose shadows wear imperial tack."],
+          "centerWeight": 2, "nearWeight": 4, "wildWeight": 6, "knowledgeTier": 2
+        }
+      ]
+    },
+    {
+      "regionId": "ontrian_clanlands",
+      "centerMean": 4.3, "nearMean": 1.7, "wildMean": 0.2,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 5,
+      "names": {"given": ["Asha", "Boru", "Cenna", "Dorn", "Eira", "Kelan", "Mora", "Tavi"], "bynames": ["Hearth-Third", "Ash Cousin", "Stone Bowl", "Old Branch", "Ember Name", "Guest-Rope"]},
+      "archetypes": [
+        {
+          "id": "hearth_cousin", "title": "hearth cousin", "glyph": "c", "tags": ["clan", "hearth", "host"], "roles": ["resident", "witness"],
+          "descriptions": ["Three clan cords cross the cousin's shoulder, none tied in quite the expected place.", "The cousin tends guest-fire with one hand and counts possible relatives with the other."],
+          "wants": ["Place this dangerous stranger correctly among guest, cousin, debtor, and omen.", "Settle a branch-family grievance before the ancestors begin taking sides audibly."],
+          "centerWeight": 6, "nearWeight": 3, "wildWeight": 1, "requiredAtCenter": true, "knowledgeTier": 3
+        },
+        {
+          "id": "ancestor_keeper", "title": "ancestor keeper", "glyph": "k", "tags": ["ancestor", "shrine", "service_provider"], "roles": ["resident", "service_provider"],
+          "descriptions": ["Small ash bowls at the keeper's belt hold advice from relatives with incompatible opinions.", "The keeper speaks softly because several ancestors are always trying to finish the sentence."],
+          "wants": ["Learn which departed aunt has begun appearing in the wrong clan's dreams.", "Protect one embarrassing ancestor from an imperial genealogy survey."],
+          "services": [{"id": "ancestor_counsel", "name": "ancestor counsel", "description": "The keeper asks the household dead what they remember of the road ahead.", "effectKind": "record_memory", "goldCost": 1, "tags": ["ancestor", "counsel"]}],
+          "centerWeight": 4, "nearWeight": 2, "wildWeight": 2, "knowledgeTier": 3
+        },
+        {
+          "id": "boundary_nephew", "title": "boundary nephew", "glyph": "n", "tags": ["boundary", "scout", "clan"], "roles": ["resident"],
+          "descriptions": ["Fresh chalk marks on the nephew's boots record boundaries moved since breakfast.", "A hooked walking staff carries apologies to three neighboring clans."],
+          "wants": ["Find where the east boundary stone went and why it took the offerings with it.", "Cross disputed ground without accidentally accepting a marriage, feud, or goat."],
+          "centerWeight": 1, "nearWeight": 4, "wildWeight": 6, "knowledgeTier": 2
+        }
+      ]
+    },
+    {
+      "regionId": "gontark_crags",
+      "centerMean": 3.6, "nearMean": 1.2, "wildMean": 0.18,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 6, "hermitChance": 8,
+      "names": {"given": ["Arka", "Brum", "Caz", "Dren", "Eka", "Gor", "Mava", "Tark"], "bynames": ["Shale-Tooth", "Seven Warnings", "Cliff Voice", "Black Rope", "Goat-Debt", "No Echo"]},
+      "archetypes": [
+        {
+          "id": "curse_guide", "title": "curse-warning guide", "glyph": "g", "tags": ["curse", "guide", "service_provider"], "roles": ["resident", "service_provider"],
+          "descriptions": ["Warning charms cover the guide from collar to boot; several warn against one another.", "The guide points with a black rope rather than a finger, for local reasons."],
+          "wants": ["Mark the new cliff-curse before a traveler gives it a more interesting name.", "Find who removed the seventh warning from a path that only had six."],
+          "services": [{"id": "warning_path", "name": "warning-marked path", "description": "A crag route described by which curses to insult and which to thank.", "effectKind": "create_route", "goldCost": 2, "targetHint": "a warning-marked Gontark path", "tags": ["route", "curse"]}],
+          "centerWeight": 5, "nearWeight": 5, "wildWeight": 3, "requiredAtCenter": true, "knowledgeTier": 3
+        },
+        {
+          "id": "shale_herder", "title": "shale-goat herder", "glyph": "h", "tags": ["goat", "shale", "herder"], "roles": ["resident", "witness"],
+          "descriptions": ["The herder's goats stand on angles that make architecture feel timid.", "Shale chips in the coat pockets are sorted by omen, edge, and snackability."],
+          "wants": ["Get a favorite goat down from a ledge visible only during arguments.", "Keep the herd away from a new imperial road that smells cursed in a boring way."],
+          "centerWeight": 3, "nearWeight": 4, "wildWeight": 6, "knowledgeTier": 2
+        },
+        {
+          "id": "cliff_exile", "title": "cliff exile", "glyph": "x", "tags": ["hermit", "curse", "exile"], "roles": ["resident"],
+          "descriptions": ["A stone mask hangs at the exile's hip, facing inward.", "The exile has built a neat home just beyond the point every warning says to stop."],
+          "wants": ["Convince one curse to haunt the person who actually earned it.", "Learn whether the valley still tells the story that made exile necessary."],
+          "centerWeight": 0, "nearWeight": 1, "wildWeight": 8, "knowledgeTier": 3
+        }
+      ]
+    },
+    {
+      "regionId": "parn_sunroads",
+      "centerMean": 4.0, "nearMean": 1.5, "wildMean": 0.16,
+      "centerRadius": 0, "nearRadius": 3, "maxResidents": 7, "hermitChance": 7,
+      "names": {"given": ["Aru", "Basa", "Djen", "Hara", "Iset", "Khemi", "Nura", "Sefu"], "bynames": ["Noon Shade", "Copper Sun", "Third Well", "Road-Born", "White Scarf", "Long Horizon"]},
+      "archetypes": [
+        {
+          "id": "shade_seller", "title": "shade seller", "glyph": "s", "tags": ["shade", "merchant", "market"], "roles": ["merchant", "resident"],
+          "descriptions": ["Folded awnings at the seller's back hold distinct grades of afternoon.", "A copper mirror measures how much sun each customer has already endured."],
+          "wants": ["Recover a stolen square of royal shade before noon notices.", "Sell enough cool shelter to buy water for a caravan the maps have abandoned."],
+          "wares": [{"item": "red tincture", "min": 1, "max": 3}],
+          "centerWeight": 6, "nearWeight": 2, "wildWeight": 0, "requiredAtCenter": true, "knowledgeTier": 2
+        },
+        {
+          "id": "sunroad_outrider", "title": "sun-road outrider", "glyph": "r", "tags": ["road", "scout", "service_provider"], "roles": ["resident", "service_provider"],
+          "descriptions": ["A white scarf shades a face mapped by salt, glare, and several unofficial roads.", "The outrider's compass points toward the nearest promise of water rather than north."],
+          "wants": ["Reach a departed caravan before its enemies realize it left yesterday.", "Find which sun-road has begun returning travelers to the wrong century."],
+          "services": [{"id": "sunroad", "name": "caravan sun-road", "description": "A route timed by shade, wells, and the patience of the horizon.", "effectKind": "create_route", "targetHint": "a Parn caravan sun-road", "tags": ["route", "desert"]}],
+          "centerWeight": 3, "nearWeight": 5, "wildWeight": 6, "knowledgeTier": 3
+        },
+        {
+          "id": "well_singer", "title": "well singer", "glyph": "w", "tags": ["water", "song", "omen"], "roles": ["resident", "witness"],
+          "descriptions": ["A low humming bowl tests whether each well is water, memory, or both.", "Blue beadwork at the throat records wells that answered in human voices."],
+          "wants": ["Teach a bitter well a song that does not mention the occupation.", "Learn why the third well sings the name of a traveler not yet born."],
+          "centerWeight": 4, "nearWeight": 3, "wildWeight": 4, "knowledgeTier": 3
+        }
+      ]
+    },
+    {
+      "regionId": "rentacosta_harbor",
+      "centerMean": 5.2, "nearMean": 2.1, "wildMean": 0.18,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 8, "hermitChance": 3,
+      "names": {"given": ["Ari", "Bela", "Canto", "Dela", "Enzo", "Lira", "Maro", "Sona"], "bynames": ["Low Tide", "Black Ink", "Bell-Shell", "Salt Ledger", "Second Voice", "Pearl Ear"]},
+      "archetypes": [
+        {
+          "id": "tide_broker", "title": "low-tide broker", "glyph": "b", "tags": ["tide", "merchant", "harbor"], "roles": ["merchant", "resident"],
+          "descriptions": ["The broker's waterproof ledger prices cargo, songs, and favors by how soon the tide returns.", "Shell weights click on a scale whose empty pan whispers offers."],
+          "wants": ["Complete an exchange before low tide uncovers the clause everybody omitted.", "Find a buyer for a pearl containing somebody else's last argument."],
+          "wares": [{"item": "moon pearl", "min": 1, "max": 2}, {"item": "grave salt", "min": 1, "max": 2}],
+          "centerWeight": 6, "nearWeight": 2, "wildWeight": 0, "requiredAtCenter": true, "knowledgeTier": 3
+        },
+        {
+          "id": "sound_ink_pilot", "title": "sound-ink pilot", "glyph": "p", "tags": ["sound_ink", "pilot", "service_provider"], "roles": ["resident", "service_provider"],
+          "descriptions": ["Black notation curls over the pilot's knuckles and changes when the surf turns.", "A rolled harbor song serves as chart, credential, and occasional threat."],
+          "wants": ["Pilot one impossible cargo through a channel omitted from imperial charts.", "Recover the missing bass line from the harbor before ships begin following its silence."],
+          "services": [{"id": "sung_channel", "name": "sung harbor channel", "description": "A navigable route encoded as intervals between bells and breaking waves.", "effectKind": "create_route", "goldCost": 3, "targetHint": "a Rentacosta sung channel", "tags": ["route", "sound_ink"]}],
+          "centerWeight": 4, "nearWeight": 5, "wildWeight": 2, "knowledgeTier": 3
+        },
+        {
+          "id": "shell_listener", "title": "shell listener", "glyph": "l", "tags": ["shell", "omens", "shore"], "roles": ["resident", "witness"],
+          "descriptions": ["A necklace of unmatched shells gives contradictory accounts of the sea.", "The listener keeps one ear salt-crusted for the living and one painted black for drowned voices."],
+          "wants": ["Identify which drowned ship keeps dictating tomorrow's prices.", "Return a speaking shell to the family it has been avoiding."],
+          "centerWeight": 2, "nearWeight": 3, "wildWeight": 6, "knowledgeTier": 3
+        }
+      ]
+    },
+    {
+      "regionId": "wild_border",
+      "centerMean": 3.0, "nearMean": 1.0, "wildMean": 0.12,
+      "centerRadius": 0, "nearRadius": 2, "maxResidents": 6, "hermitChance": 10,
+      "names": {"given": ["After", "Blue", "Clover", "Dusk", "Else", "Moth", "Rain", "Tomorrow"], "bynames": ["Late Shadow", "Bone Orchard", "Wrong Season", "Festival-Left", "Glass Root", "No Fixed Door"]},
+      "archetypes": [
+        {
+          "id": "festival_scavenger", "title": "festival scavenger", "glyph": "s", "tags": ["festival", "scavenger", "merchant"], "roles": ["merchant", "resident"],
+          "descriptions": ["Bright streamers nest in the scavenger's hair, though the festival ended before either arrived.", "A basket of abandoned celebrations smells of rain, sugar, and one small thunderstorm."],
+          "wants": ["Find where the remembered festival is happening next and whether time is invited.", "Trade away a mask that keeps choosing new faces while nobody watches."],
+          "wares": [{"item": "moon pearl", "min": 1, "max": 1}, {"item": "charcoal wand", "min": 1, "max": 1}],
+          "centerWeight": 5, "nearWeight": 2, "wildWeight": 1, "requiredAtCenter": true, "knowledgeTier": 3
+        },
+        {
+          "id": "lawless_gardener", "title": "lawless gardener", "glyph": "g", "tags": ["flowers", "broken_law", "folk_magic"], "roles": ["resident", "service_provider"],
+          "descriptions": ["Flowers turn their heads to follow the gardener's hands instead of the sun.", "Bone-handled shears prune rules from plants and occasionally from conversations."],
+          "wants": ["Persuade a new flower to stop enforcing a law nobody remembers passing.", "Plant one impossible color somewhere marble will have to acknowledge it."],
+          "services": [{"id": "flower_path", "name": "flower path", "description": "A path whose blooms turn toward the destination, though distance disagrees.", "effectKind": "create_route", "targetHint": "a responsive wildflower path", "tags": ["route", "wild_magic"]}],
+          "centerWeight": 3, "nearWeight": 4, "wildWeight": 5, "knowledgeTier": 3
+        },
+        {
+          "id": "distance_hermit", "title": "distance hermit", "glyph": "h", "tags": ["hermit", "distance", "wild_magic"], "roles": ["resident", "witness"],
+          "descriptions": ["The hermit is always a few steps farther away than the ground allows.", "A coat sewn from discarded horizons flaps in several incompatible winds."],
+          "wants": ["Recover the near side of a friendship that wandered too far away.", "Keep the straight road from discovering this crooked little home."],
+          "centerWeight": 0, "nearWeight": 1, "wildWeight": 10, "knowledgeTier": 3
+        }
+      ]
+    }
+  ]
+}

@@ -132,6 +132,13 @@ public partial class Main : Control
         }
 
         RefreshView();
+        if (System.Environment.GetEnvironmentVariable("SORCERER_MINIGAME_PREVIEW")
+            ?.Equals("bone_song", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            _ = _boneSong.PlayAsync(
+                "ask the whale-road to carry my impossible name",
+                providerSettled: () => false);
+        }
     }
 
     public override void _Input(InputEvent @event)

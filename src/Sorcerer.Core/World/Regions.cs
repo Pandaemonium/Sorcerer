@@ -7,6 +7,174 @@ public sealed record TraditionDefinition(
     string MagicTexture,
     string CostTexture);
 
+public sealed record RegionMapPlacement(
+    int AnchorX,
+    int AnchorY,
+    int SeedJitter = 0);
+
+public sealed record RegionPropBaseDefinition(
+    string Id,
+    string Name,
+    char Glyph,
+    string FixtureType,
+    string Description,
+    IReadOnlyList<string> Tags,
+    bool BlocksMovement = true,
+    bool BlocksSight = false,
+    int Weight = 1);
+
+public sealed record RegionPropPartDefinition(
+    string Id,
+    string Text,
+    string Description,
+    IReadOnlyList<string> Tags,
+    string? Material = null,
+    int Weight = 1);
+
+public sealed record RegionPropHookDefinition(
+    string Kind,
+    int Weight = 1,
+    string? Title = null,
+    string? Text = null,
+    IReadOnlyList<string>? Tags = null);
+
+public sealed record RegionPropEnsembleMemberDefinition(
+    string BaseId,
+    string MaterialId,
+    string ConditionId,
+    int OffsetX,
+    int OffsetY);
+
+public sealed record RegionPropEnsembleDefinition(
+    string Id,
+    int Weight,
+    IReadOnlyList<RegionPropEnsembleMemberDefinition> Members);
+
+public sealed record RegionPropGrammarDefinition(
+    int MinProps,
+    int MaxProps,
+    int EmptyChancePercent,
+    int DenseChancePercent,
+    int DenseBonus,
+    int EnsembleChancePercent,
+    int HookChancePercent,
+    IReadOnlyList<RegionPropBaseDefinition> Bases,
+    IReadOnlyList<RegionPropPartDefinition> Materials,
+    IReadOnlyList<RegionPropPartDefinition> Conditions,
+    IReadOnlyList<RegionPropHookDefinition>? Hooks = null,
+    IReadOnlyList<RegionPropEnsembleDefinition>? Ensembles = null);
+
+public sealed record RegionPopulationCenterDefinition(int X, int Y);
+
+public sealed record RegionNameForgeDefinition(
+    IReadOnlyList<string> GivenNames,
+    IReadOnlyList<string> ByNames);
+
+public sealed record RegionWareDefinition(
+    string Item,
+    int MinQuantity = 1,
+    int MaxQuantity = 1);
+
+public sealed record RegionServiceDefinition(
+    string Id,
+    string Name,
+    string Description,
+    string EffectKind,
+    int GoldCost = 0,
+    string? ItemCost = null,
+    string? TargetHint = null,
+    IReadOnlyList<string>? Tags = null);
+
+public sealed record RegionResidentArchetypeDefinition(
+    string Id,
+    string Title,
+    char Glyph,
+    string? FactionId,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> Roles,
+    IReadOnlyList<string> Descriptions,
+    IReadOnlyList<string> Wants,
+    IReadOnlyList<RegionWareDefinition> Wares,
+    IReadOnlyList<RegionServiceDefinition> Services,
+    int Weight = 1,
+    int CenterWeight = 1,
+    int NearWeight = 1,
+    int WildWeight = 1,
+    int MinHitPoints = 7,
+    int MaxHitPoints = 10,
+    int MinAttack = 0,
+    int MaxAttack = 2,
+    int KnowledgeTier = 1,
+    bool RequiredAtCenter = false);
+
+public sealed record RegionPopulationGrammarDefinition(
+    double CenterMean,
+    double NearMean,
+    double WildMean,
+    int CenterRadius,
+    int NearRadius,
+    int MaxResidents,
+    int HermitChancePercent,
+    RegionNameForgeDefinition Names,
+    IReadOnlyList<RegionResidentArchetypeDefinition> Archetypes,
+    IReadOnlyList<RegionPopulationCenterDefinition>? Centers = null);
+
+public sealed record RegionDistrictDefinition(
+    string Id,
+    string Name,
+    string Summary,
+    string Terrain,
+    string FeatureName,
+    string FeatureDescription,
+    char FeatureGlyph,
+    string FeatureMaterial,
+    IReadOnlyList<string> Tags,
+    int PopulationPercent = 100);
+
+public sealed record RegionLandmarkDefinition(
+    string Id,
+    string Name,
+    string Description,
+    char Glyph,
+    string Material,
+    IReadOnlyList<string> Tags);
+
+public sealed record RegionSettlementGrammarDefinition(
+    IReadOnlyList<string> SettlementNames,
+    IReadOnlyList<string> HamletNames,
+    int PrimaryRadius,
+    int HamletCount,
+    string RoadName,
+    string RoadTerrain,
+    IReadOnlyList<RegionDistrictDefinition> Districts,
+    IReadOnlyList<RegionLandmarkDefinition> Landmarks);
+
+public sealed record RegionInteriorFeatureDefinition(
+    string Name,
+    string Description,
+    char Glyph,
+    string Material,
+    IReadOnlyList<string> Tags,
+    bool BlocksMovement = false);
+
+public sealed record RegionInteriorDefinition(
+    string Id,
+    string Name,
+    string Kind,
+    string Summary,
+    string FloorTerrain,
+    string WallMaterial,
+    string AccessPolicy,
+    string? RequiredItem,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<RegionInteriorFeatureDefinition> Features);
+
+public sealed record RegionInteriorBinding(string DistrictId, string InteriorId);
+
+public sealed record RegionInteriorGrammarDefinition(
+    IReadOnlyList<RegionInteriorDefinition> Definitions,
+    IReadOnlyList<RegionInteriorBinding> Bindings);
+
 public sealed record RegionDefinition(
     string Id,
     string Name,
@@ -19,18 +187,65 @@ public sealed record RegionDefinition(
     string FloorTerrain = "floor",
     IReadOnlyList<RegionAffordanceCard>? Affordances = null,
     string VoiceSummary = "",
-    IReadOnlyList<string>? AmbientLines = null);
+    IReadOnlyList<string>? AmbientLines = null,
+    RegionMapPlacement? Placement = null,
+    RegionPropGrammarDefinition? Props = null,
+    RegionPopulationGrammarDefinition? Population = null,
+    RegionSettlementGrammarDefinition? Settlement = null,
+    RegionInteriorGrammarDefinition? Interiors = null);
 
 public sealed class RegionRegistry
 {
     private readonly Dictionary<string, RegionDefinition> _regions = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TraditionDefinition> _traditions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RegionPopulationGrammarDefinition> _populations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RegionSettlementGrammarDefinition> _settlements = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RegionInteriorGrammarDefinition> _interiors = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyCollection<RegionDefinition> Regions => _regions.Values;
 
     public IReadOnlyCollection<TraditionDefinition> Traditions => _traditions.Values;
 
-    public void AddRegion(RegionDefinition region) => _regions[region.Id] = region;
+    public void AddRegion(RegionDefinition region)
+    {
+        var withPopulation = _populations.TryGetValue(region.Id, out var population)
+            ? region with { Population = population }
+            : region;
+        _regions[region.Id] = _settlements.TryGetValue(region.Id, out var settlement)
+            ? withPopulation with { Settlement = settlement }
+            : withPopulation;
+        if (_interiors.TryGetValue(region.Id, out var interiors))
+        {
+            _regions[region.Id] = _regions[region.Id] with { Interiors = interiors };
+        }
+    }
+
+    public void AddPopulation(string regionId, RegionPopulationGrammarDefinition population)
+    {
+        _populations[regionId] = population;
+        if (_regions.TryGetValue(regionId, out var region))
+        {
+            _regions[regionId] = region with { Population = population };
+        }
+    }
+
+    public void AddSettlement(string regionId, RegionSettlementGrammarDefinition settlement)
+    {
+        _settlements[regionId] = settlement;
+        if (_regions.TryGetValue(regionId, out var region))
+        {
+            _regions[regionId] = region with { Settlement = settlement };
+        }
+    }
+
+    public void AddInteriors(string regionId, RegionInteriorGrammarDefinition interiors)
+    {
+        _interiors[regionId] = interiors;
+        if (_regions.TryGetValue(regionId, out var region))
+        {
+            _regions[regionId] = region with { Interiors = interiors };
+        }
+    }
 
     public void AddTradition(TraditionDefinition tradition) => _traditions[tradition.Id] = tradition;
 

@@ -43,6 +43,15 @@ public sealed class CliCommandParserTests
         Assert.IsType(expectedCommand, parsed);
     }
 
+    [Fact]
+    public void InteriorCommandsHaveTextAndJsonParity()
+    {
+        Assert.IsType<EnterCommand>(TextCommandParser.Parse("enter palace"));
+        Assert.IsType<LeaveCommand>(TextCommandParser.Parse("leave"));
+        Assert.IsType<EnterCommand>(Program.ParseCommand("""{"type":"enter","target":"palace"}"""));
+        Assert.IsType<LeaveCommand>(Program.ParseCommand("""{"type":"leave"}"""));
+    }
+
     [Theory]
     [InlineData("n", Direction.North)]
     [InlineData("north", Direction.North)]

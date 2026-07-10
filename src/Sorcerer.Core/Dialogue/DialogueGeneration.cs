@@ -36,7 +36,8 @@ public sealed record DialogueSceneCard(
     IReadOnlyList<string> VisibleEntities,
     IReadOnlyList<string> NearbyItems,
     IReadOnlyList<string> RecentEvents,
-    string? RegionVoice = null);
+    string? RegionVoice = null,
+    IReadOnlyList<string>? Scenery = null);
 
 public sealed record DialogueContextCardPayload(
     string Id,

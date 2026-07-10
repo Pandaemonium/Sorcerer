@@ -106,6 +106,14 @@ public sealed record TileNote(
     IReadOnlyList<string> Tags,
     string Visibility = "visible");
 
+public sealed record SceneryNote(
+    string Id,
+    string Name,
+    int X,
+    int Y,
+    string Material,
+    IReadOnlyList<string> Tags);
+
 public sealed record OperationCardView(
     string Name,
     IReadOnlyList<string> Aliases,
@@ -128,7 +136,8 @@ public sealed record MagicContextView(
     OperationIndex Operations,
     ResolverLensView? ResolverLens = null,
     IReadOnlyList<ReagentCard>? Reagents = null,
-    IReadOnlyList<LoreCardView>? Lore = null);
+    IReadOnlyList<LoreCardView>? Lore = null,
+    IReadOnlyList<SceneryNote>? Scenery = null);
 
 public sealed record StatusCard(
     string Id,
@@ -222,7 +231,14 @@ public sealed record WorldCard(
     string TraditionId,
     int ImperialPresence,
     int Wildness,
-    IReadOnlyList<RegionAffordanceCard> Affordances);
+    IReadOnlyList<RegionAffordanceCard> Affordances,
+    string PlaceKind = "wilderness",
+    string? SettlementName = null,
+    string? DistrictName = null,
+    string? RoadName = null,
+    string? LandmarkName = null,
+    string? InteriorName = null,
+    string? NearestSettlement = null);
 
 public sealed record CharacterSheetCard(
     string BodyEntityId,

@@ -31,6 +31,9 @@ references inside them to Python modules or the old name.
 
 - [GRAND_VISION.md](GRAND_VISION.md): the central vision (supersedes GAME_VISION) - play, the
   systems, and how they interact.
+- [HOLISTIC_DEVELOPMENT_PLAN.md](HOLISTIC_DEVELOPMENT_PLAN.md): current product-level review and
+  prioritized plan for turning the existing engine lanes into freedom, expression, and a visibly
+  responsive world.
 - [SYSTEMS_VISION.md](SYSTEMS_VISION.md): the systems-level unification - the
   act/witness/record/circulate/respond/deliver loop, the one-consequence-grammar discipline, and
   the four convergence moves (consequence grammar, rumor transport, wants, world-turn).
@@ -95,6 +98,10 @@ references inside them to Python modules or the old name.
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): staged build plan.
 - [MATURITY_ROADMAP.md](MATURITY_ROADMAP.md): the phased path from the first-playable slice to
   full Wild Magic-level maturity, building general systems over the reserved state lanes.
+- [PROCGEN_RICHNESS_PLAN.md](PROCGEN_RICHNESS_PLAN.md): tactical props/people/places/quests plan
+  for the large, content-driven procedural world.
+- [SIGNIFICANT_INTERIORS.md](SIGNIFICANT_INTERIORS.md): data-authored one-zone interiors,
+  threshold access, follower transitions, persistence, and GUI/CLI parity.
 - [BUILD_PLAN.md](BUILD_PLAN.md): the executable, file-level handoff plan - engine refactor,
   perception/FOV, Phases 1-8, including character/body-soul state, deeds/factions/social/worldgen,
   magic/item depth, lore/narrator/provider harness work, and the current persistence/replay/

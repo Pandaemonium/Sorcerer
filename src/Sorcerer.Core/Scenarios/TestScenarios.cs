@@ -12,6 +12,12 @@ public static class TestScenarios
 {
     public const int TacticalWidth = 40;
     public const int TacticalHeight = 30;
+    private static readonly Lazy<RegionInteriorDefinition?> OpeningInterior = new(() =>
+        RegionCatalog.LoadDefault()
+            .Region("imperial_encounter")?
+            .Interiors?
+            .Definitions
+            .FirstOrDefault(definition => definition.Id.Equals("sealed_registry", StringComparison.OrdinalIgnoreCase)));
 
     public static GameState ImperialEncounter(
         string? playerOriginId = null,
@@ -194,6 +200,7 @@ public static class TestScenarios
             }));
         Add(state, lio);
 
+        AddOpeningInteriorThreshold(state);
         AddMemorial(state, memorials);
         WorldConsequenceGuard.ApplyWithNewApplier(state, WorldConsequence.Message(
             "scenario",
@@ -208,6 +215,50 @@ public static class TestScenarios
                 ["scenario"] = "imperial_encounter",
             }));
         return state;
+    }
+
+    private static void AddOpeningInteriorThreshold(GameState state)
+    {
+        var interior = OpeningInterior.Value;
+        if (interior is null)
+        {
+            return;
+        }
+
+        var position = new GridPoint(18, 5);
+        var tags = interior.Tags
+            .Concat(new[]
+            {
+                "fixture",
+                "interior_entrance",
+                "significant_site",
+                interior.Id,
+                interior.Kind,
+                interior.AccessPolicy,
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        Add(state, new Entity(EntityId.Create("sealed_registry_entrance"), "sealed evidence registry door")
+            .Set(new PositionComponent(position))
+            .Set(new RenderableComponent('D', "imperial"))
+            .Set(new TagsComponent(tags))
+            .Set(new PhysicalComponent(BlocksMovement: false, BlocksSight: false, Material: interior.WallMaterial))
+            .Set(new FixtureComponent("interior_entrance", tags, CanAnchorMagic: true))
+            .Set(new DescriptionComponent(
+                $"A numbered marble door leads into {interior.Name}. {interior.Summary} "
+                + $"It is restricted; {interior.RequiredItem ?? "permission, force, or magic"} is one ordinary way through."))
+            .Set(new InteractableComponent(new[] { "examine", "enter" }))
+            .Set(new InteriorEntranceComponent(
+                $"interior:imperial_encounter:{interior.Id}:0,0",
+                interior.Id,
+                interior.Name,
+                interior.Kind,
+                interior.Summary,
+                interior.AccessPolicy,
+                interior.RequiredItem,
+                "0,0",
+                position.X,
+                position.Y)));
     }
 
     private static void AddMemorial(GameState state, IReadOnlyList<RunChronicleRecord>? memorials)

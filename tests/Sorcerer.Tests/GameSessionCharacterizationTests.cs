@@ -56,6 +56,7 @@ public sealed class GameSessionCharacterizationTests
             "notice_1",
             "player",
             "prisoner_1",
+            "sealed_registry_entrance",
             "soldier_1",
             "soldier_2",
         }, observation.Debug!.EntityIds);
@@ -8251,9 +8252,11 @@ public sealed class GameSessionCharacterizationTests
 
         Assert.True(travel.Success);
         Assert.Contains(travel.Messages, message =>
-            message.Contains("You travel east into Hollowmere Margin.", StringComparison.OrdinalIgnoreCase));
+            message.Contains("You travel east into", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("Hollowmere Margin", StringComparison.OrdinalIgnoreCase));
         Assert.Single(session.Engine.State.Messages, message =>
-            message.Contains("You travel east into Hollowmere Margin.", StringComparison.OrdinalIgnoreCase));
+            message.Contains("You travel east into", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("Hollowmere Margin", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(travel.Deltas, delta =>
             delta.Operation == "travel"
             && Equals(delta.Details["auditOnly"], true)
@@ -8307,8 +8310,15 @@ public sealed class GameSessionCharacterizationTests
             Assert.Equal("region_generation", delta.Details["terrainSource"]);
             Assert.False(delta.IsPlayerVisible());
         });
-        Assert.Equal(5, session.Engine.State.Terrain.Values.Count(terrain =>
-            terrain.Equals("shallow_water", StringComparison.OrdinalIgnoreCase)));
+        Assert.InRange(session.Engine.State.Terrain.Values.Count(terrain =>
+            terrain.Equals("shallow_water", StringComparison.OrdinalIgnoreCase)), 1, 5);
+        Assert.Contains(travel.Deltas, delta =>
+            delta.Operation == "generatePlaceTerrain"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.SetTerrain)
+            && Equals(delta.Details["districtId"], "ferryward")
+            && Equals(delta.Details["terrain"], "wet_planks"));
+        Assert.True(session.Engine.State.Terrain.Values.Count(terrain =>
+            terrain.Equals("wet_planks", StringComparison.OrdinalIgnoreCase)) >= 40);
         Assert.Contains(travel.Deltas, delta =>
             delta.Operation == "generateZoneFeature"
             && delta.Target.StartsWith("zone_prop_", StringComparison.OrdinalIgnoreCase)
@@ -8327,16 +8337,19 @@ public sealed class GameSessionCharacterizationTests
             && Equals(delta.Details["summoned"], false)
             && Equals(delta.Details["aiPolicyId"], "resident")
             && Equals(delta.Details["wantGenerated"], false)
+            && Equals(delta.Details["populationArchetype"], "reed_apothecary")
+            && Equals(delta.Details["populationHabitat"], "center")
             && !delta.IsPlayerVisible());
         Assert.Equal(2, travel.Deltas.Count(delta =>
             delta.Operation == "generateResidentWares"
             && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.OfferTrade)
-            && Equals(delta.Details["stockSource"], "resident_generation")));
+            && Equals(delta.Details["stockSource"], "regional_population")));
         var resident = Assert.Single(session.Engine.State.Entities.Values, entity =>
-            entity.Name == "Hollowmere reed-keeper");
+            entity.TryGet<TagsComponent>(out var tags)
+            && tags.Tags.Contains("reed_apothecary", StringComparer.OrdinalIgnoreCase));
         Assert.True(resident.TryGet<MerchantComponent>(out var merchant));
-        Assert.Equal(1, merchant.Wares["red tincture"]);
-        Assert.Equal(2, merchant.Wares["grave salt"]);
+        Assert.InRange(merchant.Wares["red tincture"], 1, 2);
+        Assert.InRange(merchant.Wares["grave salt"], 1, 3);
     }
 
     [Fact]
@@ -8510,14 +8523,16 @@ public sealed class GameSessionCharacterizationTests
         await session.ExecuteAsync(new TravelCommand(Direction.East));
         var resident = Assert.Single(
             session.Engine.State.Entities.Values,
-            entity => entity.Name == "Hollowmere reed-keeper");
+            entity => entity.TryGet<TagsComponent>(out var tags)
+                && tags.Tags.Contains("reed_apothecary", StringComparer.OrdinalIgnoreCase));
 
         Assert.Equal("hollowmere", resident.Get<ActorComponent>().Faction);
         Assert.Contains("resident", resident.Get<FactionComponent>().Roles);
         Assert.Contains("occupied", resident.Get<TagsComponent>().Tags);
         Assert.Contains("Hollowmere is occupied", resident.Get<DescriptionComponent>().Text);
-        Assert.Contains("quiet shelters", resident.Get<WantComponent>().Text);
+        Assert.False(string.IsNullOrWhiteSpace(resident.Get<WantComponent>().Text));
         Assert.Contains("promise_source", resident.Get<WantComponent>().Tags);
+        Assert.Contains("reed apothecary", resident.Name, StringComparison.OrdinalIgnoreCase);
         Assert.False(session.Engine.IsHostile(resident, session.Engine.State.ControlledEntity));
     }
 

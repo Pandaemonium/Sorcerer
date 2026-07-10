@@ -53,16 +53,18 @@ public sealed class PromiseRealizationSystem
     private readonly Func<WorldConsequence, WorldConsequenceApplyResult>? _applyConsequence;
     private readonly IReadOnlyDictionary<string, TravelPromiseHandler> _travelHandlers;
     private readonly IReadOnlyDictionary<string, AnchoredPromiseHandler> _anchoredHandlers;
-    private readonly RegionRegistry _regions = RegionRegistry.CreateMinimal();
+    private readonly RegionRegistry _regions;
 
     public PromiseRealizationSystem(
         GameState state,
         GameEngine? engine = null,
-        Func<WorldConsequence, WorldConsequenceApplyResult>? applyConsequence = null)
+        Func<WorldConsequence, WorldConsequenceApplyResult>? applyConsequence = null,
+        RegionRegistry? regions = null)
     {
         _state = state;
         _engine = engine;
         _applyConsequence = applyConsequence;
+        _regions = regions ?? RegionCatalog.LoadDefault();
         _travelHandlers = CreateTravelHandlers();
         _anchoredHandlers = CreateAnchoredHandlers();
     }

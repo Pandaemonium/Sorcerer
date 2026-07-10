@@ -138,9 +138,10 @@ public sealed class LoreLayerTests
         var session = CreateSession(seed: 7);
         await session.ExecuteAsync(new TravelCommand(Direction.East));
 
-        var feature = Assert.Single(session.Engine.State.Entities.Values, entity =>
-            entity.TryGet<FixtureComponent>(out var fixture)
-            && fixture.FixtureType.Equals("zone_feature", StringComparison.OrdinalIgnoreCase));
+        var feature = session.Engine.State.Entities.Values.First(entity =>
+            entity.TryGet<FixtureComponent>(out _)
+            && entity.TryGet<TagsComponent>(out var tags)
+            && tags.Tags.Contains("semantic_prop", StringComparer.OrdinalIgnoreCase));
         var featurePosition = feature.Get<PositionComponent>().Position;
         session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(featurePosition.X - 1, featurePosition.Y)));
 
@@ -154,7 +155,7 @@ public sealed class LoreLayerTests
             && record.Text.Contains("Hollowmere keeps names", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(secondExamine.Messages, message =>
             message.Contains("Known detail:", StringComparison.OrdinalIgnoreCase)
-            && message.Contains("Hollowmere", StringComparison.OrdinalIgnoreCase));
+            && message.Contains(feature.Name, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

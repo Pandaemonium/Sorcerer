@@ -4,6 +4,7 @@ using Sorcerer.Core.Entities;
 using Sorcerer.Core.Lore;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.Views;
 using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Dialogue;
@@ -393,10 +394,11 @@ public sealed class DialogueContextAssembler
             new DialogueSceneCard(
                 _engine.State.RegionId,
                 _engine.State.CurrentZoneId,
-                VisibleEntityLines().Take(4).ToArray(),
+                VisibleEntityLines().Take(8).ToArray(),
                 NearbyItemLines().Take(3).ToArray(),
                 _engine.State.Messages.TakeLast(2).ToArray(),
-                _engine.CurrentRegionVoice),
+                _engine.CurrentRegionVoice,
+                CompactSceneryLines().Take(8).ToArray()),
             cards.Available
                 .Select(card => new DialogueRouteCandidate(
                     card.Id,
@@ -485,7 +487,14 @@ public sealed class DialogueContextAssembler
 
     private IEnumerable<string> ZoneCurrentLines()
     {
+        var place = _engine.CurrentPlace;
         yield return $"Zone: {_engine.State.CurrentZoneId} in region {_engine.State.RegionId}.";
+        yield return $"Place: {place.DisplayName}; kind {place.Kind}. {place.Summary}";
+        if (place.Road is not null)
+        {
+            yield return $"Road: {place.Road.Name}.";
+        }
+
         foreach (var entity in VisibleEntityLines())
         {
             yield return $"Entity: {entity}";
@@ -494,6 +503,11 @@ public sealed class DialogueContextAssembler
         foreach (var item in NearbyItemLines())
         {
             yield return $"Item: {item}";
+        }
+
+        foreach (var scenery in CompactSceneryLines())
+        {
+            yield return $"Scenery: {scenery}";
         }
 
         foreach (var message in _engine.State.Messages.TakeLast(DialogueRecentEventLimit))
@@ -508,8 +522,12 @@ public sealed class DialogueContextAssembler
         var origin = controlled.TryGet<PositionComponent>(out var controlledPosition)
             ? controlledPosition.Position
             : new GridPoint(0, 0);
+        var perception = _engine.Perception();
         foreach (var item in _engine.State.Entities.Values
-            .Where(entity => entity.Id != controlled.Id && IsDialogueNpc(entity) && entity.TryGet<PositionComponent>(out _))
+            .Where(entity => entity.Id != controlled.Id
+                && perception.VisibleEntityIds.Contains(entity.Id)
+                && IsDialogueNpc(entity)
+                && entity.TryGet<PositionComponent>(out _))
             .Select(entity =>
             {
                 var position = entity.Get<PositionComponent>().Position;
@@ -554,8 +572,11 @@ public sealed class DialogueContextAssembler
         var origin = controlled.TryGet<PositionComponent>(out var controlledPosition)
             ? controlledPosition.Position
             : new GridPoint(0, 0);
+        var perception = _engine.Perception();
         foreach (var entity in _engine.State.Entities.Values
-            .Where(entity => entity.Id != controlled.Id && entity.TryGet<PositionComponent>(out _))
+            .Where(entity => entity.Id != controlled.Id
+                && perception.VisibleEntityIds.Contains(entity.Id)
+                && entity.TryGet<PositionComponent>(out _))
             .Select(entity =>
             {
                 var position = entity.Get<PositionComponent>().Position;
@@ -563,7 +584,12 @@ public sealed class DialogueContextAssembler
                 return new { Entity = entity, Position = position, Distance = distance };
             })
             .Where(item => item.Distance <= 6)
-            .OrderBy(item => item.Distance)
+            .OrderBy(item => ContextEntityRouting.IsActor(item.Entity)
+                ? 0
+                : ContextEntityRouting.IsHookBearing(item.Entity)
+                    ? 1
+                    : 2)
+            .ThenBy(item => item.Distance)
             .ThenBy(item => item.Entity.Id.Value, StringComparer.OrdinalIgnoreCase)
             .Take(DialogueVisibleEntityLimit))
         {
@@ -1141,22 +1167,57 @@ public sealed class DialogueContextAssembler
         var origin = controlled.TryGet<PositionComponent>(out var controlledPosition)
             ? controlledPosition.Position
             : new GridPoint(0, 0);
-        return _engine.State.Entities.Values
+        var perception = _engine.Perception();
+        var ordered = _engine.State.Entities.Values
             .Where(entity => entity.TryGet<PositionComponent>(out _))
+            .Where(entity => entity.Id == controlled.Id || perception.VisibleEntityIds.Contains(entity.Id))
+            .Where(entity => !ContextEntityRouting.IsCompactScenery(entity))
             .Select(entity =>
             {
                 var position = entity.Get<PositionComponent>().Position;
                 var distance = Math.Max(Math.Abs(position.X - origin.X), Math.Abs(position.Y - origin.Y));
                 return new { Entity = entity, Position = position, Distance = distance };
             })
+            .OrderBy(item => ContextEntityRouting.IsActor(item.Entity) ? 0 : 1)
+            .ThenBy(item => item.Distance)
+            .ThenBy(item => item.Entity.Id.Value, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var actors = ordered.Where(item => ContextEntityRouting.IsActor(item.Entity)).ToArray();
+        return actors
+            .Concat(ordered
+                .Where(item => !ContextEntityRouting.IsActor(item.Entity)))
             .OrderBy(item => item.Distance)
             .ThenBy(item => item.Entity.Id.Value, StringComparer.OrdinalIgnoreCase)
-            .Take(DialogueVisibleEntityLimit)
             .Select(entity =>
             {
                 var tags = TagsFor(entity.Entity);
                 return $"{entity.Entity.Name} ({entity.Entity.Id.Value}) at {entity.Position.X},{entity.Position.Y}, range {entity.Distance}, tags {string.Join(",", tags)}";
             });
+    }
+
+    private IEnumerable<string> CompactSceneryLines()
+    {
+        var controlled = _engine.State.ControlledEntity;
+        var origin = controlled.TryGet<PositionComponent>(out var controlledPosition)
+            ? controlledPosition.Position
+            : new GridPoint(0, 0);
+        var perception = _engine.Perception();
+        return _engine.State.Entities.Values
+            .Where(entity => ContextEntityRouting.IsCompactScenery(entity))
+            .Where(entity => entity.TryGet<PositionComponent>(out _))
+            .Where(entity => perception.VisibleEntityIds.Contains(entity.Id))
+            .Select(entity =>
+            {
+                var position = entity.Get<PositionComponent>().Position;
+                var distance = GameEngine.Distance(origin, position);
+                var material = entity.TryGet<PhysicalComponent>(out var physical) ? physical.Material : "unknown";
+                return new { Entity = entity, Distance = distance, Material = material };
+            })
+            .OrderBy(item => item.Distance)
+            .ThenBy(item => item.Entity.Id.Value, StringComparer.OrdinalIgnoreCase)
+            .Take(DialogueVisibleEntityLimit)
+            .Select(item =>
+                $"{item.Entity.Name} ({item.Entity.Id.Value}), range {item.Distance}, material {item.Material}, tags {string.Join(",", TagsFor(item.Entity))}");
     }
 
     private IEnumerable<string> NearbyItemLines()

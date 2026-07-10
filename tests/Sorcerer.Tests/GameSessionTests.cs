@@ -5191,6 +5191,34 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public void SpellJsonRepairsCompactPointGivenAsFlatCoordinateArray()
+    {
+        const string raw = """
+            {
+              "accepted": true,
+              "severity": "minor",
+              "outcomeText": "Ice climbs from the floor.",
+              "effects": [
+                {
+                  "type": "createTiles",
+                  "target/x/y": [10, 5],
+                  "radius": 2,
+                  "terrain": "ice_wall",
+                  "duration": 3
+                }
+              ],
+              "costs": []
+            }
+            """;
+
+        var parsed = SpellResolutionJson.Parse(raw, OperationRegistry.CreateDefault());
+
+        var effect = Assert.Single(parsed.Effects);
+        Assert.Equal(10, effect.Fields["x"]);
+        Assert.Equal(5, effect.Fields["y"]);
+    }
+
+    [Fact]
     public void SpellJsonPreservesGenericConsequencePayload()
     {
         const string raw = """

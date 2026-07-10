@@ -88,6 +88,22 @@ public static class DialogueKnowledgeProfile
             SetAtLeast(topics, "promise.hooks", 2);
         }
 
+        var authoredTier = tags
+            .Select(tag => tag.StartsWith("knowledge_", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(tag["knowledge_".Length..], out var tier)
+                    ? tier
+                    : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+        if (authoredTier > 0)
+        {
+            var tier = Math.Clamp(authoredTier, 1, 3);
+            SetAtLeast(topics, "npc.knowledge.region", tier);
+            SetAtLeast(topics, "rumors", tier);
+            SetAtLeast(topics, "region.travel", tier);
+            SetAtLeast(topics, "claims", Math.Min(2, tier));
+        }
+
         foreach (var pair in overrides ?? new Dictionary<string, int>())
         {
             topics[pair.Key] = Math.Max(0, pair.Value);

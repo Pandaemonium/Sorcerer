@@ -1067,6 +1067,7 @@ public sealed class WorldConsequenceApplier
         var profileBackstory = FirstNonBlank(ReadString(payload, "profileBackstory"), ReadString(payload, "profile_backstory"), ReadString(payload, "backstory"));
         var promiseIds = ReadStringList(payload, "promiseIds").Concat(ReadStringList(payload, "promise_ids")).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var interactableVerbs = ReadStringList(payload, "interactableVerbs").Concat(ReadStringList(payload, "verbs")).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var claimSeeds = ReadSpawnClaimSeeds(payload);
         var bodyVigor = ReadInt(payload, "bodyVigor") ?? ReadInt(payload, "body_vigor");
         var includeMemory = ReadBool(payload, "includeMemory") ?? ReadBool(payload, "include_memory") ?? false;
         var wantText = FirstNonBlank(ReadString(payload, "wantText"), ReadString(payload, "want_text"), ReadString(payload, "want"));
@@ -1143,6 +1144,11 @@ public sealed class WorldConsequenceApplier
             entity.Set(new InteractableComponent(interactableVerbs));
         }
 
+        if (claimSeeds.Count > 0)
+        {
+            entity.Set(new ClaimSourceComponent(claimSeeds));
+        }
+
         if (includeMemory)
         {
             entity.Set(MemoryComponent.Empty());
@@ -1199,6 +1205,7 @@ public sealed class WorldConsequenceApplier
                 ("summoned", summoned),
                 ("promiseIds", promiseIds),
                 ("interactableVerbs", interactableVerbs),
+                ("claimSeedCount", claimSeeds.Count),
                 ("explicitEntityId", !string.IsNullOrWhiteSpace(requestedEntityId)),
                 ("profileOrigin", profileOrigin),
                 ("profileMagicalSignature", profileMagicalSignature),
@@ -1231,6 +1238,22 @@ public sealed class WorldConsequenceApplier
 
     private static bool HasAny(IReadOnlyList<string> values, params string[] expected) =>
         expected.Any(value => values.Contains(value, StringComparer.OrdinalIgnoreCase));
+
+    private static IReadOnlyList<ClaimSeed> ReadSpawnClaimSeeds(IReadOnlyDictionary<string, object?> payload)
+    {
+        if (!payload.TryGetValue("claimSeeds", out var raw) || raw is null)
+        {
+            return Array.Empty<ClaimSeed>();
+        }
+
+        return raw switch
+        {
+            IReadOnlyList<ClaimSeed> claims => claims.ToArray(),
+            IEnumerable<ClaimSeed> claims => claims.ToArray(),
+            ClaimSeed claim => new[] { claim },
+            _ => Array.Empty<ClaimSeed>(),
+        };
+    }
 
     private WorldConsequenceApplyResult ApplySpawnItem(WorldConsequence consequence)
     {
@@ -1325,14 +1348,31 @@ public sealed class WorldConsequenceApplier
         var durability = Math.Clamp(ReadInt(payload, "durability") ?? 0, 0, 9999);
         var description = ReadString(payload, "description");
         var promiseIds = ReadStringList(payload, "promiseIds").Concat(ReadStringList(payload, "promise_ids")).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var interactableVerbs = ReadStringList(payload, "interactableVerbs").Concat(ReadStringList(payload, "verbs")).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var readableTitle = FirstNonBlank(ReadString(payload, "readableTitle"), ReadString(payload, "readable_title"));
+        var readableText = FirstNonBlank(ReadString(payload, "readableText"), ReadString(payload, "readable_text"));
+        var canAnchorMagic = ReadBool(payload, "canAnchorMagic") ?? ReadBool(payload, "can_anchor_magic") ?? true;
+        var interiorEntrance = payload.TryGetValue("interiorEntrance", out var rawEntrance)
+            ? rawEntrance as InteriorEntranceComponent
+            : null;
+        var interiorExit = payload.TryGetValue("interiorExit", out var rawExit)
+            ? rawExit as InteriorExitComponent
+            : null;
+        var interactableVerbs = ReadStringList(payload, "interactableVerbs")
+            .Concat(ReadStringList(payload, "verbs"))
+            .Concat(string.IsNullOrWhiteSpace(readableTitle) && string.IsNullOrWhiteSpace(readableText)
+                ? Array.Empty<string>()
+                : new[] { "read" })
+            .Concat(interiorEntrance is null ? Array.Empty<string>() : new[] { "enter" })
+            .Concat(interiorExit is null ? Array.Empty<string>() : new[] { "leave" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         var fixtureId = _state.NextEntityId(prefix);
         var fixture = new Entity(fixtureId, name)
             .Set(new PositionComponent(point))
             .Set(new RenderableComponent(glyph, palette))
             .Set(new TagsComponent(tags))
             .Set(new PhysicalComponent(blocksMovement, blocksSight, material, size, durability))
-            .Set(new FixtureComponent(fixtureType, tags));
+            .Set(new FixtureComponent(fixtureType, tags, canAnchorMagic));
         if (!string.IsNullOrWhiteSpace(description))
         {
             fixture.Set(new DescriptionComponent(description));
@@ -1341,6 +1381,23 @@ public sealed class WorldConsequenceApplier
         if (promiseIds.Length > 0)
         {
             fixture.Set(new PromiseAnchorComponent(promiseIds));
+        }
+
+        if (!string.IsNullOrWhiteSpace(readableTitle) || !string.IsNullOrWhiteSpace(readableText))
+        {
+            fixture.Set(new ReadableComponent(
+                FirstNonBlank(readableTitle, name)!,
+                FirstNonBlank(readableText, readableTitle, name)!));
+        }
+
+        if (interiorEntrance is not null)
+        {
+            fixture.Set(interiorEntrance);
+        }
+
+        if (interiorExit is not null)
+        {
+            fixture.Set(interiorExit);
         }
 
         if (interactableVerbs.Length > 0)
@@ -1369,7 +1426,12 @@ public sealed class WorldConsequenceApplier
                 ("durability", durability),
                 ("tags", tags),
                 ("promiseIds", promiseIds),
-                ("interactableVerbs", interactableVerbs)));
+                ("interactableVerbs", interactableVerbs),
+                ("canAnchorMagic", canAnchorMagic),
+                ("readableTitle", readableTitle),
+                ("interiorZoneId", interiorEntrance?.InteriorZoneId),
+                ("interiorId", interiorEntrance?.InteriorId ?? interiorExit?.InteriorId),
+                ("exteriorZoneId", interiorEntrance?.ExteriorZoneId ?? interiorExit?.ExteriorZoneId)));
         return AppliedFromDelta(consequence, delta);
     }
 

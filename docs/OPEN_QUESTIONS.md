@@ -17,13 +17,11 @@ The application model is settled: performance is engine-applied after the provid
 never a resolver input (see [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md) and
 [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)).
 
-- Which games belong in the repertoire beyond rune tracing: rhythm, path drawing, symbol
-  matching, something else?
-- Is the initial minimum scoring window (`RuneTraceScoring.MinimumScoringWindowSeconds`,
-  2.75s) right once real provider latencies are measured?
-- Do the initial calibration constants in `RuneTraceScoring` actually make average play land
-  at neutral for real players (playing must stay EV-neutral against skipping)? Needs
-  playtest data from the audit log's performance annotations.
+- Is the shared 2.75-second minimum scoring window right once real provider latencies are measured
+  across rune trace, thread & knot, true-sigil, and Bone-Song?
+- Do the calibration constants in all four games actually make average play land at neutral for
+  real players (playing must stay EV-neutral against skipping)? This needs audit-backed playtest
+  data, especially the redesigned Bone-Song timing bands and three-mark input load.
 - What belongs in the engine-side mishap/complication tables, and how does mishap severity
   scale with reported spell severity?
 - If the provider call fails and the cast is retried, does a played score carry over?

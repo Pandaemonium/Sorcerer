@@ -37,6 +37,13 @@ Design bias: overpowered spells should usually happen with severe cost rather th
 rejected outright. Literal win buttons, infinite resources, impossible global rewrites, and
 contradictions can still reject.
 
+Early balance calibration (owner decision, 2026-07-09): err on the side of permissiveness. When a
+spell can be represented by the validated operation/consequence grammar and applied coherently,
+allow it even if it is dramatic, durable, or probably unbalanced. Engine authority, protected-item
+consent, transactional application, and state invariants remain firm; power ceilings and stricter
+balance rules wait for concrete playtest evidence. Durable body, control, identity, relationship,
+and world changes are not rejected merely because they would be severe.
+
 ## Top-Level Shape
 
 Initial response shape:
@@ -133,8 +140,8 @@ becoming climbable, or a sign becoming a door should use this general transforma
 `narrow`, `straight-path`, `anchored`) so the engine can reject later accepted resolutions that break
 that limit before mutation.
 
-Resolver context may include `lore`: routed, access-gated canon cards selected by region, subjects,
-and triggers. Lore is voice and canon guidance only. It does not mutate state or create mechanics
+Resolver context may include one distilled `lore` card only when a selected capability requests
+regional/canon context. Lore is voice and canon guidance only. It does not mutate state or create mechanics
 unless the resolver emits supported operations that validate normally.
 
 Cost objects are normalized before validation. Canonical shapes are still preferred, e.g.
@@ -262,17 +269,17 @@ authoritative.
 
 The resolver should receive compact state views:
 
-- caster profile and controlled body
-- entities and terrain relevant to the cast, annotated by player visibility
+- compact caster resources and statuses
+- a bounded roster of important target entities
+- terrain only for spatial capabilities
 - selected target
-- spell anchors
-- inventory and reagents
-- protected inventory
-- active curses
-- promises and relevant world notes
+- spell anchors/scenery only for object-aware capabilities
+- at most four unprotected reagents
+- promises only for promise-aware capabilities
 - supported operations for this cast
 
-Do not dump all state into every prompt. Use routed context once the operation surface grows.
+Do not dump all state into every prompt. Recent event history, protected inventory, unrelated lore,
+unrelated scenery, and unrelated promises do not belong on the resolver wire.
 Player perception is not the resolver's hard knowledge boundary: hidden or debug-only facts may be
 included when useful for coherent magic, but they must be labeled as hidden from the player, and
 renderers must not reveal them until the engine makes them observable. Wild magic is not limited by

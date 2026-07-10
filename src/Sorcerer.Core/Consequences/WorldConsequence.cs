@@ -1,3 +1,4 @@
+using Sorcerer.Core.Entities;
 using Sorcerer.Core.Results;
 
 namespace Sorcerer.Core.Consequences;
@@ -602,6 +603,7 @@ public sealed record WorldConsequence(
         string? wantStakes = null,
         int? wantSalience = null,
         IReadOnlyList<string>? wantTags = null,
+        IReadOnlyList<ClaimSeed>? claimSeeds = null,
         IReadOnlyDictionary<string, object?>? details = null) =>
         new(
             WorldConsequenceTypes.SpawnEntity,
@@ -642,7 +644,8 @@ public sealed record WorldConsequence(
                 ("wantStatus", wantStatus),
                 ("wantStakes", wantStakes),
                 ("wantSalience", wantSalience),
-                ("wantTags", wantTags?.ToArray())));
+                ("wantTags", wantTags?.ToArray()),
+                ("claimSeeds", claimSeeds?.ToArray())));
 
     public static WorldConsequence SpawnItem(
         string source,
@@ -716,6 +719,11 @@ public sealed record WorldConsequence(
         string? description = null,
         IReadOnlyList<string>? promiseIds = null,
         IReadOnlyList<string>? interactableVerbs = null,
+        bool canAnchorMagic = true,
+        string? readableTitle = null,
+        string? readableText = null,
+        InteriorEntranceComponent? interiorEntrance = null,
+        InteriorExitComponent? interiorExit = null,
         string visibility = WorldConsequenceVisibility.Hidden,
         string? sourceEntityId = null,
         string? evidence = null,
@@ -750,6 +758,11 @@ public sealed record WorldConsequence(
                 ("description", description),
                 ("promiseIds", promiseIds?.ToArray() ?? Array.Empty<string>()),
                 ("interactableVerbs", interactableVerbs?.ToArray() ?? Array.Empty<string>()),
+                ("canAnchorMagic", canAnchorMagic),
+                ("readableTitle", readableTitle),
+                ("readableText", readableText),
+                ("interiorEntrance", interiorEntrance),
+                ("interiorExit", interiorExit),
                 ("operation", operation),
                 ("emitMessage", emitMessage),
                 ("message", message)));

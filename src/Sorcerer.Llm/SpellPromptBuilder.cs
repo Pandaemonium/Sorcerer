@@ -11,13 +11,13 @@ namespace Sorcerer.Llm;
 /// Shared prompt assembly for the wild-magic resolver (Ollama and OpenAI-compatible providers).
 ///
 /// Layout is deliberate (docs/OPTIMIZATION_PLAN.md WS2.3): the system prompt opens with content
-/// that is byte-identical on every cast — core rules, the consequence-type vocabulary, and the
-/// capability index — so a local backend's KV prefix cache can reuse it across consecutive casts.
+/// that is byte-identical on every cast — distilled core rules, the consequence-type vocabulary,
+/// and compact capability-name menu — so a local backend's KV prefix cache can reuse it across consecutive casts.
 /// Cast-specific material (the supported-operation list, operation guidance, loaded capability
 /// blocks) follows, and the user message puts the changing spell text last. Operation cards are
-/// rendered as compact text lines instead of JSON records, and the serialized context omits the
-/// operation catalog and null fields entirely: the catalog lives here as text, halving the old
-/// user-message payload without changing what the engine advertises or validates.
+/// rendered as compact text lines instead of JSON records. The serialized context is a dedicated
+/// compact projection with short target/resource records and only routed state slices; it omits
+/// the richer engine/audit view and operation catalog entirely.
 /// </summary>
 internal static class SpellPromptBuilder
 {
@@ -39,7 +39,7 @@ internal static class SpellPromptBuilder
         builder.Append("\n\n").Append(ConsequenceTypesLine);
         if (!string.IsNullOrWhiteSpace(request.CapabilityIndex))
         {
-            builder.Append("\n\nCapability index (mechanics that can be loaded when a spell needs them):\n");
+            builder.Append("\n\nCapability names for one bounded retry: ");
             builder.Append(request.CapabilityIndex);
         }
 
@@ -100,15 +100,100 @@ internal static class SpellPromptBuilder
 
     internal static string WireContextJson(SpellRequest request)
     {
-        // The operation catalog is rendered as prompt text by System(); serializing it again in the
-        // user message was the single largest context slice (~10 KB/cast). The runtime null lets
-        // WhenWritingNull drop the property from the wire while MagicContextView keeps a
-        // non-nullable Operations for the engine, mock provider, audits, and replay.
+        // The provider wire is intentionally not MagicContextView JSON. That view remains rich for
+        // the engine, mock provider, audit, and replay; the live resolver receives only the compact
+        // target/resource projection below. Operations live in System() and are never duplicated.
         var wireContext = request.Context is MagicContextView view
-            ? view with { Operations = null! }
+            ? CompactContext(view)
             : request.Context;
         return JsonSerializer.Serialize(wireContext, WireJsonOptions);
     }
+
+    private static ResolverWireContext CompactContext(MagicContextView view)
+    {
+        var targets = view.Visible
+            .Where(entity => !entity.Id.Equals(view.Caster.Id, StringComparison.OrdinalIgnoreCase))
+            .Select(entity => new ResolverWireTarget(
+                entity.Id,
+                entity.Name,
+                new[] { entity.X, entity.Y },
+                entity.Faction,
+                entity.Material.Equals("unknown", StringComparison.OrdinalIgnoreCase) ? null : entity.Material,
+                entity.Tags.Count == 0 ? null : entity.Tags,
+                entity.HitPoints is { } hp ? new[] { hp, entity.MaxHitPoints ?? hp } : null,
+                entity.Visibility.Equals("visible", StringComparison.OrdinalIgnoreCase) ? null : entity.Visibility))
+            .ToArray();
+        var terrain = view.Terrain
+            .Select(tile => new ResolverWireTerrain(
+                tile.Terrain,
+                new[] { tile.X, tile.Y },
+                tile.Tags.Contains("blocking", StringComparer.OrdinalIgnoreCase) ? true : null))
+            .ToArray();
+        var promises = view.KnownPromises
+            .Select(promise => new ResolverWirePromise(
+                promise.Id,
+                promise.Kind,
+                promise.Status,
+                Shorten(promise.Text, 220),
+                EmptyToNull(promise.Subject),
+                EmptyToNull(promise.BoundPlace ?? promise.ClaimedPlace),
+                EmptyToNull(promise.TriggerHint)))
+            .ToArray();
+        var reagents = (view.Reagents ?? Array.Empty<ReagentCard>())
+            .Select(reagent => new ResolverWireReagent(
+                reagent.Name,
+                reagent.Quantity,
+                reagent.Material,
+                reagent.Tags.Count == 0 ? null : reagent.Tags,
+                EmptyToNull(reagent.SpellBias)))
+            .ToArray();
+        var lore = (view.Lore ?? Array.Empty<LoreCardView>())
+            .Select(card => new ResolverWireLore(card.Id, Shorten(card.Body, 260)))
+            .ToArray();
+        var scenery = (view.Scenery ?? Array.Empty<SceneryNote>())
+            .Select(note => new ResolverWireScenery(
+                note.Id,
+                note.Name,
+                new[] { note.X, note.Y },
+                note.Material.Equals("unknown", StringComparison.OrdinalIgnoreCase) ? null : note.Material,
+                note.Tags.Count == 0 ? null : note.Tags))
+            .ToArray();
+
+        return new ResolverWireContext(
+            new ResolverWireCaster(
+                view.Caster.Id,
+                new[] { view.Caster.X, view.Caster.Y },
+                new[] { view.Caster.HitPoints, view.Caster.MaxHitPoints },
+                new[] { view.Caster.Mana, view.Caster.MaxMana },
+                view.Caster.Statuses.Count == 0
+                    ? null
+                    : view.Caster.Statuses.Select(status => new ResolverWireStatus(
+                        status.Id,
+                        status.Intensity,
+                        status.ExpiresTurn)).ToArray()),
+            targets.Length == 0 ? null : targets,
+            terrain.Length == 0 ? null : terrain,
+            view.SelectedTarget is { } selected ? new[] { selected.X, selected.Y } : null,
+            promises.Length == 0 ? null : promises,
+            view.ResolverLens is { } lens
+                ? new ResolverWireLens(
+                    lens.Vigor,
+                    lens.Attunement,
+                    lens.Composure,
+                    lens.EffectMagnitudeDelta,
+                    EmptyToNull(lens.Signature),
+                    lens.Notes.Count == 0 ? null : lens.Notes.Select(note => Shorten(note, 220)).ToArray())
+                : null,
+            reagents.Length == 0 ? null : reagents,
+            lore.Length == 0 ? null : lore,
+            scenery.Length == 0 ? null : scenery);
+    }
+
+    private static string? EmptyToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string Shorten(string value, int limit) =>
+        value.Length <= limit ? value : value[..limit].TrimEnd() + "…";
 
     internal static string RenderOperations(OperationIndex operations)
     {
@@ -146,7 +231,11 @@ internal static class SpellPromptBuilder
             return "";
         }
 
-        var ids = view.Visible.Select(entity => entity.Id).Take(16).ToArray();
+        var ids = view.Visible
+            .Select(entity => entity.Id)
+            .Concat((view.Scenery ?? Array.Empty<SceneryNote>()).Select(entity => entity.Id))
+            .Take(24)
+            .ToArray();
         return ids.Length == 0
             ? ""
             : "Valid target ids: " + string.Join(", ", ids)
@@ -160,46 +249,21 @@ internal static class SpellPromptBuilder
     /// voice) — wild magic may be strange, but strangeness is imagery, not vagueness.
     /// </summary>
     private const string CoreRules =
-        "You are the wild magic resolver for Sorcerer. Return exactly one JSON object. "
-        + "Use this shape: {\"accepted\":true,\"severity\":\"minor|moderate|major|catastrophic\","
+        "You are Sorcerer's wild-magic resolver. Return one JSON object only: "
+        + "{\"accepted\":true,\"severity\":\"minor|moderate|major|catastrophic\","
         + "\"outcomeText\":\"short vivid result\",\"effects\":[],\"costs\":[],\"rejectedReason\":null}. "
-        + "Use only supported effect types and the provided target references. "
-        + "Every target-taking effect must include target or targetId from the context; for the caster, use target:\"player\" unless the caster id differs. "
-        + "When the spell wording names how to find the target - \"nearest enemy\", \"the nearest foe\", \"whatever is closest\" - use the matching selector such as nearest_enemy directly; only use target:\"selected_target\" when the spell text refers to a target the caster has already selected or is looking at (\"that\", \"there\", \"my target\"), since selected_target fails if nothing is currently selected. "
-        + "Effects must be an array of flat objects with a type field, such as {\"type\":\"addStatus\",\"target\":\"player\",\"status\":\"river_concealed\",\"duration\":4}; never write {\"addStatus\":{...}} or put two operation keys inside one effect object. "
-        + "Prefer reusable operations over custom mechanics. "
-        + "Outcome text must describe only what the listed effects make true. "
-        + "Write outcomeText as what is concretely seen, heard, or felt where the spell lands, in the region's voice; never as fate-speak about stories, whispers, or what the world will remember. "
-        + "Do not claim a target is immobilized, asleep, dead, transformed, summoned, moved, healed, harmed, cursed, allied, raised from death, unlocked, freed, or revealed unless a matching effect operation is present. "
-        + "If the spell should stop movement or action, include an addStatus effect with a binding status such as rooted, webbed, pinned, asleep, or petrified. "
-        + "If the spell's purpose is healing or restoring mana, include a heal or restoreMana effect with a real amount; a status alone restores nothing, and narrating recovery without the effect is a broken promise. "
-        + "When a spell names several distinct outcomes, emit one effect per outcome - a wall of fire that terrifies is createTiles plus addStatus, not one effect with the other half narrated. "
-        + "When a spell speaks to minds, hearts, reputations, locks, ledgers, or absent things, use the routed mechanics or a consequence effect from the list below instead of a cosmetic status. "
-        + "If a spell asks a local place, room, shrine, terrain, fixture, or object to help, hide, protect, reveal, remember, or answer, convert that appeal into concrete effects on existing targets, nearby terrain, statuses, traits, summons, or messages. "
-        + "Use second person only for the controlled player/caster; name non-player targets instead of calling them 'you' or 'your'. "
-        + "Write outcomeText and any effect message field in grammatically correct person and number (\"you gain\", not \"you gains\"; \"the soldier gains\", not \"the soldier gain\"). "
-        + "If the spell names part of an entity's appearance, clothing, gear, rope, hair, voice, shadow, or body, target that owning entity with addTrait, addStatus, or transformEntity; do not pick an unrelated item just because it is object-like. "
-        + "If context.resolverLens is present, use it as soft guidance for magnitude, volatility, costs, and recurring magical signature. "
-        + "If context.reagents is present, those are unprotected carried materials available as spell fuel; use their material, tags, and spellBias as soft guidance for costs or theming, but do not assume protected inventory is spendable. "
-        + "If context.lore is present, use those lore cards as canon and voice guidance, but only make lore mechanically true through supported effect operations. "
-        + "Assign costs deliberately: almost every spell that actually changes the world should cost something, and the price should scale with how much it bends reality. "
-        + "The cost palette, from cheapest to gravest: mana for ordinary workings ({\"type\":\"mana\",\"amount\":2-6}); a bodily toll for spells that strain the caster ({\"type\":\"health\",\"amount\":3-8} or {\"type\":\"status\",\"status\":\"strained\",\"duration\":3}); a consumed reagent when the spell leans on a carried material; a lingering debt for dangerous, unnatural, or morally fraught magic ({\"type\":\"curse\",\"name\":\"short title\",\"description\":\"what is owed\"}); and, only for catastrophic or reality-bending spells, a permanent sacrifice ({\"type\":\"maxHealth\",\"amount\":1-3} or {\"type\":\"maxMana\",\"amount\":1-3}). "
-        + "Match the cost to severity: minor spends a little mana; moderate spends more mana or a small bodily/reagent toll; major demands a real price such as health, a reagent, or a curse; catastrophic may demand max health or max mana. Prefer two mixed costs (e.g. mana plus a reagent, or health plus a curse) over one flat mana cost for anything above minor. "
-        + "When a carried reagent in context.reagents thematically fits the spell - by its name, material, tags, or spellBias - prefer spending it as {\"type\":\"item\",\"item\":\"<exact reagent name from context>\",\"quantity\":1}, alongside or instead of mana; a named object powering the spell is more interesting than raw mana. "
-        + "Never name an item cost that is not listed in context.reagents (the caster cannot spend what they do not carry); if no carried reagent fits, use mana, health, a status, or a curse instead. "
-        + "Only a truly trivial cantrip or a pure-flavor spell may leave costs empty. "
-        + "Costs are not effects: never add a restoreMana (or heal) effect unless restoring magic (or "
-        + "healing) is the spell's actual purpose - a fire strike or an ice wall must not hand the "
-        + "caster mana back. "
-        + "Costs must use type fields such as {\"type\":\"mana\",\"amount\":4} or {\"type\":\"item\",\"item\":\"grave salt\",\"quantity\":1}; never use an item name as the cost type. "
-        + "Before rejecting an overreaching spell, deliver the largest local version the supported operations allow, at a severe cost, and let outcomeText admit the magic answered smaller than asked. "
-        + "Reject only literal win buttons, infinite resources, global rewrites, or spells with no possible local expression in the current encounter. "
-        + "Technical JSON mistakes are failures, but intentional in-world rejection should be accepted:false. "
-        + "If none of the loaded mechanics fit the spell but the capability index lists one that would, "
-        + "answer instead with exactly {\"needsCapability\":\"<index name>\"} and nothing else; that "
-        + "capability's detail will be loaded and you will be asked once more. Use this only when a "
-        + "listed capability is genuinely needed, not to avoid an ordinary resolution. "
-        + "The engine validates everything and applies all effects transactionally.";
+        + "Effects are flat objects with a type field. Use only supported types and exact target ids from context; "
+        + "player means the caster, nearest_enemy means the nearest foe, and selected_target is valid only when context.selected exists. "
+        + "Use one mechanical effect per promised outcome. Narration may describe only what those effects make true; "
+        + "write concrete sights, sounds, and sensations, not fate-speak. Binding needs addStatus; healing needs heal; movement, transformation, summoning, social change, and world change need their matching operation. "
+        + "Prefer the routed reusable mechanics. targets are important entities; scenery is a small object list; terrain is included only when spatial mechanics need it. "
+        + "lens is soft guidance: higher attunement permits stronger effects, lower composure permits stranger answers, vigor informs bodily prices, and signature/place guide imagery. "
+        + "reagents are the only carried items available as fuel; an item cost must copy an exact listed name. lore is canon, but becomes mechanical only through effects. "
+        + "Almost every real change has a cost. Minor: mana 2-6. Moderate: more mana or a small health/status/reagent toll. "
+        + "Major: health, reagent, or curse. Catastrophic: maxHealth/maxMana 1-3 may join another cost. Never add heal/restoreMana unless that is the spell's purpose. "
+        + "Answer the largest local version of an overreach at a severe price; reject only win buttons, infinite resources, global rewrites, or requests with no local expression. "
+        + "If a missing mechanic is named in the capability menu, you may instead return exactly {\"needsCapability\":\"name\"}; one retry is allowed. "
+        + "The engine re-parses, validates, prices, and applies transactionally.";
 
     /// <summary>
     /// The spell-relevant slice of the shared consequence grammar: a ~300-byte map of everything
@@ -208,9 +272,74 @@ internal static class SpellPromptBuilder
     /// full consequence card being routed in.
     /// </summary>
     private const string ConsequenceTypesLine =
-        "World effects beyond the listed operations go through effectType \"consequence\" with a consequenceType: "
+        "World effects use type \"consequence\" with consequenceType: "
         + "apply_status, create_promise, open_or_unlock, create_route, free_captive, modify_inventory, transfer_item, "
         + "add_tags, remove_tags, change_faction, edit_memory, record_memory, update_bond, update_want, "
         + "offer_service, request_service, add_merchant_stock, offer_trade, record_rumor, add_canon, add_legend, "
         + "spawn_fixture, spawn_item, spawn_entity, set_world_flag, adjust_faction_standing, schedule_event, message.";
+
+    private sealed record ResolverWireContext(
+        ResolverWireCaster Caster,
+        IReadOnlyList<ResolverWireTarget>? Targets,
+        IReadOnlyList<ResolverWireTerrain>? Terrain,
+        IReadOnlyList<int>? Selected,
+        IReadOnlyList<ResolverWirePromise>? Promises,
+        ResolverWireLens? Lens,
+        IReadOnlyList<ResolverWireReagent>? Reagents,
+        IReadOnlyList<ResolverWireLore>? Lore,
+        IReadOnlyList<ResolverWireScenery>? Scenery);
+
+    private sealed record ResolverWireCaster(
+        string Id,
+        IReadOnlyList<int> At,
+        IReadOnlyList<int> Hp,
+        IReadOnlyList<int> Mana,
+        IReadOnlyList<ResolverWireStatus>? Statuses);
+
+    private sealed record ResolverWireStatus(string Id, int Intensity, int? Expires);
+
+    private sealed record ResolverWireTarget(
+        string Id,
+        string Name,
+        IReadOnlyList<int> At,
+        string? Faction,
+        string? Material,
+        IReadOnlyList<string>? Tags,
+        IReadOnlyList<int>? Hp,
+        string? Visibility);
+
+    private sealed record ResolverWireTerrain(string Type, IReadOnlyList<int> At, bool? Blocking);
+
+    private sealed record ResolverWirePromise(
+        string Id,
+        string Kind,
+        string Status,
+        string Text,
+        string? Subject,
+        string? Place,
+        string? Trigger);
+
+    private sealed record ResolverWireLens(
+        int Vigor,
+        int Attunement,
+        int Composure,
+        int Power,
+        string? Signature,
+        IReadOnlyList<string>? Notes);
+
+    private sealed record ResolverWireReagent(
+        string Name,
+        int Quantity,
+        string Material,
+        IReadOnlyList<string>? Tags,
+        string? Bias);
+
+    private sealed record ResolverWireLore(string Id, string Text);
+
+    private sealed record ResolverWireScenery(
+        string Id,
+        string Name,
+        IReadOnlyList<int> At,
+        string? Material,
+        IReadOnlyList<string>? Tags);
 }

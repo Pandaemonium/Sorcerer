@@ -17,8 +17,8 @@ public sealed record SpellRouteResult(
 }
 
 /// <summary>
-/// A cheap "which capabilities does this spell need?" pass in front of the resolver. Implementations
-/// may call an LLM, but a failure or timeout must never block a cast: the controller treats any
+/// A "which capabilities does this spell need?" fallback for spells deterministic routing cannot
+/// classify. Implementations may call an LLM, but a failure or timeout must never block a cast: the controller treats any
 /// <see cref="SpellRouteResult.TechnicalFailure"/> (or thrown error) as "no router opinion" and
 /// falls back to keyword routing alone.
 /// </summary>

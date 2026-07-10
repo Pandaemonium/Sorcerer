@@ -150,6 +150,8 @@ public sealed class GameSession
             ReadCommand read => Engine.Read(read.Target),
             ExamineCommand examine => Engine.Examine(examine.Target),
             OpenCommand open => Engine.Open(open.Target),
+            EnterCommand enter => Engine.EnterInterior(enter.Target),
+            LeaveCommand => Engine.LeaveInterior(),
             PossessCommand possess => Engine.Possess(possess.Target),
             StandingCommand => Engine.Standing(),
             FollowersCommand => Engine.Followers(),
@@ -174,11 +176,12 @@ public sealed class GameSession
                 "Unknown command."),
         };
 
-        if (command is TalkCommand spokenDialogue
-            && result.Success
-            && ShouldQueueDialogueClaimExtraction(result))
+        if (command is TalkCommand spokenDialogue && result.Success)
         {
-            QueueDialogueClaimExtraction(spokenDialogue, result);
+            if (ShouldQueueDialogueClaimExtraction(result))
+            {
+                QueueDialogueClaimExtraction(spokenDialogue, result);
+            }
         }
 
         result = ApplyCompletedClaimExtractions(result, pendingClaimCountBeforeCommand);
@@ -714,7 +717,7 @@ public sealed class GameSession
             consumedTurn: false,
             Engine.State.Turn,
             Engine.State.Turn,
-                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, charter, echoes, echo, protect, unprotect, reagents, wares, buy, sell, services, request, journal, rumors, character, standing, followers, jobs, save, load, quit.");
+                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, enter, leave, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, charter, echoes, echo, protect, unprotect, reagents, wares, buy, sell, services, request, journal, rumors, character, standing, followers, jobs, save, load, quit.");
 
     private async Task<ActionResult> SaveGameAsync(string path, CancellationToken cancellationToken)
     {

@@ -1,0 +1,40 @@
+{
+  "templates": [
+    {
+      "id": "verify_landmark",
+      "wantPattern": "{giver} needs someone to learn why {landmark} has changed before the change reaches {settlement}.",
+      "claimPattern": "{giver} says {landmark} lies {direction}, at zone {destinationZone}. Go there and recover {token} as proof of what the place is doing.",
+      "tokenPattern": "{landmark} witness token",
+      "promiseKind": "lead",
+      "realizationKind": "item",
+      "tags": ["verify", "landmark", "local_pressure"]
+    },
+    {
+      "id": "recover_trace",
+      "wantPattern": "{giver} cannot settle a local obligation until somebody recovers a trace from {landmark}.",
+      "claimPattern": "A usable trace remains at {landmark}, {direction} in zone {destinationZone}. Reaching it will make {token} real enough to carry.",
+      "tokenPattern": "trace of {landmark}",
+      "promiseKind": "lead",
+      "realizationKind": "item",
+      "tags": ["recover", "landmark", "obligation"]
+    },
+    {
+      "id": "carry_witness",
+      "wantPattern": "{giver} wants {district} to have a witness no official account can quietly replace.",
+      "claimPattern": "{landmark} can supply that witness. It is {direction}, in zone {destinationZone}; find {token} there.",
+      "tokenPattern": "uncensored witness from {landmark}",
+      "promiseKind": "lead",
+      "realizationKind": "item",
+      "tags": ["witness", "truth", "landmark"]
+    },
+    {
+      "id": "folk_measure",
+      "wantPattern": "{giver} needs a local answer from {landmark} before offering help to anyone else.",
+      "claimPattern": "The answer waits {direction} at {landmark}, zone {destinationZone}. A traveler who arrives will find {token}.",
+      "tokenPattern": "answer given by {landmark}",
+      "promiseKind": "lead",
+      "realizationKind": "item",
+      "tags": ["folk_magic", "answer", "landmark"]
+    }
+  ]
+}

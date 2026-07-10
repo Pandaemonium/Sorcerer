@@ -10,6 +10,37 @@ Four workstreams. Each task lists the files to touch, the change, and acceptance
 Tasks are independently landable unless a dependency is called out. WS0 (measurement) should land
 first so every other workstream can prove its effect.
 
+## Latency-first override (2026-07-09)
+
+The live 4,200-4,500-token / 20-25-second warm measurements below justified the optional WS2.6
+skip lane and a more aggressive context pass. The current implementation supersedes the historic
+"routers always-on" and all-operation recall-floor decisions:
+
+- deterministic capability/core intent skips the semantic router; only opaque zero-route spells
+  call it;
+- speculative `CommonCombos` no longer load cards, and at most five explicit cards survive;
+- the resolver sees six common operations plus routed/unowned operations, not every lean op name;
+- a compact name-only `needsCapability` menu preserves one bounded recovery attempt;
+- `RequiredContext` gates terrain, promises, lore, scenery, and hidden targets, with hard per-slice
+  caps;
+- the provider wire is a distilled projection rather than `MagicContextView` JSON, and the static
+  rules were rewritten to their mechanical essentials.
+
+Representative tests enforce a 5 KB context ceiling and 12 KB combined system+user ceiling while
+the 51-spell mock evaluation remains green. A same-day live check on
+`qwen3.5:9b-q4_K_M` measured:
+
+| cast | promptTok | advertised ops | loadMs | promptEvalMs | totalMs |
+|---|---:|---:|---:|---:|---:|
+| heal (cold) | 1,180 | 6 | 8,671 | 2,806 | 31,025 |
+| ice wall (warm, two routed cards) | 1,583 | 7 | 253 | 3,661 | 31,675 |
+
+That is a 62-74% prompt-token reduction from the historic 4,200-4,500 range below. On the
+reference CPU, output generation (~19.5-27.8 s for 54-76 tokens) is now the dominant remaining
+latency; context ingestion is no longer the main wall-time cost. The ice-wall sample also exposed
+a flat `[x,y]` repair gap for the accepted `target/x/y` shorthand; the shared parser now normalizes
+both flat and nested coordinate arrays.
+
 ## Implementation Status — COMPLETE (2026-07-05, session 3)
 
 **Every workstream task has landed. Build clean, 599/599 tests green.** Changes are in the working
@@ -43,7 +74,7 @@ are in place.
 | **4.4** outcome register | CoreRules: outcomeText = concrete/sensory, no fate-speak |
 | **2.7** slim repair lane | `SpellPromptBuilder.RepairSystem/RepairUser`: core rules + parse error + previous output + supported list + valid-target-id line + spell; no context JSON, no cards |
 | **2.4** slim promises | `EngineViewBuilder.ToResolverPromiseCard` (id/kind/status/text/subject/claimedPlace/triggerHint; debug fields stay null and drop off the wire) |
-| **2.5** entity trim | nearest-first cap of 14 visible entities (caster always kept); `PerceivedEntity.RelativeX/Y` now nullable and omitted |
+| **2.5** entity routing | superseded by the 2026-07-09 semantic-prop pass: caster, actors, and hook-bearing entities receive protected full-detail context; ordinary fixtures use a compact bounded scenery lane; `PerceivedEntity.RelativeX/Y` remains nullable and omitted |
 | test updates | `SpellRouterTests.RoutedIndexTrimsUnselectedRoutableCardsAndSelectionRestoresThem` rewritten to lock recall-floor semantics |
 
 ### DONE — session 3 (landed, test-verified)

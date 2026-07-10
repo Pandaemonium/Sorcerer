@@ -45,6 +45,12 @@ and geopolitics. Tactical mechanics such as status ticks, auras, terrain reactio
 effects can run through explicit engine turn-tick systems when the player needs immediate,
 legible consequences.
 
+Owner cadence decision (2026-07-09): notable NPCs may proactively approach, interrupt, seek out,
+or follow the player when a want, rumor, memory, promise, or deed gives them a reason. These moves
+still occur only through bounded pump-point initiative and must name their cause. A significant
+player action should usually earn one visible answer within one to three zone transitions, while
+larger consequences may remain in motion for much longer.
+
 (This replaces Wild Magic's once-per-in-game-day tick. The daily clock was an arbitrary
 heartbeat; pump points tie reaction to what actually happened.)
 
@@ -147,9 +153,19 @@ region affordances. Those affordances also enter the resolver lens as soft conte
 color free-form magic without bypassing engine operations. Bound travel/site promises can now
 realize during generation as promise-site fixtures, canon records, journal updates, and action
 deltas. A minimal seeded world roll now gives realms deterministic status, rulers, and imperial
-grip variation. Richer site archetypes, directional reservation, towns, and full geopolitical
-ownership remain later layers. Generated zones also seed a first resident NPC from region/realm
-profile so the world can answer socially before full town generation exists.
+grip variation. Region and tradition definitions now load from content: fourteen regions cover
+every rolled realm and use seed-jittered data-authored anchors to form a reachable first regional
+map. The roll selects exactly one free rival among the four old kingdoms and marks the other three
+conquered. Border messages name the realm left and entered, making the first geography change legible.
+Regional population grammars now add seeded density fields: crowds at authored centers, thinner
+road/settlement shoulders, common empty wilderness, and rare outliers. Name forges and cultural
+archetypes seed every resident with a want and knowledge while selected roles carry services or
+wares through shared consequences. `WorldPlaceGraph` now gives every region a named multi-zone
+center, hamlets, a landmark, and connected physical roads; district identity feeds terrain,
+population, signature sites, atlas, travel, magic, and dialogue. The first generated journey lets
+a resident's pressure become an inspectable claim and exact-place promise whose evidence is
+realized at that real landmark. Organizations, significant interiors, return-delivery journeys,
+alternate completion rules, and full geopolitical ownership remain later layers.
 
 ## Legibility is first-class
 

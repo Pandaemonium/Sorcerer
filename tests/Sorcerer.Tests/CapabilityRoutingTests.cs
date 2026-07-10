@@ -91,6 +91,56 @@ public sealed class CapabilityRoutingTests
             card => card.Id == "summoning");
     }
 
+    [Fact]
+    public async Task ObviousSpellSkipsSlowRouterWhileOpaqueSpellUsesIt()
+    {
+        var obviousRouter = new CountingSpellRouter("summoning");
+        var obviousProvider = new CapturingSpellProvider();
+        var obviousSession = GameSession.CreateImperialEncounter(new WildMagicController(
+            obviousProvider,
+            router: obviousRouter));
+
+        await obviousSession.ExecuteAsync(new CastCommand("raise a wall of ice between us"));
+
+        Assert.Equal(0, obviousRouter.Calls);
+        Assert.Contains(
+            Assert.Single(obviousProvider.Requests).SelectedCapabilities ?? Array.Empty<Sorcerer.Magic.Capabilities.CapabilityCard>(),
+            card => card.Id == "terrain_shape" || card.Id == "barrier_shaping");
+
+        var opaqueRouter = new CountingSpellRouter("summoning");
+        var opaqueProvider = new CapturingSpellProvider();
+        var opaqueSession = GameSession.CreateImperialEncounter(new WildMagicController(
+            opaqueProvider,
+            router: opaqueRouter));
+
+        await opaqueSession.ExecuteAsync(new CastCommand("make the fresco weep real tears"));
+
+        Assert.Equal(1, opaqueRouter.Calls);
+        Assert.Contains("summoning -", opaqueRouter.LastCapabilityIndex);
+        var request = Assert.Single(opaqueProvider.Requests);
+        Assert.Contains(
+            request.SelectedCapabilities ?? Array.Empty<Sorcerer.Magic.Capabilities.CapabilityCard>(),
+            card => card.Id == "summoning");
+        Assert.DoesNotContain(" - ", request.CapabilityIndex ?? "");
+    }
+
+    [Fact]
+    public async Task HiddenEntitySliceIncludesNamedRemoteTargetButNotUnrelatedActors()
+    {
+        var provider = new CapturingSpellProvider();
+        var controller = new WildMagicController(provider);
+        var session = GameSession.CreateImperialEncounter(controller);
+
+        await controller.ResolveAsync(
+            session.Engine,
+            new CastCommand("make the prisoner forget me from far away"),
+            System.Threading.CancellationToken.None);
+
+        var context = Assert.IsType<Sorcerer.Core.Views.MagicContextView>(Assert.Single(provider.Requests).Context);
+        Assert.Contains(context.Visible, entity => entity.Id == "prisoner_1");
+        Assert.DoesNotContain(context.Visible, entity => entity.Visibility == "hidden_from_player" && entity.Id != "prisoner_1");
+    }
+
     private sealed class NeedsCapabilityThenResolveProvider : Sorcerer.Magic.Resolution.ISpellProvider
     {
         private readonly string _capability;
@@ -133,6 +183,50 @@ public sealed class CapabilityRoutingTests
                 RejectedReason: null);
             return Task.FromResult(new Sorcerer.Magic.Resolution.SpellProviderResult(
                 Name, "{}", resolution, TechnicalFailure: false, Error: null));
+        }
+    }
+
+    private sealed class CountingSpellRouter : Sorcerer.Magic.Capabilities.ISpellRouter
+    {
+        private readonly string _capability;
+
+        public CountingSpellRouter(string capability) => _capability = capability;
+
+        public int Calls { get; private set; }
+
+        public string LastCapabilityIndex { get; private set; } = "";
+
+        public string Name => "counting-router";
+
+        public Task<Sorcerer.Magic.Capabilities.SpellRouteResult> RouteAsync(
+            string spellText,
+            string capabilityIndex,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            Calls++;
+            LastCapabilityIndex = capabilityIndex;
+            return Task.FromResult(new Sorcerer.Magic.Capabilities.SpellRouteResult(
+                new[] { _capability },
+                "{}",
+                TechnicalFailure: false,
+                Error: null));
+        }
+    }
+
+    private sealed class CapturingSpellProvider : Sorcerer.Magic.Resolution.ISpellProvider
+    {
+        private readonly MockSpellProvider _inner = new();
+
+        public List<Sorcerer.Magic.Resolution.SpellRequest> Requests { get; } = new();
+
+        public string Name => _inner.Name;
+
+        public Task<Sorcerer.Magic.Resolution.SpellProviderResult> ResolveAsync(
+            Sorcerer.Magic.Resolution.SpellRequest request,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            Requests.Add(request);
+            return _inner.ResolveAsync(request, cancellationToken);
         }
     }
 

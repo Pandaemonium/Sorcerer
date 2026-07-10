@@ -21,6 +21,7 @@ public sealed class WinConditionTests
 
         await session.ExecuteAsync(new TravelCommand(Direction.East));
         await session.ExecuteAsync(new TravelCommand(Direction.East));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
 
         var emperor = session.Engine.EntityById("emperor_odran");
         Assert.NotNull(emperor);
@@ -59,6 +60,7 @@ public sealed class WinConditionTests
             """;
         var session = GameSession.CreateImperialEncounter(
             new WildMagicController(new ReplaySpellProvider(new[] { damageEmperor })));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
         await session.ExecuteAsync(new TravelCommand(Direction.East));
         await session.ExecuteAsync(new TravelCommand(Direction.East));
 
@@ -166,6 +168,7 @@ public sealed class WinConditionTests
                 """;
             var session = GameSession.CreateImperialEncounter(
                 new WildMagicController(new ReplaySpellProvider(new[] { damageEmperor })));
+            await session.ExecuteAsync(new TravelCommand(Direction.East));
             await session.ExecuteAsync(new TravelCommand(Direction.East));
             await session.ExecuteAsync(new TravelCommand(Direction.East));
             await session.ExecuteAsync(new CastCommand("strike the emperor with a mortal blue verdict"));

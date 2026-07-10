@@ -9,155 +9,219 @@ public sealed class BoneSongScoringTests
     private const float Epsilon = 0.006f;
 
     [Fact]
-    public void NeverStrikingTheDrumIsAPassiveSkipAndScoresNeutral()
+    public void WatchingWithoutAnsweringIsAPassiveSkip()
     {
-        var performance = BoneSongScoring.ToPerformance(new BoneSongMetrics(
-            Struck: false,
-            ActiveSeconds: 30,
-            CleanHits: 0,
-            Misses: 0,
-            AccentsOffered: 0,
-            AccentHits: 0));
+        var performance = BoneSongScoring.ToPerformance(Metrics(
+            played: false,
+            resolved: 8,
+            hits: 0));
 
         Assert.Equal(CastPerformance.Neutral, performance);
     }
 
     [Fact]
-    public void AttemptsShorterThanTheMinimumWindowAreDiscardedAsNeutral()
+    public void TooShortAResponseIsDiscardedRatherThanPunished()
     {
-        var performance = BoneSongScoring.ToPerformance(new BoneSongMetrics(
-            Struck: true,
-            ActiveSeconds: BoneSongScoring.MinimumScoringWindowSeconds - 0.5,
-            CleanHits: 4,
-            Misses: 0,
-            AccentsOffered: 2,
-            AccentHits: 2));
+        var performance = BoneSongScoring.ToPerformance(Metrics(
+            activeSeconds: BoneSongScoring.MinimumScoringWindowSeconds - 0.1,
+            resolved: 4,
+            hits: 4,
+            timingTotal: 4));
 
         Assert.Equal(CastPerformance.Neutral, performance);
     }
 
     [Fact]
-    public void ZeroResolvedNotchesScoresNeutral()
+    public void NoResolvedRequiredNotesIsNeutral()
     {
-        // Struck only empty air before the provider returned: too little signal to score.
-        var performance = BoneSongScoring.ToPerformance(new BoneSongMetrics(
-            Struck: true,
-            ActiveSeconds: 10,
-            CleanHits: 0,
-            Misses: 0,
-            AccentsOffered: 0,
-            AccentHits: 0));
+        var performance = BoneSongScoring.ToPerformance(Metrics(resolved: 0, hits: 0));
 
         Assert.Equal(CastPerformance.Neutral, performance);
     }
 
     [Fact]
-    public void MidBandAccuracyTakingHalfTheKnotsLandsOnTheNeutralCenter()
+    public void ParGrooveAndParTimingLandAtNeutralWithoutTakingAFlourish()
     {
-        // The EV-neutral calibration contract: 0.70 accuracy (mid of the 0.45-0.95 band)
-        // while cleanly taking half the accents offered equals skipping.
-        var performance = BoneSongScoring.ToPerformance(new BoneSongMetrics(
-            Struck: true,
-            ActiveSeconds: 20,
-            CleanHits: 14,
-            Misses: 6,
-            AccentsOffered: 4,
-            AccentHits: 2));
+        // Accuracy 0.70 is the middle of 0.45..0.95. Average timing 0.625 is the middle
+        // of 0.35..0.90. Gold notes are optional, so declining them does not lower baseline.
+        var performance = BoneSongScoring.ToPerformance(Metrics(
+            resolved: 20,
+            hits: 14,
+            timingTotal: 8.75,
+            boastsOffered: 4,
+            boastsHit: 0));
 
         Assert.True(performance.Played);
         Assert.Equal(BoneSongScoring.Source, performance.Source);
-        Assert.Equal(1.0f, performance.PowerModifier, Epsilon);
-        Assert.Equal(1.0f, performance.ControlModifier, Epsilon);
-        Assert.Equal(1.0f, performance.WildnessModifier, Epsilon);
+        Assert.Equal(1f, performance.PowerModifier, Epsilon);
+        Assert.Equal(1f, performance.ControlModifier, Epsilon);
+        Assert.Equal(1f, performance.WildnessModifier, Epsilon);
     }
 
     [Fact]
-    public void ABarWithNoKnotsOfferedJudgesPowerAsNeutral()
+    public void OptionalFlourishesOnlyAddPowerHeadroom()
     {
-        var performance = BoneSongScoring.ToPerformance(new BoneSongMetrics(
-            Struck: true,
-            ActiveSeconds: 10,
-            CleanHits: 7,
-            Misses: 3,
-            AccentsOffered: 0,
-            AccentHits: 0));
+        var plain = BoneSongScoring.ToPerformance(Metrics(
+            resolved: 20,
+            hits: 14,
+            timingTotal: 8.75,
+            boastsOffered: 4,
+            boastsHit: 0));
+        var ornate = BoneSongScoring.ToPerformance(Metrics(
+            resolved: 20,
+            hits: 14,
+            timingTotal: 8.75,
+            boastsOffered: 4,
+            boastsHit: 4));
 
-        Assert.Equal(1.0f, performance.PowerModifier, Epsilon);
+        Assert.True(ornate.PowerModifier > plain.PowerModifier);
+        Assert.Equal(plain.ControlModifier, ornate.ControlModifier);
+        Assert.True(ornate.WildnessModifier < plain.WildnessModifier);
     }
 
     [Fact]
-    public void TheBoastfulDrummerBuysPowerAndControlAndCalmsWildness()
+    public void PerfectThreeMarkResponseReachesTheStrongEdge()
     {
-        var performance = BoneSongScoring.ToPerformance(new BoneSongMetrics(
-            Struck: true,
-            ActiveSeconds: 25,
-            CleanHits: 19,
-            Misses: 1,
-            AccentsOffered: 6,
-            AccentHits: 6));
+        var performance = BoneSongScoring.ToPerformance(Metrics(
+            resolved: 24,
+            hits: 24,
+            timingTotal: 24,
+            boastsOffered: 5,
+            boastsHit: 5,
+            completedPhrases: 3,
+            longestStreak: 24));
 
-        Assert.True(performance.PowerModifier > 1f);
-        Assert.True(performance.ControlModifier > 1f);
-        Assert.True(performance.WildnessModifier < 1f);
         Assert.Equal(1f + (float)BoneSongScoring.PowerSwing, performance.PowerModifier, Epsilon);
+        Assert.Equal(1f + (float)BoneSongScoring.ControlSwing, performance.ControlModifier, Epsilon);
         Assert.Equal(1f - (float)BoneSongScoring.WildnessSwing, performance.WildnessModifier, Epsilon);
     }
 
     [Fact]
-    public void TheTimidDrummerTradesPowerForControl()
+    public void WrongDrumStrikesBreakGrooveAndRaiseWildness()
     {
-        // Every plain carving struck clean, every knot declined: high control, low power.
-        var performance = BoneSongScoring.ToPerformance(new BoneSongMetrics(
-            Struck: true,
-            ActiveSeconds: 20,
-            CleanHits: 12,
-            Misses: 0,
-            AccentsOffered: 5,
-            AccentHits: 0));
+        var clean = BoneSongScoring.ToPerformance(Metrics(
+            resolved: 12,
+            hits: 10,
+            timingTotal: 8));
+        var wrongDrums = BoneSongScoring.ToPerformance(Metrics(
+            resolved: 12,
+            hits: 10,
+            timingTotal: 8,
+            mistimed: 6));
 
-        Assert.True(performance.ControlModifier > 1f);
-        Assert.True(performance.PowerModifier < 1f);
-        Assert.Equal(1f - (float)BoneSongScoring.PowerSwing, performance.PowerModifier, Epsilon);
-    }
-
-    [Fact]
-    public void SloppyDrummingGoesWild()
-    {
-        var performance = BoneSongScoring.ToPerformance(new BoneSongMetrics(
-            Struck: true,
-            ActiveSeconds: 15,
-            CleanHits: 3,
-            Misses: 9,
-            AccentsOffered: 4,
-            AccentHits: 0));
-
-        Assert.True(performance.PowerModifier < 1f);
-        Assert.True(performance.ControlModifier < 1f);
-        Assert.True(performance.WildnessModifier > 1f);
+        Assert.True(wrongDrums.PowerModifier < clean.PowerModifier);
+        Assert.True(wrongDrums.ControlModifier < clean.ControlModifier);
+        Assert.True(wrongDrums.WildnessModifier > clean.WildnessModifier);
     }
 
     [Theory]
-    [InlineData(10, 2, 6)]
-    [InlineData(12, 0, 4)]
-    [InlineData(8, 3, 8)]
-    public void FewerMissesNeverLowersControl(int cleanHits, int fewerMisses, int moreMisses)
+    [InlineData(0.00, 1.00)]
+    [InlineData(0.075, 1.00)]
+    [InlineData(0.15, 0.65)]
+    [InlineData(0.22, 0.25)]
+    [InlineData(0.23, 0.00)]
+    public void TimingWindowsAreContinuousAndLegible(double error, double expected)
     {
-        var tight = BoneSongScoring.ToPerformance(new BoneSongMetrics(true, 20, cleanHits, fewerMisses, 2, 1));
-        var loose = BoneSongScoring.ToPerformance(new BoneSongMetrics(true, 20, cleanHits, moreMisses, 2, 1));
+        Assert.Equal(expected, BoneSongScoring.TimingQuality(error), 3);
+        Assert.Equal(expected, BoneSongScoring.TimingQuality(-error), 3);
+    }
+
+    [Fact]
+    public void BetterTimingNeverLowersControl()
+    {
+        var loose = BoneSongScoring.ToPerformance(Metrics(
+            resolved: 10,
+            hits: 8,
+            timingTotal: 4));
+        var tight = BoneSongScoring.ToPerformance(Metrics(
+            resolved: 10,
+            hits: 8,
+            timingTotal: 7));
 
         Assert.True(tight.ControlModifier >= loose.ControlModifier);
         Assert.True(tight.WildnessModifier <= loose.WildnessModifier);
     }
 
     [Fact]
-    public void ModifiersStayInsideTheirBandsAtExtremes()
+    public void DeterministicPhraseBookProducesMusicalBoundedPatterns()
     {
-        var wild = BoneSongScoring.ToPerformance(new BoneSongMetrics(true, 60, 0, 20, 8, 0));
-        var strong = BoneSongScoring.ToPerformance(new BoneSongMetrics(true, 60, 40, 0, 10, 10));
+        var first = BoneSongPattern.Create("ask the sea to remember me", 0);
+        var repeat = BoneSongPattern.Create("ask the sea to remember me", 0);
+        var late = BoneSongPattern.Create("ask the sea to remember me", 20);
 
-        Assert.InRange(wild.PowerModifier, 1f - (float)BoneSongScoring.PowerSwing - Epsilon, 1f);
-        Assert.InRange(wild.WildnessModifier, 1f, 1f + (float)BoneSongScoring.WildnessSwing + Epsilon);
-        Assert.InRange(strong.PowerModifier, 1f, 1f + (float)BoneSongScoring.PowerSwing + Epsilon);
-        Assert.InRange(strong.WildnessModifier, 1f - (float)BoneSongScoring.WildnessSwing - Epsilon, 1f);
+        Assert.Equal(first.Index, repeat.Index);
+        Assert.Equal(first.Beats, repeat.Beats);
+        Assert.Equal(first.BeatsPerMinute, repeat.BeatsPerMinute);
+        Assert.Equal(first.Notes, repeat.Notes);
+        Assert.Equal(BoneSongPattern.PhraseBeats, first.Beats);
+        Assert.InRange(first.BeatsPerMinute, BoneSongPattern.BaseBpm, BoneSongPattern.MaximumBpm);
+        Assert.Equal(BoneSongPattern.MaximumBpm, late.BeatsPerMinute);
+        Assert.InRange(first.Notes.Count(note => note.Kind == BoneSongNoteKind.Required), 8, 9);
+        Assert.InRange(first.Notes.Count(note => note.Kind == BoneSongNoteKind.Boast), 1, 2);
+        Assert.All(first.Notes, note =>
+        {
+            Assert.InRange(note.Beat, 0, first.Beats - 0.5);
+            Assert.InRange((int)note.Lane, 0, 2);
+        });
+        Assert.Equal(first.Notes.Count, first.Notes.Select(note => note.Beat).Distinct().Count());
     }
+
+    [Fact]
+    public void StreakBonusAddsOneOptionalFlourishWithoutTouchingRequiredNotes()
+    {
+        for (var phraseIndex = 0; phraseIndex < 14; phraseIndex++)
+        {
+            var plain = BoneSongPattern.Create("boast for the hall", phraseIndex);
+            var earned = BoneSongPattern.Create("boast for the hall", phraseIndex, bonusBoasts: 1);
+
+            Assert.Equal(
+                plain.Notes.Where(note => note.Kind == BoneSongNoteKind.Required),
+                earned.Notes.Where(note => note.Kind == BoneSongNoteKind.Required));
+            var plainBoasts = plain.Notes.Count(note => note.Kind == BoneSongNoteKind.Boast);
+            var earnedBoasts = earned.Notes.Count(note => note.Kind == BoneSongNoteKind.Boast);
+            Assert.InRange(earnedBoasts - plainBoasts, 0, 1);
+            Assert.Equal(
+                earned.Notes.Count,
+                earned.Notes.Select(note => note.Beat).Distinct().Count());
+        }
+    }
+
+    [Fact]
+    public void EveryPhraseKeepsEighthNoteSpacingSoHitWindowsStayLegible()
+    {
+        for (var phraseIndex = 0; phraseIndex < 16; phraseIndex++)
+        {
+            var phrase = BoneSongPattern.Create("the sea keeps its own count", phraseIndex, bonusBoasts: 1);
+            var beats = phrase.Notes.Select(note => note.Beat).OrderBy(beat => beat).ToArray();
+            for (var index = 1; index < beats.Length; index++)
+            {
+                Assert.True(
+                    beats[index] - beats[index - 1] >= 0.49,
+                    $"phrase {phraseIndex}: beats {beats[index - 1]} and {beats[index]} too close");
+            }
+        }
+    }
+
+    private static BoneSongMetrics Metrics(
+        bool played = true,
+        double activeSeconds = 20,
+        int resolved = 10,
+        int hits = 7,
+        double timingTotal = 4.375,
+        int boastsOffered = 0,
+        int boastsHit = 0,
+        int mistimed = 0,
+        int completedPhrases = 1,
+        int longestStreak = 5) =>
+        new(
+            played,
+            activeSeconds,
+            resolved,
+            hits,
+            timingTotal,
+            boastsOffered,
+            boastsHit,
+            mistimed,
+            completedPhrases,
+            longestStreak);
 }
