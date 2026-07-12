@@ -1,4 +1,5 @@
 using Sorcerer.Core;
+using Sorcerer.Core.Characters;
 
 namespace Sorcerer.Godot;
 
@@ -10,4 +11,15 @@ namespace Sorcerer.Godot;
 public static class SessionHost
 {
     public static GameSession? Session;
+
+    /// <summary>A character chosen on the creation screen, waiting for Main to build the run
+    /// around it. Main must null this out when consuming it, or a later scene swap back into
+    /// Main would silently restart the run.</summary>
+    public static CharacterBuild? PendingBuild;
+
+    /// <summary>Esc-menu provider fields, carried across the Main → CharacterCreation → Main
+    /// round trip (Main is rebuilt on each swap, so its LineEdits alone can't hold them).</summary>
+    public static string? ProviderOverride;
+    public static string? HostOverride;
+    public static string? ModelOverride;
 }

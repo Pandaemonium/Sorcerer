@@ -2,8 +2,8 @@
 
 Status: first implementation in place. Origins, body/soul stat ownership, the shared
 `character`/`sheet` command, soul-bound mana, and resolver anchor shaping exist. Character
-creation is still minimal quick-start plus CLI `--origin`; richer GUI customization and point
-spend are later work. Adapted from the Wild Magic prototype. Companion to
+creation now has a full GUI screen (origins, point spend, identity fields, bonus charter form,
+optional portrait) plus CLI parity flags. Adapted from the Wild Magic prototype. Companion to
 [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md) and [ENTITY_MODEL.md](ENTITY_MODEL.md).
 
 ## The three stats
@@ -95,9 +95,19 @@ origin, spend a small point pool, fill the free-form fields). Sorcerer is death-
 many-runs, so creation must never block the flow; the CLI uses a default profile so agents
 never stall.
 
-Current implementation is deliberately small: CLI supports `--origin <id>` and the shared
-`character`/`sheet` command; Godot starts from quick-start and can read `SORCERER_ORIGIN`
-for development runs while showing stats in the side panel.
+Current implementation: the Godot build opens a single-screen creation scene on fresh boot and
+from the Esc menu's New Run (`Scenes/CharacterCreation.tscn`). One screen, three effort tiers:
+Enter begins with the selected origin as-is, "Random wild mage" rolls and starts instantly, or
+the player tunes a 3-point spend (per-stat cap 6, additive on the origin baseline — see
+`CreationRules` in Sorcerer.Core), the four identity fields (placeholders show the origin
+defaults; empty is always valid), one bonus charter form, and an optional SDXL portrait (the
+panel only appears when the shared image venv exists; see `tools/portraits/README.md`). The
+screen stashes a sanitized `CharacterBuild` in `SessionHost.PendingBuild`; Main builds the run.
+
+Scripted flows never see the screen: `SORCERER_ORIGIN`, `SORCERER_QUICKSTART=1`,
+`SORCERER_AUTOPLAY=1`, or `SORCERER_MINIGAME_PREVIEW` boot straight into play. The CLI mirrors
+the build with optional flags — `--origin <id> --name <text> --vigor/--attunement/--composure
+<n> --charter-bonus <spell id>` — all optional, so agents never stall.
 
 ## Soul and body ownership
 
@@ -118,5 +128,6 @@ active body profile; soul-facing profile fields move with the soul.
 ## Reserved lane (what to keep ready now)
 
 Done for the first implementation: body-facing and soul-facing slots route into
-`MagicContextView.ResolverLens`. Remaining work is richer character creation UX, point spend,
-more origins, and deeper use of faction first-reaction seeds once Phase 3 factions mature.
+`MagicContextView.ResolverLens`; the creation screen, point spend, and an eight-origin roster
+(`content/origins/`) shipped with the creation UX pass. Remaining work is deeper use of
+faction first-reaction seeds once Phase 3 factions mature.

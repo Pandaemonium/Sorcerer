@@ -661,7 +661,8 @@ public sealed record ComponentSave(
                 ("appearance", value.Appearance),
                 ("origin", value.Origin),
                 ("magicalSignature", value.MagicalSignature),
-                ("backstory", value.Backstory)),
+                ("backstory", value.Backstory),
+                ("portraitPath", value.PortraitPath)),
             WantComponent value => New(
                 "want",
                 ("id", value.Id),
@@ -760,7 +761,8 @@ public sealed record ComponentSave(
                 ReadString(fields, "appearance"),
                 ReadString(fields, "origin"),
                 ReadString(fields, "magicalSignature"),
-                ReadString(fields, "backstory")),
+                ReadString(fields, "backstory"),
+                ReadString(fields, "portraitPath")),
             "want" => new WantComponent(
                 ReadString(fields, "id", "want"),
                 ReadString(fields, "text"),

@@ -2,6 +2,7 @@ using Sorcerer.Core.Characters;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Items;
 using Sorcerer.Core.Lore;
+using Sorcerer.Core.Magic;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Status;
 using Sorcerer.Core.Validation;
@@ -306,7 +307,8 @@ public sealed class EngineViewBuilder
             claims,
             rumors,
             JournalViewBuilder.Build(_state),
-            messageCards);
+            messageCards,
+            BuildRepertoire());
     }
 
     public AgentObservation Observation(bool debug)
@@ -805,6 +807,36 @@ public sealed class EngineViewBuilder
             actor.MaxMana,
             soulRecord.MagicalSignature,
             soulRecord.Backstory);
+    }
+
+    /// <summary>
+    /// The controlled soul's reliable magic — known charter forms and, when the experiment is
+    /// on, the run's echo grimoire — so renderers can offer them as affordances instead of
+    /// leaving them behind the typed `charter`/`echo` verbs.
+    /// </summary>
+    public RepertoireCard BuildRepertoire()
+    {
+        var body = _state.ControlledEntity;
+        var soulId = body.TryGet<SoulComponent>(out var soul) ? soul.SoulId : body.Id.Value;
+        var spells = _state.Souls.KnownCharterSpellsFor(soulId)
+            .Select(id => CharterSpellbook.Default.Find(id))
+            .OfType<CharterSpell>()
+            .Select(spell => new CharterSpellCard(
+                spell.Id,
+                spell.Name,
+                spell.Summary,
+                spell.CostText,
+                spell.Targeting))
+            .ToArray();
+        var echoesEnabled = GameSession.EchoesEnabledFor(_state);
+        var echoes = echoesEnabled
+            ? _state.Echoes.ForSoul(soulId)
+                // Index is 1-based to match `echo <n>`; the next cast's fatigue surcharge
+                // equals the current TimesCast (see GameSession.CastEcho).
+                .Select((record, index) => new EchoCard(index + 1, record.Name, record.TimesCast, record.TimesCast))
+                .ToArray()
+            : Array.Empty<EchoCard>();
+        return new RepertoireCard(spells, echoesEnabled, echoes);
     }
 
     private static ResolverLensView BuildResolverLens(

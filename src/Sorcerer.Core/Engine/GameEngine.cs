@@ -491,6 +491,15 @@ public sealed class GameEngine
             $"Soul: Attunement {sheet.Attunement}, Composure {sheet.Composure}; MP {sheet.Mana}/{sheet.MaxMana}",
             $"Signature: {sheet.MagicalSignature}",
         };
+        var repertoire = _viewBuilder.BuildRepertoire();
+        messages.Add(repertoire.CharterSpells.Count == 0
+            ? "Charter forms: none learned. They are learned from manuals, warrants, and licensed paraphernalia."
+            : $"Charter forms: {string.Join(", ", repertoire.CharterSpells.Select(spell => spell.Name))} — cast with 'charter <id>'.");
+        if (repertoire.EchoesEnabled)
+        {
+            messages.Add($"Echoes: {repertoire.Echoes.Count} in grimoire ('echoes' to list).");
+        }
+
         if (IsWearingBorrowedBody())
         {
             // The body/soul stat split above already shows this (body row vs. soul row belong

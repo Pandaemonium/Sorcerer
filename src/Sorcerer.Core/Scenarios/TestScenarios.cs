@@ -21,9 +21,12 @@ public static class TestScenarios
 
     public static GameState ImperialEncounter(
         string? playerOriginId = null,
-        IReadOnlyList<RunChronicleRecord>? memorials = null)
+        IReadOnlyList<RunChronicleRecord>? memorials = null,
+        CharacterBuild? build = null)
     {
-        var origin = OriginCatalog.LoadDefault().Resolve(playerOriginId);
+        var origin = CreationRules.EffectiveOrigin(
+            OriginCatalog.LoadDefault().Resolve(build?.OriginId ?? playerOriginId),
+            build);
         var playerBody = new BodyStatsComponent(origin.BodyVigor);
         var playerSoul = CharacterMath.SoulFromOrigin("player_soul", origin);
         var state = new GameState(width: TacticalWidth, height: TacticalHeight)
@@ -62,7 +65,8 @@ public static class TestScenarios
                 origin.Appearance,
                 Origin: origin.Id,
                 MagicalSignature: origin.MagicalSignature,
-                Backstory: origin.Backstory))
+                Backstory: origin.Backstory,
+                PortraitPath: build?.PortraitPath ?? ""))
             .Set(StatusContainerComponent.Empty())
             .Set(EquipmentComponent.Empty())
             .Set(new InventoryComponent(

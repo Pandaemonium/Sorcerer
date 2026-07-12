@@ -142,7 +142,8 @@ public sealed record ProfileComponent(
     string Appearance,
     string Origin = "",
     string MagicalSignature = "",
-    string Backstory = "") : IEntityComponent;
+    string Backstory = "",
+    string PortraitPath = "") : IEntityComponent;
 
 public sealed record WantComponent : IEntityComponent
 {

@@ -218,7 +218,8 @@ public sealed record GameView(
     IReadOnlyList<string>? Journal = null,
     // Curated, classified message log for renderers that colour (drops chaff, dedupes, tags damage).
     // Mirrors the curated Messages above; renderers may use either.
-    IReadOnlyList<MessageCard>? MessageCards = null);
+    IReadOnlyList<MessageCard>? MessageCards = null,
+    RepertoireCard? Repertoire = null);
 
 public sealed record WorldCard(
     string CurrentZoneId,
@@ -257,6 +258,29 @@ public sealed record CharacterSheetCard(
     int MaxMana,
     string MagicalSignature,
     string Backstory);
+
+/// <summary>A charter form the controlled soul knows: instant, fixed-cost, castable now.</summary>
+public sealed record CharterSpellCard(
+    string Id,
+    string Name,
+    string Summary,
+    string CostText,
+    string Targeting);
+
+/// <summary>A recorded spell echo. Index is 1-based to match the `echo &lt;n&gt;` command.</summary>
+public sealed record EchoCard(
+    int Index,
+    string Name,
+    int TimesCast,
+    int NextCastFatigue);
+
+/// <summary>The controlled soul's reliable magic: known charter forms plus, when the echoes
+/// experiment is enabled, the run's grimoire. Exists so renderers can surface castable
+/// options as affordances instead of hiding them behind typed verbs.</summary>
+public sealed record RepertoireCard(
+    IReadOnlyList<CharterSpellCard> CharterSpells,
+    bool EchoesEnabled,
+    IReadOnlyList<EchoCard> Echoes);
 
 public sealed record LedgerSummary(
     int Deeds,

@@ -15,19 +15,15 @@ public partial class Promises : Control
     {
         if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
         {
-            GoBack();
+            // Handled-flag first: GoBack swaps scenes, which detaches this node and nulls GetViewport().
             GetViewport().SetInputAsHandled();
+            GoBack();
         }
     }
 
     private void BuildUi()
     {
-        AddChild(FullRect(new TextureRect
-        {
-            Texture = UiTheme.BackgroundGradient(),
-            StretchMode = TextureRect.StretchModeEnum.Scale,
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-        }));
+        AddChild(UiTheme.MagicBackdrop());
 
         var outer = FullRect(new MarginContainer());
         outer.AddThemeConstantOverride("margin_left", UiTheme.SpaceLg);

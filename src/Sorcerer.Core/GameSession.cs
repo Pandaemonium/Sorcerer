@@ -84,9 +84,10 @@ public sealed class GameSession
         IDialogueAuditSink? dialogueAudit = null,
         IBackgroundTextGenerator? backgroundTextGenerator = null,
         IDialogueParser? dialogueParser = null,
-        IDialogueParserRouter? dialogueParserRouter = null)
+        IDialogueParserRouter? dialogueParserRouter = null,
+        Characters.CharacterBuild? build = null)
     {
-        var state = TestScenarios.ImperialEncounter(originId, memorials);
+        var state = TestScenarios.ImperialEncounter(originId, memorials, build);
         state.Seed = Math.Max(1, seed);
         state.Rng = new DeterministicRng(state.Seed);
         return new GameSession(state, magic, claimExtractor, dialogueProvider, dialogueRouter, dialogueAudit, backgroundTextGenerator, dialogueParser, dialogueParserRouter);
@@ -311,6 +312,17 @@ public sealed class GameSession
                 turn,
                 turn,
                 "No spell was spoken.");
+        }
+
+        // Same instant charter detour as CastSpellAsync below: a *known* form's name casts it
+        // now, with no provider call and no pending cast, so the GUI spell box (begin/await)
+        // and CLI `cast` agree on charter names. Agent contract: begin_cast with a charter name
+        // settles immediately — a following await_cast gets "No spell is waiting to resolve.";
+        // Observation().PendingCast == null remains the settled signal.
+        if (CharterSpellbook.Default.Find(command.Text) is { } charterSpell
+            && Engine.State.Souls.KnowsCharterSpell(ControlledSoulId(), charterSpell.Id))
+        {
+            return CastCharterSpell(charterSpell);
         }
 
         var id = $"cast_{++_pendingCastSerial}";
@@ -553,23 +565,24 @@ public sealed class GameSession
             ResolvedMagicJson: spell.BuildResolvedMagicJson(),
             DeedKind: "charter_magic"));
 
-    private bool EchoesEnabled
+    private bool EchoesEnabled => EchoesEnabledFor(Engine.State);
+
+    /// <summary>Tolerant read of the echoes world flag (bool, "true", or "1"), shared with the
+    /// view builder so the GUI's repertoire panel gates the same way the commands do.</summary>
+    public static bool EchoesEnabledFor(GameState state)
     {
-        get
+        if (!state.WorldFlags.TryGetValue(EchoesEnabledFlag, out var raw) || raw is null)
         {
-            if (!Engine.State.WorldFlags.TryGetValue(EchoesEnabledFlag, out var raw) || raw is null)
-            {
-                return false;
-            }
-
-            if (raw is bool flag)
-            {
-                return flag;
-            }
-
-            var text = Convert.ToString(raw);
-            return string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "1";
+            return false;
         }
+
+        if (raw is bool flag)
+        {
+            return flag;
+        }
+
+        var text = Convert.ToString(raw);
+        return string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "1";
     }
 
     private void RecordEchoIfEnabled(string spellText, ActionResult result)

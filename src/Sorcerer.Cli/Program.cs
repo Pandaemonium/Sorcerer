@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Sorcerer.Core;
+using Sorcerer.Core.Characters;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
@@ -115,7 +116,8 @@ public static class Program
             dialogueAudit: dialogueAudit,
             backgroundTextGenerator: backgroundTextGenerator,
             dialogueParser: dialogueParser,
-            dialogueParserRouter: dialogueParserRouter);
+            dialogueParserRouter: dialogueParserRouter,
+            build: options.ToCharacterBuild());
         ApplyBackgroundOptions(session, options);
         if (options.Echoes)
         {
@@ -546,8 +548,38 @@ public sealed record CliOptions(
     int BudgetSeconds,
     string? CheckpointPath,
     IReadOnlyList<string> Commands,
-    bool Echoes = false)
+    bool Echoes = false,
+    string? BuildName = null,
+    int? BuildVigor = null,
+    int? BuildAttunement = null,
+    int? BuildComposure = null,
+    string? BuildCharterBonus = null)
 {
+    /// <summary>The character-creation flags folded into a sanitized build, or null when none
+    /// were passed — absent flags keep today's origin-only behavior exactly. All flags are
+    /// optional and non-interactive, so scripted/agent runs can never block.</summary>
+    public CharacterBuild? ToCharacterBuild()
+    {
+        if (BuildName is null && BuildVigor is null && BuildAttunement is null
+            && BuildComposure is null && BuildCharterBonus is null)
+        {
+            return null;
+        }
+
+        var catalog = OriginCatalog.LoadDefault();
+        var origin = catalog.Resolve(OriginId);
+        return CreationRules.Sanitize(
+            new CharacterBuild(
+                origin.Id,
+                BuildVigor ?? origin.BodyVigor,
+                BuildAttunement ?? origin.SoulAttunement,
+                BuildComposure ?? origin.SoulComposure,
+                Name: BuildName,
+                BonusCharterSpellId: BuildCharterBonus),
+            catalog,
+            Sorcerer.Core.Magic.CharterSpellbook.Default);
+    }
+
     public static CliOptions Parse(string[] args)
     {
         var provider = "mock";
@@ -581,6 +613,11 @@ public sealed record CliOptions(
         var budgetSeconds = 500;
         string? checkpointPath = null;
         var commands = new List<string>();
+        string? buildName = null;
+        int? buildVigor = null;
+        int? buildAttunement = null;
+        int? buildComposure = null;
+        string? buildCharterBonus = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -644,6 +681,21 @@ public sealed record CliOptions(
                     break;
                 case "--origin" when index + 1 < args.Length:
                     originId = args[++index];
+                    break;
+                case "--name" when index + 1 < args.Length:
+                    buildName = args[++index];
+                    break;
+                case "--vigor" when index + 1 < args.Length:
+                    buildVigor = ReadOptionalStat(args[++index]);
+                    break;
+                case "--attunement" when index + 1 < args.Length:
+                    buildAttunement = ReadOptionalStat(args[++index]);
+                    break;
+                case "--composure" when index + 1 < args.Length:
+                    buildComposure = ReadOptionalStat(args[++index]);
+                    break;
+                case "--charter-bonus" when index + 1 < args.Length:
+                    buildCharterBonus = args[++index];
                     break;
                 case "--background-provider" when index + 1 < args.Length:
                     backgroundProvider = args[++index];
@@ -723,11 +775,19 @@ public sealed record CliOptions(
             budgetSeconds,
             checkpointPath,
             commands,
-            echoes);
+            echoes,
+            buildName,
+            buildVigor,
+            buildAttunement,
+            buildComposure,
+            buildCharterBonus);
     }
 
     private static int ReadPositiveInt(string value, int fallback) =>
         int.TryParse(value, out var parsed) && parsed > 0 ? parsed : fallback;
+
+    private static int? ReadOptionalStat(string value) =>
+        int.TryParse(value, out var parsed) && parsed > 0 ? parsed : null;
 
     private static int ReadNonNegativeInt(string value, int fallback) =>
         int.TryParse(value, out var parsed) && parsed >= 0 ? parsed : fallback;

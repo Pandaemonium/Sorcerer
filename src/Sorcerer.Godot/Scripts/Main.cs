@@ -1,5 +1,6 @@
 using Godot;
 using Sorcerer.Core;
+using Sorcerer.Core.Characters;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Persistence;
 using Sorcerer.Core.Primitives;
@@ -39,6 +40,8 @@ public partial class Main : Control
     private HFlowContainer _statusChips = null!;
     private RichTextLabel _entities = null!;
     private RichTextLabel _inventory = null!;
+    private VBoxContainer _repertoireBox = null!;
+    private readonly List<Button> _repertoireChips = new();
     private RichTextLabel _log = null!;
     private LineEdit _spellLine = null!;
     private LineEdit _commandLine = null!;
@@ -55,6 +58,20 @@ public partial class Main : Control
     private int _lastMinigame = -1;
     private readonly Random _minigameRng = new();
     private LlmDebugPanel _llmDebug = null!;
+
+    // Cells whose glyph and floor pulse each frame: living magic terrain, the player's own
+    // glyph, and the targeting ring. Rebuilt on every RenderMap.
+    private sealed record ShimmerCell(
+        Button Cell,
+        StyleBoxFlat Box,
+        Color BaseBackground,
+        Color BaseGlyph,
+        float Amplitude,
+        float Phase);
+
+    private readonly List<ShimmerCell> _shimmerCells = new();
+    private double _shimmerClock;
+    private double _shimmerLastUpdate;
 
     private ActionResult? _lastResult;
     private string? _lastError;
@@ -120,9 +137,19 @@ public partial class Main : Control
         {
             _session = SessionHost.Session;
         }
+        else if (SessionHost.PendingBuild is not null || QuickStartRequested())
+        {
+            var build = SessionHost.PendingBuild;
+            SessionHost.PendingBuild = null;
+            StartNewRun(build);
+        }
         else
         {
-            StartNewRun();
+            // Fresh boot with no character chosen: hand off to the creation screen. Deferred
+            // because swapping scenes from inside _Ready is unsupported; early return because
+            // there is no session for the rest of _Ready to refresh.
+            CallDeferred(nameof(OpenCharacterCreation));
+            return;
         }
 
         // Opt-in autoplay-on-launch (does not change normal play): set SORCERER_AUTOPLAY=1.
@@ -166,22 +193,35 @@ public partial class Main : Control
             return;
         }
 
-        // F6 toggles the LLM debug view. Handled before the busy/menu guards on purpose: the whole
+        var action = Keybindings.ActionForKey(key.Keycode);
+
+        // The LLM debug toggle is handled before the busy/menu guards on purpose: the whole
         // point is to read prompts while a call is in flight (which is exactly when _busy is true).
-        if (key.Keycode == Key.F6)
+        if (action == BindableAction.ToggleLlmDebug)
         {
             _llmDebug.Toggle();
             GetViewport().SetInputAsHandled();
             return;
         }
 
-        // P toggles autoplay: an AI agent drives the live session so you can watch it play.
-        if (key.Keycode == Key.P)
+        // Autoplay: an AI agent drives the live session so you can watch it play.
+        if (action == BindableAction.ToggleAutoplay)
         {
             _autoplay = !_autoplay;
             _autoplayTimer = 0;
             RefreshView();
             GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        // Controls screen: allowed while the Esc menu is open (it lives on that menu too),
+        // blocked only mid-cast because the scene swap would abandon the busy state.
+        // Handled-flag first: the scene swap detaches this node, after which GetViewport()
+        // returns null.
+        if (action == BindableAction.OpenControls && !_busy)
+        {
+            GetViewport().SetInputAsHandled();
+            OpenControlsScene();
             return;
         }
 
@@ -200,14 +240,14 @@ public partial class Main : Control
             return;
         }
 
-        if (key.Keycode == Key.C)
+        if (action == BindableAction.FocusSpell)
         {
             _spellLine.GrabFocus();
             GetViewport().SetInputAsHandled();
             return;
         }
 
-        if (key.Keycode == Key.T)
+        if (action == BindableAction.FocusTalk)
         {
             FocusCommandLine("talk ");
             GetViewport().SetInputAsHandled();
@@ -224,8 +264,19 @@ public partial class Main : Control
         GetViewport().SetInputAsHandled();
     }
 
+    private void OpenControlsScene()
+    {
+        SessionHost.Session = _session;
+        StashProviderOverrides();
+        GetTree().ChangeSceneToFile("res://Scenes/Controls.tscn");
+    }
+
     public override void _Process(double delta)
     {
+        // The shimmer runs before the busy guard so magic keeps breathing while a cast resolves.
+        _shimmerClock += delta;
+        UpdateShimmer();
+
         if (_busy || _session is null)
         {
             return;
@@ -339,12 +390,7 @@ public partial class Main : Control
 
     private void BuildUi()
     {
-        AddChild(FullRect(new TextureRect
-        {
-            Texture = UiTheme.BackgroundGradient(),
-            StretchMode = TextureRect.StretchModeEnum.Scale,
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-        }));
+        AddChild(UiTheme.MagicBackdrop());
 
         var outer = FullRect(new MarginContainer());
         outer.AddThemeConstantOverride("margin_left", UiTheme.SpaceLg);
@@ -463,7 +509,9 @@ public partial class Main : Control
 
         _provider = new LineEdit
         {
-            Text = System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "ollama",
+            Text = SessionHost.ProviderOverride
+                ?? System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER")
+                ?? "ollama",
             PlaceholderText = "provider",
             CustomMinimumSize = new Vector2(116, 34),
         };
@@ -472,7 +520,9 @@ public partial class Main : Control
 
         _host = new LineEdit
         {
-            Text = DefaultProviderHost(System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "ollama") ?? "",
+            Text = SessionHost.HostOverride
+                ?? DefaultProviderHost(System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "ollama")
+                ?? "",
             PlaceholderText = "host",
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 34),
@@ -482,7 +532,8 @@ public partial class Main : Control
 
         _model = new LineEdit
         {
-            Text = System.Environment.GetEnvironmentVariable("SORCERER_MODEL")
+            Text = SessionHost.ModelOverride
+                ?? System.Environment.GetEnvironmentVariable("SORCERER_MODEL")
                 ?? System.Environment.GetEnvironmentVariable("WILDMAGIC_MODEL")
                 ?? "qwen3.5:9b-cpu",
             PlaceholderText = "model",
@@ -497,20 +548,26 @@ public partial class Main : Control
         stack.AddChild(runRow);
 
         var newRun = SmallButton("New Run");
+        newRun.TooltipText = "Create a new character and start over (this run keeps running until you Begin).";
         newRun.Pressed += () =>
         {
-            StartNewRun();
-            RefreshView();
+            // Keep the current session referenced so Esc on the creation screen resumes it
+            // untouched; Begin over there clears it and stashes a PendingBuild instead.
+            SessionHost.Session = _session;
+            StashProviderOverrides();
+            GetTree().ChangeSceneToFile("res://Scenes/CharacterCreation.tscn");
         };
         runRow.AddChild(newRun);
         _busyControls.Add(newRun);
 
         var save = SmallButton("Save");
+        save.TooltipText = "Save to runs/quicksave.json — typed: save";
         save.Pressed += () => _ = ExecuteAsync(new SaveCommand(Path.Combine("runs", "quicksave.json")));
         runRow.AddChild(save);
         _busyControls.Add(save);
 
         var load = SmallButton("Load");
+        load.TooltipText = "Load runs/quicksave.json — typed: load";
         load.Pressed += () => _ = ExecuteAsync(new LoadCommand(Path.Combine("runs", "quicksave.json")));
         runRow.AddChild(load);
         _busyControls.Add(load);
@@ -519,50 +576,93 @@ public partial class Main : Control
         recordsRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         stack.AddChild(recordsRow);
 
-        AddSceneButton(recordsRow, "Journal", "res://Scenes/Journal.tscn");
-        AddSceneButton(recordsRow, "Promises", "res://Scenes/Promises.tscn");
-        AddSceneButton(recordsRow, "Rumors", "res://Scenes/Rumors.tscn");
+        AddSceneButton(recordsRow, "Journal", "res://Scenes/Journal.tscn", "Leads, claims, and promises — typed: journal");
+        AddSceneButton(recordsRow, "Promises", "res://Scenes/Promises.tscn", "Magic that is still owed — typed: promises");
+        AddSceneButton(recordsRow, "Rumors", "res://Scenes/Rumors.tscn", "What people are saying — typed: rumors");
 
         var systemsRow = new HBoxContainer();
         systemsRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         stack.AddChild(systemsRow);
 
-        AddMenuCommandButton(systemsRow, "Character", new CharacterCommand());
-        AddMenuCommandButton(systemsRow, "Standing", new StandingCommand());
-        AddMenuCommandButton(systemsRow, "Followers", new FollowersCommand());
+        AddMenuCommandButton(systemsRow, "Character", new CharacterCommand(), "Your sheet: stats, signature, charter forms — typed: character");
+        AddMenuCommandButton(systemsRow, "Standing", new StandingCommand(), "Faction standing, pressure, and legend — typed: standing");
+        AddMenuCommandButton(systemsRow, "Followers", new FollowersCommand(), "Who travels with you — typed: followers");
 
         var affordanceRow = new HBoxContainer();
         affordanceRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         stack.AddChild(affordanceRow);
 
-        AddMenuCommandButton(affordanceRow, "Services", new ServicesCommand());
-        AddMenuCommandButton(affordanceRow, "Jobs", new JobsCommand());
-        AddMenuCommandButton(affordanceRow, "Atlas", new AtlasCommand());
+        AddMenuCommandButton(affordanceRow, "Services", new ServicesCommand(), "What nearby people offer — typed: services");
+        AddMenuCommandButton(affordanceRow, "Jobs", new JobsCommand(), "Background work in progress — typed: jobs");
+        AddMenuCommandButton(affordanceRow, "Atlas", new AtlasCommand(), "Where you are in the world — typed: atlas");
+
+        var controlsRow = new HBoxContainer();
+        controlsRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
+        stack.AddChild(controlsRow);
+        AddSceneButton(
+            controlsRow,
+            "Controls",
+            "res://Scenes/Controls.tscn",
+            $"Keys, rebinding, and the typed command list ({KeyName(BindableAction.OpenControls)})");
 
         var resume = SmallButton("Resume");
+        resume.TooltipText = "Back to the game (Esc)";
         resume.Pressed += CloseEscMenu;
         stack.AddChild(resume);
 
         return overlay;
     }
 
-    private void AddSceneButton(BoxContainer parent, string label, string scenePath)
+    private void AddSceneButton(BoxContainer parent, string label, string scenePath, string? tooltip = null)
     {
         var button = SmallButton(label);
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        if (tooltip is not null)
+        {
+            button.TooltipText = tooltip;
+        }
+
         button.Pressed += () =>
         {
             SessionHost.Session = _session;
+            StashProviderOverrides();
             GetTree().ChangeSceneToFile(scenePath);
         };
         parent.AddChild(button);
         _busyControls.Add(button);
     }
 
-    private void AddMenuCommandButton(BoxContainer parent, string label, GameCommand command)
+    /// <summary>Provider fields live in this scene's LineEdits; park them in SessionHost so
+    /// they survive the scene swap (Main is rebuilt from scratch on the way back).</summary>
+    private void StashProviderOverrides()
+    {
+        SessionHost.ProviderOverride = _provider?.Text;
+        SessionHost.HostOverride = _host?.Text;
+        SessionHost.ModelOverride = _model?.Text;
+    }
+
+    private void OpenCharacterCreation()
+    {
+        GetTree().ChangeSceneToFile("res://Scenes/CharacterCreation.tscn");
+    }
+
+    /// <summary>Scripted, agent, and CLI-parity launches must never block on a menu
+    /// (docs/CLI_AND_AGENT_PLAYTESTING.md): any of these env vars boots straight into play.</summary>
+    private static bool QuickStartRequested() =>
+        !string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("SORCERER_ORIGIN"))
+        || System.Environment.GetEnvironmentVariable("SORCERER_QUICKSTART") == "1"
+        || System.Environment.GetEnvironmentVariable("SORCERER_AUTOPLAY") == "1"
+        || !string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("SORCERER_MINIGAME_PREVIEW"));
+
+    private void AddMenuCommandButton(BoxContainer parent, string label, GameCommand command, string? tooltip = null)
     {
         var button = SmallButton(label);
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        if (tooltip is not null)
+        {
+            button.TooltipText = tooltip;
+        }
+
         button.Pressed += () =>
         {
             CloseEscMenu();
@@ -574,6 +674,14 @@ public partial class Main : Control
 
     private void ToggleEscMenu()
     {
+        // _session is null for the one frame between _Ready and the deferred hand-off to
+        // character creation on a fresh boot; a menu over a session-less Main has nothing
+        // to show or resume into.
+        if (_session is null)
+        {
+            return;
+        }
+
         HideContextMenu();
         _escMenu.Visible = !_escMenu.Visible;
         if (_escMenu.Visible)
@@ -612,21 +720,25 @@ public partial class Main : Control
         header.AddChild(mapTitle);
 
         var wait = SmallButton("Wait");
+        wait.TooltipText = $"Pass a turn ({KeyName(BindableAction.Wait)}) — typed: wait";
         wait.Pressed += () => _ = ExecuteAsync(new WaitCommand());
         header.AddChild(wait);
         _busyControls.Add(wait);
 
         var inspect = SmallButton("Inspect");
+        inspect.TooltipText = $"Describe your surroundings ({KeyName(BindableAction.Inspect)}) — typed: inspect";
         inspect.Pressed += () => _ = ExecuteAsync(new InspectCommand());
         header.AddChild(inspect);
         _busyControls.Add(inspect);
 
         var pickup = SmallButton("Pickup");
+        pickup.TooltipText = $"Pick up what is underfoot ({KeyName(BindableAction.Pickup)}) — typed: pickup";
         pickup.Pressed += () => _ = ExecuteAsync(new PickupCommand());
         header.AddChild(pickup);
         _busyControls.Add(pickup);
 
         var talk = SmallButton("Talk");
+        talk.TooltipText = $"Speak to someone nearby ({KeyName(BindableAction.FocusTalk)}) — fills 'talk ' in the command box";
         talk.Pressed += () => FocusCommandLine("talk ");
         header.AddChild(talk);
         _busyControls.Add(talk);
@@ -664,14 +776,14 @@ public partial class Main : Control
         dpad.AddThemeConstantOverride("separation", UiTheme.SpaceXs);
         stack.AddChild(dpad);
 
-        AddMoveButton(dpad, "NW", Direction.NorthWest);
-        AddMoveButton(dpad, "N", Direction.North);
-        AddMoveButton(dpad, "NE", Direction.NorthEast);
-        AddMoveButton(dpad, "W", Direction.West);
-        AddMoveButton(dpad, "E", Direction.East);
-        AddMoveButton(dpad, "SW", Direction.SouthWest);
-        AddMoveButton(dpad, "S", Direction.South);
-        AddMoveButton(dpad, "SE", Direction.SouthEast);
+        AddMoveButton(dpad, "NW", Direction.NorthWest, BindableAction.MoveNorthWest, "numpad 7");
+        AddMoveButton(dpad, "N", Direction.North, BindableAction.MoveNorth, "numpad 8");
+        AddMoveButton(dpad, "NE", Direction.NorthEast, BindableAction.MoveNorthEast, "numpad 9");
+        AddMoveButton(dpad, "W", Direction.West, BindableAction.MoveWest, "numpad 4");
+        AddMoveButton(dpad, "E", Direction.East, BindableAction.MoveEast, "numpad 6");
+        AddMoveButton(dpad, "SW", Direction.SouthWest, BindableAction.MoveSouthWest, "numpad 1");
+        AddMoveButton(dpad, "S", Direction.South, BindableAction.MoveSouth, "numpad 2");
+        AddMoveButton(dpad, "SE", Direction.SouthEast, BindableAction.MoveSouthEast, "numpad 3");
 
         return panel;
     }
@@ -698,6 +810,10 @@ public partial class Main : Control
 
         _inventory = Readout(50);
         stack.AddChild(Section("Inventory", _inventory, UiTheme.Focus));
+
+        _repertoireBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _repertoireBox.AddThemeConstantOverride("separation", UiTheme.SpaceXs);
+        stack.AddChild(Section("Repertoire", _repertoireBox, UiTheme.Arcane));
 
         _log = Readout(200);
         _log.ScrollFollowing = true;
@@ -784,11 +900,14 @@ public partial class Main : Control
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             PlaceholderText = "speak your spell...",
+            TooltipText = "Describe any spell in plain words — wild magic is a gamble.\n"
+                + "A known charter form's name casts it instantly instead.",
         };
         _spellLine.TextSubmitted += text => _ = CastSpellAsync(text);
         spellRow.AddChild(_spellLine);
 
         _cast = SmallButton("Cast");
+        _cast.TooltipText = "Cast the spell text (Enter in the spell box).";
         _cast.Pressed += () => _ = CastSpellAsync(_spellLine.Text);
         spellRow.AddChild(_cast);
 
@@ -805,21 +924,30 @@ public partial class Main : Control
         _commandLine = new LineEdit
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            PlaceholderText = "inspect",
+            PlaceholderText = "command — try 'help'",
+            TooltipText = "Typed verbs: talk, examine, read, travel, charter, echoes, wares, possess…\n"
+                + "Type 'help' for the full list, or open Controls (F1).",
         };
         _commandLine.TextSubmitted += text => _ = SubmitCommandAsync(text);
         commandRow.AddChild(_commandLine);
         _busyControls.Add(_commandLine);
 
         var run = SmallButton("Run");
+        run.TooltipText = "Run the typed command — try 'help'.";
         run.Pressed += () => _ = SubmitCommandAsync(_commandLine.Text);
         commandRow.AddChild(run);
         _busyControls.Add(run);
 
+        var hints = SmallLabel(
+            $"Esc — menu · right-click — actions · {KeyName(BindableAction.FocusSpell)} — spell · "
+            + $"{KeyName(BindableAction.FocusTalk)} — talk · {KeyName(BindableAction.OpenControls)} — controls");
+        hints.AddThemeFontSizeOverride("font_size", 11);
+        stack.AddChild(hints);
+
         return panel;
     }
 
-    private void StartNewRun()
+    private void StartNewRun(CharacterBuild? build = null)
     {
         var providerName = string.IsNullOrWhiteSpace(_provider?.Text)
             ? System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "ollama"
@@ -870,7 +998,9 @@ public partial class Main : Control
         _activeProviderName = provider.Name;
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
         var dialogueAudit = new JsonlDialogueAuditSink(Path.Combine("logs", "dialogue_audit.jsonl"));
-        var origin = System.Environment.GetEnvironmentVariable("SORCERER_ORIGIN");
+        var origin = build is null
+            ? System.Environment.GetEnvironmentVariable("SORCERER_ORIGIN")
+            : null;
         var seed = int.TryParse(System.Environment.GetEnvironmentVariable("SORCERER_SEED"), out var parsedSeed)
             ? Math.Max(1, parsedSeed)
             : 7;
@@ -884,7 +1014,8 @@ public partial class Main : Control
             dialogueAudit: dialogueAudit,
             backgroundTextGenerator: backgroundTextGenerator,
             dialogueParser: dialogueParser,
-            dialogueParserRouter: dialogueParserRouter);
+            dialogueParserRouter: dialogueParserRouter,
+            build: build);
         _lastResult = null;
         _lastError = null;
         EnsureMapCells(_session.View());
@@ -997,7 +1128,13 @@ public partial class Main : Control
             // The score arrives with await_cast because it does not exist at submit time.
             var begin = await _session.ExecuteAsync(new BeginCastCommand(trimmed));
             _lastResult = begin;
-            if (begin.Success)
+            if (begin.Action != "begin_cast")
+            {
+                // Instant charter lane: a known form's name resolved the cast inside
+                // begin_cast itself — nothing is pending, so no minigame and no await.
+                RecordChronicleIfComplete(begin);
+            }
+            else if (begin.Success)
             {
                 var performance = await PlayCastMinigameAsync(trimmed);
                 _lastResult = await _session.ExecuteAsync(new AwaitCastCommand(performance));
@@ -1191,6 +1328,7 @@ public partial class Main : Control
 
     private void RenderMap(GameView view)
     {
+        _shimmerCells.Clear();
         var tiles = (view.Tiles ?? Array.Empty<MapTileCard>())
             .ToDictionary(tile => new GridPoint(tile.X, tile.Y));
         var entitiesByPoint = view.Entities
@@ -1208,17 +1346,82 @@ public partial class Main : Control
                 entitiesByPoint.TryGetValue(point, out var entity);
                 var selected = view.SelectedTarget == point;
                 var cell = _cells[y, x];
-                cell.Text = CellGlyph(tile, entity, selected);
-                cell.TooltipText = CellTooltip(point, tile, entity, selected);
-                cell.AddThemeColorOverride("font_color", GlyphColor(entity, tile, selected));
-                cell.AddThemeColorOverride("font_hover_color", GlyphColor(entity, tile, selected));
 
-                var style = CellStyle(TerrainColor(tile), selected);
-                cell.AddThemeStyleboxOverride("normal", style);
-                cell.AddThemeStyleboxOverride("hover", CellStyle(TerrainColor(tile).Lightened(0.08f), selected));
-                cell.AddThemeStyleboxOverride("pressed", CellStyle(TerrainColor(tile).Darkened(0.12f), selected));
-                cell.AddThemeStyleboxOverride("focus", style);
+                var background = TerrainBackground(tile, x, y);
+                var glyphColor = GlyphColor(entity, tile, selected, x, y, view.ControlledEntityId);
+                cell.Text = CellGlyph(tile, entity, selected, x, y);
+                cell.TooltipText = CellTooltip(point, tile, entity, selected);
+                cell.AddThemeColorOverride("font_color", glyphColor);
+                cell.AddThemeColorOverride("font_hover_color", glyphColor);
+
+                var normal = CellStyle(background, selected);
+                cell.AddThemeStyleboxOverride("normal", normal);
+                cell.AddThemeStyleboxOverride("hover", CellStyle(background.Lightened(0.08f), selected));
+                cell.AddThemeStyleboxOverride("pressed", CellStyle(background.Darkened(0.12f), selected));
+                cell.AddThemeStyleboxOverride("focus", normal);
+
+                RegisterShimmer(cell, normal, background, glyphColor, tile, entity, selected, view, x, y);
             }
+        }
+    }
+
+    /// <summary>
+    /// Living cells pulse: magical terrain thrums at its style's amplitude, the controlled body's
+    /// glyph breathes, and the targeting ring glows. Amplitudes stay gentle — the map should
+    /// shimmer, not strobe.
+    /// </summary>
+    private void RegisterShimmer(
+        Button cell,
+        StyleBoxFlat box,
+        Color background,
+        Color glyphColor,
+        MapTileCard? tile,
+        EntityCard? entity,
+        bool selected,
+        GameView view,
+        int x,
+        int y)
+    {
+        var lit = tile is { Explored: true, Visible: true };
+        if (entity is not null && entity.Id == view.ControlledEntityId && lit)
+        {
+            _shimmerCells.Add(new ShimmerCell(cell, box, background, glyphColor, 0.35f, 0f));
+            return;
+        }
+
+        if (selected)
+        {
+            _shimmerCells.Add(new ShimmerCell(cell, box, background, glyphColor, 0.3f, 1.6f));
+            return;
+        }
+
+        if (entity is null && lit)
+        {
+            var style = TerrainStyles.Resolve(tile!.Terrain, IsWallLike(tile));
+            if (style.Shimmer > 0f)
+            {
+                _shimmerCells.Add(new ShimmerCell(
+                    cell, box, background, glyphColor, style.Shimmer, TerrainStyles.PhaseFor(x, y)));
+            }
+        }
+    }
+
+    private void UpdateShimmer()
+    {
+        // ~20 Hz is plenty for a slow pulse and keeps per-frame work negligible.
+        if (_shimmerCells.Count == 0 || _shimmerClock - _shimmerLastUpdate < 0.05)
+        {
+            return;
+        }
+
+        _shimmerLastUpdate = _shimmerClock;
+        foreach (var shimmer in _shimmerCells)
+        {
+            var wave = 0.5f + (0.5f * MathF.Sin(((float)_shimmerClock * 2.1f) + shimmer.Phase));
+            shimmer.Box.BgColor = shimmer.BaseBackground.Lightened(shimmer.Amplitude * wave * 0.45f);
+            shimmer.Cell.AddThemeColorOverride(
+                "font_color",
+                shimmer.BaseGlyph.Lightened(shimmer.Amplitude * wave * 0.8f));
         }
     }
 
@@ -1315,6 +1518,8 @@ public partial class Main : Control
                 .OrderBy(item => item.Name)
                 .Select(item => $"{UiTheme.Escape(item.Name)} x{item.Quantity}{(item.Protected ? UiTheme.Colorize(" protected", UiTheme.Warning) : "")}"));
 
+        RenderRepertoire(view.Repertoire, pendingCast);
+
         var logLines = new List<string>();
         if (_lastError is not null)
         {
@@ -1357,7 +1562,7 @@ public partial class Main : Control
 
         // A faint hairline between messages so colored lines read as distinct entries rather than
         // one blurred block (message-log immersion pass).
-        _log.Text = string.Join($"\n[color=#232a33]{new string('─', 44)}[/color]\n", logLines);
+        _log.Text = string.Join($"\n[color=#2b2348]{new string('─', 44)}[/color]\n", logLines);
     }
 
     /// <summary>
@@ -1647,14 +1852,18 @@ public partial class Main : Control
             CustomMinimumSize = new Vector2(74, 34),
         };
 
-    private void AddMoveButton(BoxContainer parent, string label, Direction direction)
+    private void AddMoveButton(BoxContainer parent, string label, Direction direction, BindableAction action, string numpadHint)
     {
         var button = SmallButton(label);
         button.CustomMinimumSize = new Vector2(44, 34);
+        button.TooltipText = $"Move {label} ({KeyName(action)} / {numpadHint})";
         button.Pressed += () => _ = ExecuteAsync(new MoveCommand(direction));
         parent.AddChild(button);
         _busyControls.Add(button);
     }
+
+    private static string KeyName(BindableAction action) =>
+        Keybindings.DisplayName(Keybindings.KeyFor(action));
 
     private void SetBusy(bool busy)
     {
@@ -1670,9 +1879,89 @@ public partial class Main : Control
                     break;
             }
         }
+
+        // Repertoire chips are rebuilt on every render, so they ride their own list rather
+        // than accumulating stale entries in _busyControls.
+        foreach (var chip in _repertoireChips)
+        {
+            chip.Disabled = busy;
+        }
     }
 
-    private static string CellGlyph(MapTileCard? tile, EntityCard? entity, bool selected)
+    /// <summary>
+    /// The Repertoire section: the player's reliable magic as one-click affordances — known
+    /// charter forms (instant, fixed cost) and, when the experiment flag is on, spell echoes.
+    /// Exists because these were previously reachable only by knowing the typed verbs.
+    /// </summary>
+    private void RenderRepertoire(RepertoireCard? repertoire, PendingCastView? pendingCast)
+    {
+        _repertoireChips.Clear();
+        foreach (var child in _repertoireBox.GetChildren().ToArray())
+        {
+            child.QueueFree();
+        }
+
+        var charterSpells = repertoire?.CharterSpells ?? Array.Empty<CharterSpellCard>();
+        var echoes = repertoire?.Echoes ?? Array.Empty<EchoCard>();
+        if (charterSpells.Count == 0 && echoes.Count == 0)
+        {
+            var empty = SmallLabel("No charter forms known — they are learned from manuals, warrants, and notices.");
+            empty.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            empty.AddThemeFontSizeOverride("font_size", 11);
+            _repertoireBox.AddChild(empty);
+            return;
+        }
+
+        // Charter (and echo) casts are blocked while a wild cast is pending, so the chips
+        // grey out instead of failing with a log message.
+        var blocked = pendingCast is not null;
+
+        if (charterSpells.Count > 0)
+        {
+            var charterFlow = new HFlowContainer();
+            charterFlow.AddThemeConstantOverride("h_separation", UiTheme.SpaceXs);
+            charterFlow.AddThemeConstantOverride("v_separation", UiTheme.SpaceXs);
+            _repertoireBox.AddChild(charterFlow);
+
+            foreach (var spell in charterSpells)
+            {
+                var chip = SmallButton($"{spell.Name} · {spell.CostText}");
+                chip.AddThemeFontSizeOverride("font_size", 12);
+                chip.TooltipText = $"{spell.Summary}\nCost: {spell.CostText} · Targeting: {spell.Targeting}\n"
+                    + "Instant charter magic — no gamble, no waiting.\n"
+                    + $"Typed: charter {spell.Id}";
+                var spellId = spell.Id;
+                chip.Pressed += () => _ = ExecuteAsync(new CharterCommand(spellId));
+                chip.Disabled = blocked;
+                charterFlow.AddChild(chip);
+                _repertoireChips.Add(chip);
+            }
+        }
+
+        if (echoes.Count > 0)
+        {
+            var echoFlow = new HFlowContainer();
+            echoFlow.AddThemeConstantOverride("h_separation", UiTheme.SpaceXs);
+            echoFlow.AddThemeConstantOverride("v_separation", UiTheme.SpaceXs);
+            _repertoireBox.AddChild(echoFlow);
+
+            foreach (var echo in echoes)
+            {
+                var chip = SmallButton($"«{echo.Name}» ×{echo.TimesCast}");
+                chip.AddThemeFontSizeOverride("font_size", 12);
+                chip.TooltipText = "Re-cast this recorded spell instantly.\n"
+                    + $"Repetition fatigue: +{echo.NextCastFatigue} mana on this cast.\n"
+                    + $"Typed: echo {echo.Index}";
+                var reference = echo.Index.ToString();
+                chip.Pressed += () => _ = ExecuteAsync(new EchoCommand(reference));
+                chip.Disabled = blocked;
+                echoFlow.AddChild(chip);
+                _repertoireChips.Add(chip);
+            }
+        }
+    }
+
+    private static string CellGlyph(MapTileCard? tile, EntityCard? entity, bool selected, int x, int y)
     {
         if (tile is null || !tile.Explored)
         {
@@ -1689,24 +1978,7 @@ public partial class Main : Control
             return "X";
         }
 
-        var glyph = tile.Terrain switch
-        {
-            "wall" => "#",
-            "slick_ice" => "~",
-            "shallow_water" => "~",
-            "steam_mist" => "~",
-            "vines" => "\"",
-            "rubble" => "%",
-            "wild_fire" => "^",
-            "ice_wall" => "#",
-            _ => null,
-        };
-        if (glyph is not null)
-        {
-            return glyph;
-        }
-
-        return IsWallLike(tile) ? "#" : ".";
+        return TerrainStyles.GlyphFor(TerrainStyles.Resolve(tile.Terrain, IsWallLike(tile)), x, y);
     }
 
     private static string CellTooltip(GridPoint point, MapTileCard? tile, EntityCard? entity, bool selected)
@@ -1730,6 +2002,8 @@ public partial class Main : Control
             {
                 lines.Add(string.Join(", ", entity.Tags));
             }
+
+            lines.Add("right-click for actions");
         }
 
         if (selected)
@@ -1748,23 +2022,30 @@ public partial class Main : Control
         {
             "empire" => UiTheme.Danger,
             "player" => UiTheme.Focus,
-            _ => UiTheme.Empire,
+            _ => UiTheme.Gold,
         };
         var name = UiTheme.Colorize(entity.Name, factionColor);
         return $"{UiTheme.Escape(entity.Glyph.ToString())} {name} ({entity.X},{entity.Y}) {UiTheme.Escape(faction)}{UiTheme.Escape(hp)}";
     }
 
-    private static Color GlyphColor(EntityCard? entity, MapTileCard? tile, bool selected)
+    private static Color GlyphColor(
+        EntityCard? entity,
+        MapTileCard? tile,
+        bool selected,
+        int x,
+        int y,
+        string? controlledEntityId)
     {
         if (tile is null || !tile.Explored)
         {
-            return selected ? UiTheme.Warning : UiTheme.Muted.Darkened(0.35f);
+            return selected ? UiTheme.Gold : UiTheme.Muted.Darkened(0.35f);
         }
 
         var dim = tile.Visible ? 0f : 0.35f;
         if (entity is not null)
         {
-            if (entity.Id == "player")
+            // The controlled body glows wild-green even after a body swap.
+            if (entity.Id == controlledEntityId)
             {
                 return UiTheme.Wild.Darkened(dim);
             }
@@ -1773,19 +2054,20 @@ public partial class Main : Control
                 ? UiTheme.Danger
                 : entity.Faction == "player"
                     ? UiTheme.Focus
-                    : UiTheme.Empire;
+                    : UiTheme.Gold;
             return color.Darkened(dim);
         }
 
         if (selected)
         {
-            return UiTheme.Warning;
+            return UiTheme.Gold;
         }
 
-        return (IsWallLike(tile) ? UiTheme.Muted.Lightened(0.25f) : UiTheme.Text).Darkened(dim);
+        var style = TerrainStyles.Resolve(tile.Terrain, IsWallLike(tile));
+        return TerrainStyles.GlyphColorFor(style, x, y).Darkened(dim);
     }
 
-    private static Color TerrainColor(MapTileCard? tile)
+    private static Color TerrainBackground(MapTileCard? tile, int x, int y)
     {
         if (tile is null)
         {
@@ -1797,18 +2079,8 @@ public partial class Main : Control
             return UiTheme.UnknownTile;
         }
 
-        var color = tile.Terrain switch
-        {
-            "wall" => new Color("252b33"),
-            "slick_ice" => new Color("173647"),
-            "shallow_water" => new Color("14324b"),
-            "steam_mist" => new Color("2f3f44"),
-            "vines" => new Color("1d372a"),
-            "rubble" => new Color("3a332b"),
-            "wild_fire" => new Color("462817"),
-            "ice_wall" => new Color("263e50"),
-            _ => IsWallLike(tile) ? new Color("252b33") : new Color("15191f"),
-        };
+        var style = TerrainStyles.Resolve(tile.Terrain, IsWallLike(tile));
+        var color = TerrainStyles.BackgroundFor(style, x, y);
         return tile.Visible ? color : color.Darkened(0.28f);
     }
 
@@ -1820,31 +2092,34 @@ public partial class Main : Control
 
     private static StyleBoxFlat CellStyle(Color background, bool selected)
     {
-        var fill = selected ? background.Lightened(0.12f) : background;
+        var fill = selected ? background.Lightened(0.1f) : background;
         return UiTheme.Box(
             fill,
-            fill,
-            borderWidth: 0,
+            selected ? UiTheme.Gold : fill,
+            borderWidth: selected ? 1 : 0,
             radius: 0,
             shadow: false,
             marginX: 0,
             marginY: 0);
     }
 
+    // Routes through the rebindable Keybindings table (arrows ride its fixed fallback).
+    // Interface actions (FocusSpell etc.) return null here on purpose: they are not game
+    // commands, and returning null keeps Ctrl+<their key> free for normal editing shortcuts.
     private static GameCommand? CommandForKey(Key key) =>
-        key switch
+        Keybindings.ActionForKey(key) switch
         {
-            Key.Up or Key.K => new MoveCommand(Direction.North),
-            Key.Down or Key.J => new MoveCommand(Direction.South),
-            Key.Left or Key.H => new MoveCommand(Direction.West),
-            Key.Right or Key.L => new MoveCommand(Direction.East),
-            Key.Y => new MoveCommand(Direction.NorthWest),
-            Key.U => new MoveCommand(Direction.NorthEast),
-            Key.B => new MoveCommand(Direction.SouthWest),
-            Key.N => new MoveCommand(Direction.SouthEast),
-            Key.G => new PickupCommand(),
-            Key.Period => new WaitCommand(),
-            Key.I => new InspectCommand(),
+            BindableAction.MoveNorth => new MoveCommand(Direction.North),
+            BindableAction.MoveSouth => new MoveCommand(Direction.South),
+            BindableAction.MoveWest => new MoveCommand(Direction.West),
+            BindableAction.MoveEast => new MoveCommand(Direction.East),
+            BindableAction.MoveNorthWest => new MoveCommand(Direction.NorthWest),
+            BindableAction.MoveNorthEast => new MoveCommand(Direction.NorthEast),
+            BindableAction.MoveSouthWest => new MoveCommand(Direction.SouthWest),
+            BindableAction.MoveSouthEast => new MoveCommand(Direction.SouthEast),
+            BindableAction.Pickup => new PickupCommand(),
+            BindableAction.Wait => new WaitCommand(),
+            BindableAction.Inspect => new InspectCommand(),
             _ => null,
         };
 

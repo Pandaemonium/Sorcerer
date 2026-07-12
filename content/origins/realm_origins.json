@@ -1,0 +1,69 @@
+{
+  "origins": [
+    {
+      "id": "stalnaz_crystal_keeper",
+      "displayName": "Stalnaz Crystal-Keeper",
+      "tradition": "lattice-keeping and patient light",
+      "bodyVigor": 3,
+      "soulAttunement": 5,
+      "soulComposure": 4,
+      "startingItems": {
+        "moon pearl": 1,
+        "crystal splinter": 2,
+        "gold": 10
+      },
+      "factionFirstReactions": {
+        "empire": -1,
+        "hollowmere": 1
+      },
+      "publicName": "the crystal-keeper",
+      "appearance": "hands veined faintly violet from years of holding light still",
+      "magicalSignature": "facets waking inside ordinary stone",
+      "backstory": "You kept the Stalnaz lattice humming until the Censorate decided light itself needed a permit.",
+      "startingCharterSpells": ["lumen_edict_1"]
+    },
+    {
+      "id": "ryolan_blood_adept",
+      "displayName": "Ryolan Blood-Adept",
+      "tradition": "blood-debts and red arithmetic",
+      "bodyVigor": 4,
+      "soulAttunement": 4,
+      "soulComposure": 2,
+      "startingItems": {
+        "red tincture": 2,
+        "grave salt": 1,
+        "gold": 12
+      },
+      "factionFirstReactions": {
+        "empire": -3,
+        "hollowmere": 1
+      },
+      "publicName": "the blood-adept",
+      "appearance": "pale to the lips, with old ledger-scars laddered up both forearms",
+      "magicalSignature": "a red tally settling its own accounts",
+      "backstory": "In Ryolan every favor is banked in the vein; you left owing exactly one life, and it was yours."
+    },
+    {
+      "id": "gontark_curse_bearer",
+      "displayName": "Gontark Curse-Bearer",
+      "tradition": "goatfolk curses carried like luggage",
+      "bodyVigor": 5,
+      "soulAttunement": 3,
+      "soulComposure": 3,
+      "startingItems": {
+        "charcoal wand": 1,
+        "grave salt": 2,
+        "knotted goat-hair cord": 1,
+        "gold": 9
+      },
+      "factionFirstReactions": {
+        "empire": -2,
+        "hollowmere": 0
+      },
+      "publicName": "the curse-bearer",
+      "appearance": "broad-shouldered, smelling of cold hillside, one eye ringed in charcoal",
+      "magicalSignature": "a muttered grudge tightening like a knot",
+      "backstory": "The goatfolk of Gontark pay their debts in curses; you are carrying seven that are not yours."
+    }
+  ]
+}

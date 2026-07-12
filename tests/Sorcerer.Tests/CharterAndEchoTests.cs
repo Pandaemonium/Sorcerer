@@ -229,6 +229,111 @@ public class CharterAndEchoTests
         }
     }
 
+    [Fact]
+    public async Task BeginCastWithKnownCharterNameResolvesInstantlyWithoutPendingCast()
+    {
+        // GUI parity: the spell box submits begin_cast/await_cast, so the instant charter lane
+        // must intercept there too, or a known form typed into the box gambles as wild magic.
+        var session = ThrowingProviderSession(DeserterOrigin);
+        var player = session.Engine.State.ControlledEntity;
+        var manaBefore = player.Get<ActorComponent>().Mana;
+
+        var begin = await session.ExecuteAsync(new BeginCastCommand("Bolt Directive I"));
+
+        Assert.True(begin.Success, string.Join(" / ", begin.Messages));
+        Assert.Equal("cast", begin.Action);
+        Assert.Equal("charter", begin.Magic?.Provider);
+        Assert.True(begin.ConsumedTurn);
+        Assert.Equal(manaBefore - 2, player.Get<ActorComponent>().Mana);
+        Assert.Null(session.Observation().PendingCast);
+
+        var stale = await session.ExecuteAsync(new AwaitCastCommand());
+        Assert.False(stale.Success);
+        Assert.Contains(stale.Messages, message => message.Contains("No spell is waiting"));
+    }
+
+    [Fact]
+    public async Task BeginCastWithWildTextStillCreatesAPendingCast()
+    {
+        var session = EchoSession(out _);
+
+        var begin = await session.ExecuteAsync(new BeginCastCommand("strike the soldier with blue fire"));
+        Assert.True(begin.Success, string.Join(" / ", begin.Messages));
+        Assert.Equal("begin_cast", begin.Action);
+        Assert.NotNull(session.Observation().PendingCast);
+
+        var applied = await session.ExecuteAsync(new AwaitCastCommand());
+        Assert.True(applied.Success, string.Join(" / ", applied.Messages));
+        Assert.Null(session.Observation().PendingCast);
+    }
+
+    [Fact]
+    public async Task BeginCastCharterDetourIsBlockedWhileAWildCastIsPending()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new FixtureProvider(
+            AcceptedSpell("Blue fire snaps out."))), DeserterOrigin);
+        var player = session.Engine.State.ControlledEntity;
+
+        Assert.True((await session.ExecuteAsync(new BeginCastCommand("strike with blue fire"))).Success);
+        var manaBefore = player.Get<ActorComponent>().Mana;
+
+        var blocked = await session.ExecuteAsync(new BeginCastCommand("Bolt Directive I"));
+
+        Assert.False(blocked.Success);
+        Assert.Contains(blocked.Messages, message => message.Contains("A spell is waiting to resolve"));
+        Assert.Equal(manaBefore, player.Get<ActorComponent>().Mana);
+    }
+
+    [Fact]
+    public void ViewRepertoireListsKnownCharterForms()
+    {
+        var deserter = ThrowingProviderSession(DeserterOrigin).View().Repertoire;
+        Assert.NotNull(deserter);
+        Assert.Contains(deserter!.CharterSpells, spell => spell.Id == "bolt_directive_1");
+        Assert.All(deserter.CharterSpells, spell =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(spell.Name));
+            Assert.False(string.IsNullOrWhiteSpace(spell.CostText));
+            Assert.False(string.IsNullOrWhiteSpace(spell.Targeting));
+        });
+
+        var fugitive = ThrowingProviderSession(originId: null).View().Repertoire;
+        Assert.NotNull(fugitive);
+        Assert.Empty(fugitive!.CharterSpells);
+        Assert.False(fugitive.EchoesEnabled);
+        Assert.Empty(fugitive.Echoes);
+    }
+
+    [Fact]
+    public async Task ViewRepertoireListsEchoesWithFatigue()
+    {
+        var session = EchoSession(out _);
+        await session.ExecuteAsync(new CastCommand("strike the soldier with blue fire"));
+        await session.ExecuteAsync(TextCommandParser.Parse("echo 1"));
+
+        var repertoire = session.View().Repertoire;
+
+        Assert.NotNull(repertoire);
+        Assert.True(repertoire!.EchoesEnabled);
+        var echo = Assert.Single(repertoire.Echoes);
+        Assert.Equal(1, echo.Index);
+        Assert.Equal(1, echo.TimesCast);
+        Assert.Equal(1, echo.NextCastFatigue);
+    }
+
+    [Fact]
+    public async Task CharacterSheetListsCharterForms()
+    {
+        var deserter = await ThrowingProviderSession(DeserterOrigin)
+            .ExecuteAsync(TextCommandParser.Parse("character"));
+        Assert.Contains(deserter.Messages, message =>
+            message.StartsWith("Charter forms:") && message.Contains("Bolt Directive"));
+
+        var fugitive = await ThrowingProviderSession(originId: null)
+            .ExecuteAsync(TextCommandParser.Parse("character"));
+        Assert.Contains(fugitive.Messages, message => message.Contains("Charter forms: none learned"));
+    }
+
     private static GameSession ThrowingProviderSession(string? originId) =>
         GameSession.CreateImperialEncounter(
             new WildMagicController(new ThrowIfConsultedProvider()),
