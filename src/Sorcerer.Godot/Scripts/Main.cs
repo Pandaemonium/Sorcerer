@@ -49,6 +49,7 @@ public partial class Main : Control
     private LineEdit _provider = null!;
     private LineEdit _host = null!;
     private LineEdit _model = null!;
+    private LineEdit _effort = null!;
     private Button _cast = null!;
     private PanelContainer _contextMenu = null!;
     private VBoxContainer _contextMenuItems = null!;
@@ -132,6 +133,7 @@ public partial class Main : Control
 
     public override void _Ready()
     {
+        DotEnv.Load();
         Theme = UiTheme.Build();
         BuildUi();
         if (SessionHost.Session is not null)
@@ -508,11 +510,12 @@ public partial class Main : Control
         providerLabel.CustomMinimumSize = new Vector2(70, 34);
         providerRow.AddChild(providerLabel);
 
+        var defaultProvider = SessionHost.ProviderOverride
+            ?? System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER")
+            ?? "ollama";
         _provider = new LineEdit
         {
-            Text = SessionHost.ProviderOverride
-                ?? System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER")
-                ?? "ollama",
+            Text = defaultProvider,
             PlaceholderText = "provider",
             CustomMinimumSize = new Vector2(116, 34),
         };
@@ -522,7 +525,7 @@ public partial class Main : Control
         _host = new LineEdit
         {
             Text = SessionHost.HostOverride
-                ?? DefaultProviderHost(System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "ollama")
+                ?? DefaultProviderHost(defaultProvider)
                 ?? "",
             PlaceholderText = "host",
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -536,13 +539,25 @@ public partial class Main : Control
             Text = SessionHost.ModelOverride
                 ?? System.Environment.GetEnvironmentVariable("SORCERER_MODEL")
                 ?? System.Environment.GetEnvironmentVariable("WILDMAGIC_MODEL")
-                ?? "qwen3.5:9b-cpu",
+                ?? DefaultProviderModel(defaultProvider),
             PlaceholderText = "model",
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 34),
         };
         providerRow.AddChild(_model);
         _busyControls.Add(_model);
+
+        _effort = new LineEdit
+        {
+            Text = SessionHost.EffortOverride
+                ?? System.Environment.GetEnvironmentVariable("SORCERER_EFFORT")
+                ?? (UsesEffort(defaultProvider) ? "medium" : ""),
+            PlaceholderText = "effort",
+            TooltipText = "Claude: low–max. Gemini thinking: minimal, low, medium, or high.",
+            CustomMinimumSize = new Vector2(76, 34),
+        };
+        providerRow.AddChild(_effort);
+        _busyControls.Add(_effort);
 
         var runRow = new HBoxContainer();
         runRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
@@ -640,6 +655,7 @@ public partial class Main : Control
         SessionHost.ProviderOverride = _provider?.Text;
         SessionHost.HostOverride = _host?.Text;
         SessionHost.ModelOverride = _model?.Text;
+        SessionHost.EffortOverride = _effort?.Text;
     }
 
     private void OpenCharacterCreation()
@@ -966,20 +982,23 @@ public partial class Main : Control
             ? DefaultProviderHost(providerName)
             : _host.Text.Trim();
         var model = string.IsNullOrWhiteSpace(_model?.Text) ? null : _model.Text.Trim();
-        var provider = SpellProviderFactory.Create(providerName, host, model);
-        var router = SpellRouterFactory.Create(providerName, host, model);
+        var effort = string.IsNullOrWhiteSpace(_effort?.Text) ? null : _effort.Text.Trim();
+        var provider = SpellProviderFactory.Create(providerName, host, model, effort: effort);
+        var router = SpellRouterFactory.Create(providerName, host, model, effort: effort);
         var dialogueProvider = DialogueProviderFactory.Create(new Sorcerer.Llm.Configuration.LlmPurposeSettings(
             providerName,
             host,
             model,
-            TimeoutSeconds: 180));
+            TimeoutSeconds: 180,
+            Effort: effort));
         var dialogueRouterSettings = LlmConfiguration
             .FromEnvironment()
             .WithPurposeOverride(
                 LlmPurpose.DialogueRouter,
                 DialogueRouterEnvironmentOverride("PROVIDER") ? null : providerName,
                 DialogueRouterEnvironmentOverride("HOST") ? null : host,
-                DialogueRouterEnvironmentOverride("MODEL") ? null : model)
+                DialogueRouterEnvironmentOverride("MODEL") ? null : model,
+                effort: DialogueRouterEnvironmentOverride("EFFORT") ? null : effort)
             .SettingsFor(LlmPurpose.DialogueRouter);
         var dialogueRouter = DialogueRouterFactory.Create(dialogueRouterSettings);
         var dialogueParserSettings = LlmConfiguration
@@ -988,7 +1007,8 @@ public partial class Main : Control
                 LlmPurpose.DialogueParser,
                 ParserEnvironmentOverride("PROVIDER") ? null : providerName,
                 ParserEnvironmentOverride("HOST") ? null : host,
-                ParserEnvironmentOverride("MODEL") ? null : model)
+                ParserEnvironmentOverride("MODEL") ? null : model,
+                effort: ParserEnvironmentOverride("EFFORT") ? null : effort)
             .SettingsFor(LlmPurpose.DialogueParser);
         var dialogueParserRouterSettings = LlmConfiguration
             .FromEnvironment()
@@ -996,7 +1016,8 @@ public partial class Main : Control
                 LlmPurpose.DialogueParserRouter,
                 ParserRouterEnvironmentOverride("PROVIDER") ? null : providerName,
                 ParserRouterEnvironmentOverride("HOST") ? null : host,
-                ParserRouterEnvironmentOverride("MODEL") ? null : model)
+                ParserRouterEnvironmentOverride("MODEL") ? null : model,
+                effort: ParserRouterEnvironmentOverride("EFFORT") ? null : effort)
             .SettingsFor(LlmPurpose.DialogueParserRouter);
         var dialogueParserRouter = DialogueParserRouterFactory.Create(dialogueParserRouterSettings);
         var dialogueParser = DialogueParserFactory.Create(dialogueParserSettings);
@@ -1040,6 +1061,20 @@ public partial class Main : Control
         }
 
         var normalized = provider.Trim().ToLowerInvariant();
+        if (IsGeminiProvider(provider))
+        {
+            return System.Environment.GetEnvironmentVariable("SORCERER_GEMINI_HOST")
+                ?? System.Environment.GetEnvironmentVariable("GEMINI_BASE_URL")
+                ?? "https://generativelanguage.googleapis.com/v1beta";
+        }
+
+        if (IsAnthropicProvider(provider))
+        {
+            return System.Environment.GetEnvironmentVariable("SORCERER_ANTHROPIC_HOST")
+                ?? System.Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL")
+                ?? "https://api.anthropic.com/v1";
+        }
+
         if (normalized is "api" or "openai" or "openai-compatible")
         {
             return System.Environment.GetEnvironmentVariable("SORCERER_OPENAI_HOST")
@@ -1052,6 +1087,20 @@ public partial class Main : Control
             ?? System.Environment.GetEnvironmentVariable("OLLAMA_HOST")
             ?? "http://127.0.0.1:11434";
     }
+
+    private static string DefaultProviderModel(string provider) =>
+        IsGeminiProvider(provider)
+            ? "gemini-3.5-flash"
+            : IsAnthropicProvider(provider) ? "claude-sonnet-5" : "qwen3.5:9b-cpu";
+
+    private static bool IsAnthropicProvider(string provider) =>
+        provider.Trim().ToLowerInvariant() is "anthropic" or "claude";
+
+    private static bool IsGeminiProvider(string provider) =>
+        provider.Trim().ToLowerInvariant() is "gemini" or "google";
+
+    private static bool UsesEffort(string provider) =>
+        IsAnthropicProvider(provider) || IsGeminiProvider(provider);
 
     private static bool ParserEnvironmentOverride(string suffix) =>
         !string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable($"SORCERER_DIALOGUE_PARSER_{suffix}"));

@@ -101,8 +101,10 @@ relevant access-gated canon into magic context and atlas output, generated zone 
 deterministic texture naming with durable subject tags, and background detail jobs write canon that
 appears on later examine. Zone entry can now echo your current legend through deterministic rumor
 lines, making reputation visible without adding hidden simulation. CLI provider creation now uses
-purpose-based LLM settings for foreground wild magic/dialogue, with mock, Ollama, and
-OpenAI-compatible chat-completion adapters, and background jobs can be disabled or throttled for
+purpose-based LLM settings for foreground wild magic/dialogue, with mock, Ollama, native Anthropic
+Messages, native Gemini Interactions, and OpenAI-compatible adapters. Claude Sonnet 5 and Gemini
+3.5 Flash support configurable reasoning effort plus per-call input/output/cache/thinking-token
+and latency telemetry. Background jobs can be disabled or throttled for
 resource-sensitive playtests. The long-run spine has its first durable slice:
 schema-v1 save/load, transcript replay with materialized spell JSON, a reachable Vigovian Capital
 with Emperor Odran as a normal killable actor, victory/defeat run completion, run-closing

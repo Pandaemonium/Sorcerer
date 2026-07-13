@@ -30,6 +30,22 @@ public static class DialogueClaimExtractorFactory
                 settings.Model ?? "default",
                 timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
                 apiKey: settings.ApiKey),
+            "anthropic" or "claude" => new OpenAiCompatibleDialogueClaimExtractor(
+                new AnthropicMessagesClient(
+                    settings.Host ?? "https://api.anthropic.com/v1",
+                    settings.Model ?? "claude-sonnet-5",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "anthropic-dialogue-claims",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
+            "gemini" or "google" => new OpenAiCompatibleDialogueClaimExtractor(
+                new GeminiInteractionsClient(
+                    settings.Host ?? "https://generativelanguage.googleapis.com/v1beta",
+                    settings.Model ?? "gemini-3.5-flash",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "gemini-dialogue-claims",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
             _ => new MockDialogueClaimExtractor(),
         };
     }
@@ -60,6 +76,22 @@ public static class DialogueParserFactory
                 settings.Model ?? "default",
                 timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
                 apiKey: settings.ApiKey),
+            "anthropic" or "claude" => new OpenAiCompatibleDialogueClaimExtractor(
+                new AnthropicMessagesClient(
+                    settings.Host ?? "https://api.anthropic.com/v1",
+                    settings.Model ?? "claude-sonnet-5",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "anthropic-dialogue-claims",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
+            "gemini" or "google" => new OpenAiCompatibleDialogueClaimExtractor(
+                new GeminiInteractionsClient(
+                    settings.Host ?? "https://generativelanguage.googleapis.com/v1beta",
+                    settings.Model ?? "gemini-3.5-flash",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "gemini-dialogue-claims",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
             _ => new MockDialogueClaimExtractor(),
         };
     }
@@ -90,9 +122,26 @@ public static class DialogueParserRouterFactory
                 settings.Model ?? "default",
                 timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
                 apiKey: settings.ApiKey),
+            "anthropic" or "claude" => new OpenAiCompatibleDialogueParserRouter(
+                new AnthropicMessagesClient(
+                    settings.Host ?? "https://api.anthropic.com/v1",
+                    settings.Model ?? "claude-sonnet-5",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "anthropic-dialogue-parser-router",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
+            "gemini" or "google" => new OpenAiCompatibleDialogueParserRouter(
+                new GeminiInteractionsClient(
+                    settings.Host ?? "https://generativelanguage.googleapis.com/v1beta",
+                    settings.Model ?? "gemini-3.5-flash",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "gemini-dialogue-parser-router",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
             _ => DeterministicDialogueParserRouter.Instance,
         };
     }
+
 }
 
 public sealed class MockDialogueClaimExtractor : IDialogueClaimExtractor, IDialogueParser
@@ -228,7 +277,8 @@ public sealed class MockDialogueClaimExtractor : IDialogueClaimExtractor, IDialo
 
 public sealed class OpenAiCompatibleDialogueParserRouter : IDialogueParserRouter
 {
-    private readonly OpenAiCompatibleChatClient _chat;
+    private readonly IJsonChatClient _chat;
+    private readonly string _name;
     private readonly TimeSpan _timeout;
 
     public OpenAiCompatibleDialogueParserRouter(
@@ -237,12 +287,24 @@ public sealed class OpenAiCompatibleDialogueParserRouter : IDialogueParserRouter
         HttpClient? httpClient = null,
         TimeSpan? timeout = null,
         string? apiKey = null)
+        : this(
+            new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey),
+            "openai-compatible-dialogue-parser-router",
+            timeout)
     {
-        _chat = new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey);
+    }
+
+    internal OpenAiCompatibleDialogueParserRouter(
+        IJsonChatClient chat,
+        string name,
+        TimeSpan? timeout = null)
+    {
+        _chat = chat;
+        _name = name;
         _timeout = timeout ?? TimeSpan.FromSeconds(30);
     }
 
-    public string Name => "openai-compatible-dialogue-parser-router";
+    public string Name => _name;
 
     public async Task<DialogueParserRouteResult> RouteAsync(
         DialogueParserRouteRequest request,
@@ -259,12 +321,12 @@ public sealed class OpenAiCompatibleDialogueParserRouter : IDialogueParserRouter
             label: "dialogue-parser-router");
         if (!result.Success)
         {
-            return Failure(result.RawText, result.Error ?? "OpenAI-compatible dialogue parser router failed.");
+            return Failure(result.RawText, result.Error ?? $"{Name} failed.");
         }
 
         return OllamaDialogueParserRouter.TryParseRouteResult(Name, result.Content, out var route, out var error)
             ? route!
-            : Failure(result.Content, error ?? "OpenAI-compatible dialogue parser router returned invalid JSON.");
+            : Failure(result.Content, error ?? $"{Name} returned invalid JSON.");
     }
 
     private DialogueParserRouteResult Failure(string raw, string error) =>
@@ -494,7 +556,8 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
         WriteIndented = false,
     };
 
-    private readonly OpenAiCompatibleChatClient _chat;
+    private readonly IJsonChatClient _chat;
+    private readonly string _name;
     private readonly TimeSpan _timeout;
 
     public OpenAiCompatibleDialogueClaimExtractor(
@@ -503,12 +566,24 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
         HttpClient? httpClient = null,
         TimeSpan? timeout = null,
         string? apiKey = null)
+        : this(
+            new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey),
+            "openai-compatible-dialogue-claims",
+            timeout)
     {
-        _chat = new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey);
+    }
+
+    internal OpenAiCompatibleDialogueClaimExtractor(
+        IJsonChatClient chat,
+        string name,
+        TimeSpan? timeout = null)
+    {
+        _chat = chat;
+        _name = name;
         _timeout = timeout ?? TimeSpan.FromSeconds(180);
     }
 
-    public string Name => "openai-compatible-dialogue-claims";
+    public string Name => _name;
 
     public async Task<DialogueClaimExtractionResult> ExtractAsync(
         DialogueClaimRequest request,
@@ -548,7 +623,7 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
             label: "dialogue-parser-router");
         if (!router.Success)
         {
-            return ParserFailure(router.RawText, router.Error ?? "OpenAI-compatible dialogue parser router failed.");
+            return ParserFailure(router.RawText, router.Error ?? $"{Name} router failed.");
         }
 
         if (!OllamaDialogueClaimExtractor.RouterFoundClaim(router.Content))
@@ -572,7 +647,7 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
             label: "dialogue-parser-detail");
         if (!detail.Success)
         {
-            return ParserFailure(detail.RawText, detail.Error ?? "OpenAI-compatible dialogue parser detail extraction failed.");
+            return ParserFailure(detail.RawText, detail.Error ?? $"{Name} detail extraction failed.");
         }
 
         if (OllamaDialogueClaimExtractor.TryParseProposalEnvelope(
@@ -584,7 +659,7 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
             return ParserSuccess(detail.Content, proposals);
         }
 
-        return ParserFailure(detail.Content, parseError ?? "OpenAI-compatible dialogue parser returned invalid JSON.");
+        return ParserFailure(detail.Content, parseError ?? $"{Name} returned invalid JSON.");
     }
 
     private static IReadOnlyList<DialogueClaimProposal> ClaimsFrom(DialogueProposalSet? proposals) =>

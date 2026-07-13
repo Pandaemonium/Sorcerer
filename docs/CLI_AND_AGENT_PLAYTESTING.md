@@ -507,7 +507,7 @@ Inventory protection and reagent inspection are also implemented:
 Recommended CLI flags:
 
 ```text
---provider ollama|local|mock|api|openai-compatible
+--provider ollama|local|mock|anthropic|claude|gemini|google|api|openai-compatible
 --host <url>
 --model <name>
 --seed <int>
@@ -549,7 +549,7 @@ should not be treated as the ordinary playtest resolver.
 Live providers exercise the real resolver and write audit logs. They are the right choice
 when judging wild magic quality.
 
-Current implemented flags are `--provider`, `--host`, `--model`, `--json`,
+Current implemented flags are `--provider`, `--host`, `--model`, `--effort`, `--json`,
 `--debug-state`, `--command`, `--script`, `--transcript`, `--replay`,
 `--replay-assert-final`, `--eval`, `--episode`, `--episodes`, `--max-turns`,
 `--seed`, `--origin`, `--quickstart`, `--episode-log`/`--record`,
@@ -559,6 +559,17 @@ Current implemented flags are `--provider`, `--host`, `--model`, `--json`,
 
 Unknown provider names fall back to mock today, so strict live evaluation should use an
 explicit known provider name and check the result's `magic.provider` field.
+
+Anthropic is a known native provider under `anthropic` or `claude`. The recommended Sonnet 5
+configuration is `--provider anthropic --model claude-sonnet-5 --effort medium`; supply the secret
+through `ANTHROPIC_API_KEY` or a purpose-specific `SORCERER_<PURPOSE>_API_KEY` environment variable.
+Per-call token counts and latency are retained in provider stats and the audit logs.
+
+Gemini is a known native provider under `gemini` or `google`. The recommended free-tier
+configuration is `--provider gemini --model gemini-3.5-flash --effort medium`; supply the secret
+through `GEMINI_API_KEY` or a purpose-specific `SORCERER_<PURPOSE>_API_KEY` environment variable.
+The client uses the stateless Interactions API with JSON output, and retains input, output,
+cached, and thinking tokens plus latency in the same provider stats and audit logs.
 
 `--seed` now affects ordinary CLI runs as well as episode runs. Use it when comparing atlas/world
 roll output: the same seed should produce the same realm status/ruler/effective imperial grip, while

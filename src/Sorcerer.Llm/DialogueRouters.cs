@@ -29,6 +29,22 @@ public static class DialogueRouterFactory
                 settings.Model ?? "default",
                 timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
                 apiKey: settings.ApiKey),
+            "anthropic" or "claude" => new OpenAiCompatibleDialogueRouter(
+                new AnthropicMessagesClient(
+                    settings.Host ?? "https://api.anthropic.com/v1",
+                    settings.Model ?? "claude-sonnet-5",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "anthropic-dialogue-router",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
+            "gemini" or "google" => new OpenAiCompatibleDialogueRouter(
+                new GeminiInteractionsClient(
+                    settings.Host ?? "https://generativelanguage.googleapis.com/v1beta",
+                    settings.Model ?? "gemini-3.5-flash",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "gemini-dialogue-router",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
             _ => new MockDialogueRouter(),
         };
     }
@@ -146,7 +162,8 @@ public sealed class MockDialogueRouter : IDialogueRouter
 
 public sealed class OpenAiCompatibleDialogueRouter : IDialogueRouter
 {
-    private readonly OpenAiCompatibleChatClient _chat;
+    private readonly IJsonChatClient _chat;
+    private readonly string _name;
     private readonly TimeSpan _timeout;
 
     public OpenAiCompatibleDialogueRouter(
@@ -155,12 +172,24 @@ public sealed class OpenAiCompatibleDialogueRouter : IDialogueRouter
         HttpClient? httpClient = null,
         TimeSpan? timeout = null,
         string? apiKey = null)
+        : this(
+            new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey),
+            "openai-compatible-dialogue-router",
+            timeout)
     {
-        _chat = new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey);
+    }
+
+    internal OpenAiCompatibleDialogueRouter(
+        IJsonChatClient chat,
+        string name,
+        TimeSpan? timeout = null)
+    {
+        _chat = chat;
+        _name = name;
         _timeout = timeout ?? TimeSpan.FromSeconds(30);
     }
 
-    public string Name => "openai-compatible-dialogue-router";
+    public string Name => _name;
 
     public async Task<DialogueRouteResult> RouteAsync(
         DialogueRouteRequest request,
@@ -177,12 +206,12 @@ public sealed class OpenAiCompatibleDialogueRouter : IDialogueRouter
             label: "dialogue-context-router");
         if (!result.Success)
         {
-            return Failure(result.RawText, result.Error ?? "OpenAI-compatible dialogue router failed.");
+            return Failure(result.RawText, result.Error ?? $"{Name} failed.");
         }
 
         return OllamaDialogueRouter.TryParseRouteResult(Name, result.Content, out var route, out var error)
             ? route!
-            : Failure(result.Content, error ?? "OpenAI-compatible dialogue router returned invalid JSON.");
+            : Failure(result.Content, error ?? $"{Name} returned invalid JSON.");
     }
 
     private DialogueRouteResult Failure(string raw, string error) =>

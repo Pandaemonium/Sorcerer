@@ -22,4 +22,5 @@ public static class SessionHost
     public static string? ProviderOverride;
     public static string? HostOverride;
     public static string? ModelOverride;
+    public static string? EffortOverride;
 }

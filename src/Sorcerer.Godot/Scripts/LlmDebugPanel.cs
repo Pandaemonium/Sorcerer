@@ -197,7 +197,10 @@ public partial class LlmDebugPanel : Control
                 ? entry.Error is null ? "ok" : "ERR"
                 : "…";
             var elapsed = entry.Completed ? $"{entry.ElapsedMs:0}ms" : "running";
-            var row = _list.AddItem($"#{entry.Id} {entry.Purpose}  [{status}]  {elapsed}");
+            var tokens = entry.Stats is null
+                ? ""
+                : $"  {entry.Stats.PromptTokens?.ToString() ?? "?"}→{entry.Stats.OutputTokens?.ToString() ?? "?"} tok";
+            var row = _list.AddItem($"#{entry.Id} {entry.Purpose}  [{status}]  {elapsed}{tokens}");
             _list.SetItemCustomFgColor(row, StatusColor(entry));
         }
 
@@ -231,11 +234,21 @@ public partial class LlmDebugPanel : Control
         var responseBody = entry.Completed
             ? entry.Error ?? entry.Response ?? "(empty)"
             : "(waiting for the model…)";
+        var telemetry = entry.Stats is null
+            ? ""
+            : "\n[b][color=#8ab4ff]USAGE[/color][/b]\n"
+                + $"input {entry.Stats.PromptTokens?.ToString() ?? "unknown"} · "
+                + $"output {entry.Stats.OutputTokens?.ToString() ?? "unknown"} · "
+                + $"thinking {entry.Stats.ThinkingTokens?.ToString() ?? "unknown"} · "
+                + $"cache read {entry.Stats.CacheReadTokens?.ToString() ?? "0"} · "
+                + $"cache write {entry.Stats.CacheWriteTokens?.ToString() ?? "0"} · "
+                + $"HTTP {entry.Stats.TotalMs?.ToString("0") ?? "unknown"}ms\n";
 
         _detail.Text =
             $"[b][color=#85f0c5]#{entry.Id} {entry.Purpose}[/color][/b]  "
             + $"[color=#87929d]{entry.Model} · {status} · {entry.StartedAt:HH:mm:ss}"
             + (entry.Completed ? $" · {entry.ElapsedMs:0}ms" : "") + "[/color]\n\n"
+            + telemetry
             + $"[b][color=#8ab4ff]SYSTEM[/color][/b]\n{Escape(entry.SystemPrompt)}\n\n"
             + $"[b][color=#8ab4ff]USER[/color][/b]\n{Escape(entry.UserPrompt)}\n\n"
             + $"[b][color={(entry.Error is null ? "#85f0c5" : "#ff6b6b")}]{responseLabel}[/color][/b]\n{Escape(responseBody)}";

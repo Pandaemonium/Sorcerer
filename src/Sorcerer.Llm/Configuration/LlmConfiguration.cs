@@ -22,7 +22,8 @@ public sealed record LlmPurposeSettings(
     int MaxConcurrentCalls = 1,
     bool Enabled = true,
     string? ApiKey = null,
-    int? OllamaNumGpu = null);
+    int? OllamaNumGpu = null,
+    string? Effort = null);
 
 public sealed record LlmConfiguration(
     IReadOnlyDictionary<LlmPurpose, LlmPurposeSettings> Purposes)
@@ -41,19 +42,32 @@ public sealed record LlmConfiguration(
         int? maxConcurrentCalls = null,
         bool? enabled = null,
         string? apiKey = null,
-        int? ollamaNumGpu = null)
+        int? ollamaNumGpu = null,
+        string? effort = null)
     {
         var current = SettingsFor(purpose);
+        var providerChanged = !string.IsNullOrWhiteSpace(provider)
+            && !provider.Equals(current.Provider, StringComparison.OrdinalIgnoreCase);
+        var nextProvider = string.IsNullOrWhiteSpace(provider) ? current.Provider : provider;
         var updated = current with
         {
-            Provider = string.IsNullOrWhiteSpace(provider) ? current.Provider : provider,
-            Host = string.IsNullOrWhiteSpace(host) ? current.Host : host,
-            Model = string.IsNullOrWhiteSpace(model) ? current.Model : model,
+            Provider = nextProvider,
+            Host = string.IsNullOrWhiteSpace(host)
+                ? providerChanged ? DefaultHost(nextProvider) : current.Host
+                : host,
+            Model = string.IsNullOrWhiteSpace(model)
+                ? providerChanged ? DefaultModel(nextProvider) : current.Model
+                : model,
             TimeoutSeconds = timeoutSeconds ?? current.TimeoutSeconds,
             MaxConcurrentCalls = maxConcurrentCalls ?? current.MaxConcurrentCalls,
             Enabled = enabled ?? current.Enabled,
-            ApiKey = string.IsNullOrWhiteSpace(apiKey) ? current.ApiKey : apiKey,
+            ApiKey = string.IsNullOrWhiteSpace(apiKey)
+                ? providerChanged ? DefaultApiKey(nextProvider) : current.ApiKey
+                : apiKey,
             OllamaNumGpu = ollamaNumGpu ?? current.OllamaNumGpu,
+            Effort = string.IsNullOrWhiteSpace(effort)
+                ? providerChanged && UsesEffort(nextProvider) ? "medium" : current.Effort
+                : effort,
         };
         var purposes = new Dictionary<LlmPurpose, LlmPurposeSettings>(Purposes)
         {
@@ -65,35 +79,37 @@ public sealed record LlmConfiguration(
     public static LlmConfiguration FromEnvironment()
     {
         var provider = Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "mock";
-        var host = Environment.GetEnvironmentVariable("SORCERER_OLLAMA_HOST")
-            ?? Environment.GetEnvironmentVariable("OLLAMA_HOST")
-            ?? "http://127.0.0.1:11434";
-        var model = Environment.GetEnvironmentVariable("SORCERER_MODEL") ?? "qwen3.5:9b";
+        var host = Environment.GetEnvironmentVariable("SORCERER_HOST") ?? DefaultHost(provider);
+        var model = Environment.GetEnvironmentVariable("SORCERER_MODEL") ?? DefaultModel(provider);
+        var effort = Environment.GetEnvironmentVariable("SORCERER_EFFORT")
+            ?? (UsesEffort(provider) ? "medium" : null);
 
         return new LlmConfiguration(new Dictionary<LlmPurpose, LlmPurposeSettings>
         {
-            [LlmPurpose.Wild] = PurposeFromEnvironment(LlmPurpose.Wild, provider, host, model, 240),
+            [LlmPurpose.Wild] = PurposeFromEnvironment(LlmPurpose.Wild, provider, host, model, 240, defaultEffort: effort),
             // The router reuses the resolver's provider/host/model by default so no second model is
             // loaded; it is a short call, hence the tighter timeout. Override with SORCERER_ROUTER_*.
-            [LlmPurpose.Router] = PurposeFromEnvironment(LlmPurpose.Router, provider, host, model, 30),
-            [LlmPurpose.Dialogue] = PurposeFromEnvironment(LlmPurpose.Dialogue, provider, host, model, 180),
-            [LlmPurpose.DialogueRouter] = PurposeFromEnvironment(LlmPurpose.DialogueRouter, provider, host, model, 30),
+            [LlmPurpose.Router] = PurposeFromEnvironment(LlmPurpose.Router, provider, host, model, 30, defaultEffort: effort),
+            [LlmPurpose.Dialogue] = PurposeFromEnvironment(LlmPurpose.Dialogue, provider, host, model, 180, defaultEffort: effort),
+            [LlmPurpose.DialogueRouter] = PurposeFromEnvironment(LlmPurpose.DialogueRouter, provider, host, model, 30, defaultEffort: effort),
             [LlmPurpose.DialogueParserRouter] = PurposeFromEnvironment(
                 LlmPurpose.DialogueParserRouter,
                 provider,
                 host,
                 model,
                 30,
-                defaultOllamaNumGpu: 0),
+                defaultOllamaNumGpu: 0,
+                defaultEffort: effort),
             [LlmPurpose.DialogueParser] = PurposeFromEnvironment(
                 LlmPurpose.DialogueParser,
                 provider,
                 host,
                 model,
                 180,
-                defaultOllamaNumGpu: 0),
-            [LlmPurpose.Item] = PurposeFromEnvironment(LlmPurpose.Item, provider, host, model, 180),
-            [LlmPurpose.Canon] = PurposeFromEnvironment(LlmPurpose.Canon, provider, host, model, 180),
+                defaultOllamaNumGpu: 0,
+                defaultEffort: effort),
+            [LlmPurpose.Item] = PurposeFromEnvironment(LlmPurpose.Item, provider, host, model, 180, defaultEffort: effort),
+            [LlmPurpose.Canon] = PurposeFromEnvironment(LlmPurpose.Canon, provider, host, model, 180, defaultEffort: effort),
             [LlmPurpose.Background] = PurposeFromEnvironment(
                 LlmPurpose.Background,
                 "mock",
@@ -101,7 +117,8 @@ public sealed record LlmConfiguration(
                 model,
                 180,
                 maxConcurrentCalls: 1,
-                enabled: false),
+                enabled: false,
+                defaultEffort: effort),
             [LlmPurpose.Agent] = PurposeFromEnvironment(LlmPurpose.Agent, "mock", host, model, 60),
         });
     }
@@ -114,18 +131,27 @@ public sealed record LlmConfiguration(
         int defaultTimeoutSeconds,
         int maxConcurrentCalls = 1,
         bool enabled = true,
-        int? defaultOllamaNumGpu = null)
+        int? defaultOllamaNumGpu = null,
+        string? defaultEffort = null)
     {
         var prefix = $"SORCERER_{PurposeEnvironmentName(purpose)}";
-        var provider = Environment.GetEnvironmentVariable($"{prefix}_PROVIDER") ?? defaultProvider;
-        var host = Environment.GetEnvironmentVariable($"{prefix}_HOST") ?? defaultHost;
-        var model = Environment.GetEnvironmentVariable($"{prefix}_MODEL") ?? defaultModel;
+        var providerOverride = Environment.GetEnvironmentVariable($"{prefix}_PROVIDER");
+        var provider = providerOverride ?? defaultProvider;
+        var providerChanged = !string.IsNullOrWhiteSpace(providerOverride)
+            && !provider.Equals(defaultProvider, StringComparison.OrdinalIgnoreCase);
+        var host = Environment.GetEnvironmentVariable($"{prefix}_HOST")
+            ?? (providerChanged ? DefaultHost(provider) : defaultHost);
+        var model = Environment.GetEnvironmentVariable($"{prefix}_MODEL")
+            ?? (providerChanged ? DefaultModel(provider) : defaultModel);
         var timeout = ReadInt($"{prefix}_TIMEOUT_SECONDS", defaultTimeoutSeconds);
         var concurrency = ReadInt($"{prefix}_MAX_CONCURRENT_CALLS", maxConcurrentCalls);
         var purposeEnabled = ReadBool($"{prefix}_ENABLED", enabled);
-        var apiKey = Environment.GetEnvironmentVariable($"{prefix}_API_KEY") ?? DefaultApiKey();
+        var apiKey = Environment.GetEnvironmentVariable($"{prefix}_API_KEY") ?? DefaultApiKey(provider);
         var ollamaNumGpu = ReadNullableInt($"{prefix}_NUM_GPU", defaultOllamaNumGpu);
-        return new LlmPurposeSettings(provider, host, model, timeout, concurrency, purposeEnabled, apiKey, ollamaNumGpu);
+        var effort = Environment.GetEnvironmentVariable($"{prefix}_EFFORT")
+            ?? defaultEffort
+            ?? (UsesEffort(provider) ? "medium" : null);
+        return new LlmPurposeSettings(provider, host, model, timeout, concurrency, purposeEnabled, apiKey, ollamaNumGpu, effort);
     }
 
     private static int ReadInt(string name, int fallback) =>
@@ -161,10 +187,54 @@ public sealed record LlmConfiguration(
         return new string(chars.ToArray());
     }
 
-    private static string? DefaultApiKey() =>
-        Environment.GetEnvironmentVariable("SORCERER_OPENAI_API_KEY")
-        ?? Environment.GetEnvironmentVariable("SORCERER_API_KEY")
-        ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+    private static string DefaultHost(string provider) =>
+        IsGemini(provider)
+            ? Environment.GetEnvironmentVariable("SORCERER_GEMINI_HOST")
+                ?? Environment.GetEnvironmentVariable("GEMINI_BASE_URL")
+                ?? "https://generativelanguage.googleapis.com/v1beta"
+            : IsAnthropic(provider)
+            ? Environment.GetEnvironmentVariable("SORCERER_ANTHROPIC_HOST")
+                ?? Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL")
+                ?? "https://api.anthropic.com/v1"
+            : provider.Trim().ToLowerInvariant() is "api" or "openai" or "openai-compatible"
+                ? Environment.GetEnvironmentVariable("SORCERER_OPENAI_HOST")
+                    ?? Environment.GetEnvironmentVariable("OPENAI_BASE_URL")
+                    ?? "https://api.openai.com/v1"
+                : Environment.GetEnvironmentVariable("SORCERER_OLLAMA_HOST")
+                    ?? Environment.GetEnvironmentVariable("OLLAMA_HOST")
+                    ?? "http://127.0.0.1:11434";
+
+    private static string DefaultModel(string provider) =>
+        IsGemini(provider)
+            ? "gemini-3.5-flash"
+            : IsAnthropic(provider)
+            ? "claude-sonnet-5"
+            : provider.Trim().ToLowerInvariant() is "api" or "openai" or "openai-compatible"
+                ? "default"
+                : "qwen3.5:9b";
+
+    private static bool IsAnthropic(string provider) =>
+        provider.Trim().ToLowerInvariant() is "anthropic" or "claude";
+
+    private static bool IsGemini(string provider) =>
+        provider.Trim().ToLowerInvariant() is "gemini" or "google";
+
+    private static bool UsesEffort(string provider) =>
+        IsAnthropic(provider) || IsGemini(provider);
+
+    private static string? DefaultApiKey(string provider) =>
+        IsGemini(provider)
+            ? Environment.GetEnvironmentVariable("SORCERER_GEMINI_API_KEY")
+                ?? Environment.GetEnvironmentVariable("SORCERER_API_KEY")
+                ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY")
+                ?? Environment.GetEnvironmentVariable("GOOGLE_API_KEY")
+            : IsAnthropic(provider)
+            ? Environment.GetEnvironmentVariable("SORCERER_ANTHROPIC_API_KEY")
+                ?? Environment.GetEnvironmentVariable("SORCERER_API_KEY")
+                ?? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")
+            : Environment.GetEnvironmentVariable("SORCERER_OPENAI_API_KEY")
+                ?? Environment.GetEnvironmentVariable("SORCERER_API_KEY")
+                ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 }
 
 public sealed record LlmCallResult<T>(

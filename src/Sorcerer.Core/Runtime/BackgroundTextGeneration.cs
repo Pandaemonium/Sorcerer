@@ -1,3 +1,5 @@
+using Sorcerer.Core.Telemetry;
+
 namespace Sorcerer.Core.Runtime;
 
 public sealed record BackgroundTextRequest(
@@ -27,7 +29,8 @@ public sealed record BackgroundTextGenerationResult(
     // Set by generators (e.g. replay) that are feeding back an already-recorded, already-final
     // result rather than freshly generating prose. Skips post-generation normalization so replay
     // reproduces the exact materialized text instead of re-truncating it.
-    bool AlreadyMaterialized = false);
+    bool AlreadyMaterialized = false,
+    ProviderCallStats? ProviderStats = null);
 
 public interface IBackgroundTextGenerator
 {

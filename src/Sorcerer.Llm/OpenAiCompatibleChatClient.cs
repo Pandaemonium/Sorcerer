@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Sorcerer.Llm;
 
-internal sealed class OpenAiCompatibleChatClient
+internal sealed class OpenAiCompatibleChatClient : IJsonChatClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -28,7 +28,7 @@ internal sealed class OpenAiCompatibleChatClient
         _httpClient = httpClient ?? CreateHttpClient();
     }
 
-    public async Task<OpenAiChatResult> ChatAsync(
+    public async Task<JsonChatResult> ChatAsync(
         string system,
         string user,
         double temperature,
@@ -43,7 +43,7 @@ internal sealed class OpenAiCompatibleChatClient
         return result;
     }
 
-    private async Task<OpenAiChatResult> SendAsync(
+    private async Task<JsonChatResult> SendAsync(
         string system,
         string user,
         double temperature,
@@ -78,17 +78,17 @@ internal sealed class OpenAiCompatibleChatClient
             raw = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                return new OpenAiChatResult(false, "", raw, $"OpenAI-compatible endpoint returned HTTP {(int)response.StatusCode}.");
+                return new JsonChatResult(false, "", raw, $"OpenAI-compatible endpoint returned HTTP {(int)response.StatusCode}.");
             }
 
             var content = ExtractContent(raw);
             return string.IsNullOrWhiteSpace(content)
-                ? new OpenAiChatResult(false, "", raw, "OpenAI-compatible endpoint returned an empty message.")
-                : new OpenAiChatResult(true, content, raw, null);
+                ? new JsonChatResult(false, "", raw, "OpenAI-compatible endpoint returned an empty message.")
+                : new JsonChatResult(true, content, raw, null);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException or InvalidOperationException)
         {
-            return new OpenAiChatResult(false, "", raw, ex.Message);
+            return new JsonChatResult(false, "", raw, ex.Message);
         }
     }
 
@@ -154,9 +154,3 @@ internal sealed class OpenAiCompatibleChatClient
             Timeout = Timeout.InfiniteTimeSpan,
         };
 }
-
-internal sealed record OpenAiChatResult(
-    bool Success,
-    string Content,
-    string RawText,
-    string? Error);

@@ -25,6 +25,7 @@ public static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        DotEnv.Load();
         var options = CliOptions.Parse(args);
         options = options with
         {
@@ -187,27 +188,38 @@ public static class Program
                 LlmPurpose.Wild,
                 options.Provider,
                 options.Host,
-                options.Model)
+                options.Model,
+                effort: options.Effort)
+            .WithPurposeOverride(
+                LlmPurpose.Router,
+                PurposeEnvironmentOverride("ROUTER", "PROVIDER") ? null : options.Provider,
+                PurposeEnvironmentOverride("ROUTER", "HOST") ? null : options.Host,
+                PurposeEnvironmentOverride("ROUTER", "MODEL") ? null : options.Model,
+                effort: PurposeEnvironmentOverride("ROUTER", "EFFORT") ? null : options.Effort)
             .WithPurposeOverride(
                 LlmPurpose.Dialogue,
                 options.Provider,
                 options.Host,
-                options.Model)
+                options.Model,
+                effort: options.Effort)
             .WithPurposeOverride(
                 LlmPurpose.DialogueRouter,
                 PurposeEnvironmentOverride("DIALOGUE_ROUTER", "PROVIDER") ? null : options.Provider,
                 PurposeEnvironmentOverride("DIALOGUE_ROUTER", "HOST") ? null : options.Host,
-                PurposeEnvironmentOverride("DIALOGUE_ROUTER", "MODEL") ? null : options.Model)
+                PurposeEnvironmentOverride("DIALOGUE_ROUTER", "MODEL") ? null : options.Model,
+                effort: PurposeEnvironmentOverride("DIALOGUE_ROUTER", "EFFORT") ? null : options.Effort)
             .WithPurposeOverride(
                 LlmPurpose.DialogueParser,
                 ParserEnvironmentOverride("PROVIDER") ? null : options.Provider,
                 ParserEnvironmentOverride("HOST") ? null : options.Host,
-                ParserEnvironmentOverride("MODEL") ? null : options.Model);
+                ParserEnvironmentOverride("MODEL") ? null : options.Model,
+                effort: ParserEnvironmentOverride("EFFORT") ? null : options.Effort);
         configuration = configuration.WithPurposeOverride(
             LlmPurpose.DialogueParserRouter,
             ParserRouterEnvironmentOverride("PROVIDER") ? null : options.Provider,
             ParserRouterEnvironmentOverride("HOST") ? null : options.Host,
-            ParserRouterEnvironmentOverride("MODEL") ? null : options.Model);
+            ParserRouterEnvironmentOverride("MODEL") ? null : options.Model,
+            effort: ParserRouterEnvironmentOverride("EFFORT") ? null : options.Effort);
         if (options.BackgroundProvider is not null
             || options.BackgroundHost is not null
             || options.BackgroundModel is not null
@@ -553,7 +565,8 @@ public sealed record CliOptions(
     int? BuildVigor = null,
     int? BuildAttunement = null,
     int? BuildComposure = null,
-    string? BuildCharterBonus = null)
+    string? BuildCharterBonus = null,
+    string? Effort = null)
 {
     /// <summary>The character-creation flags folded into a sanitized build, or null when none
     /// were passed — absent flags keep today's origin-only behavior exactly. All flags are
@@ -582,9 +595,10 @@ public sealed record CliOptions(
 
     public static CliOptions Parse(string[] args)
     {
-        var provider = "mock";
-        string? host = null;
-        string? model = null;
+        var provider = Environment.GetEnvironmentVariable("SORCERER_PROVIDER") ?? "mock";
+        var host = Environment.GetEnvironmentVariable("SORCERER_HOST");
+        var model = Environment.GetEnvironmentVariable("SORCERER_MODEL");
+        var effort = Environment.GetEnvironmentVariable("SORCERER_EFFORT");
         var json = false;
         var debugState = false;
         var eval = false;
@@ -632,6 +646,9 @@ public sealed record CliOptions(
                     break;
                 case "--model" when index + 1 < args.Length:
                     model = args[++index];
+                    break;
+                case "--effort" when index + 1 < args.Length:
+                    effort = args[++index];
                     break;
                 case "--json":
                     json = true;
@@ -780,7 +797,8 @@ public sealed record CliOptions(
             buildVigor,
             buildAttunement,
             buildComposure,
-            buildCharterBonus);
+            buildCharterBonus,
+            effort);
     }
 
     private static int ReadPositiveInt(string value, int fallback) =>

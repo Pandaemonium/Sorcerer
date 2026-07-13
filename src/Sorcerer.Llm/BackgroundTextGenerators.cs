@@ -41,6 +41,28 @@ public static class BackgroundTextGeneratorFactory
                 Math.Max(1, settings.MaxConcurrentCalls),
                 audit,
                 settings.ApiKey),
+            "anthropic" or "claude" => new OpenAiCompatibleBackgroundTextGenerator(
+                new AnthropicMessagesClient(
+                    settings.Host ?? "https://api.anthropic.com/v1",
+                    settings.Model ?? "claude-sonnet-5",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "anthropic-background",
+                settings.Model ?? "claude-sonnet-5",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
+                Math.Max(1, settings.MaxConcurrentCalls),
+                audit),
+            "gemini" or "google" => new OpenAiCompatibleBackgroundTextGenerator(
+                new GeminiInteractionsClient(
+                    settings.Host ?? "https://generativelanguage.googleapis.com/v1beta",
+                    settings.Model ?? "gemini-3.5-flash",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "gemini-background",
+                settings.Model ?? "gemini-3.5-flash",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
+                Math.Max(1, settings.MaxConcurrentCalls),
+                audit),
             _ => new MockBackgroundTextGenerator(audit),
         };
     }
@@ -55,7 +77,8 @@ public sealed record BackgroundTextAuditEntry(
     string? ParsedText,
     bool TechnicalFailure,
     string? Error,
-    long ElapsedMilliseconds);
+    long ElapsedMilliseconds,
+    Sorcerer.Core.Telemetry.ProviderCallStats? ProviderStats = null);
 
 public interface IBackgroundTextAuditSink
 {
@@ -210,7 +233,8 @@ public sealed class OllamaBackgroundTextGenerator : IBackgroundTextGenerator
 
 public sealed class OpenAiCompatibleBackgroundTextGenerator : IBackgroundTextGenerator
 {
-    private readonly OpenAiCompatibleChatClient _chat;
+    private readonly IJsonChatClient _chat;
+    private readonly string _name;
     private readonly string _model;
     private readonly TimeSpan _timeout;
     private readonly SemaphoreSlim _gate;
@@ -224,15 +248,33 @@ public sealed class OpenAiCompatibleBackgroundTextGenerator : IBackgroundTextGen
         IBackgroundTextAuditSink? audit = null,
         string? apiKey = null,
         HttpClient? httpClient = null)
+        : this(
+            new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey),
+            "openai-compatible-background",
+            model,
+            timeout,
+            maxConcurrentCalls,
+            audit)
     {
+    }
+
+    internal OpenAiCompatibleBackgroundTextGenerator(
+        IJsonChatClient chat,
+        string name,
+        string model,
+        TimeSpan timeout,
+        int maxConcurrentCalls,
+        IBackgroundTextAuditSink? audit = null)
+    {
+        _chat = chat;
+        _name = name;
         _model = model;
         _timeout = timeout;
         _gate = new SemaphoreSlim(maxConcurrentCalls, maxConcurrentCalls);
         _audit = audit ?? NullBackgroundTextAuditSink.Instance;
-        _chat = new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey);
     }
 
-    public string Name => "openai-compatible-background";
+    public string Name => _name;
 
     public BackgroundTextGenerationResult Generate(BackgroundTextRequest request) =>
         // See OllamaBackgroundTextGenerator.Generate: must not await in-place on the calling
@@ -265,8 +307,8 @@ public sealed class OpenAiCompatibleBackgroundTextGenerator : IBackgroundTextGen
                 timeout.Token,
                 label: "background");
             return result.Success
-                ? BackgroundTextPrompt.FromContent(result.Content, result.RawText, Name, _model)
-                : Failure(result.Error ?? "OpenAI-compatible background generation failed.", result.RawText);
+                ? BackgroundTextPrompt.FromContent(result.Content, result.RawText, Name, _model, result.Stats)
+                : Failure(result.Error ?? $"{Name} generation failed.", result.RawText, result.Stats);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException or InvalidOperationException)
         {
@@ -278,8 +320,11 @@ public sealed class OpenAiCompatibleBackgroundTextGenerator : IBackgroundTextGen
         }
     }
 
-    private BackgroundTextGenerationResult Failure(string error, string raw = "") =>
-        new(null, TechnicalFailure: true, Error: error, Provider: Name, Model: _model, RawText: raw);
+    private BackgroundTextGenerationResult Failure(
+        string error,
+        string raw = "",
+        Sorcerer.Core.Telemetry.ProviderCallStats? stats = null) =>
+        new(null, TechnicalFailure: true, Error: error, Provider: Name, Model: _model, RawText: raw, ProviderStats: stats);
 }
 
 internal static class BackgroundTextAudit
@@ -299,7 +344,8 @@ internal static class BackgroundTextAudit
             result.Text,
             result.TechnicalFailure,
             result.Error,
-            elapsedMilliseconds));
+            elapsedMilliseconds,
+            result.ProviderStats));
     }
 }
 
@@ -336,7 +382,8 @@ internal static class BackgroundTextPrompt
         string content,
         string raw,
         string provider,
-        string model)
+        string model,
+        Sorcerer.Core.Telemetry.ProviderCallStats? stats = null)
     {
         var text = ExtractText(content);
         return string.IsNullOrWhiteSpace(text)
@@ -346,14 +393,16 @@ internal static class BackgroundTextPrompt
                 Error: "Background provider returned no text.",
                 Provider: provider,
                 Model: model,
-                RawText: raw)
+                RawText: raw,
+                ProviderStats: stats)
             : new BackgroundTextGenerationResult(
                 text.Trim(),
                 TechnicalFailure: false,
                 Error: null,
                 Provider: provider,
                 Model: model,
-                RawText: raw);
+                RawText: raw,
+                ProviderStats: stats);
     }
 
     private static string? ExtractText(string content)

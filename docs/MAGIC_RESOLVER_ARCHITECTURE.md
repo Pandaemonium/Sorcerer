@@ -71,7 +71,8 @@ The resolver should receive:
 Routing should be recall-biased. Loading one extra relevant card is much less harmful than
 missing the card that would make a spell work.
 
-Prompt assembly for both live providers (Ollama, OpenAI-compatible) lives in one place,
+Prompt assembly for all live providers (Ollama, native Anthropic, native Gemini,
+OpenAI-compatible) lives in one place,
 `SpellPromptBuilder`. The system prompt is ordered static-first — distilled core rules, the
 consequence vocabulary, and a name-only retry menu — then the per-cast supported operations and
 selected card detail, so a local backend can prompt-cache the stable prefix. The user message is a
@@ -409,6 +410,8 @@ The provider interface should support:
 
 - local model providers
 - Ollama
+- native Anthropic Messages API, including Sonnet 5 adaptive thinking/effort
+- native Gemini Interactions API, including JSON output, thinking level, and usage telemetry
 - API-key providers
 - mock providers
 - future provider experiments

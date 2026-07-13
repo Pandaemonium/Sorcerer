@@ -30,6 +30,22 @@ public static class DialogueProviderFactory
                 settings.Model ?? "default",
                 timeout: TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds)),
                 apiKey: settings.ApiKey),
+            "anthropic" or "claude" => new OpenAiCompatibleDialogueProvider(
+                new AnthropicMessagesClient(
+                    settings.Host ?? "https://api.anthropic.com/v1",
+                    settings.Model ?? "claude-sonnet-5",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "anthropic-dialogue",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
+            "gemini" or "google" => new OpenAiCompatibleDialogueProvider(
+                new GeminiInteractionsClient(
+                    settings.Host ?? "https://generativelanguage.googleapis.com/v1beta",
+                    settings.Model ?? "gemini-3.5-flash",
+                    settings.Effort,
+                    apiKey: settings.ApiKey),
+                "gemini-dialogue",
+                TimeSpan.FromSeconds(Math.Max(1, settings.TimeoutSeconds))),
             _ => new MockDialogueProvider(),
         };
     }
@@ -293,7 +309,8 @@ public sealed class MockDialogueProvider : IDialogueProvider
 
 public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
 {
-    private readonly OpenAiCompatibleChatClient _chat;
+    private readonly IJsonChatClient _chat;
+    private readonly string _name;
     private readonly TimeSpan _timeout;
 
     public OpenAiCompatibleDialogueProvider(
@@ -302,12 +319,24 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
         HttpClient? httpClient = null,
         TimeSpan? timeout = null,
         string? apiKey = null)
+        : this(
+            new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey),
+            "openai-compatible-dialogue",
+            timeout)
     {
-        _chat = new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey);
+    }
+
+    internal OpenAiCompatibleDialogueProvider(
+        IJsonChatClient chat,
+        string name,
+        TimeSpan? timeout = null)
+    {
+        _chat = chat;
+        _name = name;
         _timeout = timeout ?? TimeSpan.FromSeconds(180);
     }
 
-    public string Name => "openai-compatible-dialogue";
+    public string Name => _name;
 
     public async Task<DialogueProviderResult> ResolveAsync(
         DialogueRequest request,
@@ -325,7 +354,7 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             label: "dialogue");
         if (!first.Success)
         {
-            return Failure(first.RawText, first.Error ?? "OpenAI-compatible dialogue provider failed.");
+            return Failure(first.RawText, first.Error ?? $"{Name} provider failed.", first.Stats);
         }
 
         var parsedFirst = OllamaDialogueProvider.TryParseResponse(first.Content, request, out var response, out var parseError);
@@ -334,7 +363,7 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             && response is not null
             && !OllamaDialogueProvider.Degenerate(response, request.PlayerText, out degeneration))
         {
-            return Success(first.Content, response);
+            return Success(first.Content, response, first.Stats);
         }
 
         var retry = await _chat.ChatAsync(
@@ -346,22 +375,28 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             label: "dialogue-repair");
         if (!retry.Success)
         {
-            return Failure(retry.RawText, retry.Error ?? "OpenAI-compatible dialogue retry failed.");
+            return Failure(retry.RawText, retry.Error ?? $"{Name} retry failed.", retry.Stats);
         }
 
         if (OllamaDialogueProvider.TryParseResponse(retry.Content, request, out response, out parseError))
         {
-            return Success(retry.Content, response!);
+            return Success(retry.Content, response!, retry.Stats);
         }
 
-        return Failure(retry.Content, parseError ?? "OpenAI-compatible dialogue provider returned invalid JSON.");
+        return Failure(retry.Content, parseError ?? $"{Name} returned invalid JSON.", retry.Stats);
     }
 
-    private DialogueProviderResult Success(string raw, DialogueResponse response) =>
-        new(Name, raw, TechnicalFailure: false, Error: null, Response: response);
+    private DialogueProviderResult Success(
+        string raw,
+        DialogueResponse response,
+        Sorcerer.Core.Telemetry.ProviderCallStats? stats = null) =>
+        new(Name, raw, TechnicalFailure: false, Error: null, Response: response, Stats: stats);
 
-    private DialogueProviderResult Failure(string raw, string error) =>
-        new(Name, raw, TechnicalFailure: true, Error: error, Response: null);
+    private DialogueProviderResult Failure(
+        string raw,
+        string error,
+        Sorcerer.Core.Telemetry.ProviderCallStats? stats = null) =>
+        new(Name, raw, TechnicalFailure: true, Error: error, Response: null, Stats: stats);
 }
 
 public sealed class OllamaDialogueProvider : IDialogueProvider

@@ -3,13 +3,14 @@ using Sorcerer.Magic.Capabilities;
 namespace Sorcerer.Llm;
 
 /// <summary>
-/// Capability router backed by an OpenAI-compatible chat endpoint. Same tiny contract as
+/// Capability router backed by a JSON chat client (OpenAI-compatible or native Anthropic). Same tiny contract as
 /// <see cref="OllamaSpellRouter"/>: a short JSON reply naming the needed capabilities, with any
 /// failure surfaced as a technical failure so the controller falls back to keyword routing.
 /// </summary>
 public sealed class OpenAiCompatibleSpellRouter : ISpellRouter
 {
-    private readonly OpenAiCompatibleChatClient _chat;
+    private readonly IJsonChatClient _chat;
+    private readonly string _name;
     private readonly TimeSpan _timeout;
 
     public OpenAiCompatibleSpellRouter(
@@ -18,12 +19,24 @@ public sealed class OpenAiCompatibleSpellRouter : ISpellRouter
         HttpClient? httpClient = null,
         TimeSpan? timeout = null,
         string? apiKey = null)
+        : this(
+            new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey),
+            "openai-compatible-router",
+            timeout)
     {
-        _chat = new OpenAiCompatibleChatClient(endpoint, model, httpClient, apiKey);
+    }
+
+    internal OpenAiCompatibleSpellRouter(
+        IJsonChatClient chat,
+        string name,
+        TimeSpan? timeout = null)
+    {
+        _chat = chat;
+        _name = name;
         _timeout = timeout ?? TimeSpan.FromSeconds(30);
     }
 
-    public string Name => "openai-compatible-router";
+    public string Name => _name;
 
     public async Task<SpellRouteResult> RouteAsync(
         string spellText,
@@ -43,6 +56,6 @@ public sealed class OpenAiCompatibleSpellRouter : ISpellRouter
 
         return result.Success
             ? SpellRouterPrompt.From(Name, result.RawText, result.Content)
-            : SpellRouterPrompt.Failure(result.RawText, result.Error ?? "OpenAI-compatible router failed.");
+            : SpellRouterPrompt.Failure(result.RawText, result.Error ?? $"{Name} failed.");
     }
 }

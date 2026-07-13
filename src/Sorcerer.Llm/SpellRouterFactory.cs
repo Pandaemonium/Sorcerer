@@ -10,7 +10,7 @@ public static class SpellRouterFactory
 
     public static ISpellRouter Create(LlmPurposeSettings settings) =>
         settings.Enabled
-            ? Create(settings.Provider, settings.Host, settings.Model, settings.TimeoutSeconds, settings.ApiKey)
+            ? Create(settings.Provider, settings.Host, settings.Model, settings.TimeoutSeconds, settings.ApiKey, settings.Effort)
             : NullSpellRouter.Instance;
 
     public static ISpellRouter Create(
@@ -18,7 +18,8 @@ public static class SpellRouterFactory
         string? host = null,
         string? model = null,
         int? timeoutSeconds = null,
-        string? apiKey = null)
+        string? apiKey = null,
+        string? effort = null)
     {
         var timeout = TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds ?? 30));
         return provider.Trim().ToLowerInvariant() switch
@@ -35,6 +36,22 @@ public static class SpellRouterFactory
                 model ?? "default",
                 timeout: timeout,
                 apiKey: apiKey),
+            "anthropic" or "claude" => new OpenAiCompatibleSpellRouter(
+                new AnthropicMessagesClient(
+                    host ?? "https://api.anthropic.com/v1",
+                    model ?? "claude-sonnet-5",
+                    effort,
+                    apiKey: apiKey),
+                "anthropic-router",
+                timeout),
+            "gemini" or "google" => new OpenAiCompatibleSpellRouter(
+                new GeminiInteractionsClient(
+                    host ?? "https://generativelanguage.googleapis.com/v1beta",
+                    model ?? "gemini-3.5-flash",
+                    effort,
+                    apiKey: apiKey),
+                "gemini-router",
+                timeout),
             _ => NullSpellRouter.Instance,
         };
     }
