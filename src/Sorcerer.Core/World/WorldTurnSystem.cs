@@ -1,5 +1,6 @@
 using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
+using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Transactions;
 using Sorcerer.Core.Validation;
@@ -10,6 +11,7 @@ public sealed class WorldTurnSystem
 {
     private const int PromiseStirCooldown = 8;
     private const int WantStirCooldown = 12;
+    private const int NpcApproachCooldown = 6;
 
     public IReadOnlyList<StateDelta> Apply(
         GameState state,
@@ -49,6 +51,12 @@ public sealed class WorldTurnSystem
         }
 
         if (remaining > 0
+            && TryNpcApproach(state, reason, announce, deltas, apply))
+        {
+            remaining--;
+        }
+
+        if (remaining > 0
             && TryStirPromise(state, reason, announce, deltas, apply))
         {
             remaining--;
@@ -61,6 +69,175 @@ public sealed class WorldTurnSystem
         }
 
         return deltas;
+    }
+
+    private static bool TryNpcApproach(
+        GameState state,
+        string reason,
+        bool announce,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
+    {
+        if (!state.ControlledEntity.TryGet<PositionComponent>(out var playerPosition))
+        {
+            return false;
+        }
+
+        var candidate = state.Entities.Values
+            .Where(entity => entity.Id != state.ControlledEntityId)
+            .Where(entity => entity.TryGet<ActorComponent>(out var actor) && actor.Alive)
+            .Where(entity => entity.TryGet<PositionComponent>(out _))
+            .Where(entity => !entity.TryGet<AiComponent>(out var ai)
+                || !ai.PolicyId.Equals("hostile", StringComparison.OrdinalIgnoreCase))
+            .Select(entity => new
+            {
+                Entity = entity,
+                Position = entity.Get<PositionComponent>().Position,
+                Want = entity.TryGet<WantComponent>(out var want) ? want : null,
+                SeeksPlayer = entity.TryGet<TagsComponent>(out var tags)
+                    && tags.Tags.Any(tag => tag.Equals("objective_contact", StringComparison.OrdinalIgnoreCase)
+                        || tag.Equals("seeks_player", StringComparison.OrdinalIgnoreCase)
+                        || tag.Equals("approach_player", StringComparison.OrdinalIgnoreCase)),
+                RumorMemory = state.Memories.Records
+                    .Where(memory => memory.SubjectId.Equals(entity.Id.Value, StringComparison.OrdinalIgnoreCase))
+                    .Where(memory => memory.Provenance.StartsWith("rumor:", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(memory => memory.Salience)
+                    .FirstOrDefault(),
+            })
+            .Select(item => new
+            {
+                item.Entity,
+                item.Position,
+                item.Want,
+                item.SeeksPlayer,
+                item.RumorMemory,
+                Distance = Math.Abs(item.Position.X - playerPosition.Position.X)
+                    + Math.Abs(item.Position.Y - playerPosition.Position.Y),
+                Score = (item.RumorMemory?.Salience ?? 0) * 10
+                    + (item.Want?.Status.Equals("active", StringComparison.OrdinalIgnoreCase) == true
+                        ? item.Want.Salience * 4
+                        : 0),
+            })
+            .Where(item => item.Distance is >= 3 and <= 8)
+            .Where(item => item.RumorMemory is not null
+                || item.SeeksPlayer
+                    && item.Want?.Status.Equals("active", StringComparison.OrdinalIgnoreCase) == true
+                    && item.Want.Salience >= 4)
+            .Where(item => !state.WorldTurns.HasRecent(
+                "npc_approach",
+                item.Entity.Id.Value,
+                state.Turn,
+                NpcApproachCooldown))
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.Distance)
+            .ThenBy(item => item.Entity.Id.Value, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if (candidate is null)
+        {
+            return false;
+        }
+
+        var step = ApproachStep(state, candidate.Entity, candidate.Position, playerPosition.Position);
+        if (step is null)
+        {
+            return false;
+        }
+
+        var cause = candidate.RumorMemory is not null
+            ? $"the rumor they heard — {candidate.RumorMemory.Text}"
+            : $"their active want — {candidate.Want!.Text}";
+        return TryApplyWorldTurnTransaction(
+            state,
+            deltas,
+            applyConsequence,
+            "npc_approach",
+            candidate.Entity.Id.Value,
+            localDeltas =>
+            {
+                if (!ApplyConsequence(localDeltas, applyConsequence, WorldConsequence.MoveEntity(
+                    "world_turn",
+                    candidate.Entity.Id.Value,
+                    step.Value.X,
+                    step.Value.Y,
+                    operation: "npcApproachMove",
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    sourceEntityId: candidate.Entity.Id.Value,
+                    evidence: cause,
+                    reason: "A bounded world-turn initiative moved an interested NPC one step toward the player.",
+                    emitMessage: false,
+                    details: new Dictionary<string, object?>
+                    {
+                        ["cause"] = cause,
+                        ["fromX"] = candidate.Position.X,
+                        ["fromY"] = candidate.Position.Y,
+                        ["playerVisible"] = false,
+                    })).Applied)
+                {
+                    return false;
+                }
+
+                if (announce && !ApplyConsequence(localDeltas, applyConsequence, WorldConsequence.Message(
+                    "world_turn",
+                    $"{candidate.Entity.Name} approaches because of {cause}.",
+                    targetEntityId: candidate.Entity.Id.Value,
+                    visibility: WorldConsequenceVisibility.Message,
+                    sourceEntityId: candidate.Entity.Id.Value,
+                    evidence: cause,
+                    reason: "NPC initiative named its carrier and cause.",
+                    operation: "npcApproachMessage",
+                    details: new Dictionary<string, object?>
+                    {
+                        ["entityId"] = candidate.Entity.Id.Value,
+                        ["cause"] = cause,
+                    })).Applied)
+                {
+                    return false;
+                }
+
+                return RecordMove(
+                    state,
+                    reason,
+                    "npc_approach",
+                    candidate.Entity.Id.Value,
+                    $"{candidate.Entity.Name} approaches because of {cause}.",
+                    new Dictionary<string, object?>
+                    {
+                        ["entityId"] = candidate.Entity.Id.Value,
+                        ["cause"] = cause,
+                        ["x"] = step.Value.X,
+                        ["y"] = step.Value.Y,
+                    },
+                    announce: false,
+                    localDeltas,
+                    applyConsequence);
+            });
+    }
+
+    private static GridPoint? ApproachStep(GameState state, Entity entity, GridPoint from, GridPoint target)
+    {
+        var dx = Math.Sign(target.X - from.X);
+        var dy = Math.Sign(target.Y - from.Y);
+        var candidates = new[]
+        {
+            new GridPoint(from.X + dx, from.Y + dy),
+            new GridPoint(from.X + dx, from.Y),
+            new GridPoint(from.X, from.Y + dy),
+        };
+        foreach (var point in candidates)
+        {
+            if (point.X >= 0 && point.Y >= 0 && point.X < state.Width && point.Y < state.Height
+                && !state.BlockingTerrain.Contains(point)
+                && !state.Entities.Values.Any(other =>
+                    other.Id != entity.Id
+                    && other.TryGet<PositionComponent>(out var position)
+                    && position.Position == point
+                    && (!other.TryGet<PhysicalComponent>(out var physical) || physical.BlocksMovement)))
+            {
+                return point;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryStirWant(

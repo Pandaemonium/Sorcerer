@@ -6951,6 +6951,28 @@ public sealed class WorldConsequenceApplier
             }
         }
 
+        var offerObjectiveHandoff = ReadBool(payload, "offerObjectiveHandoff")
+            ?? ReadBool(payload, "offer_objective_handoff")
+            ?? true;
+        if (offerObjectiveHandoff && _engine is not null)
+        {
+            var handoff = _engine.ApplyGeneratedObjectiveHandoff(captive, "rescue");
+            if (handoff is not null)
+            {
+                deltas.AddRange(handoff.Deltas);
+                messages.AddRange(handoff.Messages);
+                if (!handoff.Applied)
+                {
+                    return RollBackFreeCaptive(
+                        consequence,
+                        snapshot,
+                        deltas,
+                        messages,
+                        handoff.Error ?? "objective_handoff_rejected");
+                }
+            }
+        }
+
         var delta = new StateDelta(
             operation,
             captive.Id.Value,
@@ -6963,7 +6985,8 @@ public sealed class WorldConsequenceApplier
                 ("roles", roles),
                 ("aiPolicyId", aiPolicy),
                 ("recordDeed", shouldRecordDeed),
-                ("satisfyWant", satisfyWant)));
+                ("satisfyWant", satisfyWant),
+                ("offerObjectiveHandoff", offerObjectiveHandoff)));
         deltas.Add(delta);
         return new WorldConsequenceApplyResult(
             true,

@@ -28,6 +28,7 @@ public sealed class GameEngine
     private readonly InventoryService _inventoryService;
     private readonly ItemSystem _itemSystem;
     private readonly MovementSystem _movementSystem;
+    private readonly ObjectiveProgressSystem _objectiveProgressSystem;
     private readonly PerceptionSystem _perceptionSystem;
     private readonly PersistentEffectSystem _persistentEffects;
     private readonly StatusRegistry _statusRegistry = StatusRegistry.CreateDefault();
@@ -47,6 +48,7 @@ public sealed class GameEngine
         _inventoryService = new InventoryService(_itemCatalog);
         _itemSystem = new ItemSystem(this, _itemCatalog, _inventoryService);
         _movementSystem = new MovementSystem(this, _statusRegistry);
+        _objectiveProgressSystem = new ObjectiveProgressSystem(this);
         _perceptionSystem = new PerceptionSystem(State, _statusRegistry);
         _persistentEffects = new PersistentEffectSystem(this);
         _turnSystem = new TurnSystem(this, State, _statusRegistry, _loreCatalog, backgroundTextGenerator);
@@ -58,6 +60,15 @@ public sealed class GameEngine
     public GameState State { get; }
 
     public StatusRegistry Statuses => _statusRegistry;
+
+    internal ClaimSeed? CreateObjectiveHandoff(Entity speaker, string trigger) =>
+        _generationSystem.CreateObjectiveHandoff(speaker, trigger);
+
+    internal WorldConsequenceApplyResult? ApplyGeneratedObjectiveHandoff(Entity speaker, string trigger) =>
+        _interactionSystem.ApplyGeneratedObjectiveHandoff(speaker, trigger);
+
+    public IReadOnlyList<StateDelta> EvaluateObjectiveProgress(ActionResult action) =>
+        _objectiveProgressSystem.Evaluate(action);
 
     public WorldConsequenceApplyResult ApplyConsequence(WorldConsequence consequence) =>
         WorldConsequenceGuard.Apply(State, consequence, _worldConsequences.Apply);
@@ -176,6 +187,10 @@ public sealed class GameEngine
             $"Turn {State.Turn}. You are at {position.X},{position.Y}.",
             $"HP {actor.HitPoints}/{actor.MaxHitPoints}; MP {actor.Mana}/{actor.MaxMana}.",
         };
+        if (_viewBuilder.ObjectiveCards().FirstOrDefault() is { } objective)
+        {
+            messages.Add($"Next: {objective.NextStep}");
+        }
 
         foreach (var entity in State.Entities.Values.OrderBy(e => e.Id.Value))
         {

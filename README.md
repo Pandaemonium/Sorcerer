@@ -65,9 +65,19 @@ carry regional wares or services through the shared consequence grammar. A deter
 place graph now turns every regional anchor into a named 3×3 settlement with distinct districts,
 adds smaller hamlets and landmarks, and connects all settlements with physical road-zone paths.
 District identity changes terrain, population, signature sites, travel prose, atlas/world output,
-magic context, and dialogue context. Settlement lead residents also seed the first provider-free
-generated journeys: examine the person, receive a claim/promise pointing at a real landmark, and
-reach that exact zone to realize named evidence and canon through the existing promise system. Early
+magic context, and dialogue context. Settlement lead residents also seed provider-free generated
+journeys: talk to hear a concrete lead, receive a direct journal objective pointing at a real
+landmark, and reach that exact place to realize named evidence and canon through the existing
+promise system. The opening now uses the same general machinery for forward momentum: freeing any
+qualifying captive generates a seed-varying spoken lead from real geography, materializes a named
+regional contact at the promised settlement, and completes the objective only after the player
+speaks with that contact. The contact can then produce a fetch, delivery, escort, threat, folk
+service, rumor-verification, or social-leverage handoff. Completion reads ordinary world state,
+returns to the giver for want/memory/standing payoff, and supports multiple threat/social outcomes.
+The HUD, journal, inspect output, and CLI JSON share one prioritized next-step view. Rumors use
+physical roads between regions, and selected motivated NPCs can spend bounded initiative
+approaching for a visible reason. Lio is the first proving ground, not a scripted quest giver, and
+the chain requires no provider call. Early
 significant interiors are live as persistent linked zones: every regional center has one culturally
 specific site, while the capital has separate palace and archive spaces. Shared `enter`/`leave`
 commands carry followers, consume ordinary turns, expose the same context actions in Godot and the

@@ -77,7 +77,8 @@ public partial class Journal : Control
 
     private static string FormatLine(string line)
     {
-        var color = line.StartsWith("Lead:", StringComparison.OrdinalIgnoreCase)
+        var color = line.StartsWith("Objective:", StringComparison.OrdinalIgnoreCase)
+            || line.StartsWith("Completed objective:", StringComparison.OrdinalIgnoreCase)
             ? UiTheme.Wild
             : line.StartsWith("Claim:", StringComparison.OrdinalIgnoreCase)
                 ? UiTheme.Focus

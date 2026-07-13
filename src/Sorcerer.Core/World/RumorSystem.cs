@@ -138,7 +138,7 @@ public static class RumorSystem
         foreach (var rumor in state.Rumors.Records
             .Where(IsActive)
             .Where(rumor => rumor.Salience >= 3)
-            .Where(rumor => CanReachCurrentRegion(rumor, state.RegionId))
+            .Where(rumor => CanReachCurrentRegion(state, rumor, state.RegionId))
             .OrderBy(rumor => rumor.LastTurn)
             .ThenByDescending(rumor => rumor.Salience)
             .ThenBy(rumor => rumor.Id, StringComparer.OrdinalIgnoreCase)
@@ -175,8 +175,12 @@ public static class RumorSystem
                 continue;
             }
 
-            var historyEntry = $"{NormalizeReason(reason)} reached {string.Join(", ", newCarriers)} in {state.RegionId} on turn {state.Turn}.";
-            var message = RumorSpreadMessage(state, regionCarrier, newCarriers, rumor.Text);
+            var road = RoadBetweenRegions(state, rumor.CurrentRegionId, state.RegionId);
+            var routeName = road?.Name ?? (rumor.CurrentRegionId.Equals(state.RegionId, StringComparison.OrdinalIgnoreCase)
+                ? "local paths"
+                : "the connected road");
+            var historyEntry = $"{NormalizeReason(reason)} traveled by {routeName} to {string.Join(", ", newCarriers)} in {state.RegionId} on turn {state.Turn}.";
+            var message = RumorSpreadMessage(state, regionCarrier, newCarriers, rumor, routeName);
             var nextSalience = SalienceAfterSpread(rumor);
             var nextStatus = StatusAfterSpread(rumor, nextSalience);
             var beforeValidation = StateValidator.Validate(state);
@@ -206,6 +210,9 @@ public static class RumorSystem
                         ["reason"] = reason,
                         ["regionId"] = state.RegionId,
                         ["newCarriers"] = newCarriers.ToArray(),
+                        ["roadId"] = road?.Id,
+                        ["roadName"] = routeName,
+                        ["fromRegionId"] = rumor.CurrentRegionId,
                         ["salienceBefore"] = rumor.Salience,
                         ["salienceAfter"] = nextSalience,
                         ["statusBefore"] = rumor.Status,
@@ -344,11 +351,29 @@ public static class RumorSystem
             ? applyConsequence(consequence)
             : WorldConsequenceGuard.ApplyWithNewApplier(state, consequence);
 
-    private static bool CanReachCurrentRegion(RumorRecord rumor, string regionId) =>
+    private static bool CanReachCurrentRegion(GameState state, RumorRecord rumor, string regionId) =>
         rumor.CurrentRegionId.Equals(regionId, StringComparison.OrdinalIgnoreCase)
-        || rumor.OriginRegionId.Equals(regionId, StringComparison.OrdinalIgnoreCase)
-        || rumor.Salience >= 4
-        || rumor.Hops == 0;
+        || RoadBetweenRegions(state, rumor.CurrentRegionId, regionId) is not null;
+
+    private static WorldRoad? RoadBetweenRegions(GameState state, string fromRegionId, string toRegionId)
+    {
+        if (fromRegionId.Equals(toRegionId, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var graph = WorldPlaceGraph.Create(state.Seed, RegionCatalog.LoadDefault());
+        var settlements = graph.Settlements.ToDictionary(settlement => settlement.Id, StringComparer.OrdinalIgnoreCase);
+        return graph.Roads.FirstOrDefault(road =>
+        {
+            var from = settlements[road.FromSettlementId].RegionId;
+            var to = settlements[road.ToSettlementId].RegionId;
+            return (from.Equals(fromRegionId, StringComparison.OrdinalIgnoreCase)
+                    && to.Equals(toRegionId, StringComparison.OrdinalIgnoreCase))
+                || (from.Equals(toRegionId, StringComparison.OrdinalIgnoreCase)
+                    && to.Equals(fromRegionId, StringComparison.OrdinalIgnoreCase));
+        });
+    }
 
     private static IEnumerable<string> LocalCarrierIds(GameState state, RumorRecord rumor) =>
         state.Entities.Values
@@ -564,14 +589,15 @@ public static class RumorSystem
     private static string ReadableRegion(string regionId) =>
         regionId.Replace('_', ' ');
 
-    private static string RumorSpreadMessage(GameState state, string regionCarrier, IReadOnlyList<string> newCarriers, string text)
+    private static string RumorSpreadMessage(
+        GameState state,
+        string regionCarrier,
+        IReadOnlyList<string> newCarriers,
+        RumorRecord rumor,
+        string routeName)
     {
-        if (newCarriers.Any(carrier => carrier.Equals(regionCarrier, StringComparison.OrdinalIgnoreCase)))
-        {
-            return $"A rumor reaches {ReadableRegion(state.RegionId)}: {text}";
-        }
-
         var listeners = newCarriers
+            .Where(carrier => !carrier.Equals(regionCarrier, StringComparison.OrdinalIgnoreCase))
             .Select(carrier => ReadableCarrier(state, carrier))
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -579,10 +605,28 @@ public static class RumorSystem
             .ToArray();
         return listeners.Length switch
         {
-            0 => $"A rumor changes hands in {ReadableRegion(state.RegionId)}: {text}",
-            1 => $"A rumor reaches {listeners[0]}: {text}",
-            _ => $"A rumor passes between {string.Join(" and ", listeners)}: {text}",
+            0 => $"A rumor reaches {ReadableRegion(state.RegionId)} along {routeName}: {rumor.Text}",
+            1 => $"A rumor reaches {listeners[0]} along {routeName} because {CarrierCause(state, listeners[0], rumor)}: {rumor.Text}",
+            _ => $"A rumor passes along {routeName} between {string.Join(" and ", listeners)}: {rumor.Text}",
         };
+    }
+
+    private static string CarrierCause(GameState state, string listenerName, RumorRecord rumor)
+    {
+        var listener = state.Entities.Values.FirstOrDefault(entity =>
+            entity.Name.Equals(listenerName, StringComparison.OrdinalIgnoreCase));
+        if (listener?.TryGet<WantComponent>(out var want) == true)
+        {
+            var shared = want.Tags.FirstOrDefault(tag => rumor.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(shared))
+            {
+                return $"the story touches their concern for {shared.Replace('_', ' ')}";
+            }
+
+            return "it bears on something they already want";
+        }
+
+        return "they are the nearest willing carrier";
     }
 
     private static string ReadableCarrier(GameState state, string carrierId)

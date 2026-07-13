@@ -61,10 +61,17 @@ Current live content:
   are hard-coded into the content.
   Adding a region changes shared engine generation, atlas/resolver context, dialogue scene voice,
   and both renderers without adding renderer code.
-- `content/quests/*.json` contains provider-free journey templates. Patterns may use giver, role,
-  settlement, district, landmark, exact destination-zone, direction, and evidence-token fields.
-  Templates propose claim/promise metadata only; the engine binds them to real `WorldPlaceGraph`
-  landmarks and applies them through ordinary claim, promise, spawn-item, and canon consequences.
+- `content/quests/*.json` contains provider-free journey and objective-handoff templates. Journey
+  patterns may use giver, role, settlement, district, landmark, exact destination-zone, direction,
+  and evidence-token fields. Handoff patterns use rolled speakers, contacts, roles, settlements,
+  directions, regions, realms, rulers, items, threats, services, and rumors; they provide separate
+  spoken and journal-objective text plus `objectiveKind`, `realizationKind`, `subjectPattern`,
+  `openingHandoff`, and `returnToGiver` routing metadata.
+  Templates propose claim/promise metadata only. The engine selects real `WorldPlaceGraph`
+  destinations, forges non-duplicating regional identities, and applies claims, promises, memories,
+  speech, realizations, state-based progress, return payoff, and completion receipts through
+  ordinary typed consequences. Current objective families are `meet`, `fetch`, `delivery`,
+  `escort`, `threat`, `folk_service`, `rumor_verification`, and `social_leverage`.
 - `content/lore/*.md` contains Markdown lore cards with a fenced `lore` metadata block.
   The core loader searches upward from the current/app base directory, then falls back to
   built-in seed cards if files are absent.

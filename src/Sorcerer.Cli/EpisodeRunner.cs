@@ -343,13 +343,8 @@ public static class EpisodeRunner
 
     private static GameCommand? ChooseSocialProbe(GameSession session, GameView view, EntityCard player, int step)
     {
-        if (Hostiles(view).Any(hostile => Distance(player, hostile) <= 2))
-        {
-            return null;
-        }
-
         if (step % 17 == 5
-            && view.Promises.Any(promise => promise.PlayerVisible))
+            || (step % 7 == 3 && view.Promises.Any(promise => promise.PlayerVisible)))
         {
             return new JournalCommand();
         }
@@ -358,6 +353,11 @@ public static class EpisodeRunner
             && (view.Rumors?.Count ?? 0) > 0)
         {
             return new RumorsCommand();
+        }
+
+        if (Hostiles(view).Any(hostile => Distance(player, hostile) <= 2))
+        {
+            return null;
         }
 
         var speaker = NearbyFriendlyTalker(view, player);

@@ -863,7 +863,9 @@ public sealed record ComponentSave(
                 ReadNullableString(map, "realizationKind") ?? ReadNullableString(map, "realization_kind"),
                 ReadNullableString(map, "triggerHint") ?? ReadNullableString(map, "trigger_hint"),
                 ReadNullableString(map, "claimedPlace") ?? ReadNullableString(map, "claimed_place"),
-                ReadStringList(map, "tags")))
+                ReadStringList(map, "tags"),
+                ReadNullableString(map, "spokenText") ?? ReadNullableString(map, "spoken_text"),
+                ReadNullableString(map, "objectiveText") ?? ReadNullableString(map, "objective_text")))
             .ToArray();
 
     private static IReadOnlyList<ServiceOffer> ReadServiceOfferList(IReadOnlyDictionary<string, object?> fields, string key) =>

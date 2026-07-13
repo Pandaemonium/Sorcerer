@@ -36,5 +36,97 @@
       "realizationKind": "item",
       "tags": ["folk_magic", "answer", "landmark"]
     }
+  ],
+  "handoffs": [
+    {
+      "id": "opening_missing_witness",
+      "objectiveKind": "meet",
+      "realizationKind": "person",
+      "subjectPattern": "{contact}",
+      "openingHandoff": true,
+      "spokenPattern": "Go to {settlement}, {direction}, and ask for {contact}. They saw something the officials need everyone else to forget.",
+      "objectivePattern": "Reach {settlement}, {direction}, and speak with {contact} about the missing witness.",
+      "tags": ["witness", "memory", "official_account"]
+    },
+    {
+      "id": "opening_broken_road_oath",
+      "objectiveKind": "meet",
+      "realizationKind": "person",
+      "subjectPattern": "{contact}",
+      "openingHandoff": true,
+      "spokenPattern": "Ask for {contact} in {settlement}, {direction}. The road there has stopped honoring an old promise, and they know who broke it.",
+      "objectivePattern": "Reach {settlement}, {direction}, and speak with {contact} about the road's broken promise.",
+      "tags": ["road", "promise", "travel"]
+    },
+    {
+      "id": "recover_confiscated_color",
+      "objectiveKind": "fetch",
+      "realizationKind": "item",
+      "subjectPattern": "{item}",
+      "returnToGiver": true,
+      "spokenPattern": "A confiscated color is being held near {settlement}, {direction}. Bring the {item} back to me before it learns an official name.",
+      "objectivePattern": "Recover the {item} near {settlement}, {direction}, then return to {speaker}.",
+      "tags": ["fetch", "confiscation", "color", "wild_magic"]
+    },
+    {
+      "id": "carry_uncensored_witness",
+      "objectiveKind": "delivery",
+      "realizationKind": "person",
+      "subjectPattern": "{contact}",
+      "returnToGiver": true,
+      "spokenPattern": "Carry this {item} to {contact} in {settlement}, {direction}. Put it in their hands, then come tell me it arrived.",
+      "objectivePattern": "Deliver the {item} to {contact} in {settlement}, {direction}, then return to {speaker}.",
+      "tags": ["delivery", "witness", "truth"]
+    },
+    {
+      "id": "escort_road_orphan",
+      "objectiveKind": "escort",
+      "realizationKind": "person",
+      "subjectPattern": "{contact}",
+      "returnToGiver": true,
+      "spokenPattern": "Find {contact} in {settlement}, {direction}. Persuade them to travel with you and bring them safely back to me.",
+      "objectivePattern": "Find {contact} in {settlement}, persuade them to follow, and return together to {speaker}.",
+      "tags": ["escort", "road", "relationship"]
+    },
+    {
+      "id": "settle_broken_oath",
+      "objectiveKind": "threat",
+      "realizationKind": "threat",
+      "subjectPattern": "{threat}",
+      "returnToGiver": true,
+      "spokenPattern": "The {threat} waits near {settlement}, {direction}. End the danger however you can, then return and tell me what became of it.",
+      "objectivePattern": "Resolve the {threat} near {settlement} by force, alliance, displacement, restraint, transformation, or satisfaction; then return to {speaker}.",
+      "tags": ["threat", "multiple_solutions", "road", "promise"]
+    },
+    {
+      "id": "request_forbidden_service",
+      "objectiveKind": "folk_service",
+      "realizationKind": "service",
+      "subjectPattern": "{service}",
+      "returnToGiver": true,
+      "spokenPattern": "A practitioner near {settlement}, {direction}, still offers {service}. Ask them to perform it, then return without giving the Censorate their name.",
+      "objectivePattern": "Have the {service} performed near {settlement}, then return to {speaker}.",
+      "tags": ["folk_magic", "service", "imperial_law"]
+    },
+    {
+      "id": "verify_unquiet_landmark",
+      "objectiveKind": "rumor_verification",
+      "realizationKind": "person",
+      "subjectPattern": "{contact}",
+      "returnToGiver": true,
+      "spokenPattern": "Speak with {contact} in {settlement}, {direction}. They heard {rumor}; bring me their version, not the Empire's.",
+      "objectivePattern": "Ask {contact} in {settlement} about {rumor}, then return to {speaker}.",
+      "tags": ["rumor", "verification", "landmark", "memory"]
+    },
+    {
+      "id": "turn_imperial_clerk",
+      "objectiveKind": "social_leverage",
+      "realizationKind": "person",
+      "subjectPattern": "{contact}",
+      "returnToGiver": true,
+      "spokenPattern": "Find {contact} in {settlement}, {direction}. Win their help, change what they want, or make their present allegiance impossible; then report back.",
+      "objectivePattern": "Gain leverage over {contact} in {settlement} through trust, recruitment, changed desire, fear, or allegiance; then return to {speaker}.",
+      "tags": ["social_leverage", "multiple_solutions", "empire", "relationship"]
+    }
   ]
 }

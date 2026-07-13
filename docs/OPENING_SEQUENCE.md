@@ -126,12 +126,21 @@ cluster of people who offer different kinds of future:
 - **The unreliable witness:** saw something but cannot safely say it unless trust, fear, or
   magic changes the situation.
 
-The first implementation can start with personal profiles rather than a larger cast. A profile
-should make an NPC likely to disclose concrete leads under the right pressure without making them
-a scripted quest giver. Lio, for example, can know a refuge, a blade-seller, a named relative, a
-burned-oak landmark, or a drainage route; imperial guards can know confiscation ledgers, patrol
-timing, warrants, and procedural weaknesses. The model should still decide what is actually said
-from the immediate conversation.
+The first implementation now deliberately avoids an authored Lio lead. `free_captive` treats the
+rescued actor as an event-changed promise source and combines the rolled world graph, unused nearby
+settlements, regional population grammar, and provider-free handoff templates. Lio therefore names
+a different real settlement, culturally generated contact, and pressure across seeds. The same
+handoff works for any qualifying captive; Lio is only the opening proving ground.
+
+The claim and its objective bind inside the rescue transaction. The player hears Lio speak during
+the release result and immediately receives a direct journal objective. Travel materializes the
+named contact through the ordinary person-promise handler. Speaking to that contact completes the
+meeting and uses the same generator to volunteer a fetch, delivery, escort, threat, folk-service,
+rumor-verification, or social-leverage task. Those contracts complete from ordinary inventory,
+relationship, service, dialogue, allegiance, tag, or life state; they then direct the player back
+to the giver for a want/memory/standing payoff and another possible handoff. Generated settlement
+residents with journey claim seeds also volunteer them on `talk`, so forward motion does not rely
+on examining people like props or on a model deciding to mention the crucial fact.
 
 The first NPC-want slice now supports this more directly. Opening NPCs can carry an authored
 `WantComponent` - one active desire with stakes and salience - which is passed into generated

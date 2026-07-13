@@ -341,13 +341,34 @@ meter. The entrance/exit components serialize with entities and both snapshots s
 interior mutations survive return and save/load. See
 [SIGNIFICANT_INTERIORS.md](SIGNIFICANT_INTERIORS.md).
 
-`QuestTemplateCatalog` loads shipped/embedded `content/quests/*.json`. The first deterministic
-journey factory runs only for the lead resident at a settlement center. It selects the region's
-real landmark from `WorldPlaceGraph`, adds the pressure to the resident's ordinary
-`WantComponent`, and supplies a `ClaimSourceComponent` through `spawn_entity`. Examining that NPC
-uses the existing claim-source transaction to record a claim and bind an exact-zone travel
-promise. `PromiseRealizationSystem` then creates the evidence item/canon and marks the promise
-realized at the destination. There is no quest ledger, acceptance state, or provider call.
+`QuestTemplateCatalog` loads shipped/embedded `content/quests/*.json`. Its deterministic journey
+factory selects real landmarks for settlement residents, adds pressure to the ordinary
+`WantComponent`, and supplies a `ClaimSourceComponent` through `spawn_entity`. Talking to the NPC
+surfaces that seed as speech, while reading/examining can still surface non-spoken seeds. The same
+claim-source transaction records the claim, mints any rumor, binds an exact-zone promise, updates
+the claim, records the speaker's memory, and emits the spoken receipt; any rejected child rolls the
+packet back.
+
+The companion generated-objective handoff works for event-changed actors rather than named story
+characters. `free_captive` asks it for a seed after satisfying the captive's want, and a promised
+contact asks it on first conversation. It combines the seed, current zone, unused destinations,
+physical road/settlement graph, regional population grammar, and handoff template to produce a
+different named contact and nearby reachable settlement across seeds. The journal promise is a
+direct imperative objective, while the NPC says the same fact in natural voice.
+`PromiseRealizationSystem` materializes ordinary people, items, threats, and service providers.
+Durable source-claim tags describe a small `PromiseObjectiveContract` (family, giver, item, and
+return requirement), avoiding a parallel quest ledger. `ObjectiveProgressSystem` evaluates
+successful actions against current state: inventory custody, delivery custody, follower state,
+resolved threat state, completed services, dialogue evidence, or social leverage. A satisfied
+contract becomes `ready_to_return`; talking to the giver clears it transactionally, applies the
+source claim, satisfies the giver's want with memory, adjusts standing, and may bind the next
+handoff. There is no Lio branch, acceptance state, or provider call.
+
+Cross-region rumor propagation consults the same `WorldPlaceGraph`; without a direct road between
+the rumor's current and destination regions, it does not move. Successful spreads retain road and
+carrier provenance. `WorldTurnSystem` can spend one of its existing bounded moves on an interested
+local NPC approach, but only for a rumor memory or explicit player-seeking contact, with cooldown,
+transactional movement, audit, and cause-bearing message.
 
 Tactical zones are 40 by 30 tiles. The perimeter is not a ring of wall terrain: edge tiles are
 ordinary map cells, and a cardinal move that steps past the map boundary routes through the same

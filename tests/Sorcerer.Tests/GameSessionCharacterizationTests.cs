@@ -5089,7 +5089,7 @@ public sealed class GameSessionCharacterizationTests
 
         Assert.Equal(journal.Messages, session.View().Journal);
         Assert.Contains(journal.Messages, message =>
-            message.StartsWith("Lead:", StringComparison.OrdinalIgnoreCase)
+            message.StartsWith("Objective:", StringComparison.OrdinalIgnoreCase)
             && message.Contains("magical sword", StringComparison.OrdinalIgnoreCase)
             && message.Contains("heard from Lio of Hollowmere", StringComparison.OrdinalIgnoreCase)
             && message.Contains("92% confidence", StringComparison.OrdinalIgnoreCase));
@@ -5099,7 +5099,7 @@ public sealed class GameSessionCharacterizationTests
             && message.Contains("heard from Lio of Hollowmere", StringComparison.OrdinalIgnoreCase)
             && message.Contains("85% confidence", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(journal.Messages, message =>
-            message.StartsWith("Lead:", StringComparison.OrdinalIgnoreCase)
+            message.StartsWith("Objective:", StringComparison.OrdinalIgnoreCase)
             && message.Contains("Taylor", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(journal.Messages, message =>
             message.Contains("Taylor", StringComparison.OrdinalIgnoreCase));
@@ -5172,7 +5172,7 @@ public sealed class GameSessionCharacterizationTests
         Assert.DoesNotContain(rumors.Messages, message =>
             message.Contains("distant rumor", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(rumors.Messages, message =>
-            message.StartsWith("Lead:", StringComparison.OrdinalIgnoreCase)
+            message.StartsWith("Objective:", StringComparison.OrdinalIgnoreCase)
             || message.StartsWith("Claim:", StringComparison.OrdinalIgnoreCase)
             || message.StartsWith("Promise:", StringComparison.OrdinalIgnoreCase));
     }

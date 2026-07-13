@@ -901,7 +901,7 @@ public sealed class PromiseRealizationSystem
     {
         var position = FindGeneratedOpenPointNear(entities, placementOrigin, 1, 1);
         var tags = PromiseTags(promise, "person", region)
-            .Concat(new[] { "npc" })
+            .Concat(new[] { "npc", "objective_contact" })
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var personName = PromisePersonName(promise);

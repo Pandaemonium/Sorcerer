@@ -13,11 +13,13 @@ public static class JournalViewBuilder
             .ToArray();
         var leads = visiblePromises
             .Where(IsLeadPromise)
-            .Select(promise => $"Lead: {promise.Id} [{PromiseJournalStatus(state, promise)}] {promise.Text}")
+            .Select(promise => ObjectiveIsComplete(state, promise)
+                ? $"Completed objective: [{PromiseJournalStatus(state, promise)}] {promise.Text}"
+                : $"Objective: [{PromiseJournalStatus(state, promise)}] {promise.Text}")
             .ToArray();
         var otherPromises = visiblePromises
             .Where(promise => !IsLeadPromise(promise))
-            .Select(promise => $"Promise: {promise.Id} [{PromiseJournalStatus(state, promise)}] {promise.Text}")
+            .Select(promise => $"Promise: [{PromiseJournalStatus(state, promise)}] {promise.Text}")
             .ToArray();
         if (leads.Length == 0 && otherPromises.Length == 0)
         {
@@ -79,6 +81,18 @@ public static class JournalViewBuilder
         promise.Salience >= 3
         && NormalizeJournalToken(promise.RealizationKind ?? promise.Kind) is
             "site" or "town" or "landmark" or "item" or "person" or "threat" or "merchant_stock" or "stock" or "trade" or "quest" or "door_rule" or "escape_route" or "prophecy";
+
+    private static bool ObjectiveIsComplete(GameState state, WorldPromise promise)
+    {
+        if (PromiseObjectiveContracts.For(state, promise) is not null)
+        {
+            return promise.Status.Equals("cleared", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return promise.Status.Equals("cleared", StringComparison.OrdinalIgnoreCase)
+            || (promise.Status.Equals("realized", StringComparison.OrdinalIgnoreCase)
+                && !NormalizeJournalToken(promise.RealizationKind ?? promise.Kind).Equals("person", StringComparison.OrdinalIgnoreCase));
+    }
 
     private static string PromiseJournalStatus(GameState state, WorldPromise promise)
     {

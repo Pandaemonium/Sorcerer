@@ -289,6 +289,7 @@ public sealed class EngineViewBuilder
         // The player log is curated for the renderer (chaff dropped, near-duplicates removed, damage
         // classified). State.Messages stays the full raw record; only what the player sees is shaped.
         var messageCards = MessageLog.Curate(_state.Messages);
+        var objectiveCards = ObjectiveCards();
         return new GameView(
             _state.Width,
             _state.Height,
@@ -308,7 +309,56 @@ public sealed class EngineViewBuilder
             rumors,
             JournalViewBuilder.Build(_state),
             messageCards,
-            BuildRepertoire());
+            BuildRepertoire(),
+            objectiveCards.FirstOrDefault(),
+            objectiveCards.Skip(1).ToArray());
+    }
+
+    public IReadOnlyList<ObjectiveCard> ObjectiveCards() =>
+        _state.PromiseLedger.Promises
+            .Where(promise => promise.PlayerVisible)
+            .Where(promise => !promise.Status.Equals("cleared", StringComparison.OrdinalIgnoreCase))
+            .Select(promise => (Promise: promise, Contract: PromiseObjectiveContracts.For(_state, promise)))
+            .Where(item => item.Contract is not null)
+            .OrderByDescending(item => item.Promise.Status.Equals("ready_to_return", StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(item => item.Promise.Salience)
+            .ThenBy(item => item.Promise.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(item => new ObjectiveCard(
+                item.Promise.Id,
+                item.Contract!.Kind,
+                item.Promise.Status,
+                item.Promise.Text,
+                ObjectiveNextStep(item.Promise, item.Contract),
+                item.Promise.Subject,
+                item.Contract.GiverName,
+                item.Promise.ClaimedPlace,
+                item.Promise.Status.Equals("ready_to_return", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+    private static string ObjectiveNextStep(WorldPromise promise, PromiseObjectiveContract contract)
+    {
+        if (promise.Status.Equals("ready_to_return", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Return to {contract.GiverName} and talk.";
+        }
+
+        if (promise.Status.Equals("bound", StringComparison.OrdinalIgnoreCase))
+        {
+            return promise.Text;
+        }
+
+        return contract.Kind switch
+        {
+            "meet" => $"Talk to {promise.Subject}.",
+            "fetch" => $"Pick up {contract.RequiredItem ?? promise.Subject}.",
+            "delivery" => $"Give {contract.RequiredItem ?? "the parcel"} to {promise.Subject}.",
+            "escort" => $"Recruit {promise.Subject} and bring them back to {contract.GiverName}.",
+            "threat" => $"Resolve {promise.Subject}; force is only one option.",
+            "folk_service" => $"Request {promise.Subject} from the promised practitioner.",
+            "rumor_verification" => $"Talk to {promise.Subject} and hear their account.",
+            "social_leverage" => $"Change {promise.Subject}'s bond, want, fear, or allegiance.",
+            _ => promise.Text,
+        };
     }
 
     public AgentObservation Observation(bool debug)

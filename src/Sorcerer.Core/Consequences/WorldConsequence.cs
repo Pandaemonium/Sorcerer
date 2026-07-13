@@ -2578,6 +2578,7 @@ public sealed record WorldConsequence(
         string operation = "freeCaptive",
         bool emitMessage = true,
         string? message = null,
+        bool offerObjectiveHandoff = true,
         IReadOnlyDictionary<string, object?>? details = null) =>
         new(
             WorldConsequenceTypes.FreeCaptive,
@@ -2609,7 +2610,8 @@ public sealed record WorldConsequence(
                 ("deedTags", deedTags?.ToArray() ?? Array.Empty<string>()),
                 ("operation", operation),
                 ("emitMessage", emitMessage),
-                ("message", message)));
+                ("message", message),
+                ("offerObjectiveHandoff", offerObjectiveHandoff)));
 
     public static WorldConsequence AnimateEntity(
         string source,

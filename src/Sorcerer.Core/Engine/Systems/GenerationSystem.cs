@@ -90,6 +90,52 @@ public sealed class GenerationSystem
 
     public WorldPlaceGraph PlaceGraph => _places;
 
+    public ClaimSeed? CreateObjectiveHandoff(Entity speaker, string trigger)
+    {
+        if (_state.Claims.Records.Any(claim =>
+            claim.SpeakerId.Equals(speaker.Id.Value, StringComparison.OrdinalIgnoreCase)
+            && claim.Tags.Contains("generated_objective", StringComparer.OrdinalIgnoreCase)
+            && !claim.Status.Equals("applied", StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        if (trigger.Equals("talk", StringComparison.OrdinalIgnoreCase)
+            && (!speaker.TryGet<TagsComponent>(out var tags)
+                || !tags.Tags.Contains("objective_contact", StringComparer.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        if (trigger.Equals("talk", StringComparison.OrdinalIgnoreCase)
+            && speaker.TryGet<PromiseAnchorComponent>(out var anchor)
+            && anchor.PromiseIds
+                .Select(id => _state.PromiseLedger.Promises.FirstOrDefault(promise =>
+                    promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+                .Where(promise => promise is not null)
+                .Select(promise => PromiseObjectiveContracts.For(_state, promise!))
+                .Any(contract => contract is not null && contract.Kind != "meet"))
+        {
+            return null;
+        }
+
+        var usedDestinations = _state.PromiseLedger.Promises
+            .Select(promise => promise.ClaimedPlace)
+            .Where(place => !string.IsNullOrWhiteSpace(place))
+            .Cast<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return GeneratedObjectiveHandoffFactory.Create(
+            _state.Seed,
+            _state.CurrentZoneId,
+            _state.RegionId,
+            _places,
+            _regions,
+            _quests,
+            speaker,
+            trigger,
+            usedDestinations);
+    }
+
     public int CurrentImperialPresence =>
         Math.Clamp(CurrentRegion.ImperialPresence + CurrentRealm.ImperialGripDelta, 0, 100);
 

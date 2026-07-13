@@ -486,7 +486,7 @@ task list.
 
 Useful surfaces:
 
-- a `Lead:` section in the journal for high-salience actionable promises such as
+- an `Objective:` section in the journal for high-salience actionable promises such as
   "there is a magical sword in a burned-out oak tree north of here"
 - ordinary promise/journal text for lower-pressure omens
 - brief messages when a promise binds, stirs, relocates, or realizes

@@ -252,13 +252,15 @@ permission flag, and threshold tags rather than bespoke story gating. See
 
 ### WS4 — Quests: want templates that bind real promises
 
-**Status: first complete slice implemented 2026-07-09.** Four shipped/embedded quest templates
-seed the lead resident at each settlement center with a pressure tied to that region's real rolled
-landmark. Examining the resident records a claim and binds a player-visible promise to the exact
-destination zone; reaching it realizes a named evidence item, canon record, and promise-ledger
-status through the existing promise machinery. The agent test completes this chain using only
-inspect/atlas/journal/travel text and no provider call. Return delivery, escorts, threat clearing,
-service payoffs, and richer bond/faction rewards remain in WS4.
+**Status: general contract loop implemented 2026-07-12.** Four landmark templates seed settlement
+residents with regional pressure, while nine handoff templates drive the rescue/contact chain.
+Talking records a claim and binds a direct player-visible objective to a real destination. The
+promise machinery realizes people, items, threats, or services; durable claim tags describe fetch,
+delivery, escort, threat, service, rumor-verification, social-leverage, and meeting contracts.
+Completion reads authoritative world state, supports multiple threat/social solutions, returns to
+the giver, transfers fetched evidence, satisfies the want with memory, adjusts standing, and can
+generate another handoff. Agent tests complete the chain using only player-facing text and no
+provider call.
 
 "More NPCs to give quests" is mostly seeding — the ledgers already exist.
 

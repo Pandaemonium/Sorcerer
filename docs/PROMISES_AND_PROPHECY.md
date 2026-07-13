@@ -225,7 +225,8 @@ Promises should feel mysterious to ordinary players.
 
 The player may see:
 
-- a `Lead:` journal line for high-salience actionable promises
+- an `Objective:` journal line for high-salience actionable promises, with completed objectives
+  retained as `Completed objective:` history
 - a journal omen
 - a rumor
 - a partial phrase
@@ -240,6 +241,18 @@ Not every visible claim should become a journal lead. A concrete promise such as
 "there is a magical sword in a burned-out oak tree north of here" belongs in
 leads. A small relationship fact such as "Ricky has a brother named Taylor"
 should usually remain memory/claim context unless Taylor becomes actionable.
+
+Generated objective handoffs keep natural speech and directions separate from the authoritative
+obligation. The claim records what the NPC said; the linked promise carries concise imperative
+text such as “Reach Saltmarket and speak with Sava.” Exact zone binding stays structured even when
+the human-facing objective uses place names and directions. A promised contact's arrival realizes
+the person, but the objective remains active until the player talks to them; that conversation
+applies the source claim and can generate the next contract. Follow-up source-claim tags carry a
+small durable contract vocabulary: objective kind, giver, required item, and whether return is
+required. The promise still owns lifecycle and place binding. State-based progress can move a
+contract to `ready_to_return`; talking to its giver then clears it, satisfies the giver's want,
+records a memory, applies standing, and emits a typed completion message. Materialization alone is
+not completion for these generated contracts.
 
 ## Promise Types
 

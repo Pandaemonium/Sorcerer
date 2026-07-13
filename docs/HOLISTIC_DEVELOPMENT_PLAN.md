@@ -204,6 +204,18 @@ volunteers a locally grounded pressure that can become action.
 
 Build quests as promise-driven hand-offs, never as a new quest state machine.
 
+**Forward-momentum loop implemented 2026-07-12:** freeing any qualifying captive can now
+transactionally generate and speak a seed-varying handoff assembled from real settlements,
+regional contact identities, and content templates. The linked promise supplies a direct journal
+objective, materializes the named contact at the exact destination, remains actionable until the
+player speaks to that contact, then clears the source claim and produces another generated
+handoff. Settlement journey-givers also volunteer their existing claim seeds through ordinary
+dialogue. Follow-up templates now cover fetch, delivery, escort, threat, folk service, rumor
+verification, and social leverage; their completion rules inspect authoritative state, route the
+player back to the giver, satisfy the giver's want, record why, and apply a faction payoff. Threat
+and leverage tasks accept multiple systemic outcomes instead of one privileged verb. Lio is the
+first proving ground, not a special-case quest giver.
+
 - Add data templates for fetch, delivery, escort, threat removal, folk service, rumor
   verification, and social leverage.
 - Fill templates with real neighboring places, people, factions, items, and routes from the world
@@ -273,6 +285,13 @@ Acceptance: a significant public deed produces one visible local response and on
 response without duplicate messages; laying low measurably changes available imperial pressure;
 an NPC can approach, refuse, help, or leave for reasons assembled from ordinary state lanes.
 
+**Road/carrier and initiative slice implemented 2026-07-12:** rumor propagation can cross a
+regional boundary only when the physical place graph has a road between the two regions. Spread
+history and deltas retain the road id/name, while player text names the route, listener, and the
+listener's relevant want or nearest-carrier role. The bounded world-turn pump can also spend one
+move bringing a local rumor-carrier or explicitly player-seeking objective contact one step closer;
+the move is cooled down, audited, typed, and announces the precise want or memory that caused it.
+
 ### 6. Deepen expression where playtests pull
 
 Do this alongside the world work in small tranches, driven by failed or boring casts rather than a
@@ -331,6 +350,11 @@ Acceptance: a player can explain where they are, what nearby things invite, who 
 what consequences are in motion, and what several plausible next actions are without consulting
 debug state.
 
+**Current-objective slice implemented 2026-07-12:** the shared `GameView` exposes a prioritized
+objective card with kind, status, giver, destination, and a state-sensitive next step. Godot shows
+that line in the persistent HUD, `inspect` prints the same next step, the journal distinguishes
+active from truly completed generated contracts, and CLI JSON receives the same fields.
+
 ## Near-term implementation queue
 
 This is the recommended order for the next changes. Each item lands playable and green.
@@ -345,13 +369,16 @@ This is the recommended order for the next changes. Each item lands playable and
    zone-seed-derived; compact scenery remains targetable; actor and hook cards are protected.
 3. **Population archetypes and density — implemented 2026-07-09.** Region data, name forge,
    habitat weights, zero-to-crowd distribution, wants/services/wares at spawn.
-4. **One promise-driven generated journey — first slice implemented 2026-07-09.** A settlement
-   resident's want seeds a claim and exact-place promise; player-facing travel realizes evidence,
-   canon, and journal state. Return delivery and alternate completion rules remain.
+4. **Promise-driven generated journeys — contract loop implemented 2026-07-12.** Captive rescue
+   and destination contacts form a provider-free, seed-varying spoken claim → objective →
+   exact-place realization → state-based completion → return/payoff → next-objective chain.
+   Settlement landmark/evidence journeys share the path. Seven follow-up families and alternate
+   threat/social solutions are data-driven; durable claim tags provide contracts without a quest
+   ledger.
 5. **Settlement graph and three-district town — implemented 2026-07-09.** Every region now has a
    named 3×3 center, hamlets, a landmark, district terrain/sites/population, and connected roads.
-6. **Road-aware rumor return.** Make the generated journey or one public deed visibly travel to a
-   second settlement and affect a person there.
+6. **Road-aware rumor return — first route/carrier slice implemented 2026-07-12.** Cross-region
+   spread requires a real named road and affects a concrete local carrier whose cause is visible.
 7. **Significant one-zone interiors — implemented 2026-07-09.** One regional-center interior per
    culture plus distinct capital palace/archive; persistent linked snapshots, followers, soft
    access, ordinary turn semantics, resolver/dialogue/world-card context, and GUI/CLI parity.

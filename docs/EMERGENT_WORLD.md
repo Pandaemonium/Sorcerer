@@ -162,10 +162,16 @@ road/settlement shoulders, common empty wilderness, and rare outliers. Name forg
 archetypes seed every resident with a want and knowledge while selected roles carry services or
 wares through shared consequences. `WorldPlaceGraph` now gives every region a named multi-zone
 center, hamlets, a landmark, and connected physical roads; district identity feeds terrain,
-population, signature sites, atlas, travel, magic, and dialogue. The first generated journey lets
-a resident's pressure become an inspectable claim and exact-place promise whose evidence is
-realized at that real landmark. Organizations, significant interiors, return-delivery journeys,
-alternate completion rules, and full geopolitical ownership remain later layers.
+population, signature sites, atlas, travel, magic, and dialogue. Generated journeys let a
+resident's pressure become spoken claim and exact-place promise whose evidence is realized at a
+real landmark. Rescue and promised-contact handoffs now chain the same machinery: seed-varying
+speech names a real settlement and regional contact, the person materializes there, and talking to
+them completes the meeting and creates a typed follow-up. Follow-ups span fetch, delivery, escort,
+threat, service, rumor, and social contracts; state-based completion returns to the giver and
+updates wants, memories, and standing. Rumors now cross regional boundaries only on named physical
+roads and land in concrete NPC memories, and selected interested NPCs can spend bounded initiative
+approaching for an announced reason. Organizations and full geopolitical ownership remain later
+layers.
 
 ## Legibility is first-class
 

@@ -187,7 +187,23 @@ public sealed class GameSession
 
         result = ApplyCompletedClaimExtractions(result, pendingClaimCountBeforeCommand);
         var completed = CompleteRunIfNeeded(result);
-        return completed.ShouldQuit ? completed : CompleteRunIfNeeded(AddActorTurns(completed));
+        if (completed.ShouldQuit)
+        {
+            return completed;
+        }
+
+        completed = AddActorTurns(completed);
+        var objectiveDeltas = Engine.EvaluateObjectiveProgress(completed);
+        if (objectiveDeltas.Count > 0)
+        {
+            completed = completed with
+            {
+                Messages = completed.Messages.Concat(objectiveDeltas.PlayerMessages()).ToArray(),
+                Deltas = completed.Deltas.Concat(objectiveDeltas).ToArray(),
+            };
+        }
+
+        return CompleteRunIfNeeded(completed);
     }
 
     public GameView View() => Engine.View();

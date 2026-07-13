@@ -198,6 +198,17 @@ public sealed record RumorCard(
     IReadOnlyList<string> Tags,
     IReadOnlyList<string> DistortionHistory);
 
+public sealed record ObjectiveCard(
+    string Id,
+    string Kind,
+    string Status,
+    string Text,
+    string NextStep,
+    string Subject,
+    string GiverName,
+    string? Destination,
+    bool ReadyToReturn);
+
 public sealed record GameView(
     int Width,
     int Height,
@@ -219,7 +230,9 @@ public sealed record GameView(
     // Curated, classified message log for renderers that colour (drops chaff, dedupes, tags damage).
     // Mirrors the curated Messages above; renderers may use either.
     IReadOnlyList<MessageCard>? MessageCards = null,
-    RepertoireCard? Repertoire = null);
+    RepertoireCard? Repertoire = null,
+    ObjectiveCard? CurrentObjective = null,
+    IReadOnlyList<ObjectiveCard>? OtherObjectives = null);
 
 public sealed record WorldCard(
     string CurrentZoneId,

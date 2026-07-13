@@ -27,12 +27,16 @@ public sealed record BoneSongPhrase(
 }
 
 /// <summary>
-/// Deterministic, renderer-independent phrase book for Bone-Song. Each cell is a two-bar tribal
-/// groove with fixed drum roles — the deep center duum anchors the downbeats, the rim tick rides
-/// the offbeats, and the edge doo answers in call-and-response — so a phrase loops like a real
-/// drum circle part instead of random note soup. The spell text chooses a starting groove and
-/// later phrases walk the groove book, add tempo, and gain one syncopated answer. The same spell
-/// therefore remains learnable across casts without every provider wait repeating one bar forever.
+/// Deterministic, renderer-independent phrase book for Bone-Song. Each cell is a two-bar groove
+/// lifted from a real drumming tradition — Mandé welcome, Afro-Cuban tresillo and clave, kuku,
+/// bembé, dundun gallop — with fixed drum roles: the deep center duum is the heartbeat, the rim
+/// tick carries the timeline (clave or bell), and the edge doo sings the call-and-response answer.
+/// The whole book shares one heartbeat: a duum lands on the "one" of nearly every cell and on the
+/// downbeat of the second bar, so however the walk moves from groove to groove it reads as one
+/// continuous drum song developing rather than a new pattern every phrase. Bar two answers bar one
+/// inside each cell, which is what makes a groove learnable and makes it sing. The spell text
+/// chooses the starting groove; later phrases walk the book, add tempo, and gain one syncopated
+/// answer, so the same spell stays fresh across casts without any bar repeating forever.
 /// </summary>
 public static class BoneSongPattern
 {
@@ -41,50 +45,63 @@ public static class BoneSongPattern
     public const double BpmPerPhrase = 4.0;
     public const double MaximumBpm = 124.0;
 
-    // Lane 0 = deep duum (center), lane 1 = edge doo (open tone), lane 2 = rim tick.
+    // Lane 0 = deep duum (heartbeat, center), lane 1 = edge doo (open tone, the "song"),
+    // lane 2 = rim tick (the timeline). Every groove is two bars of four on an eighth-note grid.
     private static readonly (double Beat, int Lane)[][] RequiredCells =
     {
-        // Heartbeat: duum on every strong pulse, doo and tick pickups leaning into it.
-        new[] { (0.0, 0), (1.5, 1), (2.0, 0), (3.5, 2), (4.0, 0), (5.5, 1), (6.0, 0), (7.5, 2) },
-        // Tresillo: the 3+3+2 bass figure in bar one, answered by tones in bar two.
-        new[] { (0.0, 0), (1.5, 0), (2.5, 2), (3.0, 0), (4.0, 1), (5.5, 1), (6.5, 2), (7.0, 0) },
-        // Son clave carried on the rim, the bass grounding the two-side.
-        new[] { (0.0, 2), (1.5, 2), (2.0, 1), (3.0, 2), (4.0, 0), (5.0, 2), (6.0, 2), (7.0, 0) },
-        // Kuku march: duum, then the double-doo answer, twice, with a tick turnaround.
+        // Fanga welcome: the anchor heartbeat. Duum on the one with a pushing "and-of-3", a tick
+        // on the offbeat, and the doo singing a pickup into each downbeat. Bar two mirrors bar one.
+        new[] { (0.0, 0), (1.5, 2), (2.5, 0), (3.5, 1), (4.0, 0), (5.5, 2), (6.5, 0), (7.5, 1) },
+        // Tresillo: the driving 3+3+2 bass figure (0, 1.5, 3), a tone answering on the two, the
+        // second bar echoing it home with a rim turnaround and a pickup doo.
+        new[] { (0.0, 0), (1.5, 0), (2.0, 1), (3.0, 0), (4.0, 0), (5.5, 0), (6.5, 2), (7.0, 1) },
+        // Son clave (3-2) carried on the rim as the timeline; the bass grounds the two-side and the
+        // doo answers. The clave itself is felt as the one, so no duum crowds beat zero.
+        new[] { (0.0, 2), (1.5, 2), (2.0, 1), (3.0, 2), (4.0, 0), (5.0, 2), (6.0, 2), (7.0, 1) },
+        // Rumba clave (3-2): the same shape with its third stroke pushed to the "and-of-4" for the
+        // rumba lilt, so it lands with a different swing than the son next to it in the book.
+        new[] { (0.0, 2), (1.5, 2), (2.0, 1), (3.5, 2), (4.0, 0), (5.0, 2), (6.0, 2), (7.0, 1) },
+        // Kuku circle dance: duum on the one, the doo-doo answer twice over, a rim turnaround —
+        // the tone pair is the part everyone hums.
         new[] { (0.0, 0), (1.0, 1), (1.5, 1), (3.0, 2), (4.0, 0), (5.0, 1), (5.5, 1), (7.0, 2) },
-        // Shuffle: bass anchors, ticks on the backbeats, tones swung late between them.
-        new[] { (0.0, 0), (1.0, 2), (2.5, 1), (3.5, 2), (4.0, 0), (5.0, 2), (6.5, 1), (7.5, 2) },
-        // Rolling call and answer: a four-note run states itself, rests, and answers.
-        new[] { (0.0, 0), (0.5, 1), (1.0, 2), (2.0, 1), (4.0, 0), (4.5, 1), (5.0, 2), (6.0, 1) },
-        // Offbeat ride: ticks live on the ands over a steady duum floor.
-        new[] { (0.0, 0), (1.5, 2), (2.5, 2), (3.5, 2), (4.0, 0), (5.5, 1), (6.5, 1), (7.0, 0) },
-        // Rumba clave on the rim, bass and doo answering the back half.
-        new[] { (0.0, 2), (1.5, 2), (2.0, 0), (3.5, 2), (4.0, 0), (5.0, 2), (6.0, 2), (7.0, 1) },
-        // Gallop: duum-duum doo-tick, the dunun horse figure twice over.
+        // Shiko backbeat: bass on the one, ticks planted on the backbeats, the doo swung late in
+        // the pocket between them. A steady, danceable floor.
+        new[] { (0.0, 0), (1.0, 2), (2.5, 1), (3.0, 2), (4.0, 0), (5.0, 2), (6.5, 1), (7.0, 2) },
+        // Bembé run: a rising tick run over the heartbeat states the call, and bar two answers with
+        // two sung doos leaning into the next one.
+        new[] { (0.0, 0), (1.5, 2), (2.5, 2), (3.5, 2), (4.0, 0), (5.5, 2), (6.5, 1), (7.5, 1) },
+        // Dundun gallop: the duum-duum horse figure, a doo-tick answer, the whole thing twice over.
         new[] { (0.0, 0), (1.0, 0), (2.0, 1), (2.5, 2), (4.0, 0), (5.0, 0), (6.0, 1), (6.5, 2) },
-        // Displaced bass: the second duum lands late and the tones lean into the gap.
-        new[] { (0.0, 0), (1.5, 1), (3.0, 0), (3.5, 2), (4.5, 1), (5.5, 0), (6.5, 2), (7.0, 1) },
-        // Pickup chant: silence after the duum, then doo-doo-tick driving back home.
+        // Pickup chant: a lone duum, then silence, then the doo-doo-tick run drives back home —
+        // the space before the answer is the drama.
         new[] { (0.0, 0), (2.0, 1), (2.5, 1), (3.0, 2), (4.0, 0), (6.0, 1), (6.5, 1), (7.5, 2) },
-        // Double-tick weave: tick pairs orbit the bass like sticks walking the rim.
+        // Rolling call and answer: a four-note run states itself in bar one and answers, note for
+        // note, in bar two — the plainest call-and-response in the book.
+        new[] { (0.0, 0), (0.5, 1), (1.0, 2), (2.0, 1), (4.0, 0), (4.5, 1), (5.0, 2), (6.0, 1) },
+        // Double-tick weave: tick pairs orbit the bass like sticks walking the rim, a doo answering
+        // off the back of each bar.
         new[] { (0.0, 0), (1.0, 2), (1.5, 2), (2.0, 0), (3.5, 1), (4.0, 0), (5.5, 2), (7.0, 1) },
+        // Tumbao ride: a steady offbeat tick ride over the heartbeat, the open doo singing on the
+        // two of each bar — the loosest, most rolling groove of the set.
+        new[] { (0.0, 0), (1.5, 2), (2.0, 1), (3.5, 2), (4.0, 0), (5.5, 2), (6.0, 1), (7.5, 2) },
     };
 
-    // Boast slots sit in each groove's rests — the show-off answer to the silence.
+    // Boast slots sit in each groove's rests — the show-off answer to the silence. Kept off the
+    // 3.5/5.5 beats the density bump can claim, so an earned flourish never gets swallowed.
     private static readonly double[][] BoastCells =
     {
-        new[] { 2.5, 4.5, 6.5 },
-        new[] { 1.0, 4.5, 6.0 },
+        new[] { 2.0, 4.5, 6.0 },
+        new[] { 2.5, 4.5, 7.5 },
+        new[] { 2.5, 4.5, 7.5 },
         new[] { 2.5, 4.5, 7.5 },
         new[] { 2.5, 6.0, 7.5 },
         new[] { 2.0, 4.5, 6.0 },
-        new[] { 3.0, 6.5, 7.0 },
-        new[] { 1.0, 5.0, 7.5 },
-        new[] { 2.5, 4.5, 6.5 },
-        new[] { 3.0, 4.5, 7.5 },
-        new[] { 2.0, 5.0, 7.5 },
-        new[] { 1.0, 5.0, 7.0 },
-        new[] { 3.0, 5.0, 6.5 },
+        new[] { 2.0, 5.0, 7.0 },
+        new[] { 3.0, 4.5, 7.0 },
+        new[] { 1.0, 4.5, 7.0 },
+        new[] { 2.5, 6.5, 7.5 },
+        new[] { 2.5, 5.0, 6.5 },
+        new[] { 2.5, 4.5, 7.0 },
     };
 
     /// <param name="bonusBoasts">

@@ -110,7 +110,9 @@ public sealed record ClaimSeed(
     string? RealizationKind = null,
     string? TriggerHint = null,
     string? ClaimedPlace = null,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    string? SpokenText = null,
+    string? ObjectiveText = null);
 
 public sealed record ClaimSourceComponent(IReadOnlyList<ClaimSeed> Claims) : IEntityComponent;
 

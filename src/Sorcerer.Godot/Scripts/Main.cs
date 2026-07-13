@@ -33,6 +33,7 @@ public partial class Main : Control
     private PanelContainer _providerStatusPanel = null!;
     private Label _providerStatus = null!;
     private Label _statusLine = null!;
+    private Label _objectiveLine = null!;
     private ProgressBar _hpBar = null!;
     private Label _hpLabel = null!;
     private ProgressBar _manaBar = null!;
@@ -832,6 +833,15 @@ public partial class Main : Control
         _statusLine.AddThemeColorOverride("font_color", UiTheme.Text);
         box.AddChild(_statusLine);
 
+        _objectiveLine = new Label
+        {
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            TooltipText = "Current objective — open Journal for the full thread.",
+        };
+        _objectiveLine.AddThemeFontSizeOverride("font_size", 12);
+        _objectiveLine.AddThemeColorOverride("font_color", UiTheme.Wild);
+        box.AddChild(_objectiveLine);
+
         var hpRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         hpRow.AddThemeConstantOverride("separation", UiTheme.SpaceSm);
         box.AddChild(hpRow);
@@ -1481,6 +1491,12 @@ public partial class Main : Control
         _statusLine.Text = view.Character is null
             ? $"{autoplayPrefix}Turn {view.Turn}{pendingSuffix}"
             : $"{autoplayPrefix}Turn {view.Turn} — {origin} (VIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure}){pendingSuffix}";
+        _objectiveLine.Text = view.CurrentObjective is null
+            ? "No immediate objective — explore, talk, read, or work wild magic."
+            : $"Next: {view.CurrentObjective.NextStep}";
+        _objectiveLine.AddThemeColorOverride(
+            "font_color",
+            view.CurrentObjective?.ReadyToReturn == true ? UiTheme.Warning : UiTheme.Wild);
 
         foreach (var child in _statusChips.GetChildren().ToArray())
         {
@@ -1976,6 +1992,14 @@ public partial class Main : Control
         if (selected)
         {
             return "X";
+        }
+
+        // Keep open, unoccupied ground visually quiet. Terrain identity still comes through its
+        // background color, shimmer, and tooltip; punctuation texture is reserved for blocking
+        // features so a clear route reads immediately at a glance.
+        if (!tile.BlocksMovement && !tile.BlocksSight)
+        {
+            return ".";
         }
 
         return TerrainStyles.GlyphFor(TerrainStyles.Resolve(tile.Terrain, IsWallLike(tile)), x, y);

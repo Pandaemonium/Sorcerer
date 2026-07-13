@@ -18,6 +18,7 @@ public sealed class GeneratedJourneyTests
         var embedded = QuestTemplateCatalog.LoadBuiltIn();
 
         Assert.Equal(4, loose.Templates.Count);
+        Assert.Equal(9, loose.Handoffs.Count);
         Assert.Equal(
             loose.Templates.Select(template => template.Id).OrderBy(id => id).ToArray(),
             embedded.Templates.Select(template => template.Id).OrderBy(id => id).ToArray());
@@ -27,6 +28,14 @@ public sealed class GeneratedJourneyTests
             Assert.Contains("{landmark}", template.ClaimPattern, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("{destinationZone}", template.ClaimPattern, StringComparison.OrdinalIgnoreCase);
         });
+        Assert.Equal(
+            loose.Handoffs.Select(template => template.Id).OrderBy(id => id).ToArray(),
+            embedded.Handoffs.Select(template => template.Id).OrderBy(id => id).ToArray());
+        Assert.Equal(
+            new[] { "delivery", "escort", "fetch", "folk_service", "meet", "rumor_verification", "social_leverage", "threat" },
+            loose.Handoffs.Select(template => template.ObjectiveKind).Distinct().OrderBy(kind => kind).ToArray());
+        Assert.Equal(2, loose.Handoffs.Count(template => template.OpeningHandoff));
+        Assert.All(loose.Handoffs.Where(template => !template.OpeningHandoff), template => Assert.True(template.ReturnToGiver));
     }
 
     [Fact]
@@ -39,21 +48,23 @@ public sealed class GeneratedJourneyTests
         await session.ExecuteAsync(new TravelCommand(Direction.East));
         var giver = Assert.Single(session.Engine.State.Entities.Values, entity => entity.Has<ClaimSourceComponent>());
         var want = giver.Get<WantComponent>();
-        var examine = await session.ExecuteAsync(new ExamineCommand(giver.Name));
+        var talk = await session.ExecuteAsync(new TalkCommand(giver.Name));
         var promise = Assert.Single(session.Engine.State.PromiseLedger.Promises, promise =>
             promise.SourceSpeakerId == giver.Id.Value
             && promise.RealizationKind == "item");
         var journalBefore = await session.ExecuteAsync(new JournalCommand());
 
-        Assert.True(examine.Success);
+        Assert.True(talk.Success);
+        Assert.Contains(talk.Messages, message =>
+            message.Contains($"{giver.Name} says", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("generated_journey", want.Tags, StringComparer.OrdinalIgnoreCase);
         Assert.Contains("drowned memory mill", want.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("bound", promise.Status);
         Assert.True(promise.PlayerVisible);
         Assert.NotNull(promise.ClaimedPlace);
         Assert.Contains(journalBefore.Messages, message =>
-            message.StartsWith("Lead:", StringComparison.OrdinalIgnoreCase)
-            && message.Contains(promise.ClaimedPlace!, StringComparison.OrdinalIgnoreCase)
+            message.StartsWith("Objective:", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("zone", StringComparison.OrdinalIgnoreCase)
             && message.Contains("drowned memory mill", StringComparison.OrdinalIgnoreCase));
 
         var destination = ParseZoneId(promise.ClaimedPlace!);
@@ -85,17 +96,65 @@ public sealed class GeneratedJourneyTests
         Assert.Equal(promise.ClaimedPlace, realized.RealizedIn);
         Assert.Contains("drowned memory mill", evidence.Name, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(journalAfter.Messages, message =>
-            message.StartsWith("Lead:", StringComparison.OrdinalIgnoreCase)
+            message.StartsWith("Objective:", StringComparison.OrdinalIgnoreCase)
             && message.Contains("realized", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(session.Engine.State.Canon.Records, record =>
             record.Kind == "item"
             && record.Text.Contains(evidence.Name, StringComparison.OrdinalIgnoreCase));
+
+        var pickup = await session.ExecuteAsync(new PickupCommand(evidence.Name));
+        Assert.True(pickup.Success, string.Join(" | ", pickup.Messages));
+        Assert.Equal(
+            "ready_to_return",
+            session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == promise.Id).Status);
+        Assert.Contains(pickup.Messages, message =>
+            message.Contains($"return to {giver.Name}", StringComparison.OrdinalIgnoreCase));
+
+        await TravelTo(session, "1,0");
+        var restoredGiver = Assert.Single(session.Engine.State.Entities.Values, entity =>
+            entity.Id == giver.Id);
+        var giverPosition = restoredGiver.Get<PositionComponent>().Position;
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(giverPosition.Translate(-1, 0)));
+        var returned = await session.ExecuteAsync(new TalkCommand(restoredGiver.Name));
+
+        Assert.True(returned.Success, string.Join(" | ", returned.Messages));
+        Assert.Equal(
+            "cleared",
+            session.Engine.State.PromiseLedger.Promises.Single(item => item.Id == promise.Id).Status);
+        Assert.Equal("satisfied", restoredGiver.Get<WantComponent>().Status);
+        Assert.DoesNotContain(
+            session.Engine.State.ControlledEntity.Get<InventoryComponent>().Items,
+            pair => pair.Key.Contains(evidence.Name, StringComparison.OrdinalIgnoreCase) && pair.Value > 0);
+        Assert.Contains(
+            restoredGiver.Get<InventoryComponent>().Items,
+            pair => pair.Key.Contains(evidence.Name, StringComparison.OrdinalIgnoreCase) && pair.Value == 1);
+        Assert.Contains(returned.Messages, message =>
+            message.Contains("Objective complete", StringComparison.OrdinalIgnoreCase));
     }
 
     private static (int X, int Y) ParseZoneId(string zoneId)
     {
         var parts = zoneId.Split(',', StringSplitOptions.TrimEntries);
         return (int.Parse(parts[0]), int.Parse(parts[1]));
+    }
+
+    private static async Task TravelTo(GameSession session, string zoneId)
+    {
+        var destination = ParseZoneId(zoneId);
+        var current = ParseZoneId(session.Engine.State.CurrentZoneId);
+        while (current.X != destination.X)
+        {
+            var travel = await session.ExecuteAsync(new TravelCommand(current.X < destination.X ? Direction.East : Direction.West));
+            Assert.True(travel.Success, string.Join(" | ", travel.Messages));
+            current = ParseZoneId(session.Engine.State.CurrentZoneId);
+        }
+
+        while (current.Y != destination.Y)
+        {
+            var travel = await session.ExecuteAsync(new TravelCommand(current.Y < destination.Y ? Direction.South : Direction.North));
+            Assert.True(travel.Success, string.Join(" | ", travel.Messages));
+            current = ParseZoneId(session.Engine.State.CurrentZoneId);
+        }
     }
 
     private static void DisableAi(GameSession session)

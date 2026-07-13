@@ -129,9 +129,10 @@ The atlas should surface local lore, generated fixtures should have concrete reg
 and subjects, the second examine should show applied known detail, and the spell context should
 include routed lore without requiring the player-visible view to reveal hidden debug state.
 Inside generated geography, the same `atlas` output also names the current settlement/district or
-road/landmark/interior and gives the nearest same-region settlement with zone distance and direction. A
-settlement lead can be discovered with `inspect` + `examine <resident>`; `journal` then exposes the
-exact-place generated journey without debug state.
+road/landmark/interior and gives the nearest same-region settlement with zone distance and direction.
+A settlement lead can be discovered with `talk <resident>`; `journal` then exposes the direct
+objective without debug state. Freeing a captive can produce the same spoken handoff immediately.
+At the promised settlement, `talk <contact>` completes that objective and can generate the next one.
 
 Significant settlement thresholds are ordinary visible entities. When adjacent, observations and
 `GameView` entity cards expose an `enter` context action naming the destination; inside, the return
@@ -625,6 +626,13 @@ At episode end, the runner also checks long-run invariants across the newer lane
 validation, save -> load -> save byte stability, loaded-state validation, duplicate promise ids,
 bounded faction standing, resource caps, bounded legend weights, and chronicle presence for
 completed runs.
+
+`GameView.currentObjective` is the renderer-neutral prioritized objective card used by both
+interfaces. It includes the contract kind/status, original text, giver, destination, and a computed
+`nextStep`; `otherObjectives` contains the remaining active contracts. Human `inspect` prints the
+same next step, while `journal` preserves source/confidence context and only calls generated
+contracts completed after they are actually cleared. Episode agents deliberately sample journal
+and rumor views even under tactical pressure because both commands are read-only.
 
 For a slower but more realistic unattended playtest, use Ollama:
 
