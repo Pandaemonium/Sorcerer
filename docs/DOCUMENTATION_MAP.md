@@ -55,6 +55,9 @@ references inside them to Python modules or the old name.
   capability cards, route metrics, and replay.
 - [OPENING_SEQUENCE.md](OPENING_SEQUENCE.md): the first 20 minutes as a promise-rich,
   system-driven vertical slice rather than a scripted tutorial.
+- [FREE_FOLK_MOVEMENT.md](FREE_FOLK_MOVEMENT.md): the campaign throughline from the opening
+  rescue to an allied rising — the sweep, the waystation heist, cells as small factions, and
+  the Movement as content proving existing lanes rather than a new subsystem.
 - [SEMANTIC_EFFECTS.md](SEMANTIC_EFFECTS.md): entity descriptions/traits as dormant mechanics
   the resolver surfaces (semantic by default, mechanical on demand).
 - [CHARTER_MAGIC.md](CHARTER_MAGIC.md): the deterministic licensed counterpoint - instant
