@@ -138,7 +138,11 @@ public static class TestScenarios
         var rescuePromiseResult = WorldConsequenceGuard.ApplyWithNewApplier(state, WorldConsequence.CreatePromise(
             "scenario",
             "promise",
-            "If the cell door opens, Lio of Hollowmere will owe a dangerous gratitude.",
+            // Directional so the opening's central hook is legible from turn 0: the player can see
+            // the cell key nearby but not the sight-blocked cell itself, so the promise names both
+            // the place (east) and the deed (open the door). "dangerous gratitude" is load-bearing
+            // for characterization tests — keep it.
+            "East in the containment yard, a locked cell holds Lio of Hollowmere; open its door and they will owe a dangerous gratitude.",
             playerVisible: true,
             useCurrentRegionAsClaimedPlace: false,
             autoBind: false,

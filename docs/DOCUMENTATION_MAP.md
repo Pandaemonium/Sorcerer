@@ -95,17 +95,23 @@ references inside them to Python modules or the old name.
 ## Development
 
 - [DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md): tool requirements and first build commands.
-- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): staged build plan.
+- [ROADMAP_TO_1_0.md](ROADMAP_TO_1_0.md): the product roadmap from prototype to a shipped,
+  complete-feeling 1.0 - the eight product pillars, the vertical-slice transect, milestones
+  through Early Access and breadth, and the 2026-07-13 owner decisions (8-12h runs + checkpoint
+  mode, illuminated ASCII + portraits, guided local/BYOK onboarding, bespoke score).
+- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): active roadmap-to-code handoff — the shared
+  command/consequence/time/view spines, complexity budget, hotspot-convergence prerequisite,
+  gameplay-first work packages, phase gates, and Opus execution protocol through 1.0.
 - [MATURITY_ROADMAP.md](MATURITY_ROADMAP.md): the phased path from the first-playable slice to
   full Wild Magic-level maturity, building general systems over the reserved state lanes.
 - [PROCGEN_RICHNESS_PLAN.md](PROCGEN_RICHNESS_PLAN.md): tactical props/people/places/quests plan
   for the large, content-driven procedural world.
 - [SIGNIFICANT_INTERIORS.md](SIGNIFICANT_INTERIORS.md): data-authored one-zone interiors,
   threshold access, follower transitions, persistence, and GUI/CLI parity.
-- [BUILD_PLAN.md](BUILD_PLAN.md): the executable, file-level handoff plan - engine refactor,
-  perception/FOV, Phases 1-8, including character/body-soul state, deeds/factions/social/worldgen,
-  magic/item depth, lore/narrator/provider harness work, and the current persistence/replay/
-  chronicle/win-condition slice, with Wild Magic keep/change/drop guidance.
+- [BUILD_PLAN.md](BUILD_PLAN.md): historical foundation handoff — the now-implemented engine
+  refactor, perception, character/body-soul state, deeds/factions/social/worldgen, magic/item
+  depth, lore/narrator/provider work, and first persistence/replay/chronicle/win slice. Use the
+  active IMPLEMENTATION_PLAN for new product work.
 - [FIRST_PLAYABLE.md](FIRST_PLAYABLE.md): the first vertical slice worth building.
 - [CLI_AND_AGENT_PLAYTESTING.md](CLI_AND_AGENT_PLAYTESTING.md): JSON-first CLI and agent
   play.

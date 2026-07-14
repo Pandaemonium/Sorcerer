@@ -543,7 +543,8 @@ public static class RumorSystem
             "kill" => $"{actor} left a death in {place}.",
             "attack" => $"{actor} struck first in {place}.",
             "wild_magic" => $"{actor} worked wild magic in {place}.",
-            _ => $"people in {place} are still talking about what {actor} did: {deed.Kind}.",
+            "charter_magic" => $"{actor} worked licensed-looking magic in {place}.",
+            _ => $"people in {place} are still talking about what {actor} did.",
         };
     }
 
@@ -554,22 +555,11 @@ public static class RumorSystem
     }
 
     /// <summary>
-    /// Turns an internal place key like "imperial_encounter:13,29" into a readable place name
-    /// ("Imperial Encounter") for player-facing text: takes the region portion, drops the raw
-    /// coordinates, and title-cases. Message-log immersion pass — coordinates and snake_case ids
-    /// must never surface to the player.
+    /// Turns an internal place key like "imperial_encounter:13,29" into a readable place name for
+    /// player-facing text. Prefers the region's authored display name ("Marble Containment Yard")
+    /// so scenario ids never leak; coordinates and snake_case ids must never surface to the player.
     /// </summary>
-    private static string ReadablePlace(string placeKey)
-    {
-        var region = RegionFromPlace(placeKey ?? string.Empty, placeKey ?? string.Empty);
-        var readable = region.Replace('_', ' ').Trim();
-        if (string.IsNullOrWhiteSpace(readable))
-        {
-            return "the frontier";
-        }
-
-        return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(readable);
-    }
+    private static string ReadablePlace(string placeKey) => RegionCatalog.ReadablePlace(placeKey);
 
     private static string RegionCarrier(string regionId) => $"region:{regionId}";
 
@@ -603,11 +593,15 @@ public static class RumorSystem
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(2)
             .ToArray();
+        // The region-level beat keeps its text — it is the atmospheric "your rumor precedes you
+        // into a new place" line. Per-listener spread drops the trailing rumor text: the player
+        // already holds high-salience rumors in the journal, and repeating the full sentence for
+        // every carrier every turn is the main source of log spam.
         return listeners.Length switch
         {
             0 => $"A rumor reaches {ReadableRegion(state.RegionId)} along {routeName}: {rumor.Text}",
-            1 => $"A rumor reaches {listeners[0]} along {routeName} because {CarrierCause(state, listeners[0], rumor)}: {rumor.Text}",
-            _ => $"A rumor passes along {routeName} between {string.Join(" and ", listeners)}: {rumor.Text}",
+            1 => $"A rumor reaches {listeners[0]} along {routeName} because {CarrierCause(state, listeners[0], rumor)}.",
+            _ => $"A rumor passes along {routeName} between {string.Join(" and ", listeners)}.",
         };
     }
 

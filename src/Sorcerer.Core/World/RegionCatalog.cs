@@ -4,6 +4,34 @@ namespace Sorcerer.Core.World;
 
 public static class RegionCatalog
 {
+    private static readonly Lazy<RegionRegistry> DefaultRegistry = new(LoadDefault);
+
+    /// <summary>Cached authored region catalog. Authored content is immutable at runtime
+    /// (generated regions live on GameState, not here), so a process-wide cache is safe and
+    /// keeps hot lookups — like resolving a place key to a display name — cheap.</summary>
+    public static RegionRegistry Default => DefaultRegistry.Value;
+
+    /// <summary>
+    /// Turns a deed/rumor place key ("imperial_encounter:13,5") into a player-facing place name.
+    /// Prefers the authored region's display name ("Marble Containment Yard") over the raw id,
+    /// so scenario ids never leak into the log; falls back to a title-cased id for generated
+    /// regions (whose underscore ids read fine title-cased, e.g. "Hollowmere Margin").
+    /// </summary>
+    public static string ReadablePlace(string? placeKey, string fallback = "the frontier")
+    {
+        var regionId = (placeKey ?? string.Empty).Split(':', 2, StringSplitOptions.TrimEntries).FirstOrDefault() ?? string.Empty;
+        var authored = Default.Region(regionId)?.Name;
+        if (!string.IsNullOrWhiteSpace(authored))
+        {
+            return authored;
+        }
+
+        var readable = regionId.Replace('_', ' ').Trim();
+        return string.IsNullOrWhiteSpace(readable)
+            ? fallback
+            : System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(readable);
+    }
+
     public static RegionRegistry LoadDefault()
     {
         foreach (var root in CandidateRoots())

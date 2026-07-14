@@ -62,8 +62,38 @@ internal static class SpellPromptBuilder
                     string.Join("\n", new[] { card.PromptBlock }.Concat(card.Examples)))));
         }
 
+        // Graceful floor: the resolver already spent its capability requests, so it must now commit
+        // to a resolution with the operations on hand instead of dead-ending in another needsCapability.
+        if (request.FinalAttemptNoEscape)
+        {
+            builder.Append(FinalAttemptInstruction);
+        }
+
+        // Opt-in self-critique, appended last so it never disturbs the cacheable prefix. It asks the
+        // resolver to flag a capability it lacked and context it did not need — a corpus we mine to
+        // grow real mechanics and trim the prompt. Explicitly severed from resolution.
+        if (request.RequestResolverFeedback)
+        {
+            builder.Append(FeedbackRequest);
+        }
+
         return builder.ToString();
     }
+
+    private const string FinalAttemptInstruction =
+        "\n\nFinal pass: no more mechanics can be loaded. Do NOT return needsCapability. You must return a "
+        + "resolution now using only the supported effect types above. For an overreach or a request whose "
+        + "ideal mechanic is missing, resolve the largest faithful LOCAL version at a fair-to-severe price "
+        + "(e.g. a cross-zone teleport becomes a blink to the edge of this area; a world-rewrite becomes a "
+        + "vivid local distortion). Only if there is truly no local expression at all, return accepted:false "
+        + "with a concrete, in-world rejectedReason — never a bare failure.";
+
+    private const string FeedbackRequest =
+        "\n\nAlso include a top-level \"feedback\" object alongside the resolution: "
+        + "{\"missingCapability\":\"one supported effect type or new mechanic that would have let you resolve this spell "
+        + "more faithfully, or empty string if none\",\"unusedContext\":\"which provided context fields (targets, terrain, "
+        + "lore, promises, reagents, lens, scenery) were irrelevant to this spell, or empty string if all were useful\"}. "
+        + "This feedback is for tooling only and must not change your resolution, effects, costs, or narration in any way.";
 
     public static string User(SpellRequest request) =>
         $"Current magic context JSON:\n{WireContextJson(request)}\n\nSpell: {request.SpellText}";

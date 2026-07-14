@@ -20,7 +20,15 @@ public sealed record SpellRequest(
     object Context,
     IReadOnlyList<string> SupportedOperations,
     IReadOnlyList<CapabilityCard>? SelectedCapabilities = null,
-    string? CapabilityIndex = null);
+    string? CapabilityIndex = null,
+    // When set, the prompt asks the resolver for opt-in self-critique (docs: resolver feedback).
+    // Purely observational; it never changes resolution. Gated by SORCERER_RESOLVER_FEEDBACK.
+    bool RequestResolverFeedback = false,
+    // Graceful-floor pass: the resolver has already exhausted its capability requests, so the prompt
+    // forbids another needsCapability answer and demands a best-effort resolution (largest local
+    // version or an honest in-world rejection). Turns an unsatisfiable overreach into a real spell
+    // instead of a bare technical failure.
+    bool FinalAttemptNoEscape = false);
 
 public sealed record SpellProviderResult(
     string Provider,

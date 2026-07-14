@@ -3063,6 +3063,10 @@ public sealed class WorldConsequenceApplier
             ReadString(payload, "message"),
             ReadString(payload, "summary"),
             next is { } selected ? $"Selected target set to {selected.X},{selected.Y}." : "Selected target cleared.")!;
+        // Incidental clears (travel/possession/zone generation) set Hidden visibility and must
+        // not narrate "Selected target cleared." into the log; the explicit target/untarget
+        // commands render their own player message separately, so this only silences the noise.
+        var playerVisible = consequence.Visibility != WorldConsequenceVisibility.Hidden;
         var delta = new StateDelta(
             operation,
             target,
@@ -3073,7 +3077,8 @@ public sealed class WorldConsequenceApplier
                 ("previousY", previous?.Y),
                 ("x", next?.X),
                 ("y", next?.Y),
-                ("clear", clear)));
+                ("clear", clear),
+                ("playerVisible", playerVisible)));
         return Applied(
             consequence,
             target,

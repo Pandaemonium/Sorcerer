@@ -1,9 +1,12 @@
 # Build Plan (Handoff)
 
-This is the executable, implementation-level plan for the next phase of Sorcerer. It is written
-to be handed to another agent and followed end-to-end. It is the tactical companion to the
-strategic [MATURITY_ROADMAP.md](MATURITY_ROADMAP.md); where they overlap, the roadmap gives the
-"why" and this document gives the "how."
+Status: historical foundation plan. Its Phases 0–8 produced the current prototype-era engine and
+remain useful as implementation archaeology. New work follows
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) and [ROADMAP_TO_1_0.md](ROADMAP_TO_1_0.md).
+
+This was the executable, implementation-level plan for the foundation phase of Sorcerer. It was
+written to be handed to another agent and followed end-to-end. It remains the tactical companion
+to the completed portions of [MATURITY_ROADMAP.md](MATURITY_ROADMAP.md), not the active queue.
 
 **Read before you start:** [GRAND_VISION.md](GRAND_VISION.md) (what the game is),
 [../NORTHSTAR.md](../NORTHSTAR.md) and [../AGENTS.md](../AGENTS.md) (the non-negotiables),

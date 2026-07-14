@@ -141,6 +141,64 @@ public sealed class CapabilityRoutingTests
         Assert.DoesNotContain(context.Visible, entity => entity.Visibility == "hidden_from_player" && entity.Id != "prisoner_1");
     }
 
+    [Fact]
+    public async Task UnsatisfiableCapabilityRequestFallsToGracefulFinalResolution()
+    {
+        // Models sometimes keep asking for a mechanic that cannot be loaded (an unknown card, or a
+        // genuinely missing one like cross-zone portals). Instead of dead-ending in "produced no
+        // spell", the controller forces one final no-escape pass that must resolve.
+        var provider = new AlwaysNeedsCapabilityUntilFinalProvider();
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(provider));
+
+        var result = await session.ExecuteAsync(new CastCommand("tear a portal to a distant kingdom and step through"));
+
+        Assert.True(result.Success, result.Magic?.Error);
+        Assert.False(result.TechnicalFailure);
+        Assert.Contains(provider.Requests, request => request.FinalAttemptNoEscape);
+        // The escape hatch is only forbidden on that final pass, never before.
+        Assert.DoesNotContain(provider.Requests.SkipLast(1), request => request.FinalAttemptNoEscape);
+    }
+
+    private sealed class AlwaysNeedsCapabilityUntilFinalProvider : Sorcerer.Magic.Resolution.ISpellProvider
+    {
+        public List<Sorcerer.Magic.Resolution.SpellRequest> Requests { get; } = new();
+
+        public string Name => "always-needs-capability";
+
+        public Task<Sorcerer.Magic.Resolution.SpellProviderResult> ResolveAsync(
+            Sorcerer.Magic.Resolution.SpellRequest request,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            Requests.Add(request);
+            if (!request.FinalAttemptNoEscape)
+            {
+                return Task.FromResult(new Sorcerer.Magic.Resolution.SpellProviderResult(
+                    Name, "{\"needsCapability\":\"impossible_mechanic\"}", Resolution: null,
+                    TechnicalFailure: false, Error: null, Stats: null, RequestedCapability: "impossible_mechanic"));
+            }
+
+            var resolution = new Sorcerer.Magic.Resolution.SpellResolution(
+                Accepted: true,
+                Severity: "moderate",
+                OutcomeText: "The far door refuses; you lurch a few bruising paces through torn air instead.",
+                Effects: new[]
+                {
+                    new Sorcerer.Magic.Resolution.SpellEffect("heal", new Dictionary<string, object?>
+                    {
+                        ["target"] = "player",
+                        ["amount"] = 1,
+                    }),
+                },
+                Costs: new[]
+                {
+                    new Sorcerer.Magic.Resolution.SpellCost("mana", new Dictionary<string, object?> { ["amount"] = 4 }),
+                },
+                RejectedReason: null);
+            return Task.FromResult(new Sorcerer.Magic.Resolution.SpellProviderResult(
+                Name, "{}", resolution, TechnicalFailure: false, Error: null));
+        }
+    }
+
     private sealed class NeedsCapabilityThenResolveProvider : Sorcerer.Magic.Resolution.ISpellProvider
     {
         private readonly string _capability;

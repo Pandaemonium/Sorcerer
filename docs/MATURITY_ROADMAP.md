@@ -1,16 +1,14 @@
 # Maturity Roadmap
 
-This roadmap charts the path from the current first-playable slice to the breadth and depth of
-the parent prototype, **Wild Magic** (`C:\Games\WildMagic`, ~48k lines across 74 modules), while
-keeping Sorcerer's cleaner architecture. It is the detailed expansion of Milestones 5-9 in
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) and the build sequence for the systems described
-in [GRAND_VISION.md](GRAND_VISION.md). When this roadmap and that milestone list disagree on
-sequencing, this roadmap wins; the vision in GRAND_VISION always wins on intent.
+This roadmap charts the system maturity built from the first-playable slice toward the breadth and
+depth of the parent prototype, **Wild Magic** (`C:\Games\WildMagic`, ~48k lines across 74 modules),
+while keeping Sorcerer's cleaner architecture. Most first implementations below are now complete.
+The active product-to-code order lives in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md); the
+vision in [GRAND_VISION.md](GRAND_VISION.md) always wins on intent.
 
-For the executable, file-level handoff plan (Phases 0-8 in implementation detail, including the
-engine refactor, perception, world reaction, procedural world, and persistence/win work), see
-[BUILD_PLAN.md](BUILD_PLAN.md). This roadmap is the strategic "why"; BUILD_PLAN is the tactical
-"how."
+For the historical file-level handoff that produced the first implementations (engine refactor,
+perception, world reaction, procedural world, and persistence/win work), see
+[BUILD_PLAN.md](BUILD_PLAN.md). For new implementation work, use the active implementation plan.
 
 ## The Target, And The Anti-Port Principle
 

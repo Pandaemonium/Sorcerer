@@ -20,7 +20,57 @@ public static class WorldConsequencePayloadBuilder
             }
         }
 
+        // Some models deliver the nested payload as a positional array instead of a keyed object
+        // (e.g. spawn_entity as ["entity","Lio","human","fugitive",13,4,...]). Positional slots
+        // can't be trusted for names or tags, but a missing tile coordinate is exactly what
+        // hard-rejects spatial consequences, so recover the first integer pair as x/y when they
+        // are otherwise absent. Better a creative cast that lands (with a generic entity) than one
+        // that silently collapses because its coordinates arrived in an unexpected shape.
+        if (!payload.ContainsKey("x") && !payload.ContainsKey("y")
+            && FirstPositionalArray(fields, nestedPayloadKeys) is { } array
+            && FirstIntegerPair(array) is { } coordinate)
+        {
+            payload["x"] = coordinate.X;
+            payload["y"] = coordinate.Y;
+        }
+
         return payload;
+    }
+
+    private static IReadOnlyList<object?>? FirstPositionalArray(
+        IReadOnlyDictionary<string, object?> fields,
+        IEnumerable<string> nestedPayloadKeys)
+    {
+        foreach (var key in nestedPayloadKeys)
+        {
+            if (fields.TryGetValue(key, out var raw) && raw is IReadOnlyList<object?> list)
+            {
+                return list;
+            }
+        }
+
+        return null;
+    }
+
+    private static (int X, int Y)? FirstIntegerPair(IReadOnlyList<object?> values)
+    {
+        int? first = null;
+        foreach (var value in values)
+        {
+            if (value is int integer)
+            {
+                if (first is null)
+                {
+                    first = integer;
+                }
+                else
+                {
+                    return (first.Value, integer);
+                }
+            }
+        }
+
+        return null;
     }
 
     private static IReadOnlyDictionary<string, object?>? FirstNestedPayload(

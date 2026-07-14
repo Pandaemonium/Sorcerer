@@ -201,12 +201,12 @@ public sealed class WorldReactionSystem
         if (deed.Visibility.Equals("suspicious", StringComparison.OrdinalIgnoreCase))
         {
             AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
-            AddMessage(messages, deltas, applyConsequence, deed, "suspicious_charter_magic", "Someone glimpsed tidy, licensed-looking magic with no caster to pin it on.");
+            AddMessage(messages, deltas, applyConsequence, deed, "suspicious_charter_magic", "Someone glimpsed tidy, licensed-looking magic with no caster to pin it on.", playerVisible: FirstReactionOfKind(state, "suspicious_charter_magic"));
             return;
         }
 
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
-        AddMessage(messages, deltas, applyConsequence, deed, "public_charter_magic", "The casting reads as licensed charter work; nobody reaches for an alarm bell.");
+        AddMessage(messages, deltas, applyConsequence, deed, "public_charter_magic", "The casting reads as licensed charter work; nobody reaches for an alarm bell.", playerVisible: FirstReactionOfKind(state, "public_charter_magic"));
     }
 
     private static void RecordWitnessMemories(
@@ -271,16 +271,9 @@ public sealed class WorldReactionSystem
 
     private static string CleanKind(string kind) => kind.Replace('_', ' ');
 
-    // Player-facing text must never show a raw place key like "imperial_encounter:13,29": take the
-    // region portion, drop the coordinates, title-case (message-log immersion pass).
-    private static string ReadablePlace(string placeKey)
-    {
-        var region = (placeKey ?? string.Empty).Split(':', 2, StringSplitOptions.TrimEntries).FirstOrDefault() ?? string.Empty;
-        var readable = region.Replace('_', ' ').Trim();
-        return string.IsNullOrWhiteSpace(readable)
-            ? "the frontier"
-            : System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(readable);
-    }
+    // Player-facing text must never show a raw place key like "imperial_encounter:13,29" or its
+    // title-cased id "Imperial Encounter": resolve the region's authored display name.
+    private static string ReadablePlace(string placeKey) => RegionCatalog.ReadablePlace(placeKey);
 
     private static void ApplyWildMagic(
         GameState state,
@@ -293,7 +286,7 @@ public sealed class WorldReactionSystem
         {
             AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", Math.Max(1, deed.Magnitude));
             RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
-            AddMessage(messages, deltas, applyConsequence, deed, "suspicious_wild_magic", "Someone saw the magic, but not the hand that loosed it.");
+            AddMessage(messages, deltas, applyConsequence, deed, "suspicious_wild_magic", "Someone saw the magic, but not the hand that loosed it.", playerVisible: FirstReactionOfKind(state, "suspicious_wild_magic"));
             return;
         }
 
@@ -307,7 +300,7 @@ public sealed class WorldReactionSystem
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "imperial-threat", Math.Max(1, deed.Magnitude));
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", 1);
         RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
-        AddMessage(messages, deltas, applyConsequence, deed, "public_wild_magic", "The people who saw the wild magic are already telling each other what they think it was.");
+        AddMessage(messages, deltas, applyConsequence, deed, "public_wild_magic", "The people who saw the wild magic are already telling each other what they think it was.", playerVisible: FirstReactionOfKind(state, "public_wild_magic"));
     }
 
     private static void AdjustEmpireBloc(
@@ -361,19 +354,37 @@ public sealed class WorldReactionSystem
             deed.Id));
     }
 
+    // The "witnesses are talking" flavor lines teach something real the first time (charter reads
+    // as licensed; wild magic is seen and spreads) but repeat verbatim on every subsequent cast.
+    // Show each once per run, then keep it audit-only. WorldFlags is snapshot/rollback-safe, so a
+    // rolled-back cast does not spend the first-showing.
+    private static bool FirstReactionOfKind(GameState state, string reactionKind)
+    {
+        var key = $"reaction_shown:{reactionKind}";
+        if (state.WorldFlags.ContainsKey(key))
+        {
+            return false;
+        }
+
+        state.WorldFlags[key] = true;
+        return true;
+    }
+
+    // playerVisible: false keeps the narration in deltas/audit but out of the player log.
     private static void AddMessage(
         List<string> messages,
         List<StateDelta> deltas,
         Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
         DeedRecord deed,
         string reactionKind,
-        string message)
+        string message,
+        bool playerVisible = true)
     {
         ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.Message(
             "world_reaction",
             message,
             targetEntityId: deed.Id,
-            visibility: WorldConsequenceVisibility.Message,
+            visibility: playerVisible ? WorldConsequenceVisibility.Message : WorldConsequenceVisibility.Hidden,
             evidence: $"{deed.Kind} deed {deed.Id} became {deed.Visibility}.",
             reason: "A deed became visible enough for world-reaction narration.",
             operation: "worldReactionMessage",
@@ -385,7 +396,7 @@ public sealed class WorldReactionSystem
                 ["deedVisibility"] = deed.Visibility,
                 ["attributionStatus"] = deed.AttributionStatus,
                 ["reactionKind"] = reactionKind,
-                ["playerVisible"] = true,
+                ["playerVisible"] = playerVisible,
             }));
     }
 

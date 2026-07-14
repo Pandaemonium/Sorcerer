@@ -25,19 +25,27 @@ public sealed class WildMagicController : IWildMagicController
     private readonly ISpellRouter _router;
     private readonly OperationRegistry _registry;
     private readonly CapabilityRegistry _capabilities;
+    private readonly IResolverFeedbackSink _resolverFeedback;
 
     public WildMagicController(
         ISpellProvider provider,
         OperationRegistry? registry = null,
         ISpellAuditSink? audit = null,
         CapabilityRegistry? capabilities = null,
-        ISpellRouter? router = null)
+        ISpellRouter? router = null,
+        IResolverFeedbackSink? resolverFeedback = null)
     {
         _provider = provider;
         _registry = registry ?? OperationRegistry.CreateDefault();
         _audit = audit ?? NullSpellAuditSink.Instance;
         _capabilities = capabilities ?? CapabilityRegistry.CreateDefault();
         _router = router ?? NullSpellRouter.Instance;
+        // Auto-wire the corpus sink from the env flag so every frontend (GUI, CLI, tests) gets the
+        // feature without touching its call sites; inert (Null) unless SORCERER_RESOLVER_FEEDBACK is set.
+        _resolverFeedback = resolverFeedback
+            ?? (ResolverFeedbackConfig.Enabled
+                ? new JsonlResolverFeedbackSink(ResolverFeedbackConfig.CorpusPath)
+                : NullResolverFeedbackSink.Instance);
     }
 
     public async Task<MaterializedMagicResolution> ResolveAsync(
@@ -64,6 +72,18 @@ public sealed class WildMagicController : IWildMagicController
                 request = BuildSpellRequest(engine, command.Text, selectedCapabilities);
                 providerResult = await _provider.ResolveAsync(request, cancellationToken);
             }
+
+            // Graceful floor (docs: resolver robustness): if the model produced no resolution and is
+            // still only asking for a capability we cannot satisfy — an unavailable card, one already
+            // loaded, or a genuinely missing mechanic like cross-zone portals — force one final pass
+            // that forbids another escape and demands the largest local version or an honest in-world
+            // rejection. Without this, such overreaches dead-end in a bare "produced no spell."
+            if (providerResult.Resolution is null
+                && providerResult.RequestedCapability is { Length: > 0 })
+            {
+                var finalRequest = request with { FinalAttemptNoEscape = true };
+                providerResult = await _provider.ResolveAsync(finalRequest, cancellationToken);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -82,6 +102,11 @@ public sealed class WildMagicController : IWildMagicController
                 EffectTypes: Array.Empty<string>(),
                 ResolvedMagicJson: null);
         }
+
+        // Settled provider answer (post needsCapability retry): harvest opt-in resolver critique
+        // for the corpus before branching on success/failure, so rejected and accepted casts both
+        // contribute feedback.
+        RecordResolverFeedback(request, providerResult);
 
         if (providerResult.TechnicalFailure || providerResult.Resolution is null)
         {
@@ -280,23 +305,26 @@ public sealed class WildMagicController : IWildMagicController
 
                 // A world-refused effect or cost is an in-world rejection, never a technical
                 // failure: the whole working collapses, nothing mutates, and the turn is spent.
+                // The player message stays purely diegetic; the raw validator detail rides the
+                // agent-facing Error, the rejected deltas, and the audit — never the log.
                 var errors = RejectedApplyErrors(rejectedDeltas);
                 var reason = AnyRejectedIn(deltas, effectEnd, costEnd)
-                    ? $"The spell's price cannot be paid, and the working collapses. ({errors})"
-                    : $"The magic reaches for what is not there, and the working collapses. ({errors})";
+                    ? "The spell's price cannot be paid, and the working collapses."
+                    : "The magic reaches for what is not there, and the working collapses.";
                 var rejection = WithResolutionJson(
                     Rejected(
                         engine,
                         providerResult.Provider,
                         turnBefore,
                         reason,
-                        resolution.Effects.Select(effect => effect.Type).ToArray()),
+                        resolution.Effects.Select(effect => effect.Type).ToArray(),
+                        errorDetail: $"{reason} ({errors})"),
                     resolution);
                 rejection = rejection with
                 {
                     Deltas = rejectedDeltas.Concat(rejection.Deltas).ToArray(),
                 };
-                Audit(providerResult, command, request, rejection, new[] { "apply_consequence_rejected" });
+                Audit(providerResult, command, request, rejection, new[] { $"apply_consequence_rejected: {errors}" });
                 return rejection;
             }
 
@@ -474,7 +502,31 @@ public sealed class WildMagicController : IWildMagicController
             contextView,
             operationIndex.Names,
             selectedCapabilities,
-            _capabilities.CapabilityNames());
+            _capabilities.CapabilityNames(),
+            RequestResolverFeedback: ResolverFeedbackConfig.Enabled);
+    }
+
+    // The corpus write is a side channel: parse the opt-in critique off the raw answer and append a
+    // row with the metadata needed to act on it. No-op unless the flag is on and the model answered.
+    private void RecordResolverFeedback(SpellRequest request, SpellProviderResult providerResult)
+    {
+        if (!ResolverFeedbackConfig.Enabled
+            || ResolverFeedback.TryExtract(providerResult.RawText) is not { } feedback)
+        {
+            return;
+        }
+
+        _resolverFeedback.Record(new ResolverFeedbackEntry(
+            DateTimeOffset.UtcNow,
+            providerResult.Provider,
+            request.SpellText,
+            providerResult.Resolution?.Accepted,
+            feedback.MissingCapability,
+            feedback.UnusedContext,
+            request.SelectedCapabilities?.Select(card => card.Id).ToArray() ?? Array.Empty<string>(),
+            request.SupportedOperations.Count,
+            System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(request.Context, JsonOptions)),
+            providerResult.Stats));
     }
 
     private void Audit(
@@ -1038,12 +1090,17 @@ public sealed class WildMagicController : IWildMagicController
         GameEngine engine,
         string provider,
         int turnBefore,
-        string reason,
-        IReadOnlyList<string> effectTypes)
+        string message,
+        IReadOnlyList<string> effectTypes,
+        // Agent/debug Error keeps any technical detail; the player Message stays diegetic. Defaults
+        // to the message so ordinary in-world rejections (whose reason is already player-safe) are
+        // unchanged. Used to keep validator specifics (e.g. a missing target) out of the log
+        // while retaining them for agents and the audit.
+        string? errorDetail = null)
     {
         var rejection = ApplyMagicMessage(
             engine,
-            reason,
+            message,
             "wildMagicRejected",
             "Wild magic produced an intentional in-world rejection.");
         var turnDeltas = engine.AdvanceTurn();
@@ -1060,7 +1117,7 @@ public sealed class WildMagicController : IWildMagicController
                 Accepted: false,
                 TechnicalFailure: false,
                 EffectTypes: effectTypes,
-                Error: reason),
+                Error: errorDetail ?? message),
             Deltas = rejection.Deltas.Concat(turnDeltas).ToArray(),
         };
     }

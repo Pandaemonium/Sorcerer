@@ -340,8 +340,7 @@ can complete each route.
   the content definitions.
 - Prioritize interaction clarity: nearby verbs, target feedback, cause-bearing messages, district
   identity, remembered people/objects, and promise leads.
-- Give human players progressive disclosure while CLI debug views retain perfect state.
-- Make pending model work feel like casting rather than a stalled interface; charter and echo
+- Give human players progressive disclosure while CLI debug views retain perfect state.- Make pending model work feel like casting rather than a stalled interface; charter and echo
   options should remain usable while appropriate.
 - Add tiles only after the read-only view contract can describe the same information without
   renderer-owned rules.

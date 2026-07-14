@@ -146,6 +146,12 @@ public sealed class WorldTurnSystem
         var cause = candidate.RumorMemory is not null
             ? $"the rumor they heard — {candidate.RumorMemory.Text}"
             : $"their active want — {candidate.Want!.Text}";
+        // Rumor memory just echoes a rumor the player already holds in the journal, so the player
+        // message must not re-dump that text (log-spam fix). A want is the NPC's own motivation and
+        // is not otherwise surfaced, so it stays named. Full detail always rides evidence/details.
+        var announceCause = candidate.RumorMemory is not null
+            ? "word that has been spreading about you"
+            : cause;
         return TryApplyWorldTurnTransaction(
             state,
             deltas,
@@ -178,7 +184,7 @@ public sealed class WorldTurnSystem
 
                 if (announce && !ApplyConsequence(localDeltas, applyConsequence, WorldConsequence.Message(
                     "world_turn",
-                    $"{candidate.Entity.Name} approaches because of {cause}.",
+                    $"{candidate.Entity.Name} approaches, drawn by {announceCause}.",
                     targetEntityId: candidate.Entity.Id.Value,
                     visibility: WorldConsequenceVisibility.Message,
                     sourceEntityId: candidate.Entity.Id.Value,
