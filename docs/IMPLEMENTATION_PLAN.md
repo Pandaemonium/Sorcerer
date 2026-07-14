@@ -527,6 +527,19 @@ Goal: finish the known top gaps before adding another gameplay category. This is
 
 ### 1.1 One visibility and attribution policy
 
+**Status: core done — 2026-07-13 (commit `b3bba03`).** `PerceptionSystem.ClassifyEffectWitnesses`
+is the single policy — one pass classifying each witness as saw-actor / saw-effect / both / neither
+using the shared line-of-sight, range, and `StatusRegistry` concealment rules, returning structured
+`WitnessObservation` rows (including the observed body id as the identity-model seed). Deed capture
+(`PlanDeedCapture`) and suspicion attribution (`PlanEffectSuspicion`) both project from it, replacing
+their two parallel witness passes; behavior-preserving, 930 tests green. `VisibilityAttributionTests`
+pins the four-way classification and the suspicion projection. Hostile notice (`AiSystem`) already
+shares the concealment rule via `CanPerceiveSubject`. **Remaining:** surface the structured
+classification in `AgentObservation(debug)` and concise in-fiction evidence in deed/suspicion player
+messages; route the resolver relation cards (`EngineViewBuilder`) through the same projection; the
+body-swap attribution variant of the proof lands with the Phase 4 institutional-identity model
+(the `WitnessObservation.WitnessEntityId` seed is in place for it).
+
 - Extend `PerceptionSystem` with one query/policy that accounts for line of sight, range, lighting
   if later present, concealment/status traits, body identity, and whether the witness saw actor,
   effect, both, or neither.
@@ -1447,7 +1460,7 @@ it makes complexity a conscious cost instead of an accidental byproduct.
 | Order | Phase | Roadmap owner | Status at this plan's writing |
 |---:|---|---|---|
 | 0 | Converge current hotspots | prerequisite protecting every milestone | 0.1–0.4 done: four hotspots have cohesive boundaries, 928 tests green (see phase notes) |
-| 1 | Close current roadmap program | Milestone 0 | pending Phase 0 |
+| 1 | Close current roadmap program | Milestone 0 | 1.1 core done (one visibility policy); 1.2–1.4 next |
 | 2 | Complete run structure | Milestone 1 | pending Phase 1 |
 | 3 | Deterministic ten-minute game | Milestone 2 / P3 | pending Phase 2 structure |
 | 4 | Mischief, identity, attribution | Milestone 2 / P3 | pending visibility policy and tactical intent |
