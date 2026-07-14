@@ -276,9 +276,12 @@ public sealed class GameEngine
             }
 
             var imminent = distance <= 1;
+            var direction = WorldPlaceGraph.DirectionText(
+                entityPosition.Position.X - origin.X,
+                entityPosition.Position.Y - origin.Y);
             var telegraph = imminent
-                ? "in striking range — it strikes if you hold position"
-                : $"closing in, {distance} tiles away";
+                ? $"in striking range to the {direction} — it strikes if you hold position"
+                : $"closing in from the {direction}, {distance} tiles away";
             threats.Add(new ThreatCard(entity.Id.Value, entity.Name, distance, imminent, telegraph));
         }
 

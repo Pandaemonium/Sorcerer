@@ -433,7 +433,7 @@ public sealed class WorldPlaceGraph
         }
     }
 
-    private static string DirectionText(int dx, int dy)
+    public static string DirectionText(int dx, int dy)
     {
         if (dx == 0 && dy == 0)
         {
