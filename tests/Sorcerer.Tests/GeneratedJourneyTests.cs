@@ -133,6 +133,8 @@ public sealed class GeneratedJourneyTests
         Assert.Contains(returned.Messages, message =>
             message.Contains("Objective complete", StringComparison.OrdinalIgnoreCase)
             && message.Contains("gold into your hand", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(returned.Messages, message =>
+            message.EndsWith("will remember this.", StringComparison.OrdinalIgnoreCase));
 
         // Concrete reciprocity: the giver pays for the work, visibly (4..12 gold by salience).
         var goldAfter = session.Engine.State.ControlledEntity.Get<InventoryComponent>().Items

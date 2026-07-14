@@ -54,6 +54,15 @@ public sealed class MessageLogTests
     }
 
     [Fact]
+    public void StandingEarnedReadsGold()
+    {
+        var card = MessageLog.Classify("Hollowmere will remember this.");
+
+        Assert.Equal(MessageKind.Standing, card.Kind);
+        Assert.Equal(MessageLog.StandingColor, card.AccentColor);
+    }
+
+    [Fact]
     public void DamageYouDealIsOrangeWithTintedType()
     {
         var card = MessageLog.Classify("The patrol-censor takes 5 cold damage.");

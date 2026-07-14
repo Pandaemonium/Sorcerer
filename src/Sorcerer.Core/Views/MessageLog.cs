@@ -14,6 +14,7 @@ public enum MessageKind
     DamageDealt,
     Death,
     PlayerSpeech,
+    Standing,
 }
 
 /// <summary>A run of message text sharing one colour. Colour is a hex string without '#', or null for the line's accent.</summary>
@@ -43,6 +44,7 @@ public static class MessageLog
     public const string DamageDealtColor = "e08a3c";  // orange
     public const string DeathColor = "ff5252";        // bright red
     public const string PlayerSpeechColor = "7fb2ff"; // player's own voice, cool blue
+    public const string StandingColor = "d4af37";     // gold: reputation earned
 
     private const int DedupeLookback = 4;
 
@@ -179,6 +181,13 @@ public static class MessageLog
         if (DeathPattern.IsMatch(text))
         {
             return new MessageCard(text, MessageKind.Death, DeathColor, Whole(text, DeathColor));
+        }
+
+        // Reputation earned reads gold: the fixed shape the objective-return path emits when a
+        // faction's standing shifts in the player's favour.
+        if (text.EndsWith("will remember this.", StringComparison.OrdinalIgnoreCase))
+        {
+            return new MessageCard(text, MessageKind.Standing, StandingColor, Whole(text, StandingColor));
         }
 
         return new MessageCard(text, MessageKind.System, null, new[] { new MessageSegment(text) });

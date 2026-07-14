@@ -52,7 +52,7 @@ public sealed partial class InteractionSystem
 
     private static IReadOnlyList<string> ObjectiveMessages(IEnumerable<StateDelta> deltas) =>
         deltas
-            .Where(delta => delta.Operation is "objectiveHandoffMessage" or "objectiveCompleteMessage" or "objectiveReturnMessage" or "objectiveReturnNeedsItem")
+            .Where(delta => delta.Operation is "objectiveHandoffMessage" or "objectiveCompleteMessage" or "objectiveReturnMessage" or "objectiveReturnStandingMessage" or "objectiveReturnNeedsItem")
             .PlayerMessages()
             .ToArray();
 
@@ -232,11 +232,22 @@ public sealed partial class InteractionSystem
                 continue;
             }
 
-            if (giver.TryGet<FactionComponent>(out var faction)
-                && State.Factions.Factions.Any(item => item.Id.Equals(faction.FactionId, StringComparison.OrdinalIgnoreCase))
+            // The giver's ledger faction: try the FactionComponent id and the actor's faction string
+            // (generated givers often carry only the latter; either may be the one the ledger knows).
+            var giverFactionIds = new[]
+            {
+                giver.TryGet<FactionComponent>(out var faction) ? faction.FactionId : null,
+                giver.TryGet<ActorComponent>(out var giverActor) ? giverActor.Faction : null,
+            };
+            var rememberedBy = giverFactionIds
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => State.Factions.Factions.FirstOrDefault(item =>
+                    item.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+                .FirstOrDefault(match => match is not null);
+            if (rememberedBy is not null
                 && !ApplyOrRollback(WorldConsequence.AdjustFactionStanding(
                     $"objective_return:{giver.Id.Value}",
-                    faction.FactionId,
+                    rememberedBy.Id,
                     "gratitude",
                     1,
                     visibility: WorldConsequenceVisibility.Hidden,
@@ -249,6 +260,28 @@ public sealed partial class InteractionSystem
                         ["promiseId"] = promise.Id,
                         ["giverEntityId"] = giver.Id.Value,
                     }), "standing_update_rejected"))
+            {
+                continue;
+            }
+
+            // Make the reputation payoff legible (owner request): the +1 gratitude above was real
+            // but silent. Renderers colour this fixed shape gold (MessageKind.Standing).
+            if (rememberedBy is not null
+                && !ApplyOrRollback(WorldConsequence.Message(
+                    $"objective_return:{giver.Id.Value}",
+                    $"{rememberedBy.Name} will remember this.",
+                    targetEntityId: giver.Id.Value,
+                    visibility: WorldConsequenceVisibility.Message,
+                    sourceEntityId: giver.Id.Value,
+                    evidence: promise.Text,
+                    reason: "A faction's gratitude for completed work is announced, not hidden.",
+                    operation: "objectiveReturnStandingMessage",
+                    details: new Dictionary<string, object?>
+                    {
+                        ["promiseId"] = promise.Id,
+                        ["factionId"] = rememberedBy.Id,
+                        ["standing"] = "gratitude",
+                    }), "standing_message_rejected"))
             {
                 continue;
             }
