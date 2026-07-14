@@ -99,4 +99,21 @@ public sealed class FailureVocabularyTests
         Assert.Equal(FailureCode.BlockedLine, result.FailureCode);
         Assert.Equal(turnBefore, engine.State.Turn);
     }
+
+    [Fact]
+    public async Task BuyingWithoutFundsIsTaggedUnpaidCost()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()), seed: 7);
+        await session.ExecuteAsync(new TravelCommand(Direction.East)); // reach the frontier merchant
+
+        // Drain the player's coin so the purchase is unaffordable.
+        session.Engine.State.ControlledEntity.Get<InventoryComponent>().Items["gold"] = 0;
+
+        var result = await session.ExecuteAsync(new BuyCommand("red tincture"));
+
+        Assert.False(result.Success);
+        Assert.False(result.ConsumedTurn);
+        Assert.Equal(FailureCode.UnpaidCost, result.FailureCode);
+        Assert.Contains(result.Messages, message => message.Contains("gold", System.StringComparison.OrdinalIgnoreCase));
+    }
 }

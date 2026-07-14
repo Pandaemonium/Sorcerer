@@ -729,6 +729,7 @@ public sealed class ItemSystem
                 Action = "buy",
                 Success = false,
                 ConsumedTurn = false,
+                FailureCode = Sorcerer.Core.Results.FailureCode.UnpaidCost,
                 TurnBefore = turnBefore,
                 TurnAfter = _state.Turn,
                 Messages = messages.Concat(new[] { $"You need {price} gold for {definition?.Name ?? wareKey}." }).ToArray(),
