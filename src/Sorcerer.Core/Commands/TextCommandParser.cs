@@ -126,7 +126,13 @@ public static class TextCommandParser
         int.TryParse(text, out var radius) ? new MapCommand(radius) : new MapCommand();
 
     private static GameCommand ParseTravel(string text) =>
-        Parse(text) is MoveCommand move ? new TravelCommand(move.Direction) : new UnknownCommand($"travel {text}");
+        // Bare "travel"/"go" is a question ("where can I go?"), not an error: show the atlas rather
+        // than a dead-end "unknown command". A named direction crosses to the next zone.
+        string.IsNullOrWhiteSpace(text)
+            ? new AtlasCommand()
+            : Parse(text) is MoveCommand move
+                ? new TravelCommand(move.Direction)
+                : new UnknownCommand($"travel {text}");
 
     private static GameCommand ParseGive(string text)
     {

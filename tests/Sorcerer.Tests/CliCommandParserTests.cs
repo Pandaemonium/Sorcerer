@@ -30,6 +30,21 @@ public sealed class CliCommandParserTests
     }
 
     [Theory]
+    [InlineData("travel")]
+    [InlineData("go")]
+    public void BareTravelShowsTheAtlasInsteadOfAnUnknownCommand(string input)
+    {
+        // "travel" with no direction is a question ("where can I go?"), not an error.
+        Assert.IsType<AtlasCommand>(TextCommandParser.Parse(input));
+    }
+
+    [Fact]
+    public void TravelWithADirectionCrossesZones()
+    {
+        Assert.IsType<TravelCommand>(TextCommandParser.Parse("travel east"));
+    }
+
+    [Theory]
     [InlineData("look", typeof(InspectCommand))]
     [InlineData("get", typeof(PickupCommand))]
     [InlineData("cleartarget", typeof(ClearTargetCommand))]
