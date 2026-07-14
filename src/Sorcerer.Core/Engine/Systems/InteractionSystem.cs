@@ -502,6 +502,26 @@ public sealed partial class InteractionSystem
             }
         }
 
+        if (entity.TryGet<ItemComponent>(out var item))
+        {
+            // Surface what the thing is for, read from the same UseProfile that drives the effect, so
+            // curiosity has an actionable answer instead of a bare tag dump (Q10/Q44 legibility).
+            var use = item.UseProfile ?? "inert";
+            if (use.StartsWith("heal:", StringComparison.OrdinalIgnoreCase))
+            {
+                lines.Add("Using it would mend wounds.");
+            }
+            else if (use.StartsWith("mana:", StringComparison.OrdinalIgnoreCase))
+            {
+                lines.Add("Using it would restore your reserves.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(item.EquipmentSlot))
+            {
+                lines.Add($"It can be equipped ({item.EquipmentSlot}).");
+            }
+        }
+
         if (entity.TryGet<ReadableComponent>(out var readable))
         {
             lines.Add($"Readable: {readable.Title}.");

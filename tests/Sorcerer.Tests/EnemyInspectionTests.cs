@@ -54,4 +54,20 @@ public sealed class EnemyInspectionTests
         Assert.True(result.Success);
         Assert.Contains(result.Messages, m => m.Contains("teach you a charter form", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void ExaminingAHealingItemHintsItMendsWounds()
+    {
+        var engine = GameSession.CreateImperialEncounter(seed: 7).Engine;
+        var playerPos = engine.State.ControlledEntity.Get<PositionComponent>().Position;
+        var tincture = engine.State.Entities.Values
+            .First(e => e.Name.Contains("tincture", StringComparison.OrdinalIgnoreCase));
+
+        tincture.Set(new PositionComponent(new GridPoint(playerPos.X + 1, playerPos.Y)));
+
+        var result = engine.Examine(tincture.Name);
+
+        Assert.True(result.Success);
+        Assert.Contains(result.Messages, m => m.Contains("mend wounds", StringComparison.OrdinalIgnoreCase));
+    }
 }
