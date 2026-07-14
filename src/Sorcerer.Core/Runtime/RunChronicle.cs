@@ -66,18 +66,8 @@ public static class RunChronicle
     // Phase 2.6: on defeat, the body is disposed of in the killer's register -- an imperial hand
     // files it as a Censorate incident, wild magic transforms it, ordinary force just ends it.
     // A run that did not end in defeat has no treatment ("none").
-    private static string DeriveDeathTreatment(GameState state)
-    {
-        if (!state.RunStatus.Equals("defeat", StringComparison.OrdinalIgnoreCase))
-        {
-            return "none";
-        }
-
-        return (state.LastControlledDamageProvenance ?? "mortal") switch
-        {
-            "imperial" => "imperial",
-            "wild" => "wild",
-            _ => "mortal",
-        };
-    }
+    private static string DeriveDeathTreatment(GameState state) =>
+        state.RunStatus.Equals("defeat", StringComparison.OrdinalIgnoreCase)
+            ? DeathTreatment.ForDefeat(state.LastControlledDamageProvenance)
+            : DeathTreatment.None;
 }

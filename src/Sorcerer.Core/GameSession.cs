@@ -523,12 +523,14 @@ public sealed partial class GameSession
 
         if (ControlledBodyDefeated())
         {
+            // The body is disposed of in the register of whoever struck it down (Phase 2.6).
+            var treatment = DeathTreatment.ForDefeat(Engine.State.LastControlledDamageProvenance);
             return CompleteRun(
                 result,
                 "defeat",
                 "The sorcerer's current body is dead.",
                 Engine.State.ControlledEntityId.Value,
-                "Your body falls. Somewhere, the world begins arranging a stranger's dawn.");
+                DeathTreatment.Disposition(treatment));
         }
 
         return result;

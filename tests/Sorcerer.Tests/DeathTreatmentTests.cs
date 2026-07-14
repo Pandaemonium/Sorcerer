@@ -112,6 +112,26 @@ public sealed class DeathTreatmentTests
         Assert.Equal("none", RunChronicle.Build(state).Treatment);
     }
 
+    [Theory]
+    [InlineData("imperial", "Censorate")]
+    [InlineData("wild", "wearing your shape")]
+    [InlineData("mortal", "stranger's dawn")]
+    public void EachTreatmentNarratesItsOwnDisposition(string treatment, string hallmark)
+    {
+        var line = DeathTreatment.Disposition(treatment);
+
+        // Every register opens on the same fall, then handles the body in its own way.
+        Assert.StartsWith("Your body falls.", line);
+        Assert.Contains(hallmark, line, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AnUnrecognizedRegisterFallsThroughToTheOrdinaryDeath()
+    {
+        Assert.Equal(DeathTreatment.Mortal, DeathTreatment.ForDefeat(null));
+        Assert.Equal(DeathTreatment.Disposition(DeathTreatment.Mortal), DeathTreatment.Disposition("something_unmapped"));
+    }
+
     private static Entity AddAttacker(GameState state, string id, string faction)
     {
         var attacker = new Entity(EntityId.Create(id), id)
