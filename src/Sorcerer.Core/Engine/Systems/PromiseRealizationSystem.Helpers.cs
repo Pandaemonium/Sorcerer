@@ -582,6 +582,22 @@ public sealed partial class PromiseRealizationSystem
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+    // The source claim's tags carry the promise's semantics ("waystation", "reaping",
+    // "free_folk"), which realized content needs for affordances such as siteTag interior
+    // bindings. The promise record itself stays thin; the claim ledger is the tag owner.
+    private IReadOnlyList<string> PromiseTagsWithClaim(WorldPromise promise, string realization, RegionDefinition region)
+    {
+        var claimTags = string.IsNullOrWhiteSpace(promise.SourceClaimId)
+            ? Array.Empty<string>()
+            : _state.Claims.Records
+                .FirstOrDefault(claim => claim.Id.Equals(promise.SourceClaimId, StringComparison.OrdinalIgnoreCase))
+                ?.Tags?.ToArray() ?? Array.Empty<string>();
+        return PromiseTags(promise, realization, region)
+            .Concat(claimTags)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     private static IReadOnlyList<string> BasicPromiseTags(WorldPromise promise, string realization) =>
         new[] { "promise", realization, NormalizeToken(promise.Kind), NormalizeToken(promise.RealizationKind ?? realization) }
             .Distinct(StringComparer.OrdinalIgnoreCase)

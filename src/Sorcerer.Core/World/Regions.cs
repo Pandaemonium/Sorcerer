@@ -155,7 +155,12 @@ public sealed record RegionInteriorFeatureDefinition(
     char Glyph,
     string Material,
     IReadOnlyList<string> Tags,
-    bool BlocksMovement = false);
+    bool BlocksMovement = false,
+    // A feature may be a document: readable text plus data-authored claim seeds, so interiors
+    // can hold plans, ledgers, and schedules without object-id-specific handlers
+    // (docs/OPENING_SEQUENCE.md "promise offering from documents and props").
+    string? Readable = null,
+    IReadOnlyList<Entities.ClaimSeed>? Claims = null);
 
 public sealed record RegionInteriorDefinition(
     string Id,
@@ -169,7 +174,10 @@ public sealed record RegionInteriorDefinition(
     IReadOnlyList<string> Tags,
     IReadOnlyList<RegionInteriorFeatureDefinition> Features);
 
-public sealed record RegionInteriorBinding(string DistrictId, string InteriorId);
+// A binding attaches an interior either to a settlement district (DistrictId) or to any
+// promise-site fixture carrying SiteTag - so a promised place ("imperial relay waystation")
+// can realize as an enterable interior through region data rather than bespoke code.
+public sealed record RegionInteriorBinding(string DistrictId, string InteriorId, string? SiteTag = null);
 
 public sealed record RegionInteriorGrammarDefinition(
     IReadOnlyList<RegionInteriorDefinition> Definitions,

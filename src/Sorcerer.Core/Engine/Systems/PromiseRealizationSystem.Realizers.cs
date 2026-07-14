@@ -23,8 +23,41 @@ public sealed partial class PromiseRealizationSystem
         GridPoint placementOrigin)
     {
         var position = FindGeneratedOpenPointNear(entities, placementOrigin, 1, -1);
-        var tags = PromiseTags(promise, "site", region);
+        var tags = PromiseTagsWithClaim(promise, "site", region);
         var siteName = PromiseSiteName(promise, region);
+
+        // A promised site whose tags match a region siteTag interior binding takes shape as an
+        // enterable place - the promised waystation is a building, not a plaque
+        // (docs/FREE_FOLK_MOVEMENT.md S2). Interior generation itself stays the ordinary
+        // lazily-generated path behind the entrance.
+        var interior = GenerationSystem.InteriorForSiteTag(region, tags);
+        var entrance = interior is null
+            ? null
+            : new InteriorEntranceComponent(
+                $"interior:{NormalizeToken(region.Id)}:{NormalizeToken(interior.Id)}:{zoneId}",
+                interior.Id,
+                interior.Name,
+                interior.Kind,
+                interior.Summary,
+                interior.AccessPolicy,
+                interior.RequiredItem,
+                zoneId,
+                position.X,
+                position.Y);
+        if (interior is not null)
+        {
+            tags = tags
+                .Concat(new[] { "interior_entrance", interior.Id, interior.Kind, interior.AccessPolicy })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        var description = interior is null
+            ? promise.Text
+            : $"{promise.Text} Beyond this threshold is {interior.Name}. {interior.Summary} "
+                + (interior.AccessPolicy.Equals("public", StringComparison.OrdinalIgnoreCase)
+                    ? "The threshold is public."
+                    : $"The threshold is restricted; {interior.RequiredItem ?? "permission, force, or magic"} is one ordinary way through.");
         var site = ApplyGeneratedSpawnFixture(
             WorldConsequence.SpawnFixture(
                 $"promise:{promise.Id}:travel",
@@ -37,9 +70,11 @@ public sealed partial class PromiseRealizationSystem
                 fixtureType: "promise_site",
                 material: region.TerrainTags.FirstOrDefault() ?? "stone",
                 tags: tags,
-                blocksMovement: true,
-                description: promise.Text,
+                blocksMovement: entrance is null,
+                description: description,
                 promiseIds: new[] { promise.Id },
+                interactableVerbs: entrance is null ? null : new[] { "examine", "enter" },
+                interiorEntrance: entrance,
                 visibility: WorldConsequenceVisibility.Message,
                 evidence: promise.Text,
                 operation: "promiseSite",
@@ -51,6 +86,7 @@ public sealed partial class PromiseRealizationSystem
                     ["zoneId"] = zoneId,
                     ["regionId"] = region.Id,
                     ["realizationKind"] = "site",
+                    ["interiorId"] = interior?.Id,
                 }),
             entities,
             deltas);

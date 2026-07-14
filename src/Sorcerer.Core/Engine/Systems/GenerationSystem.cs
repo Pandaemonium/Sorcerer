@@ -745,6 +745,7 @@ public sealed class GenerationSystem
         {
             var feature = interior.Features[index];
             var position = FindGeneratedOpenPoint(generatedState, featurePoints[index % featurePoints.Length]);
+            var readable = !string.IsNullOrWhiteSpace(feature.Readable);
             TryApplyGeneratedZoneConsequence(
                 generatedState,
                 WorldConsequence.SpawnFixture(
@@ -760,12 +761,15 @@ public sealed class GenerationSystem
                     tags: feature.Tags
                         .Concat(interior.Tags)
                         .Concat(new[] { "interior_feature", interior.Id, region.Id })
+                        .Concat(readable ? new[] { "readable" } : Array.Empty<string>())
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToArray(),
                     blocksMovement: feature.BlocksMovement,
                     description: feature.Description,
-                    interactableVerbs: new[] { "examine" },
+                    interactableVerbs: readable ? new[] { "examine", "read" } : new[] { "examine" },
                     canAnchorMagic: true,
+                    readableTitle: readable ? feature.Name : null,
+                    readableText: feature.Readable,
                     visibility: WorldConsequenceVisibility.Hidden,
                     evidence: feature.Description,
                     reason: "Authored regional interior grammar instantiated a semantic fixture.",
@@ -781,6 +785,19 @@ public sealed class GenerationSystem
                     }),
                 deltas,
                 "interior feature");
+
+            // Data-authored claim seeds ride the same claim/promise machinery documents use
+            // everywhere else. Attached on the staged zone entity like scenario setup does;
+            // if a second consequence caller ever needs claims-at-spawn, promote this to a
+            // SpawnFixture parameter (rule of three).
+            if (feature.Claims is { Count: > 0 })
+            {
+                var document = generatedState.Entities.Values.FirstOrDefault(entity =>
+                    entity.Name.Equals(feature.Name, StringComparison.OrdinalIgnoreCase)
+                    && entity.TryGet<PositionComponent>(out var documentPosition)
+                    && documentPosition.Position == position);
+                document?.Set(new ClaimSourceComponent(feature.Claims));
+            }
         }
 
         var place = new WorldPlaceProfile(
@@ -1196,6 +1213,21 @@ public sealed class GenerationSystem
         var grammar = region.Interiors;
         var binding = grammar?.Bindings.FirstOrDefault(candidate =>
             candidate.DistrictId.Equals(districtId, StringComparison.OrdinalIgnoreCase));
+        return binding is null
+            ? null
+            : grammar!.Definitions.FirstOrDefault(definition =>
+                definition.Id.Equals(binding.InteriorId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // A promise-site whose tags match a region's siteTag interior binding realizes as an
+    // enterable place: promised sites become real interiors through region data, not
+    // site-specific code (docs/FREE_FOLK_MOVEMENT.md S2; used by the promise realizers).
+    internal static RegionInteriorDefinition? InteriorForSiteTag(RegionDefinition region, IReadOnlyList<string> tags)
+    {
+        var grammar = region.Interiors;
+        var binding = grammar?.Bindings.FirstOrDefault(candidate =>
+            !string.IsNullOrWhiteSpace(candidate.SiteTag)
+            && tags.Contains(candidate.SiteTag!, StringComparer.OrdinalIgnoreCase));
         return binding is null
             ? null
             : grammar!.Definitions.FirstOrDefault(definition =>

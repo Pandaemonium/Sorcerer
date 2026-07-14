@@ -130,6 +130,52 @@ public sealed class FreeFolkSeedTests
     }
 
     [Fact]
+    public async Task TheWaystationIsEnterableAndHoldsThePlans()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 7);
+        DisableImperialAi(session);
+        var state = session.Engine.State;
+        MovePlayerTo(session, new GridPoint(5, 6));
+        var read = await session.ExecuteAsync(new ReadCommand("notice"));
+        Assert.True(read.Success, string.Join(" | ", read.Messages));
+        var lead = Assert.Single(state.PromiseLedger.Promises, promise =>
+            promise.Subject.Contains("waystation", StringComparison.OrdinalIgnoreCase));
+
+        await TravelTo(session, lead.ClaimedPlace!);
+
+        // The promised site is a building, not a plaque: it carries a real threshold.
+        var site = Assert.Single(state.Entities.Values, entity =>
+            entity.Id.Value.StartsWith("promise_site_", StringComparison.OrdinalIgnoreCase)
+            && entity.Name.Contains("waystation", StringComparison.OrdinalIgnoreCase));
+        Assert.True(site.Has<InteriorEntranceComponent>());
+
+        // Enter with the ordinary credential route (force/magic are other doors in).
+        state.ControlledEntity.Get<InventoryComponent>().Items["imperial cell key"] = 1;
+        MovePlayerTo(session, site.Get<PositionComponent>().Position);
+        var entered = await session.ExecuteAsync(new EnterCommand(site.Id.Value));
+        Assert.True(entered.Success, string.Join(" | ", entered.Messages));
+
+        // The plans are inside as ordinary readable claim sources.
+        var ledger = Assert.Single(state.Entities.Values, entity =>
+            entity.Name.Equals("requisition ledger", StringComparison.OrdinalIgnoreCase));
+        Assert.True(ledger.Has<ClaimSourceComponent>());
+        MovePlayerTo(session, ledger.Get<PositionComponent>().Position.Translate(1, 0));
+        var readLedger = await session.ExecuteAsync(new ReadCommand("requisition ledger"));
+        Assert.True(readLedger.Success, string.Join(" | ", readLedger.Messages));
+        Assert.Contains(state.PromiseLedger.Promises, promise =>
+            promise.Subject.Equals("confiscated name-charm", StringComparison.OrdinalIgnoreCase)
+            && promise.Status == "bound");
+
+        var dispatch = Assert.Single(state.Entities.Values, entity =>
+            entity.Name.Equals("sweep dispatch case", StringComparison.OrdinalIgnoreCase));
+        MovePlayerTo(session, dispatch.Get<PositionComponent>().Position.Translate(1, 0));
+        var readSchedule = await session.ExecuteAsync(new ReadCommand("sweep dispatch case"));
+        Assert.True(readSchedule.Success, string.Join(" | ", readSchedule.Messages));
+        Assert.Contains(state.Claims.Records, claim =>
+            claim.Tags.Contains("sweep_schedule", StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void TheReapingLandsOnRealPeopleIfIgnored()
     {
         var session = GameSession.CreateImperialEncounter(seed: 7);

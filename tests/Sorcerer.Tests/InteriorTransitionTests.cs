@@ -20,7 +20,7 @@ public sealed class InteriorTransitionTests
         var catalog = RegionCatalog.LoadDefault();
         var graph = WorldPlaceGraph.Create(7, catalog);
 
-        Assert.Equal(15, catalog.Regions.Sum(region => region.Interiors?.Definitions.Count ?? 0));
+        Assert.Equal(17, catalog.Regions.Sum(region => region.Interiors?.Definitions.Count ?? 0));
         Assert.All(catalog.Regions, region =>
         {
             var grammar = Assert.IsType<RegionInteriorGrammarDefinition>(region.Interiors);
@@ -45,7 +45,11 @@ public sealed class InteriorTransitionTests
                 .Where(id => id is not null)
                 .Cast<string>()
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            Assert.All(grammar.Bindings, binding => Assert.Contains(binding.DistrictId, footprintDistricts));
+            // District bindings must name a district inside the primary settlement's footprint;
+            // siteTag bindings attach to promise-site fixtures instead and carry no district.
+            Assert.All(
+                grammar.Bindings.Where(binding => string.IsNullOrWhiteSpace(binding.SiteTag)),
+                binding => Assert.Contains(binding.DistrictId, footprintDistricts));
         });
 
         var capital = catalog.Region("vigovian_capital")!.Interiors!;

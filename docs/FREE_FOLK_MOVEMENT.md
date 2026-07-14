@@ -434,6 +434,16 @@ ground for handoffs.
    intelligence, all five routes playable, graded outcomes verified. Exit: force, stealth,
    social, interception, and forgery each end with different documents, deeds, and provenance;
    the heist works with or without the cell's help and remembers which happened.
+   _Status: **first increment done 2026-07-14** — the waystation is a real enterable place
+   holding the plans, via two general mechanisms: region interior bindings gained `siteTag`
+   (any promise-site fixture whose claim tags match realizes as an enterable interior — data,
+   not site-specific code), and interior features gained `readable` + `claims` (data-authored
+   documents that ride the ordinary claim/promise machinery). The relay waystation interior
+   ships in hollowmere_margin and vigovian_capital with the sweep dispatch case (schedule
+   claim), the requisition ledger (first item-promise vein of the promise mine, blanks
+   included), and the relay signal bell. Access is restricted (credential/force/magic).
+   Remaining for S2 proper: the cast (clerk, courier, post-captain), the watching cell as
+   giver, the courier-interception and forgery routes, and graded provenance outcomes._
 3. **S3 — Provenance strategy** (Phase 2.2 extension): sweep scheduling reads theft-deed
    visibility; reroutes, countdowns, and false-plan marches work; aftermath texture in swept
    settlements. Exit: the quiet-heist and loud-heist runs produce different sweep behavior a

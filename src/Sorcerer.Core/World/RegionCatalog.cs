@@ -465,7 +465,9 @@ public static class RegionCatalog
                         ReadChar(feature, "glyph", '&'),
                         ReadString(feature, "material", "stone"),
                         ReadStringList(feature, "tags"),
-                        ReadBool(feature, "blocksMovement", ReadBool(feature, "blocks_movement", false))))
+                        ReadBool(feature, "blocksMovement", ReadBool(feature, "blocks_movement", false)),
+                        ReadNullableString(feature, "readable"),
+                        ReadClaimSeeds(feature)))
                     .ToArray()))
             .Where(definition => !string.IsNullOrWhiteSpace(definition.Id)
                 && !string.IsNullOrWhiteSpace(definition.Summary)
@@ -474,13 +476,35 @@ public static class RegionCatalog
         var bindings = ReadArray(root, "bindings")
             .Select(item => new RegionInteriorBinding(
                 ReadString(item, "districtId", ReadString(item, "district_id", "")),
-                ReadString(item, "interiorId", ReadString(item, "interior_id", ""))))
-            .Where(binding => !string.IsNullOrWhiteSpace(binding.DistrictId)
+                ReadString(item, "interiorId", ReadString(item, "interior_id", "")),
+                ReadNullableString(item, "siteTag") ?? ReadNullableString(item, "site_tag")))
+            .Where(binding => (!string.IsNullOrWhiteSpace(binding.DistrictId) || !string.IsNullOrWhiteSpace(binding.SiteTag))
                 && definitions.Any(definition => definition.Id.Equals(binding.InteriorId, StringComparison.OrdinalIgnoreCase)))
             .ToArray();
         return definitions.Length == 0 || bindings.Length == 0
             ? null
             : new RegionInteriorGrammarDefinition(definitions, bindings);
+    }
+
+    private static IReadOnlyList<Entities.ClaimSeed>? ReadClaimSeeds(JsonElement root)
+    {
+        var claims = ReadArray(root, "claims")
+            .Select(item => new Entities.ClaimSeed(
+                ReadString(item, "text", ""),
+                ReadString(item, "category", "document"),
+                ReadString(item, "subject", ""),
+                Salience: ReadInt(item, "salience", 3),
+                Confidence: ReadInt(item, "confidence", 80),
+                PlayerVisible: ReadBool(item, "playerVisible", ReadBool(item, "player_visible", true)),
+                BindAsPromise: ReadBool(item, "bindAsPromise", ReadBool(item, "bind_as_promise", false)),
+                PromiseKind: ReadNullableString(item, "promiseKind") ?? ReadNullableString(item, "promise_kind") ?? "rumor",
+                RealizationKind: ReadNullableString(item, "realizationKind") ?? ReadNullableString(item, "realization_kind"),
+                TriggerHint: ReadNullableString(item, "triggerHint") ?? ReadNullableString(item, "trigger_hint"),
+                ClaimedPlace: ReadNullableString(item, "claimedPlace") ?? ReadNullableString(item, "claimed_place"),
+                Tags: ReadStringList(item, "tags")))
+            .Where(seed => !string.IsNullOrWhiteSpace(seed.Text))
+            .ToArray();
+        return claims.Length == 0 ? null : claims;
     }
 
     private static IReadOnlyList<JsonElement> ReadArray(JsonElement root, string property) =>
