@@ -24,9 +24,171 @@ The danger is that each new idea grows a private state lane, helper, command, pr
 readout until the code contains many correct pieces that do not make one good game. This plan is
 organized to prevent that.
 
-Do not attempt this entire plan in one change. Execute one numbered work package at a time. Each
-package ends in a playable build, focused tests, a CLI episode, a Godot check, and a short evidence
-note. Stop at its exit gate before beginning the next.
+Execute this plan as a sequence of playable vertical changes, not as one blind rewrite. A numbered
+package is the smallest reviewable unit, but its exit gate is an evidence check rather than a
+permission barrier. Keep moving through the next package while the build is sound and the next
+highest-value change is clear.
+
+## Owner calibration — binding product direction
+
+These decisions were settled on 2026-07-13 for the overnight implementation sprint and future
+work. When several technically sound interpretations exist, choose the one that best matches this
+section.
+
+### Overnight authority and operating mode
+
+- **The morning result must be player-visible gameplay improvement.** Architectural cleanup is
+  valuable when it makes that improvement easier to implement, understand, or extend; cleanup by
+  itself is not the sprint outcome.
+- Continue autonomously through **Phase 7**. Do not stop at a phase boundary merely to request
+  review. If a package is already substantially met, close its smallest real gap and move on.
+- Very large refactors are authorized when they reduce duplication and leave a more legible route
+  to gameplay. Keep the build runnable at coherent checkpoints; do not preserve a bad seam merely
+  because changing it makes the diff large.
+- If a genuinely necessary durable concept, command, component, or consequence survives the
+  feature-admission test, implement the feature end to end. Do not leave an abstract scaffold or
+  wait for owner approval. The new concept must ship with writers, readers, persistence, both
+  interfaces, tests, presentation, and deletion of the superseded representation.
+- **There is no pre-Early-Access compatibility obligation.** Break internal saves, transcripts,
+  APIs, test fixtures, aliases, and content schemas when doing so simplifies the game. Update or
+  regenerate current fixtures and delete the old path in the same change. Do not add migrations,
+  fallbacks, dual reads/writes, deprecated wrappers, or legacy branches for unreleased builds.
+  Public-save compatibility begins only when an Early Access build creates that promise.
+- Do not stop because the diff is large, a product choice is locally uncertain, or a test exposes
+  more work. Diagnose, simplify, fix, delete an incomplete approach if needed, and continue. A true
+  external blocker such as missing credentials or an unavailable service should be recorded, then
+  work should continue on every unaffected lane rather than spawning fallback machinery.
+
+The overnight implementation loop is:
+
+1. Play the current build manually through the real CLI.
+2. Choose the most damaging player-visible break in curiosity, casting, travel, tactical mastery,
+   organic direction, relationship, or legibility.
+3. Implement the smallest general end-to-end improvement through the shared command,
+   consequence, time, and view spines.
+4. Delete the duplicate, dead code, obsolete fixture, and superseded representation immediately.
+5. Run focused tests, then manually replay the affected route with the live resolver.
+6. At stable checkpoints, run the full suite, record the evidence and complexity delta, and
+   continue with the next highest-value break.
+
+Live playtests are first-person implementation work, not delegated agent simulations. Run them
+frequently—after every player-facing vertical change and at least once per substantial structural
+increment—using the CLI with `--provider gemini --model gemini-3.5-flash --effort medium`. Keep
+useful transcripts and latency/result notes. Mock and replay providers remain fast regression
+tools, but they are not evidence that tonight's casting, dialogue, or overall game feels good. Do
+not expose API keys in commands, transcripts, logs, or documentation.
+
+### The desired play texture
+
+- The model-free ten minutes are about **curiosity**: traveling across a legible map, discovering
+  culturally specific scenery and usable props, exploring interiors and roads, and occasionally
+  fighting with reliable charter magic. Play should mix permissive flow with deliberate reading
+  when a real commitment deserves it.
+- Combat is meaningful and **medium-infrequent**, not the filler between locations. It should be
+  only medium-lethal before the capital. Death feels fair when the game clearly showed danger and
+  the player wasted time, ignored an escape, or failed to use the opportunity to author a better
+  spell—not when an opaque enemy or surprise damage erased them.
+- Because wild resolution contains uncertainty, deterministic play must supply mastery. Enemies
+  have learnable attack patterns, ranges, intents, rhythms, defenses, weaknesses, terrain
+  preferences, and counters. Inspection and prior encounters teach these facts; telegraphs are
+  generous; actual behavior follows them unless changed state explains the divergence.
+- Retreat, surrender, bribery, disguise, theft, avoidance, social leverage, transformation, and
+  victory by force are all strongly viable. Do not quietly make killing the universal efficient
+  answer.
+- Inventory is extremely permissive. Prefer generous or effectively unbounded carrying,
+  automatic stacking, concise sorting, protection for treasured objects, and low-friction use over
+  slot puzzles, encumbrance, durability, identification chores, or frequent comparison cleanup.
+  Scarcity belongs in desirable consumable spell components and distinctive gear, not in making
+  the player manage a backpack.
+- Generic rat and wolf fights are explicitly outside the content target. A fight earns its place
+  by teaching a specific enemy, culture, terrain interaction, relationship pressure, or useful
+  material.
+
+### Power, progression, and wild magic
+
+- A typical route should offer a worthwhile fresh authored cast at least every three minutes.
+  This is a cadence target, not a cooldown: dense circumstances and player taste may produce more.
+- Thirty seconds is the maximum acceptable wait for an excellent local-model cast. The current
+  sprint uses Gemini to judge resolution quality; later local-model tuning must meet the same
+  experiential ceiling through routing, context control, progress presentation, and instant
+  charter/echo alternatives.
+- Wild magic should resolve **very strongly**. “Yes, at a price” may shortcut or solve a major
+  problem and may exact a devastating durable cost, including something on the scale of 15 maximum
+  HP. Prefer an audacious accepted transformation with legible consequences over timid numerical
+  effects or routine refusal. Exact severity balance can follow once the power fantasy is real.
+- Player control over cost category and the frequency of beyond-scene consequences are both
+  medium: preparation, wording, chosen components, and casting performance may bias them without
+  making the result deterministic. Costs must remain causally legible and must not invalidate the
+  premise of using powerful magic without being crippled every time.
+- Strong resolutions are the primary feeling of becoming a sorcerer. By Foothold, a player should
+  be able to deploy very strong wild magic without every cast demanding a crippling price, while
+  charter forms retain the reliable tactical floor.
+- Within-run stat growth is a normal recurring progression lane. Rare culturally specific items
+  may become permanent stat growth when deliberately consumed as part of an authored spell; this
+  must use general item/material, cost, and stat-change consequences rather than item-id recipes.
+- Body swap should be materially transformative in a successful run. Bodies change physical
+  stats, inventory context, access, identity, and tactics while the soul retains its appropriate
+  continuity.
+- A player may comfortably gather roughly **ten followers**. Use autonomous behavior, formations
+  or standing orders, group movement, concise status summaries, and low-maintenance recovery so a
+  following feels like social power rather than ten inventories and ten turn menus. The player
+  chooses whether the resulting life is broad, specialized, socially embedded, scarred, or mixed.
+
+### Mischief, relationships, and response
+
+- Temporary false identities should be relatively easy to establish, and keeping two identities
+  unlinked should also be achievable with competent play. The Empire is dangerous because its
+  evidence and institutions are real, not because it receives hidden omniscience.
+- Deep friends do not automatically pierce every body change. Soul recognition may require
+  evidence such as a shared memory. The player receives a clear log message naming who witnessed a
+  deed and which identity they attributed it to.
+- Physical objects, testimony, magical signatures, shared memories, and paperwork are equally
+  valid evidence. Let the player get away with audacious deceit if they execute it well. If they
+  slip, the resulting institutional and human consequences should be causal, legible, and capable
+  of becoming emotionally uncomfortable without moralizing through hidden punishment.
+- NPCs should approach or interrupt reasonably often. Follower devotion, departure, and betrayal
+  are reasonably predictable from known wants, bonds, memories, and circumstances. Relationships
+  may crystallize around a few memorable acts or accumulate gradually, depending on the people.
+- A return may arrive almost immediately or much later according to its fiction. The player must
+  have good affordances to track promises, relationships, identities, rumors, and pressures.
+  Journals may be explicit about wants and possible satisfaction; preserve mystery only where it
+  creates curiosity without hiding the next actionable step.
+- Conversation is a major portion of playtime, not merely a vending interface. Keep individual
+  exchanges purposeful and state-bearing even when their writing is leisurely.
+
+### Campaign, persistence, and slice scope
+
+- Components and distinctive gear are the economy's recurring temptation. Scarcity should force
+  meaningful choices reasonably often because components are consumed in spells, while avoiding
+  survival chores and hard-locking essential routes.
+- A foothold means a real safe haven and potentially a growing following. The War movement should
+  support creative combinations of relationships, spells, routes, identity, promises, sabotage,
+  liberation, and transformed places rather than generated errands.
+- Force, infiltration, and coalition/prophecy routes into the capital are legibly discoverable and
+  roughly equal in difficulty. One spectacular spell may shortcut a large part of the campaign,
+  but doing so should be difficult and should leave commensurate state for the world to answer.
+- After Odran dies, do not stage a symmetrical debate about the value of imperial order. The people
+  eager to approach the sorcerer are mostly those expressing gratitude for freedom; those who
+  valued the old peace are generally absent, wary, grieving, or recorded indirectly. The chronicle
+  can retain the world's full truth without forcing a post-victory lecture.
+- **Classic mode:** saving is suspension only. The single current save is consumed/locked when
+  loaded, cannot be used to retry outcomes, and is deleted on death. Death is permanent.
+- **Roleplay mode:** the same simulation and difficulty, with ordinary freely created and loaded
+  saves. It replaces the previously planned checkpoint-restoration mode. Delete checkpoint
+  snapshots, restoration counters, checkpoint UI, tests, and branches rather than retaining them
+  beside Roleplay mode. Neither mode has meta-progression.
+- After death, one input starts a fresh world immediately. The chronicle should celebrate the
+  authored story, report what the world believed, and confront unresolved promises and
+  relationships—all from authoritative state.
+- The full-density target transect is now **Marble Containment Yard → Hollowmere Margin → Brall →
+  Vigovian Capital**. Brall is the first major old kingdom to receive slice density. Its memorable
+  cultural mechanism is warm, collaborative boasting about other people's deeds: witnessed acts
+  become increasingly extravagant shared tales without turning every Brall character into a
+  joke.
+- The smallest complete Sorcerer is a game where casting is powerful, fun, and rewarding; quests
+  arise organically from wants, claims, promises, and places; and relationships become meaningful
+  mechanics. When scope must contract, protect those three outcomes and the deterministic
+  curiosity/tactical floor that supports them.
 
 ## The product compass
 
@@ -291,23 +453,26 @@ For every numbered package below:
    access, before variants.
 4. **Delete the duplicate:** remove superseded mutation helpers, message builders, fallbacks, or
    special cases in the same package.
-5. **Prove it:** run focused tests, the full test suite, a mock CLI episode, save/replay when
-   durable, and the named human feel check.
+5. **Prove it:** run focused tests, a manual live-Gemini CLI episode, save/replay when durable, and
+   the named feel check. Run the full suite at each stable checkpoint and before declaring a phase
+   substantially met. Use mock/replay episodes as regression coverage, not as the feel check.
 6. **Review the diff as design:** list new public types, durable fields, consequence types,
    commands, flags, and provider calls. Each needs an explicit justification. Report what was
    removed and which existing systems gained a new reader.
 7. **Update durable docs:** architecture/subsystem docs and this plan's status in the same change.
 
-If a package reveals that its proposed representation is wrong, stop and amend the plan before
-stacking compatibility layers on it.
+If a package reveals that its proposed representation is wrong, amend the plan, delete the failed
+representation, and continue from the simpler design. Never stack a compatibility layer on an
+unreleased implementation.
 
 ---
 
 ## Phase 0 — Converge the current hotspots without changing the game
 
 Goal: create room for the roadmap without trading the existing monoliths for dozens of tiny
-abstractions. This phase is behavior-preserving except for removal of confirmed duplicate
-messages or dead branches.
+abstractions. The completed characterization work was behavior-preserving; remaining cleanup may
+break pre-release contracts and delete obsolete behavior when that directly enables the gameplay
+phases.
 
 Current review smells, not accusations:
 
@@ -393,22 +558,24 @@ Recommended shape:
 - Do not create one class and interface per consequence type. Family boundaries should correspond
   to shared invariants and shared reasons to change.
 - Centralize payload coercion in the existing payload builder/reader seam. Prefer small typed
-  internal payload records for complicated handlers while keeping the serialized envelope
-  backward-compatible. Do not big-bang rewrite every dictionary merely for type purity.
+  internal payload records for complicated handlers. If the serialized envelope is needlessly
+  tangled, replace it cleanly and regenerate current fixtures; do not retain dual formats for
+  pre-release compatibility. Do not big-bang rewrite every dictionary merely for type purity.
 - Centralize compound packet execution behind one internal transaction runner. Child mutations
   still use the injected shared consequence sink; this is not a second public apply point.
 - Move subject/object grammar and visibility filtering to one shared narration helper used by
   handler families. It formats already-decided truth; it does not decide rules.
 - Delete migrated methods from the original facade immediately. Do not leave forwarding methods
-  or compatibility aliases unless saved public data requires them.
+  or compatibility aliases; no public save contract exists yet.
 
 Migrate incrementally, never as a single rewrite: add shared context/registry under
 characterization; move one simple family; remove its old methods; run focused and full tests; then
 repeat. Move compound interaction/service/promise families last, after primitive child handlers are
 stable. Every intermediate commit must compile and preserve the public apply facade.
 
-**Tests:** all dispatch/alias characterization cases; each family directly; nested child rejection;
-exception rollback; invalid resulting state; visibility; save/replay compatibility.
+**Tests:** all current dispatch/alias cases that remain intentional; each family directly; nested
+child rejection; exception rollback; invalid resulting state; visibility; current-format
+save/replay behavior.
 
 **Exit:** adding a consequence touches its family handler and the authoritative type/metadata
 registry, not a 7,600-line switch. The guard/apply point, serialized contract, deltas, and behavior
@@ -447,7 +614,7 @@ Extract cohesive collaborators:
   update promises, and apply claim affordances transactionally. It is source-agnostic enough for
   dialogue, books, signs, props, and services to use one path.
 - **Run lifecycle coordinator:** victory/defeat detection, run-status packet, chronicle assembly,
-  and restart/checkpoint hooks.
+  Classic/Roleplay save authority, and immediate-restart hooks.
 - **Persistence coordinator:** flush non-authoritative pending materializations, then call the
   existing save service. It does not own state serialization rules.
 
@@ -500,8 +667,8 @@ state. Golden promise/save/replay behavior remains unchanged.
   acceptable only for scenario setup or restoration and should be obvious.
 - Do not create a giant test framework. Extract fixtures only after repeated setup proves stable.
 
-**Phase 0 exit gate:** full suite and golden transcripts are behaviorally stable; save/replay is
-compatible; the four hotspots have cohesive boundaries; total production code need not shrink
+**Phase 0 exit gate:** full suite and golden transcripts are behaviorally stable; current-format
+save/replay works; the four hotspots have cohesive boundaries; total production code need not shrink
 dramatically, but duplicated branches and helpers do. The implementer can point to one place for
 command routing, one apply point, one claim lifecycle, one promise-planning lifecycle, and one
 message-visibility policy.
@@ -592,6 +759,9 @@ the next command without debug state.
   visible-result time without creating multiple telemetry models.
 - Dialogue tiers, instant charter/echo alternatives, cancellation, and retry reuse the pending-work
   view.
+- For the sprint, measure every live spell pass with Gemini 3.5 Flash at medium effort. Later local
+  model acceptance is p95 at or below the thirty-second experiential ceiling; first optimize
+  routing, prompt/context size, queueing, and presentation rather than weakening resolutions.
 - The telemetry path is audit/diagnostic only. It never alters runtime mechanics.
 
 **Phase 1 exit gate:** roadmap Milestone 0 is genuinely empty; the hidden player is mechanically
@@ -638,12 +808,22 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
 ### 2.3 Progression as a capability portfolio
 
 - Use existing lanes: charter forms, named echoes, equipment/foci/reagents, treasured items,
-  bodies, followers, services, bonds, faction posture, routes, promises, scars, and rare typed stat
+  bodies, followers, services, bonds, faction posture, routes, promises, scars, and typed stat
   changes.
 - Add a read-only capability summary for telemetry/debug and a qualitative player journal/history
   surface. Do not add XP, levels, or a new progression currency.
 - Tune the reference route so at least two capability lanes materially change problem-solving by
   the end of Foothold.
+- Make within-run Vigor, Attunement, and Composure growth a meaningful recurring lane. Author rare
+  items whose semantic/material traits make them tempting spell components; when a player
+  deliberately spends one in a fitting authored cast, the resolver may propose an ordinary durable
+  stat change as part of the validated cost/outcome packet. Never key this to a specific item name
+  or phrase.
+- Body swaps must be capable of changing tactics, access, risk, physical capacity, carried
+  inventory, and institutional identity—not merely portrait or control pointer.
+- Tune follower control for about ten simultaneous allies: group-follow and transition behavior,
+  simple stance/formation orders, autonomous action, obstruction handling, and a concise shared
+  view. Do not add per-follower equipment chores or a second party-combat ruleset.
 - Echo fatigue/drift protects fresh authorship. Charter forms cover routine reliability. Neither
   becomes a second spell game.
 
@@ -651,11 +831,15 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
 
 - Keep explicit deterministic buy/sell/service commands and one price policy.
 - Add recurring sinks by composing existing state: transport, rest/lodging, information, bribery
-  or credential access, reagents/equipment, and costly recovery.
+  or credential access, spell components/equipment, and costly recovery. Components and distinctive
+  gear should be the strongest recurring temptations.
 - Merchants and providers remain normal NPCs with stock/services/wants. Do not add separate shop,
   inn, transport, or bribery systems when offers plus consequences suffice.
 - Money, items, promises, memories, standing, and services may all be payment media when the
   existing consequence grammar can validate them. Do not ask a model to infer trade intent.
+- Carrying capacity is not the scarcity lever. Use permissive capacity, automatic stacking and
+  sorting, low-friction pickup/use, and treasured-item protection. Create choices through which
+  consumable materials to spend on magic, trade, or keep for later semantic leverage.
   - _Status (31ebe59):_ the economy system is complete and graceful -- buy/sell (`ApplyExecuteTrade`)
     are the sources, services/purchases the sinks (`PayServiceCost` consumes gold transactionally),
     and a payment the sorcerer cannot afford rolls the request back rather than deadlocking a seed.
@@ -666,22 +850,24 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
 
 ### 2.5 Persistence modes as one simulation
 
-- Add a durable run-mode value: classic or checkpoint. The engine rules, content, RNG, economy,
-  enemies, and victory remain identical.
-- Save-on-quit is universal. Checkpoint mode stores an authoritative settlement-rest snapshot and
-  restores it on death through the persistence/run-lifecycle boundary.
-- Do not maintain a parallel checkpoint game state or fork action logic by mode. Only death
-  handling differs.
-- Chronicles record mode and restoration count without shaming or changing rewards.
-  - _Status (21ba8ec, 9b99a2e):_ durable `RunMode` value (classic/checkpoint) recorded in the
-    chronicle; checkpoint restore-on-death implemented. A safe rest -- a settlement place with no
-    perceivable hostile (`FindNearestHostile() == null`, which correctly excludes the guard-filled
-    start) -- records an in-memory full-state `GameStateSnapshot`; a killing blow in checkpoint mode
-    restores it instead of ending the run, before the 2.6 defeat path. Only death handling forks; no
-    parallel state. Deliberate deviation: the snapshot is an in-memory within-session safety net
-    orthogonal to the run save, not routed through the persistence boundary (so no save-contract
-    change). Remaining: restoration count in the chronicle; whether checkpoints should survive
-    quit/load (currently they do not -- the next safe rest re-forms one). `CheckpointModeTests`.
+- Keep one durable run-mode value: **classic** or **roleplay**. Engine rules, content, RNG, economy,
+  enemies, difficulty, and victory remain identical; only save authority differs.
+- Classic has one suspension save. Saving exits the live run. Loading consumes or locks that save
+  before play continues so copying/reloading is not an in-game retry path. Death ends the run and
+  deletes its suspension save.
+- Roleplay exposes ordinary manual save and load with multiple slots/autosave as product UX allows.
+  Loading restores the entire authoritative snapshot; there is no partial rewind, remembered
+  death, imperial foreknowledge, restoration tax, or altered chronicle.
+- Delete the checkpoint-restoration implementation, `GameStateSnapshot` rest checkpoint,
+  restoration count, checkpoint-specific tests/UI/messages, and any `RunMode` aliases. Rename the
+  mode cleanly; do not deserialize or migrate unreleased checkpoint saves.
+- Both modes use the same serializer and session factory. Do not fork commands, action logic,
+  balance, content, or world state. Chronicles record the chosen mode without shaming or changing
+  rewards.
+
+_Owner decision superseding the 2026-07-13 checkpoint experiment:_ commits `21ba8ec`/`9b99a2e`
+proved that the simulation could restore a snapshot, but settlement restoration is no longer the
+desired product. Treat that code as deletion inventory, not a compatibility obligation.
 
 ### 2.6 Death, victory, chronicle, restart
 
@@ -692,21 +878,24 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
     imperial/wild/mortal); a shared `DeathTreatment` helper maps it to a treatment consumed in three
     places -- `RunChronicle.Treatment`, the defeat narration (`DeathTreatment.Disposition`, read in
     the killer's register), and the cross-run memorial (an imperial death leaves a Censorate
-    incident-marker, a wild death an unquiet stone, else the weathered memorial). Backward compatible
-    with pre-Treatment memorials. `DeathTreatmentTests` pins all of it. Restart already exists through
-    the session factory (`CreateImperialEncounter` / Godot `StartNewRun`); the one coupled piece still
-    open is checkpoint restore-on-death, which is 2.5's behavioral half.
+    incident-marker, a wild death an unquiet stone, else the weathered memorial).
+    `DeathTreatmentTests` pins all of it. Delete pre-`Treatment` fallback reads and regenerate old
+    fixtures under the pre-EA compatibility policy. Restart already exists through the session
+    factory (`CreateImperialEncounter` / Godot `StartNewRun`); make it a one-input path from every
+    death surface.
 - Assemble chronicles from deeds/rumors, unrealized bound promises, deepest bonds, capability
-  portfolio, route, faction posture, and run conclusion. Do not accumulate a parallel narrative
-  summary during play.
+  portfolio, route, faction posture, run conclusion, what the world believed, and important
+  unresolved consequences. Do not accumulate a parallel narrative summary during play.
 - Restore or start a new run through the same scenario/session factory. Cross-run memorials seed
   rumor/canon texture only; no power crosses.
 
 **Phase 2 tests and proofs:**
 
 - Each of the three capital routes completes under replay.
-- Reference classic run wins in 6–8 hours; checkpoint death/restoration can continue to victory.
-- Save/quit/load works during every derived movement and with pending materialized provider work.
+- Reference classic run wins in 6–8 hours; death deletes its suspension save and one input starts a
+  fresh seed. A Roleplay run can save, reload, and continue to victory.
+- Classic save/exit/resume and Roleplay save/load work during every derived movement and with
+  pending materialized provider work.
 - Economy has measured sources and recurring sinks; no required purchase can deadlock a seed.
 - Chronicle names the actual route and omits facts the world/player never established.
 - One input starts a different seed and surfaces a meaningful difference in twenty minutes.
@@ -719,8 +908,9 @@ restart.
 
 ## Phase 3 — Make the deterministic ten minutes excellent
 
-Goal: Sorcerer remains a compelling turn-based game with providers disabled. The model should turn
-good situations into singular ones, not rescue repetitive movement and combat.
+Goal: Sorcerer remains a compelling turn-based game with providers disabled. Curiosity, travel,
+specific scenery, usable props, and reliable charter magic carry ordinary play. The model should
+turn good situations into singular ones, not rescue repetitive movement and combat.
 
 Every encounter should pose at least two of these questions:
 
@@ -743,6 +933,10 @@ Every encounter should pose at least two of these questions:
 - Add a new AI action primitive only when at least two archetypes and a non-enemy actor can use it.
 - A named hunter is an archetype plus identity, want, memories, knowledge, and equipment—not a new
   AI implementation.
+- Every archetype needs a learnable tactical identity: a recognizable approach pattern, at least
+  one dangerous commitment, one defense or immunity, one meaningful weakness/counter, and one
+  relationship with terrain, allies, props, or timing. Do not spend slice slots on generic rats,
+  wolves, or interchangeable melee sacks.
 
 ### 3.2 Intent telegraphing through the shared view
 
@@ -754,6 +948,13 @@ Every encounter should pose at least two of these questions:
 - Godot renders glyph/color/motion hints; CLI JSON exposes structured intent. Renderers do not
   recompute it.
 - Do not reveal hidden actors or secret goals through intent views.
+- `inspect` and the equivalent GUI surface expose currently knowable attack ranges, charter forms,
+  resistances, weaknesses, status interactions, and observed behavior. First contact may show
+  obvious anatomy/equipment; surviving or observing an action can add remembered knowledge. This
+  is player mastery, not a debug-only bestiary.
+- Telegraph severe actions early enough that the player can reposition, retreat, disrupt, use a
+  known counter, or spend the turn authoring wild magic. If the forecast changes, the result must
+  name the board change that caused it.
 
 ### 3.3 One tactical grammar
 
@@ -793,6 +994,12 @@ facts tell the world what happened.
 
 Do not create an `EncounterLedger` or scripted room graph for the vertical slice.
 
+Combat cadence is medium-infrequent: travel and exploration should contain many useful discoveries,
+interactions, and navigational decisions without a fight. Do not insert an encounter merely because
+a road has been quiet. Routine fights should resolve briskly once the player reads the pattern;
+longer fights earn their length through changing terrain, social stakes, reinforcements, or an
+elite interaction.
+
 ### 3.5 Reliable tempo around authored magic
 
 - Charter forms cover weak, precise, frequent tactical needs and interact with witnessing as
@@ -800,8 +1007,13 @@ Do not create an `EncounterLedger` or scripted room graph for the vertical slice
 - Echoes replay player-authored mechanics through current validation and target binding. Implement
   seeded drift only after fatigue and usage telemetry show echoes remain worth keeping.
 - Targeting, item use, movement, surrender, fleeing, and charter/echo actions remain instant.
-- Fresh wild casts should be tempting at pivotal moments, not optimal every turn. Measure fresh
-  cast variety and echo/charter share rather than enforcing an arbitrary cooldown.
+- Fresh wild casts should be tempting whenever curiosity or danger produces a rich situation,
+  averaging at least one worthwhile authored opportunity per three minutes. They need not be
+  optimal every turn. Measure opportunity cadence, fresh-cast variety, resolution strength, and
+  echo/charter share rather than enforcing an arbitrary cooldown.
+- Prefer a strong, specific resolution that substantially changes the current problem. A major
+  problem may be solved outright if the validated price and resulting world state are equally
+  substantial. Do not make routine crippling costs the price of feeling powerful.
 - Apply casting performance at the engine boundary using existing consequence severity and
   complication families. A poor score creates legible risk, not random unrelated punishment;
   skipping remains neutral.
@@ -813,6 +1025,10 @@ Do not create an `EncounterLedger` or scripted room graph for the vertical slice
   difficulty rises.
 - Enemies telegraph severe actions; wild costs name what they took; provider failure never becomes
   danger.
+- Before the capital, tune ordinary combat to be only medium-lethal. A lethal sequence must expose
+  enough warning and counterplay that the lost turns are retrospectively understandable. Avoid
+  undodgeable burst, opaque immunity, unavoidable pursuit, or attrition deaths caused chiefly by
+  travel filler.
 - Avoid hunger, durability chores, inventory busywork, or attrition systems whose main function is
   extending the run.
 
@@ -821,12 +1037,17 @@ Do not create an `EncounterLedger` or scripted room graph for the vertical slice
 - Provider-off ten-minute tests remain tactically varied across at least five encounter grammars.
 - AI intent and actual action agree when state does not change and diverge explainably when it does.
 - Each archetype has a systemic counter besides raw damage.
+- A player who has fought or studied an archetype can accurately predict its core attack, range,
+  dangerous tell, defense, and at least one counter without debug state.
+- Encounter frequency leaves ten-minute routes where exploration and scenery stay interesting
+  without combat, while combat samples remain consequential when they occur.
 - Noncombat resolutions update the same authoritative facts used by combat outcomes.
 - Terrain/status/AI rules are seed-stable, saveable, replayable, and represented in both views.
 - No per-archetype class or per-encounter completion handler enters the engine.
 
-**Phase 3 exit gate:** tactical feel, legibility, and pace score at least 4/5 in the reference
-slice without relying on a live model. Adding a new archetype is predominantly data authoring.
+**Phase 3 exit gate:** curiosity, tactical mastery, legibility, and pace score at least 4/5 in the
+reference slice without relying on a live model. Adding a new archetype is predominantly data
+authoring, and the player can explain why a death was avoidable.
 
 ---
 
@@ -870,6 +1091,10 @@ ratio for a new lane.
 - False names may create thin identities only when supported by context. Their credibility derives
   from matching body, clothing, papers, memories, or claims—not a new disguise meter.
 - A magical signature can leak across identities through witnessed wild-magic deeds.
+- Ordinary guards should be relatively easy to fool with a coherent temporary identity. Maintaining
+  two identities without a Censorate link should remain a practical skill path; difficulty comes
+  from contradictory evidence, repeated signatures, careless witnesses, and use of the wrong
+  credentials, not hidden detection bonuses.
 
 ### 4.3 Evidence without an evidence subsystem
 
@@ -894,6 +1119,9 @@ memory, claim, rumor, deed/suspicion, identity, and faction consequences. Do not
 - Identity merge/link rules are deterministic. The model may write the clerk's memo after the
   merge; it never decides the merge.
 - The player can interrupt, misdirect, bribe, steal, transform, or deliberately feed the process.
+- A deep ally's recognition across bodies is evidence-based rather than automatic. Shared memories,
+  secrets, promises, mannerisms, or a deliberately offered proof may establish soul continuity;
+  absent evidence, even intimacy may begin in uncertainty.
 
 ### 4.5 Warrants and pressure become physical
 
@@ -904,6 +1132,9 @@ memory, claim, rumor, deed/suspicion, identity, and faction consequences. Do not
   allies and uncanny systems may still know the soul.
 - UI and journal describe what the Empire believes, what it is uncertain about, and why—never a
   raw stealth percentage.
+- Every witnessed suspicious act writes one concise player-visible log message naming the witness
+  when known, what they saw, and the presented identity/body they attributed it to. Later
+  correlation names the evidence that changed the file.
 
 **Phase 4 tests and proofs:**
 
@@ -912,6 +1143,8 @@ memory, claim, rumor, deed/suspicion, identity, and faction consequences. Do not
 - Evidence planting/removal changes a later bounded investigation and warrant target.
 - Identity linking spends a faction resource, names its evidence, and is replay deterministic.
 - A player can frame an NPC or stale identity without a bespoke quest or spell phrase.
+- A well-executed deception can escape institutional punishment entirely; a failure produces
+  traceable institutional and interpersonal consequences rather than an omniscient correction.
 - The borrowed-face golden proof passes through GUI and CLI.
 
 **Phase 4 exit gate:** mischief scores at least 4/5; the Empire is powerful partly because it
@@ -946,8 +1179,13 @@ Do not add real-time jobs, daily schedules, or one hidden timer per feature.
 
 ### 5.2 Response cadence and orphan detection
 
-- A significant public act should usually receive one immediate/local answer and one later answer
-  within one to three zone transitions.
+- During ordinary play, aim for a meaningful world or relationship return at least every three
+  minutes: a changed person/place, approach, rumor, promise movement, response, access change,
+  remembered act, or actionable discovery—not a generic notification.
+- A significant public act should usually receive one immediate/local answer and a plausible later
+  answer. The later answer may arrive in the next scene or much later when route, carrier, urgency,
+  and salience support it; do not force every consequence into the same one-to-three-transition
+  window.
 - Slow promises remain slow when their explicit timing/trigger calls for it.
 - Instrument durable writes with no plausible reader, active promises with no realization route,
   rumors with no reachable carrier, wants no action can affect, and faction reactions with no
@@ -966,6 +1204,15 @@ Do not add real-time jobs, daily schedules, or one hidden timer per feature.
   completion remain deterministic and provider-free.
 - Deep relationships may key to soul identity when earned/witnessed; casual recognition keys to
   presented identity.
+- Followers act autonomously under a small set of player-chosen group/stance orders, travel as a
+  coherent following, and expose legible reasons for aid, refusal, fear, departure, or betrayal.
+  Support roughly ten followers without requiring individual inventory or turn micromanagement.
+- NPC initiative should approach or interrupt the player reasonably often when a known want,
+  relationship, rumor, promise, or danger gives a concrete reason. Do not manufacture interruption
+  cadence with content-free greetings.
+- Conversation may occupy a major share of playtime. It should remain grounded in current wants,
+  knowledge boundaries, memories, available services/actions, and the physical scene so extended
+  talk keeps creating or clarifying playable state.
 
 ### 5.4 Promise delivery becomes ordinary world content
 
@@ -977,6 +1224,10 @@ Do not add real-time jobs, daily schedules, or one hidden timer per feature.
 - Completion updates the source claim/want/memory/faction state through consequences. No separate
   quest completion record.
 - The journal exposes evocative but actionable uncertainty. Debug shows the binding exactly.
+- The ordinary journal provides compact tracking for active promises, notable relationships,
+  presented identities, rumors, faction pressures, and known wants. It may explicitly suggest
+  plausible satisfactions when the character has evidence; mystery may hide outcome or truth, but
+  not every available next step.
 
 ### 5.5 Costs become future play
 
@@ -989,6 +1240,9 @@ Do not add real-time jobs, daily schedules, or one hidden timer per feature.
   Reputation exposure is a deed/identity consequence. Do not create a private cost quest engine.
 - A deterministic fallback chooses legal cost families when a high-severity resolution omits a
   meaningful cost; it prices by general severity/profile rules, never spell phrases.
+- Let preparation, chosen components, wording, and casting performance bias cost families without
+  turning cost selection into a guaranteed menu. Strong casts should commonly be worth making;
+  reserve crippling prices for commensurately audacious outcomes rather than normal power use.
 
 ### 5.6 Campaign verbs are compositions
 
@@ -1005,6 +1259,13 @@ Use these as acceptance examples, not new subsystem names:
 
 If implementation proposes `SafehouseSystem`, `SupplyInterdictionSystem`, `InformantSystem`, or
 `LiberationQuest`, stop and return to this table.
+
+For the reference run, a foothold must become a usable safe haven and may become the physical home
+of the player's following. War content should be assembled creatively from this table: sabotage a
+route by transforming its material, turn an official through a remembered favor, boast a deed into
+a Bralli coalition, steal a supply's semantic ingredient for a spell, liberate a place, feed the
+Censorate a false identity, or bind a promised access route. Do not generate interchangeable
+errands with faction nouns substituted.
 
 **Phase 5 tests and proofs:**
 
@@ -1025,8 +1286,10 @@ the number of cross-readers has grown substantially.
 
 ## Phase 6 — Integrate and tune the complete vertical slice
 
-Goal: make **Marble Containment Yard → Hollowmere Margin → Vigovian Capital** feel like a finished
-game in miniature. Do not solve integration problems with reference-seed special cases.
+Goal: make **Marble Containment Yard → Hollowmere Margin → Brall → Vigovian Capital** feel like a
+finished game in miniature. Hollowmere proves frontier density; Brall proves that the same machine
+can carry a major old kingdom with a radically memorable social/magical voice. Do not solve
+integration problems with reference-seed special cases.
 
 ### 6.1 The opening teaches by consequence
 
@@ -1053,7 +1316,26 @@ game in miniature. Do not solve integration problems with reference-seed special
   memory/bond surface, and a way to affect play.
 - Every place has a reason to return or a deliberate one-time role.
 
-### 6.3 The capital proves scale, not a finale exception
+### 6.3 Brall proves cultural mechanics, not a palette swap
+
+- Add a connected Bralli route with at least one hold or public hall, one road/harbor or smaller
+  site, meaningful interiors, bone/scrimshaw props, component scarcity, charter bone-working, and
+  imperial occupation pressure. The trip must feel like entering another major kingdom, not a
+  renamed Hollowmere district.
+- Bralli tall tales are warm collaborative boasting about **other people's** deeds. A witnessed act
+  can become a rumor whose retellings exaggerate concrete details, recruit a listener, alter
+  hospitality or danger, satisfy a teller's want, or furnish spell language. Distortion retains
+  provenance and never becomes random joke text.
+- At least one player deed receives multiple Bralli retellings and then returns as an ordinary
+  relationship, service, follower, faction, encounter, or access consequence. Implement this with
+  the shared witness → deed → rumor → carrier → response chain, not a `BrallStorySystem`.
+- Give Brall-specific enemies and officials learnable bone/charter tactics, weaknesses, and
+  intentions. Do not fill its roads with generic rats, wolves, or culture-neutral bandits.
+- Let the player form a safe haven, following, or coalition connection in Brall. The force,
+  infiltration, and coalition/prophecy routes should each gain a different useful possibility
+  there without making Brall a mandatory quest chapter.
+
+### 6.4 The capital proves scale, not a finale exception
 
 - Outer pressure, Censor Gate, Archive Quarter, Inner Court, palace/archive, and throne form a
   campaign of ordinary thresholds, actors, evidence, faction resources, services, claims, and
@@ -1063,8 +1345,14 @@ game in miniature. Do not solve integration problems with reference-seed special
 - At least one earlier NPC/object/rumor/cost returns inside the capital.
 - Odran acts, takes damage, can be transformed or otherwise affected, and dies under ordinary
   entity/consequence rules. Run lifecycle observes the result.
+- Capital approach surfaces force, infiltration, and coalition/prophecy affordances legibly and
+  tunes them to roughly equal difficulty. A spectacular authored spell may bypass a major
+  threshold, but not through a finale-only verb or automatic easy win.
+- Post-victory approaches foreground gratitude from those who wanted freedom. Imperial loyalists
+  and people who valued order may remain absent, wary, grieving, or present in the chronicle; do
+  not force a symmetrical debate scene after the kill.
 
-### 6.4 Tune the connective tissue
+### 6.5 Tune the connective tissue
 
 - Remove empty travel, repeated low-value combat, duplicate narration, dead economy sinks,
   excessive model calls, and objective chains that do not change decisions.
@@ -1073,11 +1361,15 @@ game in miniature. Do not solve integration problems with reference-seed special
   escalations, healing/rest, money source/sink, wild casts, and route progress.
 - Balance origins as different risk/expression profiles, including a forgiving and cruel start,
   not as classes or a global difficulty slider.
-- Run the same route with provider disabled, floor local model, and one supported cloud provider.
+- During the sprint, repeatedly run representative legs with Gemini 3.5 Flash/medium. Before this
+  phase exits, also run the same route with provider disabled and the floor local model.
+- Measure meaningful discovery/response and authored-cast opportunities in real time. Ordinary
+  play should rarely go more than three minutes without one, while combat remains
+  medium-infrequent.
 
-### 6.5 Prove generality outside the slice
+### 6.6 Prove generality outside the slice
 
-- Run a generated-thin world tour through at least three other cultures.
+- Run a generated-thin world tour through at least two cultures beyond Hollowmere and Brall.
 - Confirm that encounter grammar, NPC wants, claims/promises, region props, services, rumors,
   identity, faction responses, and presentation views work without code changes.
 - If another region needs code, fix the shared content template or system seam. Do not begin
@@ -1089,12 +1381,14 @@ game in miniature. Do not solve integration problems with reference-seed special
    intervention.
 2. Provider-off play is a coherent roguelike; live magic makes it singular.
 3. Floor-model magic regularly uses local objects and prior facts within measured budgets.
-4. A documentation-blind player reaches Hollowmere, explains why the world reacted, and retains
-   at least two hooks.
+4. A documentation-blind player reaches Hollowmere and Brall, can explain how each place changed
+   play, why the world reacted, and retains at least two hooks.
 5. Feel scores reach at least 4/5 for authorship, wonder, mischief, tactics, responsiveness,
    legibility, and pace across multiple testers.
 6. Two runs differ in repertoire, material, relationships, identity/scars, route, and chronicle.
 7. A tester voluntarily starts a second run and finds an early meaningful difference.
+8. A Bralli retelling of a witnessed deed returns through a real carrier and changes an ordinary
+   gameplay decision without culture-specific engine code.
 
 **Phase 6 exit gate:** the vertical slice is fun enough that the next dollar/hour belongs in
 presentation and productization, not another engine mechanic or another region.
@@ -1153,6 +1447,15 @@ At a glance, the player should see:
 - Failure hints consume the shared failure vocabulary.
 - Debug overlays consume `AgentObservation(debug: true)` or dedicated read-only debug views; they
   never reach into systems.
+- Make exploration inviting at a glance: discovered routes, inspectable scenery, usable props,
+  interiors, travel choices, and nearby cultural texture need stronger hierarchy than decorative
+  clutter. The atlas remembers meaningful places and known return hooks without revealing the
+  whole generated map.
+- The follower surface summarizes roughly ten allies by stance, health/risk, distance, and urgent
+  desire; group commands are prominent and individual micromanagement is optional.
+- Inventory presentation assumes permissive capacity: default to consolidated stacks, semantic
+  search/filtering, protected treasures, and “use as spell material” affordances rather than a
+  capacity-management dashboard.
 
 ### 7.4 Audio as another view of consequences
 
@@ -1179,7 +1482,11 @@ At a glance, the player should see:
 ### 7.6 Whole-run UX and accessibility
 
 - Give character creation, title/main menu, new/continue, load/error recovery, travel/transition,
-  rest/checkpoint, victory, death, chronicle, and restart coherent presentation.
+  rest/safe haven, victory, death, chronicle, and restart coherent presentation.
+- Present **Classic** plainly as permadeath with save-and-exit suspension only. Present
+  **Roleplay** as the same game with free save/load. Delete every checkpoint-recovery label and
+  screen. Classic death removes Continue for that run and places “Begin a new world” one input
+  away; Roleplay retains its load surface without special death-rewind fiction.
 - Surface remappable input, keyboard-only play, font scale, color-safe palettes, reduced motion,
   audio levels, minigame opt-outs, and neutral casting.
 - CLI parity means the capability and information exist, not that the CLI imitates animation.
@@ -1256,15 +1563,18 @@ The wizard stages are explicit and resumable:
   a background callback.
 - Kill the provider during every pending-work stage in tests and manual QA.
 
-### 8.5 Save safety and compatibility
+### 8.5 Save safety and public compatibility
 
 - Autosave at bounded safe points; save-on-quit; rotating backups; atomic replace; corruption
   detection and recovery UI.
-- Versioned migrations are explicit and tested from checked-in golden public saves. No EA save
-  wipes.
+- Before public Early Access, replace schemas cleanly and regenerate fixtures; do not ship
+  compatibility scaffolding. Once a public EA build creates a save promise, versioned migrations
+  are explicit and tested from checked-in golden public saves, with no wipes.
 - Bound save size: archive/prune audit detail appropriately while retaining authoritative ledgers,
   provider materializations needed for replay, and the chronicle.
-- Checkpoint snapshots use the same serialization/migration path as ordinary saves.
+- Classic suspension and Roleplay manual saves use the same authoritative serializer. Enforce their
+  different load authority outside the simulation rather than maintaining different snapshot
+  formats.
 - A 20-hour soak verifies memory, entity/ledger/background queue growth, save time/size, and
   load/continue.
 
@@ -1305,7 +1615,7 @@ data and assets, not engine concepts.
   death/restart, chronicles, support load, save migration, and model/hardware diversity.
 - Public itch.io Early Access only after the four vertical-slice proofs in the roadmap remain
   green for people outside the project.
-- Publish exact supported providers/model floor, expected run length, classic/checkpoint behavior,
+- Publish exact supported providers/model floor, expected run length, Classic/Roleplay behavior,
   privacy, and the generated-thin state of non-slice regions.
 - Alternate depth/fix releases with region-pack releases. Do not stack new systems and a new
   culture in the same update unless the culture exposed the general need.
@@ -1384,7 +1694,9 @@ Goal: stop adding and make every remaining concept earn its place.
 
 - Resolve feature flags: ship, remove, or make developer-only. Do not leave half-supported public
   lanes.
-- Delete superseded aliases/helpers/adapters once public save/replay migration no longer needs them.
+- Delete superseded aliases/helpers/adapters immediately before EA. After EA, keep migrations at a
+  narrow serialization boundary and delete them as soon as the public support window permits; do
+  not let old schemas infect current gameplay code.
 - Find state fields with no writer or reader, consequences with no source or consumer, commands the
   GUI cannot reach, views no renderer uses, and messages that duplicate another event.
 - Remove unused content schema fields and provider prompt cards that no route selects.
@@ -1481,14 +1793,14 @@ it makes complexity a conscious cost instead of an accidental byproduct.
 - [ ] Player-facing state comes from shared read-only views/deltas and includes cause/counterplay.
 - [ ] Turn consumption, rejection, rollback, target binding, save/replay, seed stability, and
       boundedness are covered as relevant.
-- [ ] Focused and full tests pass; a real agent episode exercises discovery and action.
-- [ ] A human feel check answers the package's product question.
-- [ ] Superseded branches/helpers/messages are deleted; no compatibility path remains without a
-      stated saved-data reason.
+- [ ] Focused and full tests pass; a manual live-Gemini CLI episode exercises discovery and action.
+- [ ] A first-person feel check answers the package's product question.
+- [ ] Superseded branches/helpers/messages are deleted; before public EA, no compatibility path
+      remains.
 - [ ] New concepts and hotspot growth are justified in the change-budget report.
 - [ ] Durable docs change in the same patch.
 
-## Execution order and stop rule
+## Execution order and continuation rule
 
 | Order | Phase | Roadmap owner | Status at this plan's writing |
 |---:|---|---|---|
@@ -1504,14 +1816,18 @@ it makes complexity a conscious cost instead of an accidental byproduct.
 | 9 | Early Access and breadth | Milestones 5–6 | pending four slice proofs |
 | 10 | 1.0 release candidate | Milestone 7 | pending breadth freeze |
 
-Start with **Phase 0.1 only**. After its evidence note, perform 0.2 as a behavior-preserving
-structural change. Do not begin Phase 1 merely because part of Phase 0 compiles. Do not begin broad
-content authoring merely because the schemas exist.
+Phase 0.1–0.4 and the core of 1.1 are already substantially complete. Resume from live repository
+state, close only the remaining structural issue that directly blocks gameplay, and continue
+through Phases 1–7 without waiting at boundaries. Favor a playable end-to-end improvement over
+exhaustively perfecting a completed refactor. Do not begin broad content authoring merely because a
+schema exists, but do build the Hollowmere/Brall reference content needed to prove each general
+system as it lands.
 
-Stop and ask the owner only when a choice changes a product pillar, persistence promise, platform,
-reference transect, run-length target, public content scope, or introduces a new durable concept
-that fails the admission test. Ordinary code-shape and implementation details should be resolved by
-the principles above and current repository evidence.
+Do not stop for ordinary product judgment, code shape, test repair, large diff size, or a newly
+necessary durable concept that passes the admission test. Apply the owner calibration, implement
+the general feature, record the choice, and continue. If an external dependency truly blocks one
+lane, leave precise evidence and advance every unaffected lane; never fill the gap with a fake
+resolver, compatibility branch, or disconnected placeholder.
 
 The plan succeeds when adding one good idea makes several existing systems more useful, the player
 can see the resulting chain, and the code contains fewer ways for the world to become true—not
