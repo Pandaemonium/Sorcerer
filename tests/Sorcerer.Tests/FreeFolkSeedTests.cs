@@ -64,9 +64,18 @@ public sealed class FreeFolkSeedTests
         Assert.True(read.Success, string.Join(" | ", read.Messages));
         Assert.Contains(session.Engine.State.Claims.Records, claim =>
             claim.Tags.Contains("reaping", StringComparer.OrdinalIgnoreCase));
-        Assert.Contains(session.Engine.State.PromiseLedger.Promises, promise =>
-            promise.Subject.Contains("waystation", StringComparison.OrdinalIgnoreCase)
-            && promise.Status == "bound");
+        var lead = Assert.Single(session.Engine.State.PromiseLedger.Promises, promise =>
+            promise.Subject.Contains("waystation", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("bound", lead.Status);
+
+        // The waystation sits on the first road leg toward the sweep's target, so the warning
+        // route and the plans route share their first steps.
+        var sweep = Assert.Single(session.Engine.State.ScheduledEvents.Events, item =>
+            item.Kind.Equals("empire_sweep", StringComparison.OrdinalIgnoreCase));
+        var target = Convert.ToString(sweep.Payload["zone"])!.Split(',');
+        Assert.Equal(
+            $"{Math.Sign(int.Parse(target[0]))},{Math.Sign(int.Parse(target[1]))}",
+            lead.ClaimedPlace);
 
         var after = await session.ExecuteAsync(new JournalCommand());
         Assert.Contains(after.Messages, message =>
@@ -97,6 +106,27 @@ public sealed class FreeFolkSeedTests
         Assert.Contains("warn", objective.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(open.Messages, message =>
             message.Contains("reaping list", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task TravelingTowardTheSweepMaterializesTheWaystation()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 7);
+        DisableImperialAi(session);
+        MovePlayerTo(session, new GridPoint(5, 6));
+        var read = await session.ExecuteAsync(new ReadCommand("notice"));
+        Assert.True(read.Success, string.Join(" | ", read.Messages));
+        var lead = Assert.Single(session.Engine.State.PromiseLedger.Promises, promise =>
+            promise.Subject.Contains("waystation", StringComparison.OrdinalIgnoreCase));
+
+        await TravelTo(session, lead.ClaimedPlace!);
+
+        var realized = session.Engine.State.PromiseLedger.Promises.Single(promise => promise.Id == lead.Id);
+        Assert.Equal("realized", realized.Status);
+        var site = Assert.Single(session.Engine.State.Entities.Values, entity =>
+            entity.Id.Value.StartsWith("promise_site_", StringComparison.OrdinalIgnoreCase)
+            && entity.Name.Contains("waystation", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("imperial relay waystation", site.Name);
     }
 
     [Fact]
@@ -161,6 +191,30 @@ public sealed class FreeFolkSeedTests
 
     private static void MovePlayerTo(GameSession session, GridPoint point) =>
         session.Engine.State.ControlledEntity.Set(new PositionComponent(point));
+
+    private static async Task TravelTo(GameSession session, string zoneId)
+    {
+        var parts = zoneId.Split(',', StringSplitOptions.TrimEntries);
+        var destination = (X: int.Parse(parts[0]), Y: int.Parse(parts[1]));
+        var guard = 0;
+        while (guard++ < 12)
+        {
+            var currentParts = session.Engine.State.CurrentZoneId.Split(',', StringSplitOptions.TrimEntries);
+            var current = (X: int.Parse(currentParts[0]), Y: int.Parse(currentParts[1]));
+            if (current == destination)
+            {
+                return;
+            }
+
+            var direction = current.X != destination.X
+                ? (current.X < destination.X ? Direction.East : Direction.West)
+                : (current.Y < destination.Y ? Direction.South : Direction.North);
+            var travel = await session.ExecuteAsync(new TravelCommand(direction));
+            Assert.True(travel.Success, string.Join(" | ", travel.Messages));
+        }
+
+        Assert.Fail($"Could not reach zone {zoneId} from {session.Engine.State.CurrentZoneId}.");
+    }
 
     private static void DisableImperialAi(GameSession session)
     {

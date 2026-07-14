@@ -740,8 +740,16 @@ public sealed partial class PromiseRealizationSystem
 
     private static string PromiseSiteName(WorldPromise promise, RegionDefinition region)
     {
+        // A site is named for what it is, not where it was said to be: "imperial relay
+        // waystation", not "west along the measured road" (and never a raw zone id).
+        if (!string.IsNullOrWhiteSpace(promise.Subject))
+        {
+            return promise.Subject;
+        }
+
         if (!string.IsNullOrWhiteSpace(promise.ClaimedPlace)
-            && !promise.ClaimedPlace.Equals(region.Id, StringComparison.OrdinalIgnoreCase))
+            && !promise.ClaimedPlace.Equals(region.Id, StringComparison.OrdinalIgnoreCase)
+            && !System.Text.RegularExpressions.Regex.IsMatch(promise.ClaimedPlace, @"^-?\d+,-?\d+$"))
         {
             return promise.ClaimedPlace;
         }

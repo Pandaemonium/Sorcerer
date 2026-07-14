@@ -131,20 +131,10 @@ public static class TestScenarios
                     ClaimedPlace: "south of the containment yard",
                     Tags: new[] { "document", "escape_route", "drainage", "south" }),
                 // The seed of the Free Folk arc (docs/FREE_FOLK_MOVEMENT.md, Beat 1): the docket
-                // names the reaping and points at the waystation where its plans are kept.
-                new ClaimSeed(
-                    "This annex stages the season's Provincial Reconciliation Sweep - the folk call it the reaping. Its schedule and requisition ledger are held at the relay waystation on the measured road, west of the yard.",
-                    "landmark",
-                    "imperial relay waystation",
-                    Salience: 4,
-                    Confidence: 80,
-                    PlayerVisible: true,
-                    BindAsPromise: true,
-                    PromiseKind: "lead",
-                    RealizationKind: "site",
-                    TriggerHint: "travel",
-                    ClaimedPlace: "west along the measured road",
-                    Tags: new[] { "document", "sweep", "reaping", "waystation", "measured_road", "west" }),
+                // names the reaping and points at the waystation where its plans are kept. The
+                // waystation sits on the first road leg toward the sweep's target, so the
+                // warn-the-contact route and the steal-the-plans route share their first steps.
+                WaystationClaimSeed(state),
             })));
 
         Add(state, Item("loose_tincture_1", "red tincture", new GridPoint(4, 6), '!', "glass", "red_tincture", 12, new[] { "item", "healing", "blood" }, "heal:6"));
@@ -246,20 +236,66 @@ public static class TestScenarios
     // docs/FREE_FOLK_MOVEMENT.md.
     private const int SweepArrivalTurns = 100;
 
-    // The reaping is a standing seasonal operation, real from turn one whether or not anyone
-    // reads the schedule (docs/FREE_FOLK_MOVEMENT.md, Beat 1). Its target uses the same
-    // deterministic refuge selection the rescue handoff uses, so the captive's warning and
-    // the Empire's schedule point at the same place without coupling.
-    private static void AddProvincialSweep(GameState state)
+    // The sweep's target: the same deterministic refuge selection the rescue handoff uses, so
+    // the captive's warning, the docket's waystation lead, and the Empire's schedule all point
+    // the same way without coupling.
+    private static WorldSettlement? SweepTarget(GameState state)
     {
         var regions = RegionCatalog.LoadDefault();
         var graph = WorldPlaceGraph.Create(state.Seed, regions);
-        var target = GeneratedObjectiveHandoffFactory.RescueDestination(
+        return GeneratedObjectiveHandoffFactory.RescueDestination(
             state.Seed,
             state.CurrentZoneId,
             state.RegionId,
             graph,
             regions);
+    }
+
+    // The docket's waystation lead. The waystation realizes on the first road leg toward the
+    // sweep's target settlement; if no target rolled, it falls back to a directionless lead.
+    private static ClaimSeed WaystationClaimSeed(GameState state)
+    {
+        var target = SweepTarget(state);
+        var zone = target is null
+            ? "0,-1"
+            : $"{Math.Sign(target.CenterX)},{Math.Sign(target.CenterY)}";
+        var toward = target is null ? "the frontier" : target.Name;
+        var direction = target is null
+            ? "north"
+            : DirectionPhrase(Math.Sign(target.CenterX), Math.Sign(target.CenterY));
+        return new ClaimSeed(
+            $"This annex stages the season's Provincial Reconciliation Sweep - the folk call it the reaping. Its schedule and requisition ledger are held at the relay waystation on the measured road toward {toward}, {direction} of the yard.",
+            "landmark",
+            "imperial relay waystation",
+            Salience: 4,
+            Confidence: 80,
+            PlayerVisible: true,
+            BindAsPromise: true,
+            PromiseKind: "lead",
+            RealizationKind: "site",
+            TriggerHint: "travel",
+            ClaimedPlace: zone,
+            Tags: new[] { "document", "sweep", "reaping", "waystation", "measured_road" });
+    }
+
+    private static string DirectionPhrase(int dx, int dy) => (dx, dy) switch
+    {
+        (0, -1) => "north",
+        (0, 1) => "south",
+        (1, 0) => "east",
+        (-1, 0) => "west",
+        (1, -1) => "north-east",
+        (-1, -1) => "north-west",
+        (1, 1) => "south-east",
+        (-1, 1) => "south-west",
+        _ => "near",
+    };
+
+    // The reaping is a standing seasonal operation, real from turn one whether or not anyone
+    // reads the schedule (docs/FREE_FOLK_MOVEMENT.md, Beat 1).
+    private static void AddProvincialSweep(GameState state)
+    {
+        var target = SweepTarget(state);
         if (target is null)
         {
             return;
