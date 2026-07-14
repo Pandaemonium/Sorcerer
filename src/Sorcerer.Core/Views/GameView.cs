@@ -267,6 +267,7 @@ public sealed record CapitalApproachView(
     string? CurrentDistrictId,
     IReadOnlyList<CapitalThresholdCard> Thresholds,
     int ImperialDefenses,
+    int ThroneGuards,
     bool EmperorPresent,
     bool EmperorAlive,
     string Summary);

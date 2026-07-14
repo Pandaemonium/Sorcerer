@@ -566,16 +566,27 @@ public sealed class EngineViewBuilder
         var emperorAlive = emperor is not null
             && emperor.TryGet<ActorComponent>(out var actor)
             && actor.Alive;
+        // Guard density is the imperial defense made physical (organic capital approach): spending
+        // defenses -- by force or by allies at war -- thins the guard the player must get through.
+        var throneGuards = _state.Entities.Values.Count(entity =>
+            entity.TryGet<TagsComponent>(out var tags)
+            && tags.Tags.Contains("guard", StringComparer.OrdinalIgnoreCase)
+            && entity.TryGet<ActorComponent>(out var guard)
+            && guard.Alive);
 
         var where = place.District is null ? "at the outer approach" : $"in {place.District.Name}";
         var court = emperor is null ? "is not in view" : emperorAlive ? "still holds the Inner Court" : "has fallen";
-        var summary = $"Vigovian Capital, {where}. Imperial defenses stand at {defenses}. Emperor Odran {court}.";
+        var guardLine = throneGuards == 0
+            ? "No guard stands between you and the throne."
+            : $"{throneGuards} Censorate {(throneGuards == 1 ? "guard holds" : "guards hold")} the approach.";
+        var summary = $"Vigovian Capital, {where}. Imperial defenses stand at {defenses}. {guardLine} Emperor Odran {court}.";
 
         return new CapitalApproachView(
             InCapital: true,
             currentDistrictId,
             thresholds,
             defenses,
+            throneGuards,
             emperor is not null,
             emperorAlive,
             summary);

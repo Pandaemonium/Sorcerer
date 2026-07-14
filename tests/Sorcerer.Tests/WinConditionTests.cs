@@ -66,6 +66,10 @@ public sealed class WinConditionTests
         Assert.Contains(approach.Thresholds, threshold =>
             threshold.DistrictId == "censor_gate" && threshold.Tags.Contains("gate"));
         Assert.Contains("Vigovian Capital", approach.Summary);
+
+        // The organic gate is legible: the imperial defense stands as guards around the throne.
+        Assert.True(approach.ThroneGuards > 0);
+        Assert.Contains("guard", approach.Summary, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
