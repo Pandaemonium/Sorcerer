@@ -665,10 +665,15 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
 
 - Select imperial/wild/other death treatment from authoritative killer, faction, region, and
   effect provenance. Deterministic templates always work; provider prose is optional enrichment.
-  - _Status (410516c):_ killer provenance is now recorded at the moment the controlled body is
-    struck (`GameState.LastControlledDamageProvenance`: imperial/wild/mortal), and `RunChronicle`
-    selects the treatment deterministically on defeat. `DeathTreatmentTests` pins both halves.
-    Remaining: the restart/disposition that consumes the treatment (below).
+  - _Status (410516c, 620862d, 9a0864b):_ the death-treatment loop is closed. Killer provenance is
+    recorded at the moment the body is struck (`GameState.LastControlledDamageProvenance`:
+    imperial/wild/mortal); a shared `DeathTreatment` helper maps it to a treatment consumed in three
+    places -- `RunChronicle.Treatment`, the defeat narration (`DeathTreatment.Disposition`, read in
+    the killer's register), and the cross-run memorial (an imperial death leaves a Censorate
+    incident-marker, a wild death an unquiet stone, else the weathered memorial). Backward compatible
+    with pre-Treatment memorials. `DeathTreatmentTests` pins all of it. Restart already exists through
+    the session factory (`CreateImperialEncounter` / Godot `StartNewRun`); the one coupled piece still
+    open is checkpoint restore-on-death, which is 2.5's behavioral half.
 - Assemble chronicles from deeds/rumors, unrealized bound promises, deepest bonds, capability
   portfolio, route, faction posture, and run conclusion. Do not accumulate a parallel narrative
   summary during play.
