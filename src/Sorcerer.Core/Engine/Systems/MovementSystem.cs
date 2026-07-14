@@ -355,6 +355,7 @@ public sealed class MovementSystem
             Action = "move",
             Success = false,
             ConsumedTurn = false,
+            FailureCode = Sorcerer.Core.Results.FailureCode.BlockedLine,
             TurnBefore = turnBefore,
             TurnAfter = _state.Turn,
             Messages = blockedMessage.Messages,

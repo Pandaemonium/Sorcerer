@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.References;
 using Sorcerer.Core.Results;
@@ -75,5 +76,27 @@ public sealed class FailureVocabularyTests
         Assert.False(rejected.TechnicalFailure);
         Assert.True(rejected.ConsumedTurn);
         Assert.Equal(FailureCode.Rejected, rejected.FailureCode);
+    }
+
+    [Fact]
+    public async Task BlockedMoveIsTaggedBlockedLineAndConsumesNoTurn()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        var engine = session.Engine;
+        var origin = engine.State.ControlledEntity.Get<PositionComponent>().Position;
+
+        // Wall the tile the player would step into so the move is blocked (not a travel off the edge).
+        var offset = Direction.North.Offset();
+        var destination = origin.Translate(offset.X, offset.Y);
+        engine.State.BlockingTerrain.Add(destination);
+        var turnBefore = engine.State.Turn;
+
+        var result = await session.ExecuteAsync(new MoveCommand(Direction.North));
+
+        Assert.Equal("move", result.Action); // blocked, not resolved as travel
+        Assert.False(result.Success);
+        Assert.False(result.ConsumedTurn);
+        Assert.Equal(FailureCode.BlockedLine, result.FailureCode);
+        Assert.Equal(turnBefore, engine.State.Turn);
     }
 }
