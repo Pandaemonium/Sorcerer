@@ -1,3 +1,4 @@
+using System.Linq;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Consequences;
@@ -37,6 +38,34 @@ public sealed class WinConditionTests
         Assert.Contains("containment", want.Tags);
         Assert.Contains("promise_source", want.Tags);
         Assert.Equal("running", session.Engine.State.RunStatus);
+    }
+
+    [Fact]
+    public async Task CapitalApproachViewDerivesFromDistrictGeographyNotAMeter()
+    {
+        var session = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()));
+
+        // Outside the capital there is no approach view at all.
+        Assert.Null(session.View().World!.CapitalApproach);
+
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+
+        var approach = session.View().World!.CapitalApproach;
+        Assert.NotNull(approach);
+        Assert.True(approach!.InCapital);
+        Assert.True(approach.EmperorPresent);
+        Assert.True(approach.EmperorAlive);
+
+        // The thresholds are the capital's own districts, in Censor Gate -> Archive Quarter ->
+        // Inner Court approach order -- not a plot-access number.
+        var thresholdIds = approach.Thresholds.Select(threshold => threshold.DistrictId).ToArray();
+        var knownThresholds = new[] { "censor_gate", "archive_quarter", "inner_court" };
+        Assert.Equal(knownThresholds, thresholdIds.Where(id => knownThresholds.Contains(id)).ToArray());
+        Assert.Contains(approach.Thresholds, threshold =>
+            threshold.DistrictId == "censor_gate" && threshold.Tags.Contains("gate"));
+        Assert.Contains("Vigovian Capital", approach.Summary);
     }
 
     [Fact]

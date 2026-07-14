@@ -531,7 +531,62 @@ public sealed class EngineViewBuilder
             place.Interior?.Name,
             nearest.Distance == 0
                 ? $"{nearest.Settlement.Name} (here)"
-                : $"{nearest.Settlement.Name} ({nearest.Distance} {nearest.Direction})");
+                : $"{nearest.Settlement.Name} ({nearest.Distance} {nearest.Direction})",
+            BuildCapitalApproach(region, place));
+    }
+
+    // Read-only capital-approach projection (Phase 1.2): derived entirely from the capital's own
+    // district geography, the imperial defense resource, and the emperor actor. Null outside the
+    // capital. No plot-access meter, no finale gate -- just legibility over ordinary facts.
+    private static readonly string[] CapitalThresholdOrder = { "censor_gate", "archive_quarter", "inner_court" };
+
+    private CapitalApproachView? BuildCapitalApproach(RegionDefinition region, WorldPlaceProfile place)
+    {
+        if (!region.Id.Equals("vigovian_capital", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var currentDistrictId = place.District?.Id;
+        var thresholds = (region.Settlement?.Districts ?? Array.Empty<RegionDistrictDefinition>())
+            .OrderBy(district => IndexOfThreshold(district.Id))
+            .ThenBy(district => district.Id, StringComparer.Ordinal)
+            .Select(district => new CapitalThresholdCard(
+                district.Id,
+                district.Name,
+                district.Id.Equals(currentDistrictId, StringComparison.OrdinalIgnoreCase),
+                district.Tags))
+            .ToArray();
+
+        var defenses = _state.Factions.FactionsByRole("empire_bloc")
+            .Sum(faction => _state.Factions.ResourceValue(faction.Id, "defenses"));
+        var emperor = _state.Entities.Values.FirstOrDefault(entity =>
+            entity.TryGet<TagsComponent>(out var tags)
+            && tags.Tags.Contains("emperor", StringComparer.OrdinalIgnoreCase));
+        var emperorAlive = emperor is not null
+            && emperor.TryGet<ActorComponent>(out var actor)
+            && actor.Alive;
+
+        var where = place.District is null ? "at the outer approach" : $"in {place.District.Name}";
+        var court = emperor is null ? "is not in view" : emperorAlive ? "still holds the Inner Court" : "has fallen";
+        var summary = $"Vigovian Capital, {where}. Imperial defenses stand at {defenses}. Emperor Odran {court}.";
+
+        return new CapitalApproachView(
+            InCapital: true,
+            currentDistrictId,
+            thresholds,
+            defenses,
+            emperor is not null,
+            emperorAlive,
+            summary);
+    }
+
+    private static int IndexOfThreshold(string districtId)
+    {
+        var index = Array.FindIndex(
+            CapitalThresholdOrder,
+            id => id.Equals(districtId, StringComparison.OrdinalIgnoreCase));
+        return index >= 0 ? index : int.MaxValue;
     }
 
     public IReadOnlyList<BackgroundJobCard> BuildBackgroundJobCards() =>

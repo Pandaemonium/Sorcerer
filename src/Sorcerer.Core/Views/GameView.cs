@@ -252,7 +252,30 @@ public sealed record WorldCard(
     string? RoadName = null,
     string? LandmarkName = null,
     string? InteriorName = null,
-    string? NearestSettlement = null);
+    string? NearestSettlement = null,
+    CapitalApproachView? CapitalApproach = null);
+
+/// <summary>
+/// Read-only projection of the capital approach (Phase 1.2), derived from ordinary facts — the
+/// capital's district geography (Censor Gate → Archive Quarter → Inner Court), the imperial
+/// defense resource, and the emperor actor. It is a legibility view, not a plot-access meter or a
+/// finale gate: renderers/agents read "where am I on the approach, what still stands" without any
+/// privileged run state.
+/// </summary>
+public sealed record CapitalApproachView(
+    bool InCapital,
+    string? CurrentDistrictId,
+    IReadOnlyList<CapitalThresholdCard> Thresholds,
+    int ImperialDefenses,
+    bool EmperorPresent,
+    bool EmperorAlive,
+    string Summary);
+
+public sealed record CapitalThresholdCard(
+    string DistrictId,
+    string Name,
+    bool Current,
+    IReadOnlyList<string> Tags);
 
 public sealed record CharacterSheetCard(
     string BodyEntityId,
