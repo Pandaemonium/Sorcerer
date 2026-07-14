@@ -32,6 +32,11 @@ public sealed class GameState
 
     public string? RunConclusion { get; set; }
 
+    // Durable run mode (Phase 2.5): "classic" or "checkpoint". The engine rules, content, RNG,
+    // economy, enemies, and victory are identical across modes -- only death handling differs
+    // (checkpoint restores an authoritative settlement-rest snapshot). The chronicle records it.
+    public string RunMode { get; set; } = "classic";
+
     public int NextEntitySerial { get; set; } = 1;
 
     public EntityId ControlledEntityId { get; set; } = EntityId.Create("player");

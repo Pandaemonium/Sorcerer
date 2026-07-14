@@ -13,7 +13,8 @@ public sealed record RunChronicleRecord(
     string ZoneId,
     IReadOnlyList<string> Legend,
     IReadOnlyList<string> KeyDeeds,
-    string Text);
+    string Text,
+    string Mode = "classic");
 
 public static class RunChronicle
 {
@@ -56,6 +57,7 @@ public static class RunChronicle
             state.CurrentZoneId,
             legend,
             deeds,
-            text);
+            text,
+            string.IsNullOrWhiteSpace(state.RunMode) ? "classic" : state.RunMode);
     }
 }

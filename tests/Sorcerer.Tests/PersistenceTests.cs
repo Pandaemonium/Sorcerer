@@ -19,6 +19,19 @@ namespace Sorcerer.Tests;
 public sealed class PersistenceTests
 {
     [Fact]
+    public void RunModeIsClassicByDefaultPersistsAndIsRecordedInTheChronicle()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 7);
+        Assert.Equal("classic", session.Engine.State.RunMode);
+
+        session.Engine.State.RunMode = "checkpoint";
+        var loaded = GameSaveService.Deserialize(GameSaveService.Serialize(session.Engine.State));
+        Assert.Equal("checkpoint", loaded.State.RunMode);
+
+        Assert.Equal("checkpoint", RunChronicle.Build(session.Engine.State).Mode);
+    }
+
+    [Fact]
     public async Task SaveLoadSaveRoundTripIsByteStable()
     {
         var session = GameSession.CreateImperialEncounter(
