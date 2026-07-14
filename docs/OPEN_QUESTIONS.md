@@ -35,12 +35,13 @@ never a resolver input (see [CASTING_AND_MINIGAMES.md](CASTING_AND_MINIGAMES.md)
 
 ## Persistence
 
-The high-level persistence direction is now settled in BUILD_PLAN.md: full mid-run
-quicksave/resume, `System.Text.Json` with a versioned envelope and migration hook, and replays
-under `runs/<id>/`.
+The high-level direction is settled: Classic permits save-and-exit suspension only and deletes the
+run save on death; Roleplay permits free save/load over the identical simulation. Checkpoint
+restoration is discarded. Before public Early Access, old saves and schemas receive no
+compatibility work; delete and regenerate them. `System.Text.Json` remains the authoritative
+serialization path and replays live under `runs/<id>/`.
 
-- What migration tests and compatibility guarantees should we keep once real saves exist in the
-  wild?
+- What public migration support window should begin with the first Early Access saves?
 - How much of the audit/log bundle should ship with ordinary player saves versus developer builds?
 
 ## Collaboration

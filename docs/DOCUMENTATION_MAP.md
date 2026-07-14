@@ -97,11 +97,16 @@ references inside them to Python modules or the old name.
 - [DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md): tool requirements and first build commands.
 - [ROADMAP_TO_1_0.md](ROADMAP_TO_1_0.md): the product roadmap from prototype to a shipped,
   complete-feeling 1.0 - the eight product pillars, the vertical-slice transect, milestones
-  through Early Access and breadth, and the 2026-07-13 owner decisions (8-12h runs + checkpoint
-  mode, illuminated ASCII + portraits, guided local/BYOK onboarding, bespoke score).
+  through Early Access and breadth, and the 2026-07-13 owner decisions (8-12h runs, Classic +
+  Roleplay persistence, Hollowmere/Brall slice, illuminated ASCII + portraits, guided local/BYOK
+  onboarding, bespoke score).
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): active roadmap-to-code handoff — the shared
   command/consequence/time/view spines, complexity budget, hotspot-convergence prerequisite,
-  gameplay-first work packages, phase gates, and Opus execution protocol through 1.0.
+  binding owner calibration, gameplay-first work packages, deletion-first pre-EA policy, live
+  Gemini playtest loop, phase gates, and Opus execution protocol through 1.0.
+- [RUN_ARC.md](RUN_ARC.md): derived Escape/Foothold/War/Reach pacing for the target Marble Yard →
+  Hollowmere → Brall → capital transect; it records that Brall is target geography, not a chapter
+  gate.
 - [PHASE_0_BASELINE.md](PHASE_0_BASELINE.md): IMPLEMENTATION_PLAN Phase 0.1 evidence note —
   pinned baseline metrics (suite, save size, durable-lane counts), the architecture inventory
   (commands, 72 consequence families, views, provider purposes), and the honest eight-proof

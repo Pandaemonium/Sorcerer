@@ -24,11 +24,11 @@ public sealed class PersistenceTests
         var session = GameSession.CreateImperialEncounter(seed: 7);
         Assert.Equal("classic", session.Engine.State.RunMode);
 
-        session.Engine.State.RunMode = "checkpoint";
+        session.Engine.State.RunMode = "roleplay";
         var loaded = GameSaveService.Deserialize(GameSaveService.Serialize(session.Engine.State));
-        Assert.Equal("checkpoint", loaded.State.RunMode);
+        Assert.Equal("roleplay", loaded.State.RunMode);
 
-        Assert.Equal("checkpoint", RunChronicle.Build(session.Engine.State).Mode);
+        Assert.Equal("roleplay", RunChronicle.Build(session.Engine.State).Mode);
     }
 
     [Fact]

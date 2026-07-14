@@ -8,15 +8,18 @@ names.
 
 ## The four movements
 
-The reference transect is **Marble Containment Yard (`imperial_encounter`) → Hollowmere Margin
-(`hollowmere_margin`) → Vigovian Capital (`vigovian_capital`)**. The current movement is derived
-read-only in `EngineViewBuilder.BuildRunArc` and surfaced as `GameView.World.RunArc`:
+The product reference transect is **Marble Containment Yard (`imperial_encounter`) → Hollowmere
+Margin (`hollowmere_margin`) → Brall → Vigovian Capital (`vigovian_capital`)**. Brall is the first
+full-density major old kingdom and carries the War movement's cultural/campaign proof. The current
+implemented world spine still travels directly from Hollowmere to the capital; Phase 6 must insert
+a connected Bralli route and data without hard-coding a chapter gate. The current movement is
+derived read-only in `EngineViewBuilder.BuildRunArc` and surfaced as `GameView.World.RunArc`:
 
 | Movement | Derived when | Meaning |
 |---|---|---|
 | **escape** | still in the starting region (`imperial_encounter`) | breaking out of imperial custody |
 | **foothold** | left the start region, imperial defenses still at full | building strength on the frontier |
-| **war** | left the start region **and** imperial defenses spent below max | actively bleeding the empire (force / liberation / alliance — see [capital-organic-approach-design]) |
+| **war** | left the start region **and** imperial defenses spent below max; Brall should normally carry much of this movement once connected | actively bleeding the empire through force, liberation, deception, tale/coalition, or promise |
 | **reach** | in the capital region (`vigovian_capital`) | at the marble heart, the throne within reach |
 
 Derivation is furthest-progressed-condition-wins, so `reach` overrides `war` overrides `foothold`
@@ -33,3 +36,5 @@ overrides `escape`. It reads only authoritative facts (current region + `empire_
   player-attributed depletion) here.
 - Target: the classic reference run wins in **6–8 hours** (plan §2, roadmap Milestone 1). Instrument
   elapsed turns/real time per movement to expose pacing gaps; keep the numbers in this doc.
+- The target route must enter Brall as ordinary geography while preserving mixed and surprising
+  capital approaches. Brall is a dense opportunity, not a mandatory quest-state check.

@@ -865,9 +865,10 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
   balance, content, or world state. Chronicles record the chosen mode without shaming or changing
   rewards.
 
-_Owner decision superseding the 2026-07-13 checkpoint experiment:_ commits `21ba8ec`/`9b99a2e`
-proved that the simulation could restore a snapshot, but settlement restoration is no longer the
-desired product. Treat that code as deletion inventory, not a compatibility obligation.
+_Owner decision superseding the 2026-07-13 checkpoint experiment:_ commits `21ba8ec`/`9b99a2e`/
+`d670d7d` proved that the simulation could restore and count snapshot restorations, but settlement
+restoration is no longer the desired product. Treat that code as deletion inventory, not a
+compatibility obligation.
 
 ### 2.6 Death, victory, chronicle, restart
 

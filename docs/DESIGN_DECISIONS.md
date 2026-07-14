@@ -55,6 +55,44 @@ have to recover them from chat history.
 - Content should bias data-first for future modding.
 - Renderer animation should prefer engine `StateDelta` records.
 
+## Settled Decisions (Player Feel and Product Modes)
+
+Locked by the owner calibration on 2026-07-13. The detailed execution contract lives in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
+- Ordinary model-free play should foreground curiosity: travel, exploration, culturally specific
+  inspectable scenery, useful props, relationships, and reliable charter magic.
+- Combat is medium-infrequent and only medium-lethal before the capital. It rewards deterministic
+  mastery through generous intent telegraphs, learnable attack patterns, ranges, defenses,
+  weaknesses, and terrain counters. Generic rat/wolf filler encounters are out of scope.
+- Retreat, surrender, bribery, disguise, theft, avoidance, social leverage, transformation, and
+  force should all be strongly viable.
+- Inventory capacity is extremely permissive. Scarcity comes from choosing which desirable spell
+  components and gear to spend, not encumbrance, durability, or backpack maintenance.
+- A worthwhile fresh wild-cast opportunity should appear at least every three minutes in ordinary
+  play. Wild magic should resolve very strongly and may solve a major problem at a proportionate,
+  legible cost; routine casts should not all be crippling. Thirty seconds is the experiential
+  ceiling for the supported local floor model.
+- Within-run stat growth is a recurring progression lane. Rare items used as fitting spell
+  components may participate in validated permanent stat gains without item-specific recipes.
+- Body swap should be highly transformative when it occurs. Roughly ten followers should remain
+  manageable through autonomy and group orders rather than party micromanagement.
+- False identities should be relatively easy for competent players to establish and keep apart.
+  Soul recognition by a deep friend may require evidence such as a shared memory. Witness and
+  identity attribution must be explicit in the player log.
+- NPC initiative occurs reasonably often; follower decisions are reasonably predictable from
+  known state; conversation and relationships are a major portion of play. Journals provide useful
+  tracking and may be explicit about known wants and plausible satisfaction.
+- Classic mode is permadeath with save-and-exit suspension only; death deletes the save. Roleplay
+  mode uses the identical simulation and difficulty with free save/load. It replaces checkpoint
+  restoration. Neither mode has meta-progression, and a new world is one input away after death.
+- The full-density slice is Marble Containment Yard → Hollowmere Margin → Brall → Vigovian
+  Capital. Brall is remembered for collaborative boasting about other people's deeds through the
+  shared witness/rumor/relationship chain.
+- Before public Early Access, there is no compatibility obligation. Delete obsolete code and
+  break/regenerate unreleased saves, transcripts, fixtures, and schemas rather than adding legacy
+  fallbacks. Public save migrations begin with the first EA compatibility promise.
+
 ## Settled Decisions (Resolver, Magic, and Systems)
 
 Locked while specifying the core execution model and adapting the inherited design docs. See

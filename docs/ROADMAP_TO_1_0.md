@@ -26,11 +26,12 @@ These calibrate everything below.
 1. **Canonical runs are 8–12 hours,** deliberate play, genuinely winnable. Winning stays hard;
    long greedy runs remain possible, but the tuned win path should not require 20 hours. (This
    revises the earlier ~20-hour note; "very hard to win" stands.)
-2. **Two persistence modes ship at 1.0.** **Classic** — permadeath, the canonical way to play —
-   and a Qud-style **checkpoint mode** (working name; final name comes from the tone bible) that
-   restores at settlements on death. No meta-progression in either mode, ever. The chronicle
-   records which mode a run used. Save design for both modes lands early (Milestone 1), because
-   retrofitting persistence is the expensive kind of late change.
+2. **Two persistence modes ship at 1.0.** **Classic** is permadeath with save-and-exit suspension
+   only; loading is never a retry path and death deletes the run save. **Roleplay** is the same
+   simulation and difficulty with free save/load. It replaces the discarded checkpoint-restoration
+   design. No meta-progression in either mode, ever. The chronicle records which mode a run used.
+   Save design for both modes lands early (Milestone 1), because retrofitting persistence is the
+   expensive kind of late change.
 3. **Visual identity at 1.0 is illuminated ASCII plus portraits.** ASCII is the face of the game,
    polished to the Cogmind/Brogue tier — regional palettes, light, motion, cast choreography —
    with the existing portrait pipeline giving faces to people and moments. No tiles at 1.0; the
@@ -42,6 +43,22 @@ These calibrate everything below.
 5. **The score is bespoke.** Commissioned original music is an identity pillar, like Qud's
    soundtrack. Commissioning starts early (Milestone 1 timeframe) because music has the longest
    external lead time; integration matures through Milestone 3.
+6. **Ordinary play is curiosity plus deterministic mastery.** Travel, inspectable cultural
+   scenery, useful props, charter magic, exploration, relationships, and medium-infrequent combat
+   carry the game between wild casts. Enemy patterns, intentions, ranges, and weaknesses are
+   generous and learnable because the wild resolver supplies uncertainty elsewhere.
+7. **Wild magic is allowed to be spectacular.** A fresh authored opportunity should usually appear
+   at least every three minutes; very strong resolutions may solve major problems and answer with
+   proportionate durable costs. Thirty seconds is the maximum experiential wait for the supported
+   local floor model. Inventory is permissive; scarcity lives in desirable spell components and
+   gear, not capacity chores.
+8. **The slice includes a major old kingdom.** The target transect is Marble Containment Yard →
+   Hollowmere Margin → Brall → Vigovian Capital. Brall's collaborative boasting about other
+   people's deeds is the first full-density proof that cultural mechanics travel through shared
+   systems.
+9. **Before public Early Access, deletion outranks compatibility.** Break unreleased saves,
+   transcripts, APIs, aliases, and schemas when simplification warrants it; regenerate fixtures
+   and remove superseded paths. Public save migrations begin only when EA creates that promise.
 
 ## What the finished game is
 
@@ -208,22 +225,23 @@ Systems grade: A−. Product grade: D+. This roadmap is the closing of that spre
 
 We do not widen until a narrow path is excellent end-to-end. The **vertical slice** is:
 
-> Under a pinned reference seed: the start region, one neighboring region, and the capital —
+> Under a pinned reference seed: the start region, Hollowmere, one major old kingdom, and the capital —
 > a complete, winnable, classic-mode run of roughly 6–8 hours in slice form — with all eight
 > pillars at shippable quality inside that footprint.
 
-The working reference transect is **Marble Containment Yard → Hollowmere Margin → Vigovian
-Capital**, because the current opening, Lio handoff, reed-memory culture, and capital geography
-already form that line. Pin the exact seed and route in Milestone 0. Changing the proving region
-after Milestone 1 begins is a product-scope decision, not ordinary content churn.
+The reference transect is **Marble Containment Yard → Hollowmere Margin → Brall → Vigovian
+Capital**. The opening, Lio handoff, and reed-memory frontier retain their current line; Brall adds
+the first major old kingdom and proves witnessed deeds can become collaborative tall tales,
+relationships, followers, and campaign leverage through the ordinary rumor chain. Pin the exact
+seed and route in Milestone 0.
 
-The other eleven regions stay reachable and generated-thin. Everything built for the slice must
+Other regions stay reachable and generated-thin. Everything built for the slice must
 be general systems plus per-region data — "Lio is a proving ground, not a special case" remains
 the law — so that widening later (Milestone 6) is authoring, not engineering. Sections below end
 with a **Later breadth** note marking what deliberately stays narrow for now.
 
 The slice run is shorter than the final 8–12 hour target because it compresses the regional War
-movement into one neighboring region. It must still contain the complete emotional and mechanical
+movement into Hollowmere and one Bralli route. It must still contain the complete emotional and mechanical
 arc; Milestone 6 widens choice and replay variety without padding the critical path.
 
 ### Vertical-slice content contract
@@ -233,16 +251,16 @@ set of things that cross-read one another is better than a larger catalog of iso
 
 | Surface | Slice floor | What it proves |
 |---|---|---|
-| **Geography** | The promise-rich imperial opening; one dense non-imperial region with a center of at least three distinct districts, two smaller sites or hamlets, and a road/transport corridor; the capital's outer, institutional, inner, and throne geography; significant interiors on the route | Town traversal, travel, borders, interiors, and the capital all use one place graph and ordinary access state |
-| **Cultures and factions** | One fully dense non-imperial regional identity plus Vigovia; one generated-thin culture encountered in a world-tour proof; local loyalist, separatist/rival, civilian, and imperial pressures represented through the existing faction lanes | Color-versus-marble is a playable conflict, and the template generalizes beyond one culture without prematurely densifying it |
+| **Geography** | The promise-rich imperial opening; dense Hollowmere districts/sites/road corridor; a Bralli hold or public hall plus road/harbor and smaller site; the capital's outer, institutional, inner, and throne geography; significant interiors on the route | Town traversal, travel, borders, interiors, a major kingdom, and the capital all use one place graph and ordinary access state |
+| **Cultures and factions** | Hollowmere frontier identity, full-density Brall, and Vigovia; one further generated-thin culture in a world-tour proof; local loyalist, rival, civilian, and imperial pressures through existing faction lanes | Color-versus-marble is playable across distinct cultures, and Bralli tale escalation proves cultural mechanics compose without culture-specific engine code |
 | **People** | Enough generated and authored roles to guarantee: ally/follower, merchant, folk practitioner, official, rumor carrier, journey giver, claimant, hunter, and conflicted civilian; each notable person has a want and at least one useful state lane | Talk, gifts, services, recruitment, memory, bonds, rumor, and initiative all hand off |
-| **Encounters** | Roughly 10–14 enemy archetypes across bruiser, ranged, caster, leader, beast, investigator, and elite/hunter roles; civilians and terrain complicate some fights; noncombat resolution is valid in representative encounters | The zero-model tactics have variety, readable intent, and social consequences without requiring a huge bestiary |
+| **Encounters** | Roughly 10–14 specific enemy archetypes across bruiser, ranged, caster, leader, beast, investigator, and elite/hunter roles; no generic rat/wolf filler; each has learnable intent, pattern, weakness, and counter; noncombat resolution is representative | The zero-model tactics reward knowledge and social/terrain play without constant combat or a huge bestiary |
 | **Magic vocabulary** | Representative object, terrain, movement, summoning, transformation, body/soul, social, memory, promise, delayed, and cost-bearing outcomes exercised in real play; four casting minigames remain optional latency masks | The general consequence grammar expresses the fantasy instead of a phrase library |
 | **Objectives** | The current generated journey families exercised across at least one connected chain; one short promise payoff and one multi-hour payoff; at least one objective accepts two mechanically different solutions | Wants/claims/promises create direction without a quest engine |
-| **Economy** | Money enters through trade, reward, theft, or service and leaves through transport, lodging/rest, information, bribery/access, reagents/equipment, and at least one costly recovery | Wealth changes decisions across a run instead of accumulating decoratively |
-| **Build identity** | At least three tuned origins spanning forgiving, expressive, and cruel starts; useful charter choices; echoes proven safe for authorship; treasured items, body state, and followers matter | Two slice runs produce different verbs and risks, not just different flavor text |
+| **Economy** | Money enters through trade, reward, theft, or service and leaves through tempting spell components/gear, transport, rest, information, bribery/access, and recovery; carrying remains permissive | Scarcity changes which semantic materials the player spends without becoming backpack maintenance |
+| **Build identity** | At least three tuned origins; useful charter choices; strong wild resolutions; recurring within-run stat growth including rare components that magic can turn permanent; transformative bodies; up to roughly ten manageable followers | Two slice runs produce different verbs, bodies, relationships, and risks rather than inventory chores or flavor-only builds |
 | **Imperial campaign** | Notices, patrols, warrants, a named hunter or equivalent elite answer, finite defenses on real capital geography, and at least three tested reach routes: force/resource depletion, identity/infiltration, and alliance/promise/legitimacy | Escalation is visible, spendable, and answerable through existing systems |
-| **Endings** | Imperial and wild death treatments; victory; deterministic chronicle assembly; immediate classic restart; checkpoint restoration | A run is a complete object whether it ends well or badly |
+| **Endings** | Imperial and wild death treatments; victory; deterministic chronicle assembly; immediate classic restart; Classic suspension semantics; free Roleplay save/load | A run is a complete object whether it ends well or badly, under either save authority |
 | **Presentation and product** | Three coherent palette/ornament/audio identities, portraits for slice notables, settings/accessibility, provider wizard, demo path, resilient saves, and distributable Windows build | The slice can be judged as a product, not excused as an internal build |
 
 ### The content-unit rule
@@ -336,8 +354,9 @@ death, and restart form one understandable arc.
 - **Progression curve v1:** a run-level capability inventory shows when the player gained a
   charter form, echo, treasured focus, follower/service, access, route, or lasting transformation.
   By hour three at least two of those lanes have changed how the player solves problems.
-- **Both persistence modes:** classic permadeath; checkpoint mode restoring at last settlement
-  rest; save-on-quit always; the chronicle records the mode. Same difficulty, same world rules.
+- **Both persistence modes:** Classic permadeath with a consumed save-and-exit suspension; Roleplay
+  free save/load; the chronicle records the mode. Same difficulty, same world rules, one serializer,
+  no checkpoint restoration or parallel simulation.
 - **Death-to-new-run flow v1:** killer-split death screens, chronicle assembled from ledgers,
   one-command re-roll, prior chronicle seeding the next world's rumor layer (commemorate, never
   empower).
@@ -350,10 +369,10 @@ death, and restart form one understandable arc.
   route toward the capital have I uncovered?
 
 **Exit:** an agent and a human each complete a classic reference-transect win in 6–8 hours; a
-checkpoint death and restoration can continue to victory; each of the three reach routes
-completes in replay; the chronicle names the route actually taken; both death screen families
-appear in play; save/quit/resume works at every movement. Milestone 6 revalidates the 8–12 hour
-envelope after breadth.
+Roleplay save/load run can continue to victory; each of the three reach routes completes in replay;
+the chronicle names the route actually taken; both death screen families appear in play; Classic
+save/exit/resume and Roleplay save/load work at every movement. Milestone 6 revalidates the 8–12
+hour envelope after breadth.
 **Later breadth:** more origins, more victory framings, post-1.0 conducts/challenge modes.
 
 ### Milestone 2 — The slice made dense (game feel)
@@ -423,8 +442,8 @@ layout with enough coherence that raw play footage needs no explanation or proto
   interactions, pending consequences, objectives, faction pressure, and provider state receive a
   clear visual hierarchy without turning the screen into a dashboard.
 - **Whole-run screens:** character creation, loading, transition/travel, settlement rest,
-  checkpoint recovery, victory, death, chronicle, and restart all receive the same art direction;
-  no high-frequency flow falls back to debug presentation.
+  Classic suspension/continue, Roleplay save/load, victory, death, chronicle, and restart all
+  receive the same art direction; no high-frequency flow falls back to debug presentation.
 
 **Exit:** the trailer test — thirty seconds of raw footage reads as a distinctive finished game;
 muting the game feels like losing half of it; a settings-only player never edits a file.
@@ -473,7 +492,7 @@ Ship the slice-plus-thin-world honestly labeled, and turn players into the playt
   density) and depth (systems), chosen partly from telemetry and chronicles players share.
 - Save compatibility discipline begins at EA: schema migrations, never wipes.
 - Publish an honest support contract: reference hardware/model, known provider caveats, save and
-  privacy behavior, expected run length, checkpoint versus classic, and what "generated-thin"
+  privacy behavior, expected run length, Classic versus Roleplay, and what "generated-thin"
   means for regions outside the slice.
 - Treat chronicles and transcripts as qualitative evidence, not only marketing. Every update
   should name the observed player problem it addresses and re-run the four slice proofs.
@@ -523,7 +542,7 @@ belong to the same stable product.
 - Content and schema freeze; only fixes, tuning, accessibility, performance, compatibility,
   presentation polish, and text corrections enter the candidate branch.
 - Full matrix: clean install, offline/demo, local floor model, each supported API family,
-  provider loss/recovery, classic/checkpoint, save/quit/resume, update migration, victory, every
+  provider loss/recovery, Classic/Roleplay, save/quit/resume/load, update migration, victory, every
   death family, chronicle/restart, common resolutions and aspect ratios, keyboard-only play,
   reduced motion, and color-safe palettes.
 - Long-run confidence: seeded agent populations across origins and reach routes; repeated
@@ -653,7 +672,7 @@ Risks need observable tripwires and scope-preserving fallbacks, not only optimis
 
 | Risk | Tripwire | Response | Fallback without betraying the game |
 |---|---|---|---|
-| **Floor-model latency poisons authorship** | p95 breaks its action budget; players avoid fresh casts or spend encounters waiting | Instant charter/echo lanes, dialogue tiering, compact routed context, cancellation/retry, budgets in CI; casting UI treats waiting as ritual | Raise the documented floor model or narrow supported local hardware; never fake a successful cast or move simulation into prose |
+| **Floor-model latency poisons authorship** | p95 exceeds 30 seconds; players avoid fresh casts or spend encounters waiting | Instant charter/echo lanes, dialogue tiering, compact routed context, cancellation/retry, budgets in CI; casting UI treats waiting as ritual | Raise the documented floor model or narrow supported local hardware; never fake a successful cast or move simulation into prose |
 | **Magic is valid but boring** | High acceptance with low specificity, surprise, local-anchor use, or downstream consequence | Curated live evals, boring-outcome audits, cost palette, context repair, capability guidance, model floor review | Ship fewer supported providers/models with a higher quality bar; do not add prompt-phrase handlers |
 | **LLM setup bounces players** | Wizard abandonment or model-pull failure prevents first play | Detect/install/pull with progress and disk math; BYOK validation; same-build demo path | Let demo start immediately and offer model setup later; never strand at configuration |
 | **The zero-model game is not fun** | Ten-minute tests rely on wild casts to excuse repetitive combat, travel, or interaction | Milestone 2 gates on combat, stealth, economy, social state, encounter grammar, and instant tempo | Cut encounter frequency and world distance before adding more model calls |
@@ -663,7 +682,7 @@ Risks need observable tripwires and scope-preserving fallbacks, not only optimis
 | **Solo-development scope outruns capacity** | Milestones widen before exit evidence; support, content, or asset queue grows without closure | Gate discipline, one transect, priority rule, fixed external briefs, alternate breadth/depth EA cadence | Reduce number of dense 1.0 regions or audio variations only with an explicit owner decision; protect the complete arc and pillars first |
 | **Commissioned score slips or mismatches** | No approved themes by Milestone 2 exit; integration reveals dynamic needs the brief missed | Commission early against a playable capture and clear stems/loop/delivery spec; integrate temp cues early | Ship fewer excellent pieces with strong regional reuse; never pad with generic stock fantasy music |
 | **ASCII limits store appeal or legibility** | Trailer/store tests cannot parse action or identity; font/palette accessibility fails | Illuminated ASCII, portraits, restrained motion, light, strong UI hierarchy, trailer craft, color-safe modes | Revisit tiles only after EA evidence and only through the renderer boundary; do not derail the slice pre-EA |
-| **Two persistence modes split balance** | Checkpoint mode needs separate encounters/economy or becomes the assumed canonical tuning | Identical world rules and difficulty; only death restoration differs; chronicle labels mode | Narrow checkpoint restoration behavior, not world balance; classic remains canonical |
+| **Two persistence modes split the game** | Roleplay gains separate encounters/economy or Classic save authority leaks into simulation rules | Identical world rules, difficulty, serializer, and content; hosts differ only in whether saves may be freely loaded; chronicle labels mode | Simplify save-slot UX, not world balance; Classic remains canonical and checkpoint code stays deleted |
 | **Breadth-by-authoring stalls** | A new region needs code, bespoke commands, or months of unique assets | Region packs inherit the slice template; fix missing general capability once, then resume data authoring | Ship fewer dense regions rather than fourteen thin ones only by explicit scope revision before 1.0 claims |
 | **Content density re-inflates prompts** | Token/latency grows with props or NPC count; relevant actors disappear from context | Protected actor/hook lanes, compact scenery, lore/knowledge routing, clutter stress tests | Reduce routed context, not world state; keep detail inspectable and mechanically real |
 | **EA save compatibility traps development** | Schema churn, bloated saves, or provider artifacts make real saves unmigratable | Versioned migrations, golden saves, rotating backups, materialized provider results, compatibility tests from first EA | Delay EA rather than promise wipes; after EA, cut a feature before invalidating saves |
@@ -672,7 +691,8 @@ Risks need observable tripwires and scope-preserving fallbacks, not only optimis
 ## Anti-goals at 1.0
 
 No tiles. No meta-progression in any mode. No quest engine, mission scripting, or bespoke finale
-systems. No multiplayer. No model calls on the deterministic generation path. No separate demo
+systems. No multiplayer. No generic rat/wolf filler encounters. No inventory-capacity or durability
+chores. No model calls on the deterministic generation path. No separate demo
 SKU — demo mode is the same build. No Steam until post-1.0 evaluation. No weather, ecology, or
 NPC daily schedules unless the reactive world is already felt as alive without them. No account
 requirement or mandatory cloud provider. No universal XP/level grind, giant crafting tree,

@@ -32,15 +32,11 @@ public sealed class GameState
 
     public string? RunConclusion { get; set; }
 
-    // Durable run mode (Phase 2.5): "classic" or "checkpoint". The engine rules, content, RNG,
-    // economy, enemies, and victory are identical across modes -- only death handling differs
-    // (checkpoint restores an authoritative settlement-rest snapshot). The chronicle records it.
+    // Durable run mode (Phase 2.5): "classic" or "roleplay". Same simulation, content, RNG, economy,
+    // enemies, and victory in both; they differ only in save/death authority -- Classic is permadeath
+    // with a single suspension save, Roleplay uses ordinary freely created/loaded saves. The
+    // chronicle records the mode. (Roleplay replaces the former checkpoint-restoration idea.)
     public string RunMode { get; set; } = "classic";
-
-    // How many times checkpoint mode has rewound a killing blow to the last safe rest (Phase 2.5).
-    // It lives outside the snapshot lifecycle -- Capture/Restore never touch it -- so it counts
-    // monotonically across restores; the chronicle records it without shaming or changing rewards.
-    public int RestorationCount { get; set; }
 
     public int NextEntitySerial { get; set; } = 1;
 
