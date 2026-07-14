@@ -465,6 +465,16 @@ run lifecycle policies have focused homes; command behavior and result ordering 
 
 ### 0.4 Separate planning from applying in interactions and promises
 
+**Status: done — 2026-07-13 (commits `870ed6d`, `c228400`).** Both systems already had the
+planning/applying separation this package targets — `InteractionSystem` routes every change through
+`_engine.ApplyConsequence`, and `PromiseRealizationSystem` selects/builds a plan then applies it via
+the injected `_applyConsequence` sink under snapshot rollback — so the remaining work was cohesive
+boundaries. Both are now partial classes: `PromiseRealizationSystem` (3317→863 base) split into
+`.Realizers.cs` and `.Helpers.cs`; `InteractionSystem` (2797→621 base) split into `.Verbs.cs`,
+`.Resolution.cs`, `.Objectives.cs`. Behavior identical, 928 tests green. Deeper pure-planner
+extraction (item/person/site/route/service/threat) remains optional per this package's "only where
+they share enough policy to be independently testable."
+
 - `InteractionSystem` resolves player intent and eligibility for `talk`, `give`, `read`, `examine`,
   `open`, `enter`, `leave`, `recruit`, trade, and service requests. Actual changes are consequence
   packets.
@@ -495,6 +505,18 @@ compatible; the four hotspots have cohesive boundaries; total production code ne
 dramatically, but duplicated branches and helpers do. The implementer can point to one place for
 command routing, one apply point, one claim lifecycle, one promise-planning lifecycle, and one
 message-visibility policy.
+
+> **Substantially met — 2026-07-13.** The full suite (928) is green throughout and save/replay is
+> unchanged (`EpisodeRunnerTests`/`PersistenceTests` all pass). The four hotspots now have cohesive
+> boundaries (base files: applier 195, `GameSession` 928, `PromiseRealizationSystem` 863,
+> `InteractionSystem` 621, each with family partials). One apply point (`GameEngine.ApplyConsequence`
+> → guard → `FamilyDispatch` registry), one claim lifecycle (`GameSession.Claims.cs`), one
+> promise-planning lifecycle (`PromiseRealizationSystem` select/build/apply), and one
+> message-visibility policy (`StateDelta.IsPlayerVisible` + the applier's shared narration helper)
+> are each locatable. Deferred to future increments: true collaborator objects (vs. partials) for
+> `GameSession`, intra-family subdivision of the remaining >1000-line partials, and 0.5 test
+> re-homing beyond the new `ConsequenceCatalogTests`. These are refinements, not blockers for
+> Phase 1.
 
 ---
 
@@ -1424,7 +1446,7 @@ it makes complexity a conscious cost instead of an accidental byproduct.
 
 | Order | Phase | Roadmap owner | Status at this plan's writing |
 |---:|---|---|---|
-| 0 | Converge current hotspots | prerequisite protecting every milestone | 0.1 done; 0.2 applier split done; 0.3 (GameSession) next |
+| 0 | Converge current hotspots | prerequisite protecting every milestone | 0.1–0.4 done: four hotspots have cohesive boundaries, 928 tests green (see phase notes) |
 | 1 | Close current roadmap program | Milestone 0 | pending Phase 0 |
 | 2 | Complete run structure | Milestone 1 | pending Phase 1 |
 | 3 | Deterministic ten-minute game | Milestone 2 / P3 | pending Phase 2 structure |
