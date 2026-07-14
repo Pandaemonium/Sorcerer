@@ -183,6 +183,18 @@ public static class RumorSystem
             var message = RumorSpreadMessage(state, regionCarrier, newCarriers, rumor, routeName);
             var nextSalience = SalienceAfterSpread(rumor);
             var nextStatus = StatusAfterSpread(rumor, nextSalience);
+            // The legend grows in the telling: a well-travelled deed spreads into a taller tale.
+            // Framed off the preserved OriginalText (not the current Text) so the awe escalates with
+            // hops instead of compounding, and left null when it would not change anything.
+            var embellishedText = rumor.SourceKind.Equals("deed", StringComparison.OrdinalIgnoreCase)
+                ? LegendFraming(
+                    string.IsNullOrWhiteSpace(rumor.OriginalText) ? rumor.Text : rumor.OriginalText,
+                    rumor.Hops + 1,
+                    rumor.Id)
+                : rumor.Text;
+            var textUpdate = string.Equals(embellishedText, rumor.Text, StringComparison.Ordinal)
+                ? null
+                : embellishedText;
             var beforeValidation = StateValidator.Validate(state);
             var snapshot = GameStateSnapshot.Capture(state);
             var localDeltas = new List<StateDelta>();
@@ -196,6 +208,7 @@ public static class RumorSystem
                     "world_turn",
                     rumor.Id,
                     currentRegionId: state.RegionId,
+                    text: textUpdate,
                     salience: nextSalience,
                     status: nextStatus,
                     carrierIds: carriers.OrderBy(id => id, StringComparer.OrdinalIgnoreCase).ToArray(),
@@ -259,6 +272,44 @@ public static class RumorSystem
         rumor.Hops < 2
             ? rumor.Salience
             : Math.Max(1, rumor.Salience - 1);
+
+    // The world's awe grows in the retelling: once a witnessed deed has travelled a few hops, its
+    // rumor takes on an escalating, admiring frame -- the sorcerer's legend outrunning the truth.
+    // Deterministic and keyed to the rumor + hop so it stays stable and varied, not spammy; framed
+    // off the original deed each time so it escalates rather than compounds. This is the base layer;
+    // a later model-authored pass (and Brall's collaborative boasting) can grow the deed itself.
+    private static string LegendFraming(string deed, int hops, string rumorId)
+    {
+        var core = deed.Trim().TrimEnd('.', '!', ' ');
+        if (hops < 3 || core.Length == 0)
+        {
+            return deed; // early tellings stay close to the truth
+        }
+
+        var lowered = char.ToLowerInvariant(core[0]) + core[1..];
+        var loud = hops >= 5;
+        var pick = (StableToken(rumorId) + hops) % 3;
+        return (loud, pick) switch
+        {
+            (false, 0) => $"Word's going around that {lowered}.",
+            (false, 1) => $"They're saying {lowered} -- and each teller adds a little.",
+            (false, _) => $"The story on the road has it that {lowered}.",
+            (true, 0) => $"By now they swear {lowered}, grander every time it's told.",
+            (true, 1) => $"Half the country claims {lowered}; the rest claim worse.",
+            (true, _) => $"The tale has outrun the truth: {lowered}, only fiercer with each telling.",
+        };
+    }
+
+    private static int StableToken(string value)
+    {
+        var total = 0;
+        foreach (var c in value)
+        {
+            total = ((total * 31) + c) & 0x7fffffff;
+        }
+
+        return total;
+    }
 
     private static string StatusAfterSpread(RumorRecord rumor, int nextSalience) =>
         nextSalience < 3
