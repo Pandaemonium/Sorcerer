@@ -1569,13 +1569,18 @@ public partial class Main : Control
         _providerStatus.AddThemeColorOverride("font_color", UiTheme.Background);
         _providerStatusPanel.AddThemeStyleboxOverride("panel", UiTheme.PillBox(pillColor));
 
-        _entities.Text = string.Join(
-            "\n",
-            view.Entities
-                .Where(entity => entity.Id != view.ControlledEntityId)
-                .OrderBy(entity => entity.Faction == "empire" ? 0 : 1)
-                .ThenBy(entity => entity.Id)
-                .Select(FormatEntity));
+        // Lead with the combat telegraph so danger is read before it lands (tactical-mastery pillar):
+        // imminent strikes in danger red, hostiles closing in amber, then the ordinary entity list.
+        var threatLines = (view.Threats ?? Array.Empty<ThreatCard>())
+            .Select(threat => UiTheme.Colorize(
+                $"{(threat.Imminent ? "‼" : "⚠")} {UiTheme.Escape(threat.Name)} — {UiTheme.Escape(threat.Telegraph)}",
+                threat.Imminent ? UiTheme.Danger : UiTheme.Warning));
+        var entityLines = view.Entities
+            .Where(entity => entity.Id != view.ControlledEntityId)
+            .OrderBy(entity => entity.Faction == "empire" ? 0 : 1)
+            .ThenBy(entity => entity.Id)
+            .Select(FormatEntity);
+        _entities.Text = string.Join("\n", threatLines.Concat(entityLines));
 
         _inventory.Text = string.Join(
             "  ·  ",
