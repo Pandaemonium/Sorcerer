@@ -628,6 +628,12 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
   not merely hide a meter.
 - Named hunters are ordinary archetyped actors with wants/knowledge/memories and behavior tags,
   not bosses with a private scheduler.
+  - _Status (893264d):_ the heat-gated response ladder now has three rungs plus a graceful
+    blocked-memo -- `empire_patrol` (heat >= 3, spawns a hunter), `empire_warrant` (heat >= 5,
+    legend pressure), and `empire_cordon` (heat >= 7, commits two capital defenses, reinforcing the
+    organic capital approach). Each spends a finite resource, names its cause via a Censorate memo,
+    shares one 8-turn cooldown, and degrades gracefully when the resource is short. Remaining: more
+    authored templates (named hunters, bribery/redirection routes) and richer materialization.
 
 ### 2.3 Progression as a capability portfolio
 
