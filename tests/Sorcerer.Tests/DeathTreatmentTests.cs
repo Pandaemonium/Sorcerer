@@ -132,6 +132,41 @@ public sealed class DeathTreatmentTests
         Assert.Equal(DeathTreatment.Disposition(DeathTreatment.Mortal), DeathTreatment.Disposition("something_unmapped"));
     }
 
+    [Theory]
+    [InlineData("imperial", "Censorate incident-marker", "censorate_incident")]
+    [InlineData("wild", "disturbed memorial-stone", "unquiet")]
+    [InlineData("mortal", "weathered sorcerer's memorial", "mortal_rest")]
+    [InlineData("none", "weathered sorcerer's memorial", "mortal_rest")]
+    public void APastDeathIsMemorializedInItsOwnRegisterInTheNextRun(
+        string treatment, string expectedName, string expectedTag)
+    {
+        var priorRun = Memorial("A past sorcerer fell in the Marble Containment Yard.", treatment);
+
+        var nextRun = GameSession.CreateImperialEncounter(memorials: new[] { priorRun });
+
+        var memorial = nextRun.Engine.EntityById("memorial_1");
+        Assert.NotNull(memorial);
+        Assert.Equal(expectedName, memorial!.Name);
+        Assert.True(memorial.TryGet<TagsComponent>(out var tags));
+        Assert.Contains("memorial", tags.Tags);          // still a memorial, whatever the register
+        Assert.Contains(expectedTag, tags.Tags);         // ...filed under its own register
+        Assert.Equal(priorRun.Text, memorial.Get<DescriptionComponent>().Text);
+    }
+
+    private static RunChronicleRecord Memorial(string text, string treatment) => new(
+        Id: "chronicle_test",
+        Seed: 1,
+        Status: treatment == "none" ? "victory" : "defeat",
+        Conclusion: "the run ended",
+        SoulId: "soul_test",
+        Turn: 5,
+        ZoneId: "0,0",
+        Legend: Array.Empty<string>(),
+        KeyDeeds: Array.Empty<string>(),
+        Text: text,
+        Mode: "classic",
+        Treatment: treatment);
+
     private static Entity AddAttacker(GameState state, string id, string faction)
     {
         var attacker = new Entity(EntityId.Create(id), id)

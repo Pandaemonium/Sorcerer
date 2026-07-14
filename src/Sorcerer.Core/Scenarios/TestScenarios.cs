@@ -279,16 +279,28 @@ public static class TestScenarios
             return;
         }
 
-        var tags = new[] { "memorial", "past_run", "inert", "readable" };
-        Add(state, new Entity(EntityId.Create("memorial_1"), "weathered sorcerer's memorial")
+        // Phase 2.6: the world remembers a fallen sorcerer in the register their death was filed
+        // under -- the Censorate's cold incident-marker, an unquiet stone the wild left disturbed,
+        // or an ordinary weathered memorial. The chronicle text itself is the readable body.
+        var (markerName, markerTitle, registerTag) = MemorialRegister(memorial.Treatment);
+        var tags = new[] { "memorial", "past_run", "inert", "readable", registerTag };
+        Add(state, new Entity(EntityId.Create("memorial_1"), markerName)
             .Set(new PositionComponent(new GridPoint(2, 7)))
             .Set(new RenderableComponent('?', "memory"))
             .Set(new TagsComponent(tags))
             .Set(new PhysicalComponent(BlocksMovement: false, Material: "stone"))
             .Set(new DescriptionComponent(memorial.Text))
             .Set(new FixtureComponent("memorial", tags, CanAnchorMagic: false))
-            .Set(new ReadableComponent("Weathered Sorcerer's Memorial", memorial.Text)));
+            .Set(new ReadableComponent(markerTitle, memorial.Text)));
     }
+
+    // The marker a past death leaves behind, keyed to the register it was filed under (Phase 2.6).
+    private static (string Name, string Title, string RegisterTag) MemorialRegister(string treatment) => treatment switch
+    {
+        DeathTreatment.Imperial => ("Censorate incident-marker", "Censorate Incident Marker", "censorate_incident"),
+        DeathTreatment.Wild => ("disturbed memorial-stone", "Disturbed Memorial Stone", "unquiet"),
+        _ => ("weathered sorcerer's memorial", "Weathered Sorcerer's Memorial", "mortal_rest"),
+    };
 
     private static Entity Soldier(string id, string name, GridPoint position)
     {
