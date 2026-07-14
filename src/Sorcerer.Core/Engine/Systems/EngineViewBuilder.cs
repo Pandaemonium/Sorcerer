@@ -396,10 +396,27 @@ public sealed class EngineViewBuilder
                 BuildWorldTurnDebugCards(),
                 _state.RunStatus,
                 _state.RunConclusion,
-                BuildWitnessDebugCards())
+                BuildWitnessDebugCards(),
+                BuildCapabilitySummary())
             : null;
 
         return new AgentObservation(View(), debugState);
+    }
+
+    // Read-only capability portfolio (Phase 2.3): rolls up ordinary ledgers -- named echoes,
+    // relationships, active promises, treasured items -- into one qualitative summary. No XP or
+    // levels; it just reads what the run already accumulated.
+    private CapabilitySummaryView BuildCapabilitySummary()
+    {
+        var echoes = _state.Echoes.Records.Count;
+        var bonds = _state.Bonds.Bonds.Count;
+        var promises = _state.PromiseLedger.Promises.Count;
+        var treasured = _state.ControlledEntity.TryGet<InventoryComponent>(out var inventory)
+            ? inventory.TreasuredItems.Count
+            : 0;
+        var summary =
+            $"Portfolio: {echoes} echo(es), {bonds} bond(s), {promises} promise(s), {treasured} treasured item(s).";
+        return new CapabilitySummaryView(echoes, bonds, promises, treasured, summary);
     }
 
     // Debug projection of the one visibility policy: who could currently witness the controlled

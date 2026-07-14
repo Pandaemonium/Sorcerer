@@ -41,6 +41,23 @@ public sealed class WinConditionTests
     }
 
     [Fact]
+    public void CapabilitySummaryRollsUpOrdinaryLedgers()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 7);
+        var state = session.Engine.State;
+
+        var caps = session.Observation(debug: true).Debug!.Capabilities;
+        Assert.NotNull(caps);
+        Assert.Equal(state.Echoes.Records.Count, caps!.Echoes);
+        Assert.Equal(state.Bonds.Bonds.Count, caps.Bonds);
+        Assert.Equal(state.PromiseLedger.Promises.Count, caps.Promises);
+        Assert.Contains("Portfolio", caps.Summary);
+
+        // Player-facing (non-debug) observation carries no debug capability roll-up.
+        Assert.Null(session.Observation(debug: false).Debug);
+    }
+
+    [Fact]
     public async Task RunArcMovementDerivesFromRegionAndDefenses()
     {
         static string Movement(GameSession session) => session.View().World!.RunArc!.Movement;

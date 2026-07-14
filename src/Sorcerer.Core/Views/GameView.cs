@@ -367,7 +367,21 @@ public sealed record DebugStateView(
     IReadOnlyList<WorldTurnDebugCard>? WorldTurns = null,
     string RunStatus = "running",
     string? RunConclusion = null,
-    IReadOnlyList<WitnessDebugCard>? Witnesses = null);
+    IReadOnlyList<WitnessDebugCard>? Witnesses = null,
+    CapabilitySummaryView? Capabilities = null);
+
+/// <summary>
+/// Read-only capability portfolio (Phase 2.3): a qualitative roll-up of what the run has
+/// accumulated across existing lanes -- named echoes, relationships, active promises, and treasured
+/// items -- for telemetry/debug and a player history surface. It is a summary of ordinary ledgers,
+/// not XP, levels, or a new progression currency.
+/// </summary>
+public sealed record CapabilitySummaryView(
+    int Echoes,
+    int Bonds,
+    int Promises,
+    int TreasuredItems,
+    string Summary);
 
 public sealed record FactionDebugCard(
     string Id,
