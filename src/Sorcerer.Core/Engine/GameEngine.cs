@@ -696,7 +696,16 @@ public sealed class GameEngine
     public IReadOnlyList<Entity> WitnessesOf(GridPoint point, EntityId? exclude = null) =>
         _perceptionSystem.WitnessesOf(point, exclude);
 
-    internal IReadOnlyList<SuspicionCapturePlan> PlanEffectSuspicion(
+    /// <summary>
+    /// The one witness-classification policy (Phase 1.1): who saw the actor and/or the effect of a
+    /// deed. Deed capture and suspicion attribution both project from this; debug observation
+    /// surfaces it so the "who noticed and why" is inspectable.
+    /// </summary>
+    public IReadOnlyList<WitnessObservation> ClassifyEffectWitnesses(
+        GridPoint actorOrigin, GridPoint? effectPoint, Entity actor) =>
+        _perceptionSystem.ClassifyEffectWitnesses(actorOrigin, effectPoint, actor);
+
+    public IReadOnlyList<SuspicionCapturePlan> PlanEffectSuspicion(
         GridPoint effectPoint,
         string kind,
         Entity? actor = null) =>
@@ -713,10 +722,14 @@ public sealed class GameEngine
         GridPoint? effectPoint,
         IEnumerable<string>? tags = null)
     {
-        var actorWitnesses = _perceptionSystem.WitnessesOf(origin, actor.Id, subject: actor);
-        var effectWitnesses = effectPoint is null
-            ? Array.Empty<Entity>()
-            : _perceptionSystem.WitnessesOf(effectPoint.Value, actor.Id);
+        // One witness-classification pass feeds both witness sets, so deed capture and suspicion
+        // share exactly one line-of-sight/range/concealment rule (Phase 1.1). Effect visibility
+        // ignores the actor's concealment; actor visibility honors it.
+        var observations = _perceptionSystem.ClassifyEffectWitnesses(origin, effectPoint, actor);
+        IReadOnlyList<Entity> actorWitnesses = observations.Where(observation => observation.SawActor)
+            .Select(observation => observation.Witness).ToArray();
+        IReadOnlyList<Entity> effectWitnesses = observations.Where(observation => observation.SawEffect)
+            .Select(observation => observation.Witness).ToArray();
         var suspicionDeltas = Array.Empty<StateDelta>();
         if (effectPoint is not null && actorWitnesses.Count == 0 && effectWitnesses.Count > 0)
         {

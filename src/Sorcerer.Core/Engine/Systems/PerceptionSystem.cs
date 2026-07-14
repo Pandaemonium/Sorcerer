@@ -26,6 +26,29 @@ public sealed record SuspicionCapturePlan(
     int? AttributedTurn,
     int ExpiresTurn);
 
+/// <summary>
+/// One witness's structured classification of a single deed (Phase 1.1): did they see the actor
+/// (subject to concealment), the effect, both, or neither. <see cref="WitnessEntityId"/> is the
+/// body the witness actually observed — the seed the identity/attribution model keys on so a
+/// body-swapped or concealed actor can attribute differently from a public one.
+/// </summary>
+public sealed record WitnessObservation(
+    Entity Witness,
+    string WitnessSoulId,
+    string WitnessEntityId,
+    bool SawActor,
+    bool SawEffect)
+{
+    public bool SawBoth => SawActor && SawEffect;
+
+    /// <summary>Compact label for debug state / evidence: both | actor | effect | neither.</summary>
+    public string Classification =>
+        SawActor && SawEffect ? "both"
+        : SawActor ? "actor"
+        : SawEffect ? "effect"
+        : "neither";
+}
+
 public sealed class PerceptionSystem
 {
     public const int DefaultSightRadius = 8;
@@ -114,25 +137,73 @@ public sealed class PerceptionSystem
     private bool IsStatusActive(StatusInstance status) =>
         status.ExpiresTurn is null || status.ExpiresTurn > _state.Turn;
 
+    /// <summary>
+    /// The one witness-classification policy (Phase 1.1): a single pass over living actors that
+    /// classifies, for one deed, whether each witness saw the actor (at <paramref name="actorOrigin"/>,
+    /// subject to the shared concealment rule) and/or the effect (at <paramref name="effectPoint"/>),
+    /// using the same line-of-sight, range, and concealment rules everywhere. Deed capture
+    /// (<see cref="GameEngine.PlanDeedCapture"/>) and suspicion attribution
+    /// (<see cref="PlanEffectSuspicion"/>) both project from this, so there is exactly one
+    /// actor-vs-effect visibility rule in the codebase. Witnesses who saw neither are omitted; the
+    /// actor itself is never a witness. Effect visibility is not gated by the actor's concealment
+    /// (the effect is out in the world); actor visibility is.
+    /// </summary>
+    public IReadOnlyList<WitnessObservation> ClassifyEffectWitnesses(
+        GridPoint? actorOrigin,
+        GridPoint? effectPoint,
+        Entity? actor)
+    {
+        var observations = new List<WitnessObservation>();
+        foreach (var entity in _state.Entities.Values)
+        {
+            if ((actor is not null && entity.Id == actor.Id) || !IsLivingActor(entity))
+            {
+                continue;
+            }
+
+            var sawActor = actor is not null
+                && actorOrigin is not null
+                && Sees(entity, actorOrigin.Value)
+                && CanPerceiveSubject(entity, actor);
+            var sawEffect = effectPoint is not null && Sees(entity, effectPoint.Value);
+            if (sawActor || sawEffect)
+            {
+                observations.Add(new WitnessObservation(
+                    entity, SoulIdFor(entity), entity.Id.Value, sawActor, sawEffect));
+            }
+        }
+
+        return observations
+            .OrderBy(observation => observation.Witness.Id.Value)
+            .ToArray();
+    }
+
+    private bool Sees(Entity witness, GridPoint point) =>
+        InBounds(point)
+        && witness.TryGet<PositionComponent>(out var position)
+        && IsWithinSightRadius(position.Position, point, DefaultSightRadius)
+        && HasLineOfSight(position.Position, point);
+
     public IReadOnlyList<SuspicionCapturePlan> PlanEffectSuspicion(
         GridPoint effectPoint,
         string kind,
         Entity? actor = null)
     {
         var actorSoulId = actor is null ? null : SoulIdFor(actor);
-        var actorPosition = actor?.TryGet<PositionComponent>(out var position) == true
+        var actorOrigin = actor?.TryGet<PositionComponent>(out var position) == true
             ? position.Position
             : (GridPoint?)null;
         var plans = new List<SuspicionCapturePlan>();
-        foreach (var witness in WitnessesOf(effectPoint, actor?.Id))
+        foreach (var observation in ClassifyEffectWitnesses(actorOrigin, effectPoint, actor))
         {
-            var seesActor = actorPosition is not null
-                && witness.TryGet<PositionComponent>(out var witnessPosition)
-                && IsWithinSightRadius(witnessPosition.Position, actorPosition.Value, DefaultSightRadius)
-                && HasLineOfSight(witnessPosition.Position, actorPosition.Value)
-                && (actor is null || CanPerceiveSubject(witness, actor));
+            if (!observation.SawEffect)
+            {
+                continue;
+            }
+
+            var seesActor = observation.SawActor;
             plans.Add(new SuspicionCapturePlan(
-                SoulIdFor(witness),
+                observation.WitnessSoulId,
                 kind,
                 effectPoint,
                 seesActor ? "attributed" : "pending",
