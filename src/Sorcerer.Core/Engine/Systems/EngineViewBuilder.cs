@@ -397,7 +397,8 @@ public sealed class EngineViewBuilder
                 _state.RunStatus,
                 _state.RunConclusion,
                 BuildWitnessDebugCards(),
-                BuildCapabilitySummary())
+                BuildCapabilitySummary(),
+                BuildEconomySummary())
             : null;
 
         return new AgentObservation(View(), debugState);
@@ -417,6 +418,35 @@ public sealed class EngineViewBuilder
         var summary =
             $"Portfolio: {echoes} echo(es), {bonds} bond(s), {promises} promise(s), {treasured} treasured item(s).";
         return new CapabilitySummaryView(echoes, bonds, promises, treasured, summary);
+    }
+
+    // Measured economy (Phase 2.4): reads the sorcerer's gold and sellable stacks (a source measure)
+    // and the paid services offered by providers present in the zone (the recurring sinks within
+    // reach), so the working buy/sell/service economy is legible without adding any new system.
+    private EconomySummaryView BuildEconomySummary()
+    {
+        var gold = 0;
+        var sellable = 0;
+        if (_state.ControlledEntity.TryGet<InventoryComponent>(out var inventory))
+        {
+            gold = inventory.Items.TryGetValue("gold", out var onHand) ? onHand : 0;
+            sellable = inventory.Items.Count(pair => pair.Value > 0
+                && !pair.Key.Equals("gold", StringComparison.OrdinalIgnoreCase)
+                && !inventory.TreasuredItems.Contains(pair.Key));
+        }
+
+        var paidOffers = _state.Entities.Values
+            .Where(entity => entity.Has<ServiceComponent>())
+            .SelectMany(entity => entity.Get<ServiceComponent>().Offers)
+            .Where(offer => offer.Revealed && offer.GoldCost > 0)
+            .ToArray();
+        var servicesInReach = paidOffers.Length;
+        var serviceGold = paidOffers.Sum(offer => offer.GoldCost);
+
+        var summary =
+            $"Purse: {gold} gold, {sellable} sellable stack(s); {servicesInReach} paid service(s) in reach "
+            + $"totaling {serviceGold} gold.";
+        return new EconomySummaryView(gold, sellable, servicesInReach, serviceGold, summary);
     }
 
     // Debug projection of the one visibility policy: who could currently witness the controlled

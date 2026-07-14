@@ -368,7 +368,8 @@ public sealed record DebugStateView(
     string RunStatus = "running",
     string? RunConclusion = null,
     IReadOnlyList<WitnessDebugCard>? Witnesses = null,
-    CapabilitySummaryView? Capabilities = null);
+    CapabilitySummaryView? Capabilities = null,
+    EconomySummaryView? Economy = null);
 
 /// <summary>
 /// Read-only capability portfolio (Phase 2.3): a qualitative roll-up of what the run has
@@ -381,6 +382,20 @@ public sealed record CapabilitySummaryView(
     int Bonds,
     int Promises,
     int TreasuredItems,
+    string Summary);
+
+/// <summary>
+/// Read-only measured economy (Phase 2.4): a snapshot of the sorcerer's liquidity and the recurring
+/// sinks within reach -- gold on hand, sellable stacks (a source measure), and the paid services
+/// offered by providers present here (the sinks) with their total cost. It composes ordinary
+/// inventory and service state; it adds no new economy system, it just makes the working one legible
+/// for telemetry, balance work, and the no-deadlock proof.
+/// </summary>
+public sealed record EconomySummaryView(
+    int GoldOnHand,
+    int SellableStacks,
+    int PaidServicesInReach,
+    int ServiceGoldInReach,
     string Summary);
 
 public sealed record FactionDebugCard(
