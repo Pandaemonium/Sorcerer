@@ -536,6 +536,79 @@ public sealed class WorldTurnSystem
                 continue;
             }
 
+            // Top of the ladder (Phase 2.2): at the highest heat the Censorate throws a manhunt
+            // cordon over the district and pulls the reserve to man it. Per the organic capital
+            // approach, that very commitment strips the guard the sorcerer will later face --
+            // provoking the empire hardest thins its own walls. Requires defenses to spend, so it
+            // degrades gracefully to the warrant/patrol rungs when the reserve is already gone.
+            if (heat >= 7 && HasFactionResource(state, faction.Id, "defenses", 2))
+            {
+                return TryApplyWorldTurnTransaction(
+                    state,
+                    deltas,
+                    applyConsequence,
+                    "faction_pressure",
+                    faction.Id,
+                    localDeltas =>
+                    {
+                        if (!TrySpendFactionResource(state, faction.Id, "defenses", 2, localDeltas, applyConsequence))
+                        {
+                            return false;
+                        }
+
+                        if (!ApplyConsequence(localDeltas, applyConsequence, WorldConsequence.ScheduleEvent(
+                            "world_turn",
+                            "empire_cordon",
+                            2,
+                            new Dictionary<string, object?>
+                            {
+                                ["factionId"] = faction.Id,
+                                ["text"] = "A manhunt cordon closes over the district; the empire has stripped a wall to man the streets.",
+                            })).Applied)
+                        {
+                            return false;
+                        }
+
+                        if (!ApplyConsequence(localDeltas, applyConsequence, WorldConsequence.AddCanon(
+                            "world_turn",
+                            "censorate_memo",
+                            faction.Id,
+                            "Censorate memorandum: cordon the district and pull the reserve to work it; the capital's watch will notice the gap.",
+                            "Censorate commits defenses to a cordon.",
+                            new[] { "empire", "cordon", "manhunt" },
+                            operation: "censorateMemo")).Applied)
+                        {
+                            return false;
+                        }
+
+                        if (AdjustFactionResource(state, faction.Id, "heat", -3, deltas: localDeltas, applyConsequence: applyConsequence) != -3)
+                        {
+                            return false;
+                        }
+
+                        if (!SetFactionResource(state, faction.Id, "response_cooldown_until", state.Turn + 8, localDeltas, applyConsequence))
+                        {
+                            return false;
+                        }
+
+                        return RecordMove(
+                            state,
+                            reason,
+                            "faction_pressure",
+                            faction.Id,
+                            "The Empire throws a cordon over the district, stripping a wall to do it.",
+                            new Dictionary<string, object?>
+                            {
+                                ["factionId"] = faction.Id,
+                                ["response"] = "empire_cordon",
+                                ["heatBefore"] = heat,
+                            },
+                            announce,
+                            localDeltas,
+                            applyConsequence);
+                    });
+            }
+
             if (heat >= 5 && HasFactionResource(state, faction.Id, "warrants", 1))
             {
                 return TryApplyWorldTurnTransaction(

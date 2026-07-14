@@ -946,6 +946,45 @@ public sealed class GameSessionCharacterizationTests
     }
 
     [Fact]
+    public void HighestHeatThrowsACordonThatStripsCapitalDefenses()
+    {
+        var session = CreateMockSession();
+        // Drive the Censorate to its top rung; base heat is 0, so +9 clears the cordon threshold
+        // even after ordinary per-turn heat recovery.
+        session.Engine.State.Factions.AdjustResource("empire", "heat", 9);
+        var defensesBefore = session.Engine.State.Factions.ResourceValue("empire", "defenses");
+
+        session.Engine.AdvanceTurn();
+
+        // The cordon is checked before the warrant, so at the top of the ladder it fires first and
+        // commits two defenses -- thinning the capital guard the sorcerer will later face.
+        Assert.Equal(defensesBefore - 2, session.Engine.State.Factions.ResourceValue("empire", "defenses"));
+        Assert.Contains(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_cordon");
+        Assert.DoesNotContain(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_warrant");
+        Assert.Contains(session.Engine.State.WorldTurns.Records, record =>
+            record.Kind == "faction_pressure"
+            && record.SourceId == "empire"
+            && Equals(record.Details["response"], "empire_cordon"));
+    }
+
+    [Fact]
+    public void ACordonDegradesToTheWarrantRungWhenTheReserveCannotAffordIt()
+    {
+        var session = CreateMockSession();
+        session.Engine.State.Factions.AdjustResource("empire", "heat", 9);
+        // Leave the reserve below the cordon's two-defense cost; the warrant rung still stands.
+        session.Engine.State.Factions.AdjustResource("empire", "defenses", -2);
+
+        session.Engine.AdvanceTurn();
+
+        Assert.DoesNotContain(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_cordon");
+        Assert.Contains(session.Engine.State.WorldTurns.Records, record =>
+            record.Kind == "faction_pressure"
+            && record.SourceId == "empire"
+            && Equals(record.Details["response"], "empire_warrant"));
+    }
+
+    [Fact]
     public void QuietFactionRecoveryDoesNotEmitNoOpResourceDeltas()
     {
         var session = CreateMockSession();

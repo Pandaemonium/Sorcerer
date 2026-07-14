@@ -69,6 +69,7 @@ public static class JournalViewBuilder
             {
                 "empire_warrant" => $"Warrant: a wanted poster is expected around turn {item.DueTurn}.",
                 "empire_patrol" => $"Pressure: an imperial patrol is expected around turn {item.DueTurn}.",
+                "empire_cordon" => $"Cordon: a manhunt cordon is expected to close around turn {item.DueTurn}.",
                 _ => $"Pressure: {item.Kind} is expected around turn {item.DueTurn}.",
             })
             .ToArray();
