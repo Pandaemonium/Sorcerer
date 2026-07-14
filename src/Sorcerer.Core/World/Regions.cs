@@ -325,8 +325,8 @@ public sealed class RegionRegistry
             VoiceSummary: "Frontier country under imperial eyes: hedgerows, market roads, old shrines, and buried strata of older magic below. Keep outcomes earthy and vivid, wonder with mud on its boots.",
             AmbientLines: new[]
             {
-                "Something unseen brushes the rushes, curious.",
-                "The deep places are listening, politely.",
+                "A heron stands in the shallows, watching the water, not you.",
+                "By the path an old shrine-stone wears fresh offerings: bread, a coin, a knot of reeds.",
                 "Far off, water finds a new way down.",
             }));
         registry.AddRegion(new RegionDefinition(
@@ -348,7 +348,7 @@ public sealed class RegionRegistry
             {
                 "A voice hums a lullaby with no breath behind it.",
                 "Your shadow arrives half a step late.",
-                "Somewhere near, a festival is being remembered by the stones.",
+                "Somewhere near, festival music is playing, and no one is playing it.",
             }));
         return registry;
     }

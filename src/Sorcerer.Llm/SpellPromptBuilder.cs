@@ -275,8 +275,9 @@ internal static class SpellPromptBuilder
     /// <summary>
     /// Static on every cast — no per-cast values may appear here, so a local backend can prompt-
     /// cache this whole block. The supported-operation list therefore lives in the variable tail.
-    /// Voice: outcome text stays concrete and sensory (docs/AESTHETICS_AND_TONE.md, narration
-    /// voice) — wild magic may be strange, but strangeness is imagery, not vagueness.
+    /// Voice: outcome text is grounded and worldly — folk and physical, not cosmic or oracular
+    /// (docs/AESTHETICS_AND_TONE.md, narration voice). Wild magic may be strange, but that
+    /// strangeness is vivid sensory imagery, never fate-speak about the world or destiny.
     /// </summary>
     private const string CoreRules =
         "You are Sorcerer's wild-magic resolver. Return one JSON object only: "
@@ -285,7 +286,8 @@ internal static class SpellPromptBuilder
         + "Effects are flat objects with a type field. Use only supported types and exact target ids from context; "
         + "player means the caster, nearest_enemy means the nearest foe, and selected_target is valid only when context.selected exists. "
         + "Use one mechanical effect per promised outcome. Narration may describe only what those effects make true; "
-        + "write concrete sights, sounds, and sensations, not fate-speak. Binding needs addStatus; healing needs heal; movement, transformation, summoning, social change, and world change need their matching operation. "
+        + "write concrete sights, sounds, and sensations in a grounded, worldly register -- folk and physical, not cosmic or oracular fate-speak; strangeness is vivid imagery (glass grows warm over the wound), never portent about the world or destiny. "
+        + "Binding needs addStatus; healing needs heal; movement, transformation, summoning, social change, and world change need their matching operation. "
         + "Prefer the routed reusable mechanics. targets are important entities; scenery is a small object list; terrain is included only when spatial mechanics need it. "
         + "lens is soft guidance: higher attunement permits stronger effects, lower composure permits stranger answers, vigor informs bodily prices, and signature/place guide imagery. "
         + "reagents are the only carried items available as fuel; an item cost must copy an exact listed name. lore is canon, but becomes mechanical only through effects. "
