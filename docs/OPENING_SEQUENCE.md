@@ -36,12 +36,17 @@ The existing opening seed already has useful bones:
 - a small imperial containment encounter
 - two soldiers
 - a brass containment brazier with an examinable oath/landmark claim source
-- a readable containment notice with a document/escape-route claim source
+- a readable containment notice with a document/escape-route claim source and the
+  reaping/waystation lead (docs/FREE_FOLK_MOVEMENT.md Beat 1: the notice reveals the
+  Provincial Reconciliation Sweep and points at the relay waystation on the measured road)
 - loose items, including a tincture and cell key
 - a locked cell door
 - Lio of Hollowmere as a prisoner and possible follower
 - a visible promise that realizes when the cell opens
-- faction pressure and patrol response when public magic escalates
+- a standing scheduled sweep operation aimed at a real settlement; the rescue handoff becomes
+  the sweep warning naming the same settlement
+- faction pressure and patrol response when public magic escalates — report-borne and
+  road-arriving per FREE_FOLK_MOVEMENT S0
 
 Keep this shape, but make it less like a small combat chamber and more like a compressed
 Sorcerer situation: a place full of people, objects, claims, and unstable futures.

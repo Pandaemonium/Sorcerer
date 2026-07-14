@@ -168,13 +168,15 @@ public sealed class GameSessionTests
             && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.ScheduleEvent)
             && Equals(delta.Details["scheduledConsequenceType"], WorldConsequenceTypes.AddTags)
             && Equals(delta.Details["scheduledTiming"], WorldConsequenceTiming.AfterTurn));
-        Assert.Single(session.Engine.State.ScheduledEvents.Events);
+        // The standing empire_sweep operation is scheduled from scenario start, so filter to
+        // the timed consequence under test.
+        Assert.Single(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "timed_consequence");
         Assert.False(player.TryGet<TagsComponent>(out var beforeTags)
             && beforeTags.Tags.Contains("timed_mark", StringComparer.OrdinalIgnoreCase));
 
         var turnDeltas = session.Engine.AdvanceTurn();
 
-        Assert.Empty(session.Engine.State.ScheduledEvents.Events);
+        Assert.DoesNotContain(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "timed_consequence");
         Assert.Contains("timed_mark", player.Get<TagsComponent>().Tags);
         Assert.Contains(turnDeltas, delta =>
             delta.Operation == "testTimedAddTags"

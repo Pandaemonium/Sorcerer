@@ -114,7 +114,7 @@ public static class TestScenarios
                 new[] { "paper", "law", "contract", "imperial", "readable" }))
             .Set(new ReadableComponent(
                 "Thaumic Containment Order 7-112",
-                "By marble authority: unauthorized color, oath, dream, bone, rain, name, or prophecy is to be contained until it consents to empire. Confiscated colors and wastewater depart by the southern drainage culvert at dusk."))
+                "By marble authority: unauthorized color, oath, dream, bone, rain, name, or prophecy is to be contained until it consents to empire. Confiscated colors and wastewater depart by the southern drainage culvert at dusk. This annex stages the season's Provincial Reconciliation Sweep; schedules, warrants, and requisitions are held at the relay waystation on the measured road."))
             .Set(new ClaimSourceComponent(new[]
             {
                 new ClaimSeed(
@@ -130,6 +130,21 @@ public static class TestScenarios
                     TriggerHint: "travel",
                     ClaimedPlace: "south of the containment yard",
                     Tags: new[] { "document", "escape_route", "drainage", "south" }),
+                // The seed of the Free Folk arc (docs/FREE_FOLK_MOVEMENT.md, Beat 1): the docket
+                // names the reaping and points at the waystation where its plans are kept.
+                new ClaimSeed(
+                    "This annex stages the season's Provincial Reconciliation Sweep - the folk call it the reaping. Its schedule and requisition ledger are held at the relay waystation on the measured road, west of the yard.",
+                    "landmark",
+                    "imperial relay waystation",
+                    Salience: 4,
+                    Confidence: 80,
+                    PlayerVisible: true,
+                    BindAsPromise: true,
+                    PromiseKind: "lead",
+                    RealizationKind: "site",
+                    TriggerHint: "travel",
+                    ClaimedPlace: "west along the measured road",
+                    Tags: new[] { "document", "sweep", "reaping", "waystation", "measured_road", "west" }),
             })));
 
         Add(state, Item("loose_tincture_1", "red tincture", new GridPoint(4, 6), '!', "glass", "red_tincture", 12, new[] { "item", "healing", "blood" }, "heal:6"));
@@ -210,6 +225,7 @@ public static class TestScenarios
 
         AddOpeningInteriorThreshold(state);
         AddMemorial(state, memorials);
+        AddProvincialSweep(state);
         WorldConsequenceGuard.ApplyWithNewApplier(state, WorldConsequence.Message(
             "scenario",
             "Imperial soldiers move to contain you.",
@@ -223,6 +239,45 @@ public static class TestScenarios
                 ["scenario"] = "imperial_encounter",
             }));
         return state;
+    }
+
+    // How long the Provincial Reconciliation Sweep takes to reach its first target. Long
+    // enough to act on the warning, short enough to press; pacing notes live in
+    // docs/FREE_FOLK_MOVEMENT.md.
+    private const int SweepArrivalTurns = 100;
+
+    // The reaping is a standing seasonal operation, real from turn one whether or not anyone
+    // reads the schedule (docs/FREE_FOLK_MOVEMENT.md, Beat 1). Its target uses the same
+    // deterministic refuge selection the rescue handoff uses, so the captive's warning and
+    // the Empire's schedule point at the same place without coupling.
+    private static void AddProvincialSweep(GameState state)
+    {
+        var regions = RegionCatalog.LoadDefault();
+        var graph = WorldPlaceGraph.Create(state.Seed, regions);
+        var target = GeneratedObjectiveHandoffFactory.RescueDestination(
+            state.Seed,
+            state.CurrentZoneId,
+            state.RegionId,
+            graph,
+            regions);
+        if (target is null)
+        {
+            return;
+        }
+
+        WorldConsequenceGuard.ApplyWithNewApplier(state, WorldConsequence.ScheduleEvent(
+            "scenario",
+            "empire_sweep",
+            SweepArrivalTurns,
+            new Dictionary<string, object?>
+            {
+                ["settlementId"] = target.Id,
+                ["settlementName"] = target.Name,
+                ["zone"] = $"{target.CenterX},{target.CenterY}",
+                ["regionId"] = target.RegionId,
+            },
+            evidence: "Thaumic Containment Order 7-112 names the annex as a sweep staging stop.",
+            reason: "The Provincial Reconciliation Sweep is a standing seasonal operation."));
     }
 
     private static void AddOpeningInteriorThreshold(GameState state)

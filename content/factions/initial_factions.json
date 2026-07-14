@@ -36,6 +36,22 @@
       }
     },
     {
+      "id": "free_folk",
+      "name": "The Free Folk",
+      "role": "resistance",
+      "hostileRoles": ["empire_bloc"],
+      "resources": {
+        "support": 1,
+        "max_support": 3,
+        "shelter": 1,
+        "max_shelter": 3,
+        "hands": 0,
+        "max_hands": 3,
+        "secrets": 1,
+        "max_secrets": 3
+      }
+    },
+    {
       "id": "independent",
       "name": "Independent Threats",
       "role": "independent_hostile",

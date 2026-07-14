@@ -18,7 +18,7 @@ public sealed class GeneratedJourneyTests
         var embedded = QuestTemplateCatalog.LoadBuiltIn();
 
         Assert.Equal(4, loose.Templates.Count);
-        Assert.Equal(9, loose.Handoffs.Count);
+        Assert.Equal(10, loose.Handoffs.Count);
         Assert.Equal(
             loose.Templates.Select(template => template.Id).OrderBy(id => id).ToArray(),
             embedded.Templates.Select(template => template.Id).OrderBy(id => id).ToArray());
@@ -34,7 +34,7 @@ public sealed class GeneratedJourneyTests
         Assert.Equal(
             new[] { "delivery", "escort", "fetch", "folk_service", "meet", "rumor_verification", "social_leverage", "threat" },
             loose.Handoffs.Select(template => template.ObjectiveKind).Distinct().OrderBy(kind => kind).ToArray());
-        Assert.Equal(2, loose.Handoffs.Count(template => template.OpeningHandoff));
+        Assert.Equal(3, loose.Handoffs.Count(template => template.OpeningHandoff));
         Assert.All(loose.Handoffs.Where(template => !template.OpeningHandoff), template => Assert.True(template.ReturnToGiver));
     }
 

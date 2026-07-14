@@ -39,6 +39,16 @@
   ],
   "handoffs": [
     {
+      "id": "opening_scheduled_sweep",
+      "objectiveKind": "meet",
+      "realizationKind": "person",
+      "subjectPattern": "{contact}",
+      "openingHandoff": true,
+      "spokenPattern": "The reaping list has {settlement} on it -- I watched the clerks copying the schedule. Go {direction} and find {contact} before the sweep does; tell them what you saw in this yard.",
+      "objectivePattern": "Reach {settlement}, {direction}, and warn {contact} that the imperial sweep is coming for them.",
+      "tags": ["sweep", "reaping", "warning", "free_folk"]
+    },
+    {
       "id": "opening_missing_witness",
       "objectiveKind": "meet",
       "realizationKind": "person",

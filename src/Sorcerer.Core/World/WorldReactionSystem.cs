@@ -158,6 +158,9 @@ public sealed class WorldReactionSystem
                 AddLegend(messages, deltas, applyConsequence, deed, "merciful", 2);
                 AddLegend(messages, deltas, applyConsequence, deed, "defiant", 1);
                 AdjustFactionStanding(messages, deltas, applyConsequence, "hollowmere", "gratitude", 2);
+                // The Free Folk's lines read the same rumors the Empire pays informants for
+                // (docs/FREE_FOLK_MOVEMENT.md): a rescue is how the Movement first notices you.
+                AdjustFactionStanding(messages, deltas, applyConsequence, "free_folk", "gratitude", 1);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
                 // Liberation erodes the empire's grip: a real anti-imperial victory spends a point of
                 // imperial defense, which later shows up as one fewer guard at the capital (organic

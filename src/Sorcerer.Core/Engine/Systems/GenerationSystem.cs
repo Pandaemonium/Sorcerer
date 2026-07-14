@@ -124,6 +124,20 @@ public sealed class GenerationSystem
             .Where(place => !string.IsNullOrWhiteSpace(place))
             .Cast<string>()
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // When a Provincial Reconciliation Sweep is pending, a rescued captive's handoff
+        // becomes the sweep warning: same generator, same machinery, higher stakes
+        // (docs/FREE_FOLK_MOVEMENT.md, Beat 1). The contact they name is on the schedule.
+        string? sweepZone = null;
+        if (trigger.Equals("rescue", StringComparison.OrdinalIgnoreCase))
+        {
+            var sweep = _state.ScheduledEvents.Events.FirstOrDefault(item =>
+                item.Kind.Equals("empire_sweep", StringComparison.OrdinalIgnoreCase));
+            sweepZone = sweep is not null && sweep.Payload.TryGetValue("zone", out var zone)
+                ? Convert.ToString(zone)
+                : null;
+        }
+
         return GeneratedObjectiveHandoffFactory.Create(
             _state.Seed,
             _state.CurrentZoneId,
@@ -133,7 +147,9 @@ public sealed class GenerationSystem
             _quests,
             speaker,
             trigger,
-            usedDestinations);
+            usedDestinations,
+            preferredDestinationZone: sweepZone,
+            preferredTemplateTag: string.IsNullOrWhiteSpace(sweepZone) ? null : "sweep");
     }
 
     public int CurrentImperialPresence =>

@@ -188,6 +188,25 @@ public sealed class FactionCatalog
                 ["max_support"] = 1,
             },
             new[] { "empire_bloc" }),
+        // The Free Folk Movement pre-exists the player (docs/FREE_FOLK_MOVEMENT.md): old,
+        // cellular, and losing. It starts starved - the map does not open with rebel bases.
+        new FactionDefinition(
+            "free_folk",
+            "The Free Folk",
+            "resistance",
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["support"] = 1,
+                ["max_support"] = 3,
+                ["shelter"] = 1,
+                ["max_shelter"] = 3,
+                ["hands"] = 0,
+                ["max_hands"] = 3,
+                ["secrets"] = 1,
+                ["max_secrets"] = 3,
+            },
+            new[] { "empire_bloc" }),
         new FactionDefinition(
             "independent",
             "Independent Threats",

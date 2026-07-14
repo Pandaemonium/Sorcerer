@@ -62,8 +62,14 @@ public static class JournalViewBuilder
             messages.Add($"Legend: {string.Join(", ", legend)}");
         }
 
+        // The journal is what the character knows. The reaping is real from turn one, but its
+        // schedule only appears here once a claim about it has been read or heard
+        // (docs/FREE_FOLK_MOVEMENT.md, Beat 1).
+        var knowsReaping = state.Claims.Records.Any(claim =>
+            claim.Tags.Contains("reaping", StringComparer.OrdinalIgnoreCase));
         var warrants = state.ScheduledEvents.Events
             .Where(item => item.Kind.StartsWith("empire_", StringComparison.OrdinalIgnoreCase))
+            .Where(item => knowsReaping || !item.Kind.Equals("empire_sweep", StringComparison.OrdinalIgnoreCase))
             .OrderBy(item => item.DueTurn)
             .Select(item => item.Kind switch
             {
@@ -75,6 +81,7 @@ public static class JournalViewBuilder
                     : $"Word travels: someone who saw you is carrying a report toward an imperial desk (around turn {item.DueTurn}).",
                 "empire_hunter_trace" => $"Pursuit: road talk of a Censorate witchhunter should reach you around turn {item.DueTurn}.",
                 "empire_hunter" => $"Pursuit: a witchhunter is expected to reach the district around turn {item.DueTurn}.",
+                "empire_sweep" => $"The reaping: the imperial sweep is expected to reach {SweepTarget(item)} around turn {item.DueTurn}.",
                 _ => $"Pressure: {item.Kind} is expected around turn {item.DueTurn}.",
             })
             .ToArray();
@@ -86,6 +93,12 @@ public static class JournalViewBuilder
     private static bool IsOverdueReport(ScheduledEventRecord item) =>
         item.Payload.TryGetValue("cause", out var cause)
         && WorldReactionSystem.OverdueReportCause.Equals(Convert.ToString(cause), StringComparison.OrdinalIgnoreCase);
+
+    private static string SweepTarget(ScheduledEventRecord item) =>
+        item.Payload.TryGetValue("settlementName", out var name)
+        && Convert.ToString(name) is { Length: > 0 } settlement
+            ? settlement
+            : "a frontier settlement";
 
     private static bool IsLeadPromise(WorldPromise promise) =>
         promise.Salience >= 3

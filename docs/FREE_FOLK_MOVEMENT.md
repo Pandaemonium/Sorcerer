@@ -419,6 +419,16 @@ ground for handoffs.
    `empire_sweep` as a standing scheduled operation with a readable route, `free_folk` faction
    and cell roll in data. Exit: a fresh opening reliably points at the waystation through at
    least two of the three pointers, and the sweep lands somewhere real if ignored.
+   _Status: **core done 2026-07-14.** The `free_folk` faction rolls starved from turn one and
+   gains gratitude when any captive is freed; the sweep is scheduled at scenario start against
+   the same deterministic refuge settlement the rescue handoff prefers
+   (`GeneratedObjectiveHandoffFactory.RescueDestination`), so the captive's warning and the
+   Empire's schedule name the same place without coupling; the docket carries the
+   reaping/waystation claim seed; the journal reveals the sweep only after a reaping-tagged
+   claim exists (the journal is what the character knows); an ignored sweep lands with memo,
+   rumor, and a real `support` cost to resistance factions. `FreeFolkSeedTests` pins it.
+   Deferred within S1: Lio's want stakes line, and per-realm cell health rolls (with the
+   organizations layer, S4/S5)._
 2. **S2 — The waystation** (Phase 2–3): site/interior data, cast with wants and services, the
    three documents as claim sources, the watching cell as optional giver with real tactical
    intelligence, all five routes playable, graded outcomes verified. Exit: force, stealth,

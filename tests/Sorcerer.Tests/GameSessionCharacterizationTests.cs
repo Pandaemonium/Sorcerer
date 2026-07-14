@@ -5032,12 +5032,17 @@ public sealed class GameSessionCharacterizationTests
         var loadedNotice = loaded.State.Entities[notice.Id];
 
         Assert.True(loadedNotice.TryGet<ClaimSourceComponent>(out var claimSource));
-        var seed = Assert.Single(claimSource.Claims);
-        Assert.Equal("escape_route", seed.Category);
+        // The notice carries two seeds since FREE_FOLK_MOVEMENT S1: the drainage escape route
+        // and the reaping/waystation lead. Both must survive the round trip.
+        Assert.Equal(2, claimSource.Claims.Count);
+        var seed = Assert.Single(claimSource.Claims, item => item.Category == "escape_route");
         Assert.Equal("southern drainage culvert", seed.Subject);
         Assert.True(seed.BindAsPromise);
         Assert.Equal("escape_route", seed.RealizationKind);
         Assert.Contains("drainage", seed.Tags!);
+        var sweepSeed = Assert.Single(claimSource.Claims, item => item.Category == "landmark");
+        Assert.Equal("imperial relay waystation", sweepSeed.Subject);
+        Assert.Contains("reaping", sweepSeed.Tags!);
 
         var loadedBrazier = loaded.State.Entities[EntityId.Create("brazier_1")];
         Assert.True(loadedBrazier.TryGet<ClaimSourceComponent>(out var brazierClaimSource));

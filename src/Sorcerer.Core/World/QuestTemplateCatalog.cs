@@ -299,6 +299,20 @@ public static class GeneratedJourneyFactory
 
 public static class GeneratedObjectiveHandoffFactory
 {
+    /// <summary>
+    /// The settlement a rescue handoff would send the player to from this zone: the same
+    /// deterministic refuge selection the handoff itself uses. Exposed so a standing
+    /// operation (the Provincial Reconciliation Sweep) can be aimed at the same place the
+    /// captive's warning will name, without coupling the two systems.
+    /// </summary>
+    public static WorldSettlement? RescueDestination(
+        int worldSeed,
+        string sourceZoneId,
+        string sourceRegionId,
+        WorldPlaceGraph graph,
+        RegionRegistry regions) =>
+        SelectDestination(worldSeed, sourceZoneId, sourceRegionId, graph, regions, "scenario", "rescue", null);
+
     public static ClaimSeed? Create(
         int worldSeed,
         string sourceZoneId,
@@ -308,22 +322,27 @@ public static class GeneratedObjectiveHandoffFactory
         QuestTemplateCatalog catalog,
         Entity speaker,
         string trigger,
-        IReadOnlySet<string>? usedDestinationZones = null)
+        IReadOnlySet<string>? usedDestinationZones = null,
+        string? preferredDestinationZone = null,
+        string? preferredTemplateTag = null)
     {
         if (catalog.Handoffs.Count == 0)
         {
             return null;
         }
 
-        var destination = SelectDestination(
-            worldSeed,
-            sourceZoneId,
-            sourceRegionId,
-            graph,
-            regions,
-            speaker.Id.Value,
-            trigger,
-            usedDestinationZones);
+        // A preferred destination (e.g. the sweep's scheduled target) wins when it is a real,
+        // still-unpromised settlement; otherwise ordinary selection applies.
+        var destination = PreferredDestination(graph, preferredDestinationZone, usedDestinationZones)
+            ?? SelectDestination(
+                worldSeed,
+                sourceZoneId,
+                sourceRegionId,
+                graph,
+                regions,
+                speaker.Id.Value,
+                trigger,
+                usedDestinationZones);
         var region = destination is null ? null : regions.Region(destination.RegionId);
         if (destination is null
             || region?.Population is not { } population
@@ -342,6 +361,17 @@ public static class GeneratedObjectiveHandoffFactory
             .Where(item => item.OpeningHandoff == opening)
             .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        if (!string.IsNullOrWhiteSpace(preferredTemplateTag))
+        {
+            var preferred = templates
+                .Where(item => item.Tags.Contains(preferredTemplateTag, StringComparer.OrdinalIgnoreCase))
+                .ToArray();
+            if (preferred.Length > 0)
+            {
+                templates = preferred;
+            }
+        }
+
         if (templates.Length == 0)
         {
             return null;
@@ -407,6 +437,21 @@ public static class GeneratedObjectiveHandoffFactory
             Tags: tags,
             SpokenText: spoken,
             ObjectiveText: objective);
+    }
+
+    private static WorldSettlement? PreferredDestination(
+        WorldPlaceGraph graph,
+        string? preferredDestinationZone,
+        IReadOnlySet<string>? usedDestinationZones)
+    {
+        if (string.IsNullOrWhiteSpace(preferredDestinationZone)
+            || usedDestinationZones?.Contains(preferredDestinationZone) == true)
+        {
+            return null;
+        }
+
+        return graph.Settlements.FirstOrDefault(settlement =>
+            $"{settlement.CenterX},{settlement.CenterY}".Equals(preferredDestinationZone, StringComparison.OrdinalIgnoreCase));
     }
 
     private static WorldSettlement? SelectDestination(

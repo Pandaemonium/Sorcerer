@@ -406,6 +406,10 @@ public sealed class TurnSystem
         {
             deltas.AddRange(ResolveWitchhunterArrival(scheduled));
         }
+        else if (scheduled.Kind.Equals("empire_sweep", StringComparison.OrdinalIgnoreCase))
+        {
+            deltas.AddRange(ResolveEmpireSweep(scheduled));
+        }
         else if (TryBuildScheduledConsequence(scheduled, out var consequence))
         {
             deltas.AddRange(_engine.ApplyConsequence(consequence).Deltas);
@@ -865,6 +869,57 @@ public sealed class TurnSystem
         else
         {
             deltas.AddRange(applied.Deltas);
+        }
+
+        return deltas;
+    }
+
+    // The Provincial Reconciliation Sweep lands on its scheduled target if nobody stopped it
+    // (docs/FREE_FOLK_MOVEMENT.md, Beat 1): word travels back as rumor and memo, and the free
+    // folk quietly lose ground. Warning routes, ambushes, and aftermath texture are later
+    // slices; this makes ignoring the reaping a real event rather than a forgotten flag.
+    private IReadOnlyList<StateDelta> ResolveEmpireSweep(ScheduledEventRecord scheduled)
+    {
+        var deltas = new List<StateDelta>();
+        var settlement = ReadPayloadString(scheduled.Payload, "settlementName") ?? "a frontier settlement";
+        var regionId = ReadPayloadString(scheduled.Payload, "regionId") ?? _state.RegionId;
+        deltas.AddRange(ApplyScheduledMessage(
+            scheduled,
+            $"Word comes down the road: the reaping has passed through {settlement}. Hearths audited, wonders confiscated, at least one name taken for containment.",
+            "scheduledEventMessage"));
+        deltas.AddRange(_engine.ApplyConsequence(WorldConsequence.AddCanon(
+            "scheduled_event",
+            "censorate_memo",
+            "empire",
+            $"Censorate memorandum: Provincial Reconciliation Sweep concluded at {settlement}. Requisitions filed; residue contained.",
+            $"The sweep reconciled {settlement}.",
+            new[] { "empire", "sweep", "reaping" },
+            operation: "censorateMemo")).Deltas);
+        deltas.AddRange(_engine.ApplyConsequence(WorldConsequence.RecordRumor(
+            "scheduled_event",
+            "sweep",
+            scheduled.Id,
+            regionId,
+            regionId,
+            $"The Empire's reaping swept {settlement}: hearths audited, a family taken.",
+            salience: 4,
+            tags: new[] { "empire", "sweep", "reaping" },
+            evidence: scheduled.Id,
+            reason: "The reaping landed on real people; word travels.")).Deltas);
+        foreach (var faction in _state.Factions.FactionsByRole("resistance"))
+        {
+            if (_state.Factions.ResourceValue(faction.Id, "support") <= 0)
+            {
+                continue;
+            }
+
+            deltas.AddRange(_engine.ApplyConsequence(WorldConsequence.AdjustFactionResource(
+                "scheduled_event",
+                faction.Id,
+                "support",
+                -1,
+                evidence: scheduled.Id,
+                reason: $"The reaping at {settlement} cost the free folk shelter and nerve.")).Deltas);
         }
 
         return deltas;
