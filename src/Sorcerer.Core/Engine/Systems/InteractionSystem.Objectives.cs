@@ -253,9 +253,35 @@ public sealed partial class InteractionSystem
                 continue;
             }
 
+            // Concrete reciprocity (Q46/Q47): help rendered is paid for, visibly. Weightier asks pay
+            // more (salience-scaled), so quest income and component prices form one economy instead
+            // of gratitude being the only -- and invisible -- wage.
+            var payment = ObjectiveGoldPayment(promise.Salience);
+            if (!ApplyOrRollback(WorldConsequence.ModifyInventory(
+                $"objective_return:{giver.Id.Value}",
+                State.ControlledEntityId.Value,
+                "gold",
+                op: "add",
+                amount: payment,
+                visibility: WorldConsequenceVisibility.Hidden,
+                sourceEntityId: giver.Id.Value,
+                evidence: promise.Text,
+                reason: "A completed objective pays the promised consideration.",
+                operation: "objectiveReturnPayment",
+                details: new Dictionary<string, object?>
+                {
+                    ["promiseId"] = promise.Id,
+                    ["objectiveKind"] = contract.Kind,
+                    ["giverEntityId"] = giver.Id.Value,
+                    ["gold"] = payment,
+                }), "payment_rejected"))
+            {
+                continue;
+            }
+
             if (!ApplyOrRollback(WorldConsequence.Message(
                 $"objective_return:{giver.Id.Value}",
-                $"Objective complete: {giver.Name} accepts what you learned and remembers what you did.",
+                $"Objective complete: {giver.Name} accepts what you learned and presses {payment} gold into your hand.",
                 targetEntityId: giver.Id.Value,
                 visibility: WorldConsequenceVisibility.Message,
                 sourceEntityId: giver.Id.Value,
@@ -267,6 +293,7 @@ public sealed partial class InteractionSystem
                     ["promiseId"] = promise.Id,
                     ["objectiveKind"] = contract.Kind,
                     ["giverEntityId"] = giver.Id.Value,
+                    ["gold"] = payment,
                 }), "completion_message_rejected"))
             {
                 continue;
@@ -277,6 +304,12 @@ public sealed partial class InteractionSystem
 
         return deltas;
     }
+
+    // Payment for a returned objective: 4 gold for a routine ask up to 12 for a weighty one
+    // (salience 1..5) -- sized against component prices (grave salt 8, tincture 12) so a completed
+    // quest funds roughly one meaningful purchase, keeping quest income and shop sinks in one economy.
+    private static int ObjectiveGoldPayment(int salience) =>
+        2 + (2 * Math.Clamp(salience, 1, 5));
 
     private IReadOnlyList<StateDelta> CompleteContactObjectives(Entity contact)
     {

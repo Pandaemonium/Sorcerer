@@ -115,6 +115,8 @@ public sealed class GeneratedJourneyTests
             entity.Id == giver.Id);
         var giverPosition = restoredGiver.Get<PositionComponent>().Position;
         session.Engine.State.ControlledEntity.Set(new PositionComponent(giverPosition.Translate(-1, 0)));
+        var goldBefore = session.Engine.State.ControlledEntity.Get<InventoryComponent>().Items
+            .TryGetValue("gold", out var coins) ? coins : 0;
         var returned = await session.ExecuteAsync(new TalkCommand(restoredGiver.Name));
 
         Assert.True(returned.Success, string.Join(" | ", returned.Messages));
@@ -129,7 +131,13 @@ public sealed class GeneratedJourneyTests
             restoredGiver.Get<InventoryComponent>().Items,
             pair => pair.Key.Contains(evidence.Name, StringComparison.OrdinalIgnoreCase) && pair.Value == 1);
         Assert.Contains(returned.Messages, message =>
-            message.Contains("Objective complete", StringComparison.OrdinalIgnoreCase));
+            message.Contains("Objective complete", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("gold into your hand", StringComparison.OrdinalIgnoreCase));
+
+        // Concrete reciprocity: the giver pays for the work, visibly (4..12 gold by salience).
+        var goldAfter = session.Engine.State.ControlledEntity.Get<InventoryComponent>().Items
+            .TryGetValue("gold", out var paid) ? paid : 0;
+        Assert.InRange(goldAfter - goldBefore, 4, 12);
     }
 
     private static (int X, int Y) ParseZoneId(string zoneId)
