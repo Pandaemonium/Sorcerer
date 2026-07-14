@@ -666,6 +666,15 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
 - Do not maintain a parallel checkpoint game state or fork action logic by mode. Only death
   handling differs.
 - Chronicles record mode and restoration count without shaming or changing rewards.
+  - _Status (21ba8ec, 9b99a2e):_ durable `RunMode` value (classic/checkpoint) recorded in the
+    chronicle; checkpoint restore-on-death implemented. A safe rest -- a settlement place with no
+    perceivable hostile (`FindNearestHostile() == null`, which correctly excludes the guard-filled
+    start) -- records an in-memory full-state `GameStateSnapshot`; a killing blow in checkpoint mode
+    restores it instead of ending the run, before the 2.6 defeat path. Only death handling forks; no
+    parallel state. Deliberate deviation: the snapshot is an in-memory within-session safety net
+    orthogonal to the run save, not routed through the persistence boundary (so no save-contract
+    change). Remaining: restoration count in the chronicle; whether checkpoints should survive
+    quit/load (currently they do not -- the next safe rest re-forms one). `CheckpointModeTests`.
 
 ### 2.6 Death, victory, chronicle, restart
 
