@@ -23,24 +23,28 @@ public sealed record BoundReference(
     Entity? Entity,
     GridPoint? Position,
     IReadOnlyList<Entity> Group,
-    string? Error)
+    string? Error,
+    string? FailureCode = null)
 {
     public bool Success => Error is null;
 
-    public static BoundReference Failure(GameReference reference, string error) =>
-        new(reference, null, null, Array.Empty<Entity>(), error);
+    // FailureCode is the machine-stable family from Results.FailureCode; Error is the precise player
+    // message. Callers should pass a code so GUI/CLI/transcript/resolver read one vocabulary.
+    public static BoundReference Failure(GameReference reference, string error, string? failureCode = null) =>
+        new(reference, null, null, Array.Empty<Entity>(), error, failureCode);
 }
 
 public sealed record ResolvedEntitySet(
     EntityRef Reference,
     IReadOnlyList<Entity> Entities,
     GridPoint? Position,
-    string? Error)
+    string? Error,
+    string? FailureCode = null)
 {
     public bool Success => Error is null;
 
-    public static ResolvedEntitySet Failure(EntityRef reference, string error) =>
-        new(reference, Array.Empty<Entity>(), null, error);
+    public static ResolvedEntitySet Failure(EntityRef reference, string error, string? failureCode = null) =>
+        new(reference, Array.Empty<Entity>(), null, error, failureCode);
 }
 
 public interface IReferenceResolver

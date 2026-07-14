@@ -1,6 +1,7 @@
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Results;
 
 namespace Sorcerer.Core.References;
 
@@ -147,10 +148,10 @@ public static class ReferenceBinder
                 Position: tile.Position,
                 Group: Array.Empty<Entity>(),
                 Error: null),
-            TileReference => BoundReference.Failure(reference, "Tile is outside the current map."),
+            TileReference => BoundReference.Failure(reference, "Tile is outside the current map.", FailureCode.OutOfRange),
             SelectorReference selector => BindSelector(engine, reference, selector.Selector),
             FactionReference faction => BindFaction(engine, reference, faction.FactionId),
-            _ => BoundReference.Failure(reference, "Unknown reference shape."),
+            _ => BoundReference.Failure(reference, "Unknown reference shape.", FailureCode.Unsupported),
         };
 
     private static BoundReference BindEntity(GameEngine engine, GameReference reference, string id)
@@ -158,7 +159,7 @@ public static class ReferenceBinder
         var entity = engine.EntityById(id);
         if (entity is null)
         {
-            return BoundReference.Failure(reference, NoVisibleTargetMessage(id));
+            return BoundReference.Failure(reference, NoVisibleTargetMessage(id), FailureCode.MissingTarget);
         }
 
         var position = entity.TryGet<PositionComponent>(out var pos) ? pos.Position : (GridPoint?)null;
@@ -180,7 +181,7 @@ public static class ReferenceBinder
                 {
                     var target = engine.FindNearestHostile();
                     return target is null
-                        ? BoundReference.Failure(reference, "No hostile target is visible.")
+                        ? BoundReference.Failure(reference, "No hostile target is visible.", FailureCode.MissingTarget)
                         : new BoundReference(
                             reference,
                             target,
@@ -191,7 +192,7 @@ public static class ReferenceBinder
             case "selected_target":
                 return engine.State.SelectedTarget is { } selected
                     ? new BoundReference(reference, null, selected, Array.Empty<Entity>(), null)
-                    : BoundReference.Failure(reference, NoSelectedTargetMessage);
+                    : BoundReference.Failure(reference, NoSelectedTargetMessage, FailureCode.NoSelection);
             case "all_enemies":
                 {
                     var actor = engine.State.ControlledEntity;
@@ -203,11 +204,11 @@ public static class ReferenceBinder
                             && targetStats.Faction != "neutral")
                         .ToArray();
                     return group.Length == 0
-                        ? BoundReference.Failure(reference, "No hostile group is visible.")
+                        ? BoundReference.Failure(reference, "No hostile group is visible.", FailureCode.MissingTarget)
                         : new BoundReference(reference, null, null, group, null);
                 }
             default:
-                return BoundReference.Failure(reference, $"Unsupported selector {selector}.");
+                return BoundReference.Failure(reference, $"Unsupported selector {selector}.", FailureCode.Unsupported);
         }
     }
 
@@ -217,7 +218,7 @@ public static class ReferenceBinder
             .Where(entity => entity.TryGet<ActorComponent>(out var actor) && actor.Faction == factionId)
             .ToArray();
         return group.Length == 0
-            ? BoundReference.Failure(reference, $"No entities currently represent faction {factionId}.")
+            ? BoundReference.Failure(reference, $"No entities currently represent faction {factionId}.", FailureCode.MissingTarget)
             : new BoundReference(reference, null, null, group, null);
     }
 }
@@ -263,8 +264,8 @@ public sealed class EngineReferenceResolver : IReferenceResolver
             "selector" => ResolveSelector(reference),
             "name" => ResolveName(reference),
             "point" => ResolvePoint(reference),
-            "malformed" => ResolvedEntitySet.Failure(reference, reference.Value),
-            _ => ResolvedEntitySet.Failure(reference, $"Unsupported reference kind {reference.Kind}."),
+            "malformed" => ResolvedEntitySet.Failure(reference, reference.Value, FailureCode.Malformed),
+            _ => ResolvedEntitySet.Failure(reference, $"Unsupported reference kind {reference.Kind}.", FailureCode.Unsupported),
         };
 
     private ResolvedEntitySet ResolveId(EntityRef reference)
@@ -277,7 +278,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
                 return new ResolvedEntitySet(reference, new[] { projected }, PositionOf(projected), null);
             }
 
-            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoVisibleTargetMessage(reference.Value));
+            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoVisibleTargetMessage(reference.Value), FailureCode.MissingTarget);
         }
 
         return new ResolvedEntitySet(reference, new[] { entity }, PositionOf(entity), null);
@@ -290,13 +291,13 @@ public sealed class EngineReferenceResolver : IReferenceResolver
             || !int.TryParse(parts[0], out var x)
             || !int.TryParse(parts[1], out var y))
         {
-            return ResolvedEntitySet.Failure(reference, "Malformed point target.");
+            return ResolvedEntitySet.Failure(reference, "Malformed point target.", FailureCode.Malformed);
         }
 
         var point = new GridPoint(x, y);
         if (!_engine.InBounds(point))
         {
-            return ResolvedEntitySet.Failure(reference, $"Target point {x},{y} is outside the encounter.");
+            return ResolvedEntitySet.Failure(reference, $"Target point {x},{y} is outside the encounter.", FailureCode.OutOfRange);
         }
 
         var occupant = _engine.State.Entities.Values
@@ -320,7 +321,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
             "all_allies" => ResolveGroup(reference, hostile: false),
             "all_in_radius" => ResolveAllInRadius(reference),
             "random_enemy" => ResolveRandomEnemy(reference),
-            _ => ResolvedEntitySet.Failure(reference, $"Unsupported selector {reference.Value}."),
+            _ => ResolvedEntitySet.Failure(reference, $"Unsupported selector {reference.Value}.", FailureCode.Unsupported),
         };
     }
 
@@ -333,7 +334,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
             .ToArray();
         if (tokens.Length == 0)
         {
-            return ResolvedEntitySet.Failure(reference, $"Name reference is too vague: {reference.Value}.");
+            return ResolvedEntitySet.Failure(reference, $"Name reference is too vague: {reference.Value}.", FailureCode.Malformed);
         }
 
         var matches = _engine.State.Entities.Values.Concat(_projectedEntities.Values)
@@ -354,14 +355,14 @@ public sealed class EngineReferenceResolver : IReferenceResolver
 
         if (matches.Length == 0)
         {
-            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoVisibleTargetMessage(reference.Value));
+            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoVisibleTargetMessage(reference.Value), FailureCode.MissingTarget);
         }
 
         if (matches.Length > 1
             && matches[0].Score == matches[1].Score
             && matches[0].Distance == matches[1].Distance)
         {
-            return ResolvedEntitySet.Failure(reference, $"Reference {reference.Value} is ambiguous.");
+            return ResolvedEntitySet.Failure(reference, $"Reference {reference.Value} is ambiguous.", FailureCode.AmbiguousTarget);
         }
 
         var entity = matches[0].Entity;
@@ -372,7 +373,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
     {
         if (_engine.State.SelectedTarget is not { } target)
         {
-            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoSelectedTargetMessage);
+            return ResolvedEntitySet.Failure(reference, ReferenceBinder.NoSelectedTargetMessage, FailureCode.NoSelection);
         }
 
         var occupant = _engine.State.Entities.Values
@@ -387,7 +388,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
         var candidates = CandidateActors(hostile).ToArray();
         if (candidates.Length == 0)
         {
-            return ResolvedEntitySet.Failure(reference, hostile ? "No hostile target is visible." : "No ally is visible.");
+            return ResolvedEntitySet.Failure(reference, hostile ? "No hostile target is visible." : "No ally is visible.", FailureCode.MissingTarget);
         }
 
         var origin = PositionOf(_caster);
@@ -404,7 +405,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
     {
         var group = CandidateActors(hostile).Take(_groupCap).ToArray();
         return group.Length == 0
-            ? ResolvedEntitySet.Failure(reference, hostile ? "No hostile targets are visible." : "No allies are visible.")
+            ? ResolvedEntitySet.Failure(reference, hostile ? "No hostile targets are visible." : "No allies are visible.", FailureCode.MissingTarget)
             : new ResolvedEntitySet(reference, group, null, null);
     }
 
@@ -414,7 +415,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
         var origin = _engine.State.SelectedTarget ?? PositionOf(_caster);
         if (origin is null)
         {
-            return ResolvedEntitySet.Failure(reference, "No origin exists for radius targeting.");
+            return ResolvedEntitySet.Failure(reference, "No origin exists for radius targeting.", FailureCode.MissingTarget);
         }
 
         var group = _engine.State.Entities.Values
@@ -423,7 +424,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
             .Take(_groupCap)
             .ToArray();
         return group.Length == 0
-            ? ResolvedEntitySet.Failure(reference, "No entities are in the requested radius.")
+            ? ResolvedEntitySet.Failure(reference, "No entities are in the requested radius.", FailureCode.MissingTarget)
             : new ResolvedEntitySet(reference, group, origin, null);
     }
 
@@ -432,7 +433,7 @@ public sealed class EngineReferenceResolver : IReferenceResolver
         var group = CandidateActors(hostile: true).ToArray();
         if (group.Length == 0)
         {
-            return ResolvedEntitySet.Failure(reference, "No hostile target is visible.");
+            return ResolvedEntitySet.Failure(reference, "No hostile target is visible.", FailureCode.MissingTarget);
         }
 
         var entity = group[_engine.State.Rng.NextInt(0, group.Length)];

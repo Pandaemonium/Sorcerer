@@ -127,6 +127,14 @@ public sealed record ActionResult
 
     public bool TechnicalFailure { get; init; }
 
+    /// <summary>
+    /// The machine-stable failure family from <see cref="Results.FailureCode"/> when this result is a
+    /// failure, or null on success. GUI hints, CLI JSON, transcripts, and resolver feedback read this
+    /// one field instead of matching message text (Phase 1.3). <see cref="Messages"/> carries the
+    /// precise, in-fiction reason alongside it.
+    /// </summary>
+    public string? FailureCode { get; init; }
+
     public MagicResolutionRecord? Magic { get; init; }
 
     public DialogueResolutionRecord? Dialogue { get; init; }
