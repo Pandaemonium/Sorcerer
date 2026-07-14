@@ -665,6 +665,10 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
 
 - Select imperial/wild/other death treatment from authoritative killer, faction, region, and
   effect provenance. Deterministic templates always work; provider prose is optional enrichment.
+  - _Status (410516c):_ killer provenance is now recorded at the moment the controlled body is
+    struck (`GameState.LastControlledDamageProvenance`: imperial/wild/mortal), and `RunChronicle`
+    selects the treatment deterministically on defeat. `DeathTreatmentTests` pins both halves.
+    Remaining: the restart/disposition that consumes the treatment (below).
 - Assemble chronicles from deeds/rumors, unrealized bound promises, deepest bonds, capability
   portfolio, route, faction posture, and run conclusion. Do not accumulate a parallel narrative
   summary during play.
