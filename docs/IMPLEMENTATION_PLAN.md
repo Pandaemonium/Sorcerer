@@ -656,6 +656,13 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
   inn, transport, or bribery systems when offers plus consequences suffice.
 - Money, items, promises, memories, standing, and services may all be payment media when the
   existing consequence grammar can validate them. Do not ask a model to infer trade intent.
+  - _Status (31ebe59):_ the economy system is complete and graceful -- buy/sell (`ApplyExecuteTrade`)
+    are the sources, services/purchases the sinks (`PayServiceCost` consumes gold transactionally),
+    and a payment the sorcerer cannot afford rolls the request back rather than deadlocking a seed.
+    Added the missing "measured" half: a read-only `EconomySummaryView` (gold, sellable stacks, paid
+    services in reach + total cost) on the debug/telemetry surface. Remaining is content/tuning:
+    authoring enough recurring service sinks with meaningful prices across a run that gold pressure
+    is felt, and a run-scale no-deadlock replay proof.
 
 ### 2.5 Persistence modes as one simulation
 
