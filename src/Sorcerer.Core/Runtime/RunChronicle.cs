@@ -14,7 +14,8 @@ public sealed record RunChronicleRecord(
     IReadOnlyList<string> Legend,
     IReadOnlyList<string> KeyDeeds,
     string Text,
-    string Mode = "classic");
+    string Mode = "classic",
+    string Treatment = "none");
 
 public static class RunChronicle
 {
@@ -58,6 +59,25 @@ public static class RunChronicle
             legend,
             deeds,
             text,
-            string.IsNullOrWhiteSpace(state.RunMode) ? "classic" : state.RunMode);
+            string.IsNullOrWhiteSpace(state.RunMode) ? "classic" : state.RunMode,
+            DeriveDeathTreatment(state));
+    }
+
+    // Phase 2.6: on defeat, the body is disposed of in the killer's register -- an imperial hand
+    // files it as a Censorate incident, wild magic transforms it, ordinary force just ends it.
+    // A run that did not end in defeat has no treatment ("none").
+    private static string DeriveDeathTreatment(GameState state)
+    {
+        if (!state.RunStatus.Equals("defeat", StringComparison.OrdinalIgnoreCase))
+        {
+            return "none";
+        }
+
+        return (state.LastControlledDamageProvenance ?? "mortal") switch
+        {
+            "imperial" => "imperial",
+            "wild" => "wild",
+            _ => "mortal",
+        };
     }
 }

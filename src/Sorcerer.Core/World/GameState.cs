@@ -46,6 +46,14 @@ public sealed class GameState
     /// <summary>The controlled entity's last movement offset, read by the "mimic" behavior tag.</summary>
     public GridPoint? LastControlledMoveDelta { get; set; }
 
+    /// <summary>
+    /// Provenance of the last damage the controlled body suffered (Phase 2.6): "imperial" (an
+    /// empire-faction hand), "wild" (wild magic), or "mortal" (ordinary force). Transient -- not
+    /// persisted -- and populated at the moment of the blow, so at defeat it names the killer.
+    /// <see cref="Sorcerer.Core.Runtime.RunChronicle"/> reads it to select the death treatment.
+    /// </summary>
+    public string? LastControlledDamageProvenance { get; set; }
+
     public Dictionary<EntityId, Entity> Entities { get; } = new();
 
     public Dictionary<string, ZoneSnapshot> Zones { get; } = new(StringComparer.OrdinalIgnoreCase);

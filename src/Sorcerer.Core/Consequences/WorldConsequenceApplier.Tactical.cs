@@ -42,6 +42,13 @@ public sealed partial class WorldConsequenceApplier
             && operation.Contains("attack", StringComparison.OrdinalIgnoreCase)
             && attacker is not null;
         var delta = DamageEntityDelta(target.Entity, amount, damageType);
+        if (target.Entity!.Id == _state.ControlledEntityId)
+        {
+            // Phase 2.6: name the hand that struck the sorcerer's body, so a defeat can be
+            // treated in the killer's register (imperial paperwork vs. wild transformation).
+            _state.LastControlledDamageProvenance = ClassifyBodyDamageProvenance(attacker, consequence, damageType);
+        }
+
         if (isAttack && delta.Operation.Equals("delayIncoming", StringComparison.OrdinalIgnoreCase))
         {
             AddMessageIfAllowed(consequence, payload, delta.Summary);
@@ -61,6 +68,27 @@ public sealed partial class WorldConsequenceApplier
         }
 
         return AppliedFromDelta(consequence, WithOperation(delta, operation));
+    }
+
+    // Classifies who dealt a blow to the controlled body. Empire-faction hands (Censorate guards,
+    // the emperor) read as "imperial"; wild-magic sources as "wild"; everything else as "mortal".
+    private static string ClassifyBodyDamageProvenance(Entity? attacker, WorldConsequence consequence, string damageType)
+    {
+        if (attacker is not null
+            && attacker.TryGet<ActorComponent>(out var atk)
+            && string.Equals(atk.Faction, "empire", StringComparison.OrdinalIgnoreCase))
+        {
+            return "imperial";
+        }
+
+        var source = consequence.Source ?? string.Empty;
+        if (string.Equals(damageType, "wild", StringComparison.OrdinalIgnoreCase)
+            || source.Contains("wild", StringComparison.OrdinalIgnoreCase))
+        {
+            return "wild";
+        }
+
+        return "mortal";
     }
 
     private WorldConsequenceApplyResult ApplyHeal(WorldConsequence consequence)
