@@ -56,6 +56,22 @@ public sealed class EnemyInspectionTests
     }
 
     [Fact]
+    public void ExaminingAnAlertEnemyTeachesTheBodySwapRoute()
+    {
+        var engine = GameSession.CreateImperialEncounter(seed: 7).Engine;
+        var playerPos = engine.State.ControlledEntity.Get<PositionComponent>().Position;
+        var soldier = engine.State.Entities.Values
+            .First(e => e.Name.Contains("containment soldier", StringComparison.OrdinalIgnoreCase));
+        soldier.Set(new PositionComponent(new GridPoint(playerPos.X + 1, playerPos.Y)));
+
+        var result = engine.Examine(soldier.Name);
+
+        // An alert hostile cannot be possessed -- the hint teaches you to daze it first.
+        Assert.True(result.Success);
+        Assert.Contains(result.Messages, m => m.Contains("Too alert to possess", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void ExaminingAHealingItemHintsItMendsWounds()
     {
         var engine = GameSession.CreateImperialEncounter(seed: 7).Engine;

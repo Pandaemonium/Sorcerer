@@ -499,6 +499,17 @@ public sealed partial class InteractionSystem
                         lines.Add($"Shrugs off {string.Join(", ", resists)}.");
                     }
                 }
+
+                // Teach the body-swap route on a hostile: you cannot wear an alert enemy (its soul
+                // refuses yours), but a dazed or unmoored one is yours to take -- infiltration by
+                // stealing a foe's shape (Q28 body swap / Q31-37 identity).
+                if (entity.Id != State.ControlledEntityId
+                    && _engine.IsHostile(State.ControlledEntity, entity))
+                {
+                    lines.Add(_engine.CanPossess(entity, out _)
+                        ? "Its guard is down -- you could cast your soul across and wear this body as your own."
+                        : "Too alert to possess as it stands; daze or unmoor it first, then the body is yours to take.");
+                }
             }
         }
 
