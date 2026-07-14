@@ -159,79 +159,34 @@ public static class WorldConsequenceTypes
         };
     }
 
-    public static bool IsKnown(string type) =>
-        Normalize(type) is Damage
-            or Heal
-            or RestoreMana
-            or AdjustActorResource
-            or MoveEntity
-            or SetTerrain
-            or UpdateTerrain
-            or ApplyStatus
-            or RemoveStatus
-            or AccelerateStatus
-            or SpawnEntity
-            or SpawnItem
-            or SpawnFixture
-            or CreatePromise
-            or UpdatePromise
-            or Message
-            or ModifyInventory
-            or TransferItem
-            or UpdateEquipment
-            or AddTags
-            or RemoveTags
-            or ChangeFaction
-            or UpdateControl
-            or SetControlledEntity
-            or SwapSouls
-            or SetWorldFlag
-            or UpdateRunStatus
-            or SetSelectedTarget
-            or QueueBackgroundJob
-            or UpdateBackgroundJob
-            or ScheduleEvent
-            or UpdateScheduledEvent
-            or CreateTrigger
-            or UpdateTrigger
-            or AdjustFactionStanding
-            or AdjustFactionResource
-            or RecordSuspicion
-            or UpdateSuspicion
-            or RecordDeed
-            or UpdateDeed
-            or AddLegend
-            or AddCanon
-            or RecordWorldTurn
-            or RecordExploration
-            or TransformEntity
-            or SetResistance
-            or SetWeakness
-            or DelayIncomingDamage
-            or ReleaseDelayedDamage
-            or EditMemory
-            or CreatePersistentEffect
-            or UpdatePersistentEffect
-            or SetBehavior
-            or UpdateBehavior
-            or CreateFlow
-            or UpdateFlow
-            or RecordClaim
-            or UpdateClaim
-            or RecordRumor
-            or UpdateRumor
-            or RecordMemory
-            or UpdateBond
-            or UpdateWant
-            or AddMerchantStock
-            or OfferTrade
-            or ExecuteTrade
-            or OfferService
-            or RequestService
-            or OpenOrUnlock
-            or CreateRoute
-            or FreeCaptive
-            or AnimateEntity;
+    /// <summary>
+    /// The canonical consequence catalog: the single source of truth for type membership, replacing
+    /// the former hand-maintained <c>IsKnown</c> or-chain (Phase 0.2). Entries reference the type
+    /// constants above, so the constants and membership set can no longer drift apart.
+    /// <see cref="ConsequenceCatalogTests"/> pins this exact set, and asserts it matches the
+    /// applier's dispatch registry so every known type has exactly one dispatch owner.
+    /// </summary>
+    private static readonly IReadOnlySet<string> CanonicalTypeSet = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Damage, Heal, RestoreMana, AdjustActorResource, MoveEntity, SetTerrain, UpdateTerrain,
+        ApplyStatus, RemoveStatus, AccelerateStatus, SpawnEntity, SpawnItem, SpawnFixture,
+        CreatePromise, UpdatePromise, Message, ModifyInventory, TransferItem, UpdateEquipment,
+        AddTags, RemoveTags, ChangeFaction, UpdateControl, SetControlledEntity, SwapSouls,
+        SetWorldFlag, UpdateRunStatus, SetSelectedTarget, QueueBackgroundJob, UpdateBackgroundJob,
+        ScheduleEvent, UpdateScheduledEvent, CreateTrigger, UpdateTrigger, AdjustFactionStanding,
+        AdjustFactionResource, RecordSuspicion, UpdateSuspicion, RecordDeed, UpdateDeed, AddLegend,
+        AddCanon, RecordWorldTurn, RecordExploration, TransformEntity, SetResistance, SetWeakness,
+        DelayIncomingDamage, ReleaseDelayedDamage, EditMemory, CreatePersistentEffect,
+        UpdatePersistentEffect, SetBehavior, UpdateBehavior, CreateFlow, UpdateFlow, RecordClaim,
+        UpdateClaim, RecordRumor, UpdateRumor, RecordMemory, UpdateBond, UpdateWant, AddMerchantStock,
+        OfferTrade, ExecuteTrade, OfferService, RequestService, OpenOrUnlock, CreateRoute, FreeCaptive,
+        AnimateEntity,
+    };
+
+    /// <summary>The canonical consequence types, in no particular order. The authoritative catalog.</summary>
+    public static IReadOnlyCollection<string> Canonical => (IReadOnlyCollection<string>)CanonicalTypeSet;
+
+    public static bool IsKnown(string type) => CanonicalTypeSet.Contains(Normalize(type));
 
     private static string NormalizeToken(string type)
     {

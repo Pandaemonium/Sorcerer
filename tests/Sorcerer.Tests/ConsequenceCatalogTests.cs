@@ -132,6 +132,28 @@ public sealed class ConsequenceCatalogTests
     }
 
     /// <summary>
+    /// Registry parity (Phase 0.2 architecture enforcement): the reflected constant catalog, the
+    /// <see cref="WorldConsequenceTypes.Canonical"/> membership set that backs <c>IsKnown</c>, and
+    /// the applier's <see cref="WorldConsequenceApplier.DispatchableConsequenceTypes"/> dispatch
+    /// registry are all the same set. This guarantees every known type has exactly one dispatch
+    /// owner, no handler is orphaned, and the membership set and dispatch table cannot drift apart
+    /// when families are split into partial files.
+    /// </summary>
+    [Fact]
+    public void CatalogMembershipAndDispatchRegistryAgree()
+    {
+        var canonicalMembership = WorldConsequenceTypes.Canonical
+            .OrderBy(type => type, StringComparer.Ordinal)
+            .ToArray();
+        var dispatchable = WorldConsequenceApplier.DispatchableConsequenceTypes
+            .OrderBy(type => type, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(CanonicalTypes, canonicalMembership);
+        Assert.Equal(CanonicalTypes, dispatchable);
+    }
+
+    /// <summary>
     /// Every canonical type reports as known and is a fixed point of normalization. If a constant
     /// is added to the catalog but omitted from <see cref="WorldConsequenceTypes.IsKnown"/> or its
     /// normalize table, this fails -- catching the parallel-list drift the plan warns about.
