@@ -99,6 +99,37 @@ public sealed class DeedAndFactionTests
     }
 
     [Fact]
+    public void KillingImperialForcesInTheOpenErodesDefensesButKillingOthersDoesNot()
+    {
+        static int Defenses(GameSession session) =>
+            session.Engine.State.Factions.FactionsByRole("empire_bloc")
+                .Sum(faction => session.Engine.State.Factions.ResourceValue(faction.Id, "defenses"));
+
+        static void RecordWitnessedKill(GameSession session, string victimFaction)
+        {
+            var player = session.Engine.State.ControlledEntity;
+            var origin = player.Get<PositionComponent>().Position;
+            session.Engine.ApplyConsequence(WorldConsequence.RecordDeed(
+                "test", player.Id.Value, "kill", magnitude: 4,
+                originX: origin.X, originY: origin.Y, effectX: origin.X, effectY: origin.Y,
+                tags: new[] { "combat", "violence", victimFaction }, sourceEntityId: player.Id.Value));
+            new WorldReactionSystem().ApplyPending(session.Engine.State);
+        }
+
+        // Felling one of the empire's own forces in the open spends a point of imperial defense.
+        var imperial = GameSession.CreateImperialEncounter(seed: 7);
+        var imperialBefore = Defenses(imperial);
+        RecordWitnessedKill(imperial, "empire");
+        Assert.True(Defenses(imperial) < imperialBefore);
+
+        // Killing a non-imperial does not touch imperial defenses.
+        var other = GameSession.CreateImperialEncounter(seed: 7);
+        var otherBefore = Defenses(other);
+        RecordWitnessedKill(other, "hollowmere");
+        Assert.Equal(otherBefore, Defenses(other));
+    }
+
+    [Fact]
     public void OneDeedAdjustsFactionsByRoleWithoutTouchingOtherRoles()
     {
         var ledger = new FactionLedger();

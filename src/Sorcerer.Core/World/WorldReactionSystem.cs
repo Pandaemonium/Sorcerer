@@ -174,6 +174,15 @@ public sealed class WorldReactionSystem
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "fear", deed.Magnitude);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", deed.Magnitude);
                 RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
+                // Force route of the organic capital approach: cutting down an imperial in the open
+                // spends a point of the empire's finite defense, so beating its forces in the field
+                // means fewer guards stand at the throne later. The kill deed carries the victim's
+                // faction as a tag (MovementSystem), so this needs no new plumbing.
+                if (VictimIsEmpireBloc(state, deed))
+                {
+                    SpendEmpireDefenses(state, messages, deltas, applyConsequence, 1);
+                }
+
                 AddMessage(messages, deltas, applyConsequence, deed, "kill", "Someone will carry word of the killing to the next town before nightfall.");
                 break;
             case "attack":
@@ -351,6 +360,18 @@ public sealed class WorldReactionSystem
         {
             AdjustFactionResource(messages, deltas, applyConsequence, faction.Id, "defenses", -Math.Max(0, amount));
         }
+    }
+
+    // A kill/attack deed carries the victim's faction id among its tags (MovementSystem records it).
+    // This is true when the felled actor belonged to an empire-bloc faction, i.e. it was one of the
+    // empire's own forces.
+    private static bool VictimIsEmpireBloc(GameState state, DeedRecord deed)
+    {
+        var empireFactionIds = state.Factions.FactionsByRole("empire_bloc")
+            .Select(faction => faction.Id)
+            .ToArray();
+        return deed.Tags.Any(tag =>
+            empireFactionIds.Any(id => id.Equals(tag, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static void AddLegend(
