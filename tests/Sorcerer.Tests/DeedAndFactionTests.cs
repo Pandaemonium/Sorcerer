@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Sorcerer.Core;
+using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.World;
 using Xunit;
@@ -67,6 +69,33 @@ public sealed class DeedAndFactionTests
         Assert.Equal("witnessed", plan.Visibility);
         Assert.Equal("attributed", plan.AttributionStatus);
         Assert.Equal(soulId, plan.AttributedSoulId);
+    }
+
+    [Fact]
+    public void FreeingPrisonersErodesImperialDefensesOrganically()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 7);
+        var state = session.Engine.State;
+        var player = state.ControlledEntity;
+        var origin = player.Get<PositionComponent>().Position;
+
+        var defensesBefore = state.Factions.FactionsByRole("empire_bloc")
+            .Sum(faction => state.Factions.ResourceValue(faction.Id, "defenses"));
+        Assert.True(defensesBefore > 0);
+
+        // A witnessed liberation is a real anti-imperial victory (reference scenario has soldiers by
+        // the yard, so the deed is not secret).
+        var deed = session.Engine.ApplyConsequence(WorldConsequence.RecordDeed(
+            "test", player.Id.Value, "freed_prisoner", magnitude: 2,
+            originX: origin.X, originY: origin.Y, effectX: origin.X, effectY: origin.Y,
+            sourceEntityId: player.Id.Value));
+        Assert.True(deed.Applied, deed.Error);
+
+        new WorldReactionSystem().ApplyPending(state);
+
+        var defensesAfter = state.Factions.FactionsByRole("empire_bloc")
+            .Sum(faction => state.Factions.ResourceValue(faction.Id, "defenses"));
+        Assert.True(defensesAfter < defensesBefore, "Freeing prisoners should spend imperial defenses.");
     }
 
     [Fact]

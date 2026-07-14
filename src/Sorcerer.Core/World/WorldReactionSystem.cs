@@ -157,6 +157,10 @@ public sealed class WorldReactionSystem
                 AdjustFactionStanding(messages, deltas, applyConsequence, "hollowmere", "gratitude", 2);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
                 RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
+                // Liberation erodes the empire's grip: a real anti-imperial victory spends a point of
+                // imperial defense, which later shows up as one fewer guard at the capital (organic
+                // capital approach -- see memory capital-organic-approach-design).
+                SpendEmpireDefenses(state, messages, deltas, applyConsequence, 1);
                 AddMessage(messages, deltas, applyConsequence, deed, "freed_prisoner", "By morning someone will have carried word of the rescue down the road.");
                 break;
             case "body_swap":
@@ -329,6 +333,23 @@ public sealed class WorldReactionSystem
         foreach (var faction in state.Factions.FactionsByRole("empire_bloc"))
         {
             AdjustFactionResource(messages, deltas, applyConsequence, faction.Id, "heat", Math.Max(0, amount));
+        }
+    }
+
+    // Spend the empire's finite defense capacity in response to a real anti-imperial victory. This
+    // is the player-driven half of the organic capital approach: the capital guard is generated from
+    // the current defenses, so eroding them here means fewer guards stand between the player and the
+    // throne later. Clamped at 0 by AdjustFactionResource.
+    private static void SpendEmpireDefenses(
+        GameState state,
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
+        int amount)
+    {
+        foreach (var faction in state.Factions.FactionsByRole("empire_bloc"))
+        {
+            AdjustFactionResource(messages, deltas, applyConsequence, faction.Id, "defenses", -Math.Max(0, amount));
         }
     }
 
