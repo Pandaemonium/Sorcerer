@@ -16,6 +16,21 @@ public sealed record EntityCard(
     IReadOnlyList<string> Tags,
     IReadOnlyList<ContextActionCard>? Actions = null);
 
+/// <summary>
+/// A generous, deterministic combat telegraph (tactical-mastery pillar): a hostile the sorcerer can
+/// perceive, its distance, and what it is poised to do next turn under the ordinary pursue-and-strike
+/// AI -- <see cref="Imminent"/> when it stands in striking range (distance &lt;= 1, it attacks) or
+/// closing in otherwise. Because wild resolution carries uncertainty, deterministic play must supply
+/// mastery: threats are foretold so a death reads as a wasted turn, not an ambush. Actual behaviour
+/// follows the telegraph unless changed state (a stun, a fear, a lured step) explains the divergence.
+/// </summary>
+public sealed record ThreatCard(
+    string EntityId,
+    string Name,
+    int Distance,
+    bool Imminent,
+    string Telegraph);
+
 public sealed record ContextActionCard(
     string Id,
     string Label,
@@ -232,7 +247,10 @@ public sealed record GameView(
     IReadOnlyList<MessageCard>? MessageCards = null,
     RepertoireCard? Repertoire = null,
     ObjectiveCard? CurrentObjective = null,
-    IReadOnlyList<ObjectiveCard>? OtherObjectives = null);
+    IReadOnlyList<ObjectiveCard>? OtherObjectives = null,
+    // Generous combat telegraphs: perceived hostiles nearest-first, each with what it is poised to
+    // do next turn (tactical-mastery pillar). Empty/absent when nothing threatens the sorcerer.
+    IReadOnlyList<ThreatCard>? Threats = null);
 
 public sealed record WorldCard(
     string CurrentZoneId,

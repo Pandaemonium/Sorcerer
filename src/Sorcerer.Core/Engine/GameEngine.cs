@@ -213,6 +213,16 @@ public sealed class GameEngine
             }
         }
 
+        var threats = DescribeThreats();
+        if (threats.Count > 0)
+        {
+            messages.Add("Threats:");
+            foreach (var threat in threats)
+            {
+                messages.Add($"  {threat.Name} is {threat.Telegraph}.");
+            }
+        }
+
         return ActionResult.Simple(
             "inspect",
             success: true,
@@ -220,6 +230,62 @@ public sealed class GameEngine
             State.Turn,
             State.Turn,
             messages.ToArray());
+    }
+
+    // The AI pursues within this Chebyshev distance and strikes when adjacent (see AiSystem); the
+    // telegraph reads the same reach so what it foretells is exactly what the enemy will do.
+    private const int HostileEngagementRange = 8;
+
+    /// <summary>
+    /// Generous, deterministic combat telegraphs (tactical-mastery pillar): every hostile the
+    /// sorcerer can perceive within engagement range, nearest first, with what it is poised to do
+    /// under the ordinary pursue-and-strike AI. Read by the observation and the structured view so
+    /// the player is never ambushed -- a death should read as a wasted turn, not a surprise.
+    /// </summary>
+    public IReadOnlyList<ThreatCard> DescribeThreats()
+    {
+        var player = State.ControlledEntity;
+        if (!player.TryGet<PositionComponent>(out var position)
+            || !player.TryGet<ActorComponent>(out var actor)
+            || !actor.Alive)
+        {
+            return Array.Empty<ThreatCard>();
+        }
+
+        var origin = position.Position;
+        var threats = new List<ThreatCard>();
+        foreach (var entity in State.Entities.Values)
+        {
+            if (entity.Id == State.ControlledEntityId
+                || !entity.TryGet<ActorComponent>(out var stats)
+                || !stats.Alive
+                || !entity.TryGet<PositionComponent>(out var entityPosition))
+            {
+                continue;
+            }
+
+            if (!IsHostile(player, entity) || !CanPerceiveSubject(player, entity))
+            {
+                continue;
+            }
+
+            var distance = Distance(origin, entityPosition.Position);
+            if (distance > HostileEngagementRange)
+            {
+                continue;
+            }
+
+            var imminent = distance <= 1;
+            var telegraph = imminent
+                ? "in striking range — it strikes if you hold position"
+                : $"closing in, {distance} tiles away";
+            threats.Add(new ThreatCard(entity.Id.Value, entity.Name, distance, imminent, telegraph));
+        }
+
+        return threats
+            .OrderBy(threat => threat.Distance)
+            .ThenBy(threat => threat.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public ActionResult Map(int radius = 8)

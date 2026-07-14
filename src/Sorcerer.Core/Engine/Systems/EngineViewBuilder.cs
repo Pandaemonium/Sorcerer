@@ -13,6 +13,7 @@ namespace Sorcerer.Core.Engine.Systems;
 
 public sealed class EngineViewBuilder
 {
+    private readonly GameEngine _engine;
     private readonly GenerationSystem _generationSystem;
     private readonly InventoryService _inventoryService;
     private readonly LoreCatalog _loreCatalog;
@@ -28,6 +29,7 @@ public sealed class EngineViewBuilder
         GenerationSystem generationSystem,
         LoreCatalog loreCatalog)
     {
+        _engine = engine;
         _generationSystem = generationSystem;
         _inventoryService = inventoryService;
         _loreCatalog = loreCatalog;
@@ -311,7 +313,8 @@ public sealed class EngineViewBuilder
             messageCards,
             BuildRepertoire(),
             objectiveCards.FirstOrDefault(),
-            objectiveCards.Skip(1).ToArray());
+            objectiveCards.Skip(1).ToArray(),
+            _engine.DescribeThreats());
     }
 
     public IReadOnlyList<ObjectiveCard> ObjectiveCards() =>
