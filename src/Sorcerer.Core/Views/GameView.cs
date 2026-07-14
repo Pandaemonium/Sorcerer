@@ -253,7 +253,22 @@ public sealed record WorldCard(
     string? LandmarkName = null,
     string? InteriorName = null,
     string? NearestSettlement = null,
-    CapitalApproachView? CapitalApproach = null);
+    CapitalApproachView? CapitalApproach = null,
+    RunArcView? RunArc = null);
+
+/// <summary>
+/// Read-only projection of the run's current movement (Phase 2.1): escape → foothold → war → reach,
+/// derived furthest-progressed-first from ordinary facts (current region + imperial defenses vs
+/// max) for debug/telemetry and chronicle structure. It is a label, NOT a chapter state machine or
+/// a progress meter -- it gates nothing. Pacing/tuning lives in docs/RUN_ARC.md.
+/// </summary>
+public sealed record RunArcView(
+    string Movement,
+    string RegionId,
+    string RegionName,
+    int ImperialDefenses,
+    int ImperialDefensesMax,
+    string Summary);
 
 /// <summary>
 /// Read-only projection of the capital approach (Phase 1.2), derived from ordinary facts — the

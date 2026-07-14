@@ -41,6 +41,37 @@ public sealed class WinConditionTests
     }
 
     [Fact]
+    public async Task RunArcMovementDerivesFromRegionAndDefenses()
+    {
+        static string Movement(GameSession session) => session.View().World!.RunArc!.Movement;
+
+        // Escape: still in the containment yard.
+        var escape = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()), seed: 7);
+        Assert.Equal("escape", Movement(escape));
+
+        // Foothold: out of the yard, the empire's defenses still intact.
+        var foothold = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()), seed: 7);
+        await foothold.ExecuteAsync(new TravelCommand(Direction.East));
+        Assert.Equal("foothold", Movement(foothold));
+
+        // War: out of the yard and imperial defenses have been spent.
+        var war = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()), seed: 7);
+        await war.ExecuteAsync(new TravelCommand(Direction.East));
+        foreach (var faction in war.Engine.State.Factions.FactionsByRole("empire_bloc"))
+        {
+            war.Engine.State.Factions.AdjustResource(faction.Id, "defenses", -99);
+        }
+        Assert.Equal("war", Movement(war));
+
+        // Reach: at the marble heart of the empire.
+        var reach = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()), seed: 7);
+        await reach.ExecuteAsync(new TravelCommand(Direction.East));
+        await reach.ExecuteAsync(new TravelCommand(Direction.East));
+        await reach.ExecuteAsync(new TravelCommand(Direction.East));
+        Assert.Equal("reach", Movement(reach));
+    }
+
+    [Fact]
     public async Task CapitalApproachViewDerivesFromDistrictGeographyNotAMeter()
     {
         var session = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()));

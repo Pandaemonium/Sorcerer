@@ -532,7 +532,35 @@ public sealed class EngineViewBuilder
             nearest.Distance == 0
                 ? $"{nearest.Settlement.Name} (here)"
                 : $"{nearest.Settlement.Name} ({nearest.Distance} {nearest.Direction})",
-            BuildCapitalApproach(region, place));
+            BuildCapitalApproach(region, place),
+            BuildRunArc(region));
+    }
+
+    // Read-only run-arc projection (Phase 2.1): the current movement, derived furthest-progressed
+    // first from ordinary facts (current region + imperial defenses vs max). A label for
+    // debug/telemetry and chronicle structure -- it gates nothing. Tuning lives in docs/RUN_ARC.md.
+    private RunArcView BuildRunArc(RegionDefinition region)
+    {
+        var empire = _state.Factions.FactionsByRole("empire_bloc").ToArray();
+        var defenses = empire.Sum(faction => _state.Factions.ResourceValue(faction.Id, "defenses"));
+        var maxDefenses = empire.Sum(faction => _state.Factions.ResourceValue(faction.Id, "max_defenses"));
+
+        var movement =
+            region.Id.Equals("vigovian_capital", StringComparison.OrdinalIgnoreCase) ? "reach"
+            : region.Id.Equals("imperial_encounter", StringComparison.OrdinalIgnoreCase) ? "escape"
+            : defenses < maxDefenses ? "war"
+            : "foothold";
+
+        var summary = movement switch
+        {
+            "escape" => "Escape: breaking out of imperial custody.",
+            "foothold" => "Foothold: building strength on the frontier.",
+            "war" => "War: the empire's defenses are being spent.",
+            "reach" => "Reach: at the marble heart of the empire, the throne within reach.",
+            _ => movement,
+        };
+
+        return new RunArcView(movement, region.Id, region.Name, defenses, maxDefenses, summary);
     }
 
     // Read-only capital-approach projection (Phase 1.2): derived entirely from the capital's own
