@@ -351,6 +351,25 @@ messages, rollback, replay, or provider semantics.
 
 ### 0.2 Decompose consequence application by cohesive family
 
+**Status: substantially complete — 2026-07-13 (commits `69d170a`, `b81cd0d`, `08a7dd8`).**
+`WorldConsequenceApplier.Apply` is now a 195-line facade (normalize → timing route → registry
+lookup → unknown-type reject). The former ~72-case switch is an explicit static `FamilyDispatch`
+registry; `WorldConsequenceTypes.IsKnown` is one canonical set; handlers live in eight cohesive
+family partial files (`WorldConsequenceApplier.{Tactical,Space,Entities,Trade,Social,Scheduling,WorldRun,Compound}.cs`)
+plus a shared-helper partial (`.Shared.cs`). Adding a consequence now touches its family file and
+the registry, not a 7,600-line switch. `ConsequenceCatalogTests` pins the dispatch/alias/reject
+contract and asserts the constants, `IsKnown` set, and registry are one set.
+
+**Design choice vs. the recommended shape below:** partial classes were used instead of separate
+handler classes + a `ConsequenceContext`. Rationale (per the complexity budget's "minimum private
+machinery"): partial classes give each family its own cohesive file and a single explicit registry
+while keeping every handler's direct access to the ~40 shared helpers and instance state, so the
+move is pure relocation with zero behavior risk — no large context surface re-exposing state, the
+child-apply sink, entity/reach lookup, and payload/delta helpers. The child-consequence sink stays
+`this.Apply` under the existing snapshot rollback (see `Compound.cs` `ApplyFreeCaptive`).
+**Remaining:** `Trade` (1462), `Entities` (1224), and `Social` (1169) partials are still >1000
+lines — cohesive, not dumping grounds, but candidates for later intra-family subdivision.
+
 Keep `WorldConsequenceApplier.Apply(WorldConsequence)` as the internal facade used by the existing
 guard. Its only jobs after this package are normalization, explicit timing routing, family lookup,
 and unknown-type rejection.
@@ -1392,7 +1411,7 @@ it makes complexity a conscious cost instead of an accidental byproduct.
 
 | Order | Phase | Roadmap owner | Status at this plan's writing |
 |---:|---|---|---|
-| 0 | Converge current hotspots | prerequisite protecting every milestone | 0.1 done (PHASE_0_BASELINE.md); 0.2 next |
+| 0 | Converge current hotspots | prerequisite protecting every milestone | 0.1 done; 0.2 applier split done; 0.3 (GameSession) next |
 | 1 | Close current roadmap program | Milestone 0 | pending Phase 0 |
 | 2 | Complete run structure | Milestone 1 | pending Phase 1 |
 | 3 | Deterministic ten-minute game | Milestone 2 / P3 | pending Phase 2 structure |

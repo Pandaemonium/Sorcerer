@@ -623,6 +623,13 @@ The consequence applier canonicalizes common source spellings such as `addTags`,
 before dispatch. That repair happens at the authoritative mutation boundary, so
 dialogue, wild magic, scheduled events, triggers, persistent effects, services,
 and promise payoffs do not each need their own alias table.
+Dispatch is an explicit static `FamilyDispatch` registry (type → handler), and the handlers
+are organized into cohesive family partial files
+(`WorldConsequenceApplier.{Tactical,Space,Entities,Trade,Social,Scheduling,WorldRun,Compound}.cs`)
+over one shared-helper partial (`.Shared.cs`); the base `WorldConsequenceApplier.cs` holds only
+normalization, timing routing, and the registry. Adding a consequence touches its family file and
+the registry. `ConsequenceCatalogTests` pins that every canonical type has exactly one dispatch
+owner.
 `GameEngine.ApplyConsequence` is the normal authoritative apply point. It uses
 `WorldConsequenceGuard`, which snapshots state, delegates to
 `WorldConsequenceApplier`, restores the snapshot on rejection, and validates the
