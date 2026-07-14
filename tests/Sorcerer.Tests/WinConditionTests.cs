@@ -69,6 +69,41 @@ public sealed class WinConditionTests
     }
 
     [Fact]
+    public async Task CapitalGuardDensityScalesWithImperialDefensesOrganically()
+    {
+        // While the empire's defenses stand, guards materialize around the throne.
+        var full = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()));
+        await TravelEastToCapital(full);
+        var guardedCount = CountImperialGuards(full);
+        Assert.True(guardedCount > 0, "Guards should stand around Odran while imperial defenses hold.");
+
+        // Spend the empire's defenses (force, or allies waging war off-screen) and the throne stands
+        // far less guarded -- reaching Odran is emergent, not a binary gate.
+        var depleted = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()));
+        foreach (var faction in depleted.Engine.State.Factions.FactionsByRole("empire_bloc"))
+        {
+            depleted.Engine.State.Factions.AdjustResource(faction.Id, "defenses", -99);
+        }
+
+        await TravelEastToCapital(depleted);
+        Assert.True(
+            CountImperialGuards(depleted) < guardedCount,
+            "Depleting imperial defenses should organically thin the guard around the throne.");
+    }
+
+    private static async Task TravelEastToCapital(GameSession session)
+    {
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+        await session.ExecuteAsync(new TravelCommand(Direction.East));
+    }
+
+    private static int CountImperialGuards(GameSession session) =>
+        session.Engine.State.Entities.Values.Count(entity =>
+            entity.TryGet<TagsComponent>(out var tags)
+            && tags.Tags.Contains("guard", System.StringComparer.OrdinalIgnoreCase));
+
+    [Fact]
     public async Task KillingEmperorThroughOrdinaryDamageWinsRun()
     {
         var damageEmperor = """

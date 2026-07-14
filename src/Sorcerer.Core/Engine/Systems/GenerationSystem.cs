@@ -1674,6 +1674,64 @@ public sealed class GenerationSystem
                 }),
             deltas,
             "emperor");
+
+        SpawnImperialDefenseGuards(generatedState, region, position, deltas);
+    }
+
+    // Organic capital approach (see memory capital-organic-approach-design): the imperial "defenses"
+    // faction resource materializes as guards around Odran. The more the empire's defenses have been
+    // spent -- directly by force, or by allies waging war off-screen -- the fewer guards stand in the
+    // way, so reaching the throne is emergent tactics/stealth, never a binary gate or a shield on the
+    // emperor. Guards are ordinary hostile actors that die, distract, and can be bypassed.
+    private void SpawnImperialDefenseGuards(
+        GameState generatedState,
+        RegionDefinition region,
+        GridPoint throne,
+        List<StateDelta> deltas)
+    {
+        var defenses = _state.Factions.FactionsByRole("empire_bloc")
+            .Sum(faction => _state.Factions.ResourceValue(faction.Id, "defenses"));
+        var guardCount = Math.Clamp(defenses, 0, 6);
+        var ring = new[]
+        {
+            new GridPoint(1, 0), new GridPoint(-1, 0), new GridPoint(0, 1),
+            new GridPoint(0, -1), new GridPoint(1, 1), new GridPoint(-1, -1),
+        };
+        for (var index = 0; index < guardCount; index++)
+        {
+            var offset = ring[index % ring.Length];
+            var point = FindGeneratedOpenPoint(
+                generatedState,
+                new GridPoint(throne.X + offset.X, throne.Y + offset.Y));
+            TryApplyGeneratedZoneEntityConsequence(
+                generatedState,
+                WorldConsequence.SpawnEntity(
+                    "generation",
+                    "Censorate Guard",
+                    point.X,
+                    point.Y,
+                    prefix: "censor_guard",
+                    glyph: 's',
+                    faction: "empire",
+                    hp: 6,
+                    attack: 2,
+                    tags: new[] { "imperial", "guard", "soldier", "censorate" },
+                    material: "body",
+                    roles: new[] { "empire", "guard" },
+                    controllerKind: "ai",
+                    aiPolicyId: "soldier",
+                    summoned: false,
+                    description: "A Censorate guard, one measure of the throne's remaining defense.",
+                    interactableVerbs: new[] { "talk", "examine" },
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    evidence: "Imperial defenses materialized as a guard around the throne.",
+                    reason: "Capital guard density scales with the empire's remaining defenses (organic capital approach).",
+                    operation: "generateImperialGuard",
+                    emitMessage: false,
+                    autoWant: false),
+                deltas,
+                "imperial_guard");
+        }
     }
 
     private GridPoint FindGeneratedOpenPoint(GameState generatedState, GridPoint origin)
