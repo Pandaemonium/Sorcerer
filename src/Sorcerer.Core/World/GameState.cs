@@ -37,6 +37,11 @@ public sealed class GameState
     // (checkpoint restores an authoritative settlement-rest snapshot). The chronicle records it.
     public string RunMode { get; set; } = "classic";
 
+    // How many times checkpoint mode has rewound a killing blow to the last safe rest (Phase 2.5).
+    // It lives outside the snapshot lifecycle -- Capture/Restore never touch it -- so it counts
+    // monotonically across restores; the chronicle records it without shaming or changing rewards.
+    public int RestorationCount { get; set; }
+
     public int NextEntitySerial { get; set; } = 1;
 
     public EntityId ControlledEntityId { get; set; } = EntityId.Create("player");

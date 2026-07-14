@@ -577,6 +577,7 @@ public sealed partial class GameSession
         }
 
         _checkpoint.Restore(Engine.State);
+        Engine.State.RestorationCount++;
         const string message = "You come to at your last safe rest, the killing blow already thinning into a bad dream.";
         Engine.State.AddMessage(message);
         result = result with

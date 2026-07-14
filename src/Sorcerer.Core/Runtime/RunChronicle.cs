@@ -15,7 +15,8 @@ public sealed record RunChronicleRecord(
     IReadOnlyList<string> KeyDeeds,
     string Text,
     string Mode = "classic",
-    string Treatment = "none");
+    string Treatment = "none",
+    int Restorations = 0);
 
 public static class RunChronicle
 {
@@ -60,7 +61,8 @@ public static class RunChronicle
             deeds,
             text,
             string.IsNullOrWhiteSpace(state.RunMode) ? "classic" : state.RunMode,
-            DeriveDeathTreatment(state));
+            DeriveDeathTreatment(state),
+            state.RestorationCount);
     }
 
     // Phase 2.6: on defeat, the body is disposed of in the killer's register -- an imperial hand

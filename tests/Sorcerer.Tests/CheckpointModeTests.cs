@@ -3,6 +3,7 @@ using System.Linq;
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
+using Sorcerer.Core.Runtime;
 using Sorcerer.Magic;
 using Sorcerer.Magic.Replay;
 using Xunit;
@@ -74,6 +75,22 @@ public sealed class CheckpointModeTests
         await session.ExecuteAsync(new CastCommand("let the room swallow my current body whole"));
 
         Assert.Equal("defeat", session.Engine.State.RunStatus);
+    }
+
+    [Fact]
+    public async Task ChronicleRecordsHowManyTimesTheRunWasRestored()
+    {
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new ReplaySpellProvider(new[] { DamageSelf, DamageSelf })));
+        session.Engine.State.RunMode = "checkpoint";
+        MakeSafe(session);
+
+        await session.ExecuteAsync(new WaitCommand());                                        // capture
+        await session.ExecuteAsync(new CastCommand("let the room swallow my current body whole")); // restore #1
+        await session.ExecuteAsync(new CastCommand("let the room swallow my current body whole")); // restore #2
+
+        Assert.Equal("running", session.Engine.State.RunStatus);
+        Assert.Equal(2, RunChronicle.Build(session.Engine.State).Restorations);
     }
 
     // Kill every actor the sorcerer would treat as hostile, directly (no consequence, no reactions),
