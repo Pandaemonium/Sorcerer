@@ -1,7 +1,11 @@
+using System.Threading.Tasks;
 using Sorcerer.Core;
+using Sorcerer.Core.Commands;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.References;
 using Sorcerer.Core.Results;
+using Sorcerer.Llm;
+using Sorcerer.Magic;
 using Xunit;
 
 namespace Sorcerer.Tests;
@@ -52,5 +56,24 @@ public sealed class FailureVocabularyTests
             resolver.Resolve(new EntityRef("selector", "not_a_real_selector")).FailureCode);
         Assert.Equal(FailureCode.MissingTarget,
             resolver.Resolve(new EntityRef("id", "no_such_entity")).FailureCode);
+    }
+
+    [Fact]
+    public async Task TurnSemanticsDistinguishProviderFailureFromIntentionalRejection()
+    {
+        // Technical provider failure: tagged provider_failure and consumes no turn.
+        var technical = await GameSession.CreateImperialEncounter()
+            .ExecuteAsync(new CastCommand("turn the soldier blue"));
+        Assert.True(technical.TechnicalFailure);
+        Assert.False(technical.ConsumedTurn);
+        Assert.Equal(FailureCode.ProviderFailure, technical.FailureCode);
+
+        // Intentional in-world rejection: tagged rejected and does consume a turn.
+        var rejected = await GameSession
+            .CreateImperialEncounter(new WildMagicController(new MockSpellProvider()))
+            .ExecuteAsync(new CastCommand("kill the emperor"));
+        Assert.False(rejected.TechnicalFailure);
+        Assert.True(rejected.ConsumedTurn);
+        Assert.Equal(FailureCode.Rejected, rejected.FailureCode);
     }
 }

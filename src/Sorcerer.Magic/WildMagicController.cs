@@ -1077,6 +1077,7 @@ public sealed class WildMagicController : IWildMagicController
             Messages = message.Messages.Count == 0 ? new[] { error } : message.Messages,
             Deltas = message.Deltas,
             TechnicalFailure = true,
+            FailureCode = Sorcerer.Core.Results.FailureCode.ProviderFailure,
             Magic = new MagicResolutionRecord(
                 provider,
                 Accepted: false,
@@ -1109,6 +1110,7 @@ public sealed class WildMagicController : IWildMagicController
             Action = "cast",
             Success = false,
             ConsumedTurn = true,
+            FailureCode = Sorcerer.Core.Results.FailureCode.Rejected,
             TurnBefore = turnBefore,
             TurnAfter = engine.State.Turn,
             Messages = rejection.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),

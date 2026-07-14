@@ -107,6 +107,7 @@ public sealed class NullWildMagicController : IWildMagicController
             Messages = applied.Messages.Count == 0 ? new[] { message } : applied.Messages,
             Deltas = applied.Deltas,
             TechnicalFailure = true,
+            FailureCode = Sorcerer.Core.Results.FailureCode.ProviderFailure,
             Magic = new MagicResolutionRecord(
                 "none",
                 Accepted: false,

@@ -343,6 +343,7 @@ public sealed partial class GameSession
             TurnBefore = turn.TurnBefore,
             TurnAfter = Engine.State.Turn,
             TechnicalFailure = true,
+            FailureCode = Sorcerer.Core.Results.FailureCode.ProviderFailure,
             Messages = new[] { message },
             Deltas = new[]
             {
