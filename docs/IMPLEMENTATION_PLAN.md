@@ -416,6 +416,19 @@ remain stable. No handler family becomes a dumping ground for unrelated features
 
 ### 0.3 Make `GameSession` an orchestrator again
 
+**Status: in progress — 2026-07-13 (commit `fbabccb`).** First increment done: `GameSession` is a
+partial class whose base file (`GameSession.cs`, ~928 lines) is now the orchestrator — public
+surface, `ExecuteAsync` command switch, `View`/`Observation`, persistence/run-lifecycle, the
+post-action pipeline, and shared helpers. Its three large accumulated policy regions moved to
+cohesive partials: `GameSession.Magic.cs` (pending casts, charter, echoes), `GameSession.Dialogue.cs`
+(dialogue turn + proposal application), `GameSession.Claims.cs` (claim intake/binding). Same
+partial-class technique and rationale as 0.2 — pure relocation, behavior identical, 928 tests green,
+`ExecuteAsync` untouched. **Remaining:** `Dialogue` (2030) and `Claims` (1491) are still >1000
+lines; the plan's true collaborator extraction below (dialogue turn orchestrator / proposal applier
+/ claim intake system with the state each owns teased out) is the next step now that each policy has
+a legible home. Making the post-action pipeline an explicit named sequence with tests is also
+pending.
+
 Keep the public constructor/factory, `ExecuteAsync`, `View`, and `Observation` stable. Keep the
 typed command switch explicit; it is a readable route table, not the source of bloat.
 
