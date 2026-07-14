@@ -532,13 +532,15 @@ is the single policy — one pass classifying each witness as saw-actor / saw-ef
 using the shared line-of-sight, range, and `StatusRegistry` concealment rules, returning structured
 `WitnessObservation` rows (including the observed body id as the identity-model seed). Deed capture
 (`PlanDeedCapture`) and suspicion attribution (`PlanEffectSuspicion`) both project from it, replacing
-their two parallel witness passes; behavior-preserving, 930 tests green. `VisibilityAttributionTests`
-pins the four-way classification and the suspicion projection. Hostile notice (`AiSystem`) already
-shares the concealment rule via `CanPerceiveSubject`. **Remaining:** surface the structured
-classification in `AgentObservation(debug)` and concise in-fiction evidence in deed/suspicion player
-messages; route the resolver relation cards (`EngineViewBuilder`) through the same projection; the
-body-swap attribution variant of the proof lands with the Phase 4 institutional-identity model
-(the `WitnessObservation.WitnessEntityId` seed is in place for it).
+their two parallel witness passes; behavior-preserving, 932 tests green. `VisibilityAttributionTests`
+pins the four-way classification, the suspicion projection, the debug readout, and witness-named
+messages. Done since: the structured classification is surfaced in `AgentObservation(debug)`
+(`WitnessDebugCard`, commit `f06e976`), and deed reaction messages now name the carrier who noticed
+instead of "someone" (commit `8c76062`, converging with the tone directive). Hostile notice
+(`AiSystem`) already shares the concealment rule via `CanPerceiveSubject`. **Remaining (minor):**
+route the resolver relation cards (`EngineViewBuilder`) through the same projection; the body-swap
+attribution variant of the proof lands with the Phase 4 institutional-identity model (the
+`WitnessObservation.WitnessEntityId` seed is in place for it).
 
 - Extend `PerceptionSystem` with one query/policy that accounts for line of sight, range, lighting
   if later present, concealment/status traits, body identity, and whether the witness saw actor,
