@@ -169,6 +169,7 @@ public sealed class WorldTurnSystem
             .Where(entity => entity.TryGet<PositionComponent>(out _))
             .Where(entity => !entity.TryGet<AiComponent>(out var ai)
                 || !ai.PolicyId.Equals("hostile", StringComparison.OrdinalIgnoreCase))
+            .Where(entity => !IsHeldCaptive(entity))
             .Select(entity => new
             {
                 Entity = entity,
@@ -991,6 +992,16 @@ public sealed class WorldTurnSystem
                 ["playerVisible"] = false,
             });
     }
+
+    // A held captive cannot wander toward the player on rumor -- it stays put until freed (its cell
+    // opened, its bonds cut), so a "free them" promise stays coherent instead of the prisoner
+    // strolling out of a locked cell because word spread.
+    private static bool IsHeldCaptive(Entity entity) =>
+        (entity.TryGet<AiComponent>(out var ai)
+            && ai.PolicyId.Equals("captive", StringComparison.OrdinalIgnoreCase))
+        || (entity.TryGet<TagsComponent>(out var tags)
+            && tags.Tags.Any(tag => tag.Equals("prisoner", StringComparison.OrdinalIgnoreCase)
+                || tag.Equals("captive", StringComparison.OrdinalIgnoreCase)));
 
     private static bool HasFactionResource(GameState state, string factionId, string resource, int amount) =>
         state.Factions.ResourceValue(factionId, resource) >= Math.Max(1, amount);
