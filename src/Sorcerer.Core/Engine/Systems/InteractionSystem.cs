@@ -471,6 +471,35 @@ public sealed partial class InteractionSystem
         if (entity.TryGet<ActorComponent>(out var actor))
         {
             lines.Add($"HP {actor.HitPoints}/{actor.MaxHitPoints}; faction {actor.Faction}.");
+            if (actor.Alive)
+            {
+                // Inspection teaches how to fight it (tactical-mastery pillar): its hitting power, its
+                // guard, and the damage it shrugs off or folds under -- deterministic facts the player
+                // can act on to offset wild magic's uncertainty.
+                lines.Add($"In a fight: strikes for about {actor.Attack}, wards off {actor.Defense}.");
+                if (entity.TryGet<ResistanceComponent>(out var resistance))
+                {
+                    var weakTo = resistance.Weaknesses
+                        .Where(pair => pair.Value > 0)
+                        .Select(pair => pair.Key)
+                        .OrderBy(kind => kind, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    var resists = resistance.Resistances
+                        .Where(pair => pair.Value > 0)
+                        .Select(pair => pair.Key)
+                        .OrderBy(kind => kind, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    if (weakTo.Length > 0)
+                    {
+                        lines.Add($"Weak to {string.Join(", ", weakTo)}.");
+                    }
+
+                    if (resists.Length > 0)
+                    {
+                        lines.Add($"Shrugs off {string.Join(", ", resists)}.");
+                    }
+                }
+            }
         }
 
         if (entity.TryGet<ReadableComponent>(out var readable))
