@@ -395,10 +395,33 @@ public sealed class EngineViewBuilder
                 _state.WorldTurns.Records.Select(record => record.Id).ToArray(),
                 BuildWorldTurnDebugCards(),
                 _state.RunStatus,
-                _state.RunConclusion)
+                _state.RunConclusion,
+                BuildWitnessDebugCards())
             : null;
 
         return new AgentObservation(View(), debugState);
+    }
+
+    // Debug projection of the one visibility policy: who could currently witness the controlled
+    // body (as both actor and deed effect at its own tile), and how. Debug-only -- player-facing
+    // views stay non-omniscient.
+    private IReadOnlyList<WitnessDebugCard> BuildWitnessDebugCards()
+    {
+        var actor = _state.ControlledEntity;
+        if (!actor.TryGet<PositionComponent>(out var position))
+        {
+            return Array.Empty<WitnessDebugCard>();
+        }
+
+        return _perceptionSystem
+            .ClassifyEffectWitnesses(position.Position, position.Position, actor)
+            .Select(observation => new WitnessDebugCard(
+                observation.WitnessEntityId,
+                observation.WitnessSoulId,
+                observation.SawActor,
+                observation.SawEffect,
+                observation.Classification))
+            .ToArray();
     }
 
     private IReadOnlyList<FactionDebugCard> BuildFactionDebugCards() =>

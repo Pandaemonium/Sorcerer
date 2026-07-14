@@ -327,7 +327,8 @@ public sealed record DebugStateView(
     IReadOnlyList<string>? WorldTurnIds = null,
     IReadOnlyList<WorldTurnDebugCard>? WorldTurns = null,
     string RunStatus = "running",
-    string? RunConclusion = null);
+    string? RunConclusion = null,
+    IReadOnlyList<WitnessDebugCard>? Witnesses = null);
 
 public sealed record FactionDebugCard(
     string Id,
@@ -336,6 +337,19 @@ public sealed record FactionDebugCard(
     IReadOnlyDictionary<string, int> Standing,
     IReadOnlyDictionary<string, int> Resources,
     IReadOnlyList<string> HostileRoles);
+
+/// <summary>
+/// Debug-only projection of the one witness-classification policy (Phase 1.1): for the controlled
+/// body standing at its tile, who currently classifies as seeing the actor and/or a deed effect
+/// there, and how (both | actor | effect). Renderers/agents can inspect exactly who would notice
+/// and why without the classification becoming omniscient player-facing state.
+/// </summary>
+public sealed record WitnessDebugCard(
+    string WitnessEntityId,
+    string WitnessSoulId,
+    bool SawActor,
+    bool SawEffect,
+    string Classification);
 
 public sealed record BondDebugCard(
     string SubjectSoulId,

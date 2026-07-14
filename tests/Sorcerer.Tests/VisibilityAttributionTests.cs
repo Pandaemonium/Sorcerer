@@ -4,6 +4,7 @@ using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Engine.Systems;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Views;
 using Xunit;
 
 namespace Sorcerer.Tests;
@@ -118,5 +119,31 @@ public sealed class VisibilityAttributionTests
             .Single(plan => plan.WitnessSoulId == (witness.TryGet<SoulComponent>(out var s) ? s.SoulId : witness.Id.Value));
         Assert.Equal("pending", pending.Status);
         Assert.Null(pending.SuspectedSoulId);
+    }
+
+    [Fact]
+    public void DebugObservationSurfacesWitnessClassificationButPlayerViewDoesNot()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 7);
+        var engine = session.Engine;
+        var actor = engine.State.ControlledEntity;
+        var origin = actor.Get<PositionComponent>().Position;
+        var witness = engine.EntityById("soldier_1")!;
+
+        // Adjacent -> line of sight is trivially clear (no intervening tile).
+        var witnessPoint = new GridPoint(origin.X + 1, origin.Y);
+        witness.Set(new PositionComponent(witnessPoint));
+        engine.State.BlockingTerrain.Remove(witnessPoint);
+
+        var debug = session.Observation(debug: true).Debug!;
+        Assert.NotNull(debug.Witnesses);
+        var card = debug.Witnesses!.Single(entry => entry.WitnessEntityId == witness.Id.Value);
+        Assert.True(card.SawActor);
+        Assert.True(card.SawEffect);
+        Assert.Equal("both", card.Classification);
+
+        // The player-facing observation carries no debug state, so the classification never leaks
+        // into non-omniscient views.
+        Assert.Null(session.Observation(debug: false).Debug);
     }
 }
