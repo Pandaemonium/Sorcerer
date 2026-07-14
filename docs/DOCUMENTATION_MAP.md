@@ -102,6 +102,10 @@ references inside them to Python modules or the old name.
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md): active roadmap-to-code handoff — the shared
   command/consequence/time/view spines, complexity budget, hotspot-convergence prerequisite,
   gameplay-first work packages, phase gates, and Opus execution protocol through 1.0.
+- [PHASE_0_BASELINE.md](PHASE_0_BASELINE.md): IMPLEMENTATION_PLAN Phase 0.1 evidence note —
+  pinned baseline metrics (suite, save size, durable-lane counts), the architecture inventory
+  (commands, 72 consequence families, views, provider purposes), and the honest eight-proof
+  coverage map that gates the Phase 0.2 consequence-applier decomposition.
 - [MATURITY_ROADMAP.md](MATURITY_ROADMAP.md): the phased path from the first-playable slice to
   full Wild Magic-level maturity, building general systems over the reserved state lanes.
 - [PROCGEN_RICHNESS_PLAN.md](PROCGEN_RICHNESS_PLAN.md): tactical props/people/places/quests plan

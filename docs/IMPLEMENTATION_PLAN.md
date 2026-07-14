@@ -325,6 +325,11 @@ cohesive policy independently readable.
 
 ### 0.1 Baseline and dependency map
 
+**Status: complete — 2026-07-13. See [PHASE_0_BASELINE.md](PHASE_0_BASELINE.md).** Baseline pinned
+(927 tests green, incl. new `ConsequenceCatalogTests` exhaustive dispatch/alias/reject contract);
+reference scenario/seed, save size, durable-lane counts, architecture inventory, and an honest
+eight-proof coverage map are recorded there. Next: 0.2.
+
 - Pin the reference seed and produce golden transcripts for the eight gameplay proofs where the
   current engine supports them; mark genuinely missing links rather than faking success.
 - Record current full-suite result, save size, long-episode state counts, and floor-model p50/p95 by
@@ -1387,7 +1392,7 @@ it makes complexity a conscious cost instead of an accidental byproduct.
 
 | Order | Phase | Roadmap owner | Status at this plan's writing |
 |---:|---|---|---|
-| 0 | Converge current hotspots | prerequisite protecting every milestone | next |
+| 0 | Converge current hotspots | prerequisite protecting every milestone | 0.1 done (PHASE_0_BASELINE.md); 0.2 next |
 | 1 | Close current roadmap program | Milestone 0 | pending Phase 0 |
 | 2 | Complete run structure | Milestone 1 | pending Phase 1 |
 | 3 | Deterministic ten-minute game | Milestone 2 / P3 | pending Phase 2 structure |
