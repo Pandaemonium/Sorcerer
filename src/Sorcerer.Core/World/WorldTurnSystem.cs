@@ -39,6 +39,11 @@ public sealed class WorldTurnSystem
             remaining--;
         }
 
+        if (remaining > 0 && TryApplyAlliedWar(state, deltas, apply))
+        {
+            remaining--;
+        }
+
         if (remaining <= 0)
         {
             return deltas;
@@ -69,6 +74,81 @@ public sealed class WorldTurnSystem
         }
 
         return deltas;
+    }
+
+    // How much "gratitude" a resistance faction must hold -- earned through real anti-imperial help
+    // like freeing its people -- before it will spend that goodwill waging war on the empire.
+    private const int AlliedWarGratitudeThreshold = 4;
+
+    // Alliance route of the organic capital approach (memory capital-organic-approach-design): a
+    // resistance faction the player has meaningfully befriended spends its goodwill to wage war on
+    // the empire off-screen, thinning imperial defenses (and so the capital guard) with the player
+    // nowhere near. Bounded by a cooldown and by the empire actually having defenses left to lose,
+    // and rolled back as one move if any child rejects.
+    private static bool TryApplyAlliedWar(
+        GameState state,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
+    {
+        foreach (var ally in state.Factions.FactionsByRole("resistance"))
+        {
+            if (state.Factions.StandingValue(ally.Id, "gratitude") < AlliedWarGratitudeThreshold)
+            {
+                continue;
+            }
+
+            if (state.Turn < state.Factions.ResourceValue(ally.Id, "response_cooldown_until"))
+            {
+                continue;
+            }
+
+            var empire = state.Factions.FactionsByRole("empire_bloc")
+                .FirstOrDefault(faction => state.Factions.ResourceValue(faction.Id, "defenses") > 0);
+            if (empire is null)
+            {
+                continue;
+            }
+
+            return TryApplyWorldTurnTransaction(
+                state,
+                deltas,
+                applyConsequence,
+                "allied_war",
+                ally.Id,
+                localDeltas =>
+                {
+                    if (!TrySpendFactionResource(state, empire.Id, "defenses", 1, localDeltas, applyConsequence))
+                    {
+                        return false;
+                    }
+
+                    if (!SetFactionResource(state, ally.Id, "response_cooldown_until", state.Turn + 10, localDeltas, applyConsequence))
+                    {
+                        return false;
+                    }
+
+                    // The ally spends goodwill committing to the fight.
+                    if (!ApplyConsequence(localDeltas, applyConsequence, WorldConsequence.AdjustFactionStanding(
+                        "world_turn",
+                        ally.Id,
+                        "gratitude",
+                        -2)).Applied)
+                    {
+                        return false;
+                    }
+
+                    return ApplyConsequence(localDeltas, applyConsequence, WorldConsequence.AddCanon(
+                        "world_turn",
+                        "allied_war",
+                        ally.Id,
+                        "Word comes down the road: your allies have struck an imperial garrison, and the Censorate has pulled soldiers from the capital to answer.",
+                        "Allies wage war on the empire, thinning its defenses.",
+                        new[] { "resistance", "war", "empire" },
+                        operation: "alliedWar")).Applied;
+                });
+        }
+
+        return false;
     }
 
     private static bool TryNpcApproach(

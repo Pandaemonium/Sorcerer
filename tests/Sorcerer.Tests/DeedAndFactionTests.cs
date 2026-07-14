@@ -130,6 +130,29 @@ public sealed class DeedAndFactionTests
     }
 
     [Fact]
+    public void AlliedFactionsWageWarThinningImperialDefensesOnlyWhenBefriended()
+    {
+        static int Defenses(GameState state) =>
+            state.Factions.FactionsByRole("empire_bloc")
+                .Sum(faction => state.Factions.ResourceValue(faction.Id, "defenses"));
+
+        // A resistance faction the player has meaningfully befriended (high gratitude) wages war on
+        // the empire off-screen, thinning its defenses.
+        var allied = GameSession.CreateImperialEncounter(seed: 7).Engine.State;
+        var alliedBefore = Defenses(allied);
+        Assert.True(alliedBefore > 0);
+        allied.Factions.AdjustStandingByRole("resistance", "gratitude", 6);
+        new WorldTurnSystem().Apply(allied, "test", budget: 2);
+        Assert.True(Defenses(allied) < alliedBefore, "Befriended allies should wage war and thin imperial defenses.");
+
+        // Without the alliance, no off-screen war touches imperial defenses on a quiet turn.
+        var neutral = GameSession.CreateImperialEncounter(seed: 7).Engine.State;
+        var neutralBefore = Defenses(neutral);
+        new WorldTurnSystem().Apply(neutral, "test", budget: 2);
+        Assert.Equal(neutralBefore, Defenses(neutral));
+    }
+
+    [Fact]
     public void OneDeedAdjustsFactionsByRoleWithoutTouchingOtherRoles()
     {
         var ledger = new FactionLedger();
