@@ -290,7 +290,7 @@ public sealed class EngineViewBuilder
 
         // The player log is curated for the renderer (chaff dropped, near-duplicates removed, damage
         // classified). State.Messages stays the full raw record; only what the player sees is shaped.
-        var messageCards = MessageLog.Curate(_state.Messages);
+        var messageCards = MessageLog.Curate(_state.Messages, limit: 500);
         var objectiveCards = ObjectiveCards();
         return new GameView(
             _state.Width,

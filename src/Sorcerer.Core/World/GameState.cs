@@ -126,9 +126,11 @@ public sealed class GameState
             Messages.Add(message.Trim());
         }
 
-        if (Messages.Count > 80)
+        // Deep scrollback: keep a long history so the log can be read far into the past (owner
+        // request). Strings are cheap; the view layer decides how much it renders.
+        if (Messages.Count > 600)
         {
-            Messages.RemoveRange(0, Messages.Count - 80);
+            Messages.RemoveRange(0, Messages.Count - 600);
         }
     }
 }

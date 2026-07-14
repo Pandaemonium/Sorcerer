@@ -1625,9 +1625,11 @@ public partial class Main : Control
             }
         }
 
+        // Deep scrollback (owner request): render the long curated history so the player can scroll
+        // far into the past; ScrollFollowing still pins the view to the newest line.
         var cards = view.MessageCards is { Count: > 0 }
-            ? view.MessageCards.TakeLast(14).Select(RenderMessageCard)
-            : view.Messages.TakeLast(14).Select(UiTheme.Escape);
+            ? view.MessageCards.TakeLast(400).Select(RenderMessageCard)
+            : view.Messages.TakeLast(400).Select(UiTheme.Escape);
         logLines.AddRange(cards);
 
         // A faint hairline between messages so colored lines read as distinct entries rather than
