@@ -523,6 +523,13 @@ public sealed partial class GameSession
 
         if (ControlledBodyDefeated())
         {
+            // In checkpoint mode a killing blow rewinds to the last safe rest instead of ending the
+            // run (Phase 2.5); only when there is no checkpoint to fall back on does the body die.
+            if (TryRestoreCheckpoint(ref result))
+            {
+                return result;
+            }
+
             // The body is disposed of in the register of whoever struck it down (Phase 2.6).
             var treatment = DeathTreatment.ForDefeat(Engine.State.LastControlledDamageProvenance);
             return CompleteRun(
@@ -533,7 +540,50 @@ public sealed partial class GameSession
                 DeathTreatment.Disposition(treatment));
         }
 
+        // The run continues: record a checkpoint if the sorcerer is resting somewhere safe.
+        MaybeCaptureCheckpoint();
         return result;
+    }
+
+    // Phase 2.5 checkpoint mode. The snapshot is held only in memory: it is a within-session safety
+    // net, orthogonal to the ordinary run save (which carries the run across quit/load). GameState's
+    // full-fidelity snapshot -- the same one that backs transactional rollback -- is authoritative,
+    // so a restore rewinds the whole world to the rest, not a curated subset.
+    private GameStateSnapshot? _checkpoint;
+
+    private bool IsCheckpointMode() =>
+        Engine.State.RunMode.Equals("checkpoint", StringComparison.OrdinalIgnoreCase);
+
+    // A safe settlement rest: standing in a settlement place with no hostile the sorcerer can
+    // perceive. The imprisonment start is a settlement place too, but its guards are perceivable
+    // hostiles, so it never qualifies -- a checkpoint only forms once the sorcerer is actually safe.
+    private bool IsSafeRest() =>
+        Engine.CurrentPlace.Settlement is not null
+        && Engine.FindNearestHostile() is null;
+
+    private void MaybeCaptureCheckpoint()
+    {
+        if (IsCheckpointMode() && IsSafeRest())
+        {
+            _checkpoint = GameStateSnapshot.Capture(Engine.State);
+        }
+    }
+
+    private bool TryRestoreCheckpoint(ref ActionResult result)
+    {
+        if (!IsCheckpointMode() || _checkpoint is null)
+        {
+            return false;
+        }
+
+        _checkpoint.Restore(Engine.State);
+        const string message = "You come to at your last safe rest, the killing blow already thinning into a bad dream.";
+        Engine.State.AddMessage(message);
+        result = result with
+        {
+            Messages = result.Messages.Append(message).ToArray(),
+        };
+        return true;
     }
 
     private ActionResult CompleteRun(
