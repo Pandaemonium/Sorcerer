@@ -286,7 +286,8 @@ public sealed class WorldReactionSystem
         {
             AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", Math.Max(1, deed.Magnitude));
             RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
-            AddMessage(messages, deltas, applyConsequence, deed, "suspicious_wild_magic", "Someone saw the magic, but not the hand that loosed it.", playerVisible: FirstReactionOfKind(state, "suspicious_wild_magic"));
+            var effectSeer = ResolveWitnessName(state, deed.EffectWitnesses, "A passerby");
+            AddMessage(messages, deltas, applyConsequence, deed, "suspicious_wild_magic", $"{effectSeer} saw the magic flare, but not the hand that loosed it.", playerVisible: FirstReactionOfKind(state, "suspicious_wild_magic"));
             return;
         }
 
@@ -300,7 +301,8 @@ public sealed class WorldReactionSystem
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "imperial-threat", Math.Max(1, deed.Magnitude));
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", 1);
         RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
-        AddMessage(messages, deltas, applyConsequence, deed, "public_wild_magic", "The people who saw the wild magic are already telling each other what they think it was.", playerVisible: FirstReactionOfKind(state, "public_wild_magic"));
+        var actorSeer = ResolveWitnessName(state, deed.Witnesses, "A bystander");
+        AddMessage(messages, deltas, applyConsequence, deed, "public_wild_magic", $"{actorSeer} saw you loose the wild magic, and the ones who watched are already telling each other what they think it was.", playerVisible: FirstReactionOfKind(state, "public_wild_magic"));
     }
 
     private static void AdjustEmpireBloc(
@@ -505,6 +507,29 @@ public sealed class WorldReactionSystem
 
     private static string WitnessId(Entity entity) =>
         entity.TryGet<SoulComponent>(out var soul) ? soul.SoulId : entity.Id.Value;
+
+    // Name the actual carrier of a witnessed deed (docs/AESTHETICS_AND_TONE.md: name people, never
+    // "someone"). Resolves a witness soul id from the shared classification to a concrete name,
+    // preferring the public appearance name; falls back only if the witness has since left the zone.
+    private static string ResolveWitnessName(GameState state, IReadOnlyList<string>? witnessSoulIds, string fallback)
+    {
+        foreach (var soulId in witnessSoulIds ?? Array.Empty<string>())
+        {
+            var witness = state.Entities.Values.FirstOrDefault(entity =>
+                entity.TryGet<SoulComponent>(out var soul)
+                && soul.SoulId.Equals(soulId, StringComparison.OrdinalIgnoreCase));
+            if (witness is null)
+            {
+                continue;
+            }
+
+            return witness.TryGet<ProfileComponent>(out var profile) && !string.IsNullOrWhiteSpace(profile.PublicName)
+                ? profile.PublicName
+                : witness.Name;
+        }
+
+        return fallback;
+    }
 
     private static IReadOnlyList<string> NormalizeTags(IEnumerable<string>? tags) =>
         (tags ?? Array.Empty<string>())

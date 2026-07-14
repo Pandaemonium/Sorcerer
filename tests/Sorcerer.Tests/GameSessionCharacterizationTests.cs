@@ -833,7 +833,7 @@ public sealed class GameSessionCharacterizationTests
             && Equals(delta.Details["deedId"], deed.Id)
             && Equals(delta.Details["deedVisibility"], "suspicious")
             && Equals(delta.Details["reactionKind"], "suspicious_wild_magic")
-            && delta.Summary.Contains("Someone saw the magic", StringComparison.OrdinalIgnoreCase));
+            && delta.Summary.Contains("saw the magic flare", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

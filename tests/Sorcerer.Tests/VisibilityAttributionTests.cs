@@ -1,5 +1,7 @@
 using System.Linq;
+using System.Threading.Tasks;
 using Sorcerer.Core;
+using Sorcerer.Core.Commands;
 using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Engine.Systems;
 using Sorcerer.Core.Entities;
@@ -145,5 +147,41 @@ public sealed class VisibilityAttributionTests
         // The player-facing observation carries no debug state, so the classification never leaks
         // into non-omniscient views.
         Assert.Null(session.Observation(debug: false).Debug);
+    }
+
+    [Fact]
+    public async Task WitnessedWildMagicNamesTheCarrierRatherThanSomeone()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 7);
+        var engine = session.Engine;
+        var player = engine.State.ControlledEntity;
+        var origin = player.Get<PositionComponent>().Position;
+        var witness = engine.EntityById("soldier_1")!;
+        var witnessName = witness.TryGet<ProfileComponent>(out var profile)
+            && !string.IsNullOrWhiteSpace(profile.PublicName)
+            ? profile.PublicName
+            : witness.Name;
+
+        // Adjacent, clear line of sight: the witness sees the caster, so the deed is public.
+        var witnessPoint = new GridPoint(origin.X + 1, origin.Y);
+        witness.Set(new PositionComponent(witnessPoint));
+        engine.State.BlockingTerrain.Remove(witnessPoint);
+
+        var deed = engine.ApplyConsequence(WorldConsequence.RecordDeed(
+            "test", player.Id.Value, "wild_magic", magnitude: 3,
+            originX: origin.X, originY: origin.Y, effectX: origin.X, effectY: origin.Y,
+            tags: new[] { "addStatus", "minor" }, sourceEntityId: player.Id.Value));
+        Assert.True(deed.Applied, deed.Error);
+        Assert.Equal("public", Assert.Single(deed.Deltas, delta => delta.Operation == "recordDeed").Details["visibility"]);
+
+        var wait = await session.ExecuteAsync(new WaitCommand());
+
+        // In-fiction evidence names the carrier who noticed (docs/AESTHETICS_AND_TONE.md), instead
+        // of the old faceless "The people who saw...".
+        Assert.Contains(wait.Messages, message =>
+            message.Contains(witnessName, System.StringComparison.OrdinalIgnoreCase)
+            && message.Contains("wild magic", System.StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(wait.Messages, message =>
+            message.Contains("The people who saw", System.StringComparison.OrdinalIgnoreCase));
     }
 }
