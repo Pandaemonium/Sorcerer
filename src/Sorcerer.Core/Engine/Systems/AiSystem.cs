@@ -45,7 +45,8 @@ public sealed class AiSystem
             // foes. Everyone else stays idle exactly as before.
             var huntsPlayer = IsHostile(actor, player) && CanNoticeTarget(actor, player);
             var isAlly = !huntsPlayer && IsPlayerAlly(actor);
-            if (!huntsPlayer && !isAlly)
+            var isFollower = !huntsPlayer && !isAlly && IsPlayerFollower(actor);
+            if (!huntsPlayer && !isAlly && !isFollower)
             {
                 continue;
             }
@@ -62,6 +63,14 @@ public sealed class AiSystem
 
             if (!actor.TryGet<PositionComponent>(out var actorPosition))
             {
+                continue;
+            }
+
+            if (isFollower)
+            {
+                // Followers keep pace with the leader but are not driven into combat by the shared
+                // AI -- a low-maintenance company (Q29), directed by the player, not auto-swinging.
+                MaybeFollowLeader(deltas, actor, actorPosition.Position, player);
                 continue;
             }
 
@@ -130,6 +139,38 @@ public sealed class AiSystem
     private static bool IsPlayerAlly(Entity actor) =>
         actor.TryGet<AiComponent>(out var ai)
         && ai.PolicyId.Equals("ally", StringComparison.OrdinalIgnoreCase);
+
+    // A recruited follower (by AI policy or faction role). Followers fight the leader's foes when
+    // there are any; this identifies them so, when there are none, they keep up instead of idling.
+    private static bool IsPlayerFollower(Entity actor) =>
+        (actor.TryGet<AiComponent>(out var ai) && ai.PolicyId.Equals("follower", StringComparison.OrdinalIgnoreCase))
+        || (actor.TryGet<FactionComponent>(out var faction)
+            && faction.Roles.Contains("follower", StringComparer.OrdinalIgnoreCase));
+
+    // Keep a follower a step off the leader: close the gap when it has fallen behind (up to a
+    // generous leash so a straggler still catches up), hold position when already alongside, and
+    // never move onto or strike the leader. This is what makes a following low-maintenance (Q29).
+    private const int FollowLeash = 12;
+
+    private void MaybeFollowLeader(List<StateDelta> deltas, Entity actor, GridPoint from, Entity leader)
+    {
+        if (!IsPlayerFollower(actor) || !leader.TryGet<PositionComponent>(out var leaderPosition))
+        {
+            return;
+        }
+
+        var gap = GameEngine.Distance(from, leaderPosition.Position);
+        if (gap <= 1 || gap > FollowLeash)
+        {
+            return;
+        }
+
+        var step = StepToward(from, leaderPosition.Position);
+        if (CanEnter(step))
+        {
+            AddMoveDeltas(deltas, actor, step, "follow_leader");
+        }
+    }
 
     /// <summary>Nearest living entity this actor is hostile to and can perceive, or null.</summary>
     private Entity? NearestHostileTarget(Entity actor)
