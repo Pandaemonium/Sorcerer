@@ -36,4 +36,22 @@ public sealed class EnemyInspectionTests
         Assert.Contains(result.Messages, m => m.Contains("Weak to fire", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.Messages, m => m.Contains("Shrugs off physical", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void ExaminingACharterSourceHintsThatReadingItTeaches()
+    {
+        var engine = GameSession.CreateImperialEncounter(seed: 7).Engine;
+        var playerPos = engine.State.ControlledEntity.Get<PositionComponent>().Position;
+        var notice = engine.State.Entities.Values
+            .First(e => e.Name.Contains("containment notice", StringComparison.OrdinalIgnoreCase));
+
+        // Bring the charter-bearing notice into examine reach; the curiosity hook should appear
+        // instead of a bare "teaches_charter:*" tag.
+        notice.Set(new PositionComponent(new GridPoint(playerPos.X + 1, playerPos.Y)));
+
+        var result = engine.Examine(notice.Name);
+
+        Assert.True(result.Success);
+        Assert.Contains(result.Messages, m => m.Contains("teach you a charter form", StringComparison.OrdinalIgnoreCase));
+    }
 }

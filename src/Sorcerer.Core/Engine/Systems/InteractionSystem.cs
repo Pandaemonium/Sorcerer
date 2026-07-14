@@ -514,6 +514,14 @@ public sealed partial class InteractionSystem
 
         if (entity.TryGet<TagsComponent>(out var tags) && tags.Tags.Count > 0)
         {
+            // Surface the charter-learning affordance as a legible curiosity hook rather than leaving
+            // the player to decode a raw "teaches_charter:*" tag: reading it grows the reliable
+            // deterministic magic that steadies a repertoire otherwise built on wild resolution.
+            if (tags.Tags.Any(tag => tag.StartsWith("teaches_charter:", StringComparison.OrdinalIgnoreCase)))
+            {
+                lines.Add("Reading it may teach you a charter form.");
+            }
+
             lines.Add($"Tags: {string.Join(", ", tags.Tags)}.");
         }
 
