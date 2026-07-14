@@ -278,7 +278,16 @@ witchhunters who chase the player arriving **diegetically**. This section owns t
 is this plan's first slice because it is a live playability irritant, and because the pacing
 fix and the Movement arc fight on the same seam: roads, reports, and logistics.
 
-**Current behavior (audited from code):**
+> **Status: implemented — 2026-07-14 (slice S0).** Report-borne heat (`empire_report` events
+> with witness carriers; killing every carrier before the report lands silences it), overdue
+> audits for silent imperial losses, road-edge arrival outside the player's sight (the
+> near-player spawn candidates are deleted), a 12-turn patrol fuse with diegetic dispatch and
+> arrival lines, turn-modulo patrol/warrant/informant regeneration, and the named witchhunter
+> pipeline (warrant → road-talk trace rumor → arrival by the same edge rule; one hunter at a
+> time). `ImperialResponsePacingTests` pins all six behaviors. The audited pre-rework behavior
+> below is retained as the record of what was wrong.
+
+**Current behavior (audited from code, pre-rework):**
 
 - Any witnessed kill or public cast raises empire `heat` instantly at the next pump
   (`WorldReactionSystem.RaiseEmpireHeat`) — the Empire receives knowledge for free, whether or
@@ -403,6 +412,9 @@ ground for handoffs.
    the warrant rung. Exit: after a public kill, no imperial responder ever appears within the
    player's sight; a silent no-witness kill raises no heat until an overdue audit fires; a
    documentation-blind player can say where the response came from and how it knew.
+   _Status: **done 2026-07-14** — see the status note in "The marble answers slowly" above.
+   Deferred within S0: distance-scaled (vs. constant) report/patrol fuses, hunter wants and
+   memory, and hunter cross-zone pursuit; these ride Phase 3's archetype work._
 1. **S1 — The seed** (with Phase 2): docket claim, sweep-tier handoff rows, want stakes,
    `empire_sweep` as a standing scheduled operation with a readable route, `free_folk` faction
    and cell roll in data. Exit: a fresh opening reliably points at the waystation through at

@@ -651,11 +651,13 @@ public sealed class GameSessionCharacterizationTests
             && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.AdjustFactionStanding)
             && Equals(delta.Details["axis"], "imperial-threat")
             && Equals(delta.Details["playerVisible"], false));
+        // Heat is report-borne (FREE_FOLK_MOVEMENT S0): the public cast schedules a report
+        // that will raise heat when it reaches an imperial desk, instead of an instant bump.
         Assert.Contains(cast.Deltas, delta =>
-            delta.Operation == "adjustFactionResource"
-            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.AdjustFactionResource)
-            && Equals(delta.Details["resource"], "heat")
-            && Equals(delta.Details["playerVisible"], false));
+            delta.Operation == "scheduleEvent"
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.ScheduleEvent)
+            && Equals(delta.Details["eventType"], "empire_report"));
+        Assert.Equal(0, session.Engine.State.Factions.ResourceValue("empire", "heat"));
         Assert.Contains(cast.Deltas, delta =>
             delta.Operation == "worldReactionMessage"
             && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.Message)
@@ -867,23 +869,37 @@ public sealed class GameSessionCharacterizationTests
         var patrolsBefore = session.Engine.State.Factions.ResourceValue("empire", "patrols");
 
         var cast = await session.ExecuteAsync(new CastCommand("a plain blue fire"));
-        var debug = session.Observation(debug: true);
 
+        // FREE_FOLK_MOVEMENT S0: the cast no longer produces an instant patrol. It schedules a
+        // report; heat rises when the report arrives, and only then does the Empire spend.
         Assert.True(cast.Success);
+        Assert.Equal(patrolsBefore, session.Engine.State.Factions.ResourceValue("empire", "patrols"));
+        Assert.DoesNotContain(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_patrol");
+        var report = Assert.Single(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_report");
+
+        while (session.Engine.State.Turn < report.DueTurn)
+        {
+            session.Engine.AdvanceTurn();
+        }
+
+        var debug = session.Observation(debug: true);
         Assert.Equal(patrolsBefore - 1, session.Engine.State.Factions.ResourceValue("empire", "patrols"));
-        Assert.Contains(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_patrol");
+        var scheduledPatrol = Assert.Single(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_patrol");
         Assert.Contains(session.Engine.State.WorldTurns.Records, record =>
             record.Kind == "faction_pressure"
             && record.SourceId == "empire"
             && Equals(record.Details["response"], "empire_patrol"));
-        Assert.Contains(cast.Messages, message => message.Contains("spends a patrol", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(debug.Debug!.Factions!, faction =>
             faction.Id == "empire"
             && faction.Resources.TryGetValue("patrols", out var patrols)
             && patrols == patrolsBefore - 1);
+        Assert.True(scheduledPatrol.DueTurn - session.Engine.State.Turn >= 10,
+            "The dispatched patrol takes real road time to arrive.");
 
-        await session.ExecuteAsync(new WaitCommand());
-        await session.ExecuteAsync(new WaitCommand());
+        while (session.Engine.State.Turn < scheduledPatrol.DueTurn)
+        {
+            session.Engine.AdvanceTurn();
+        }
 
         var patrol = Assert.Single(session.Engine.State.Entities.Values, entity =>
             entity.Id.Value.StartsWith("imperial_patrol_", StringComparison.OrdinalIgnoreCase)
@@ -894,17 +910,21 @@ public sealed class GameSessionCharacterizationTests
         Assert.Equal("imperial_patrol", patrol.Get<AiComponent>().PolicyId);
         Assert.Equal("body", patrol.Get<PhysicalComponent>().Material);
         Assert.False(patrol.Has<SummonedComponent>());
+        // Arrival is travel, not spawn: the responder enters outside the player's sight.
+        Assert.DoesNotContain(patrol.Id, session.Engine.Perception().VisibleEntityIds);
     }
 
     [Fact]
-    public async Task EmpirePressureCooldownPreventsImmediatePatrolSpam()
+    public void EmpirePressureCooldownPreventsImmediatePatrolSpam()
     {
         var session = CreateMockSession();
         DisableImperialAi(session);
 
-        await session.ExecuteAsync(new CastCommand("a plain blue fire"));
+        session.Engine.State.Factions.AdjustResource("empire", "heat", 4);
+        session.Engine.AdvanceTurn();
         var scheduledAfterFirst = session.Engine.State.ScheduledEvents.Events.Count(item => item.Kind == "empire_patrol");
-        await session.ExecuteAsync(new CastCommand("a second plain blue fire"));
+        session.Engine.State.Factions.AdjustResource("empire", "heat", 4);
+        session.Engine.AdvanceTurn();
         var scheduledAfterSecond = session.Engine.State.ScheduledEvents.Events.Count(item => item.Kind == "empire_patrol");
 
         Assert.Equal(1, scheduledAfterFirst);
@@ -915,12 +935,22 @@ public sealed class GameSessionCharacterizationTests
     public void DepletedEmpireRegeneratesBeforeItCanSpendPressureAgain()
     {
         var session = CreateMockSession();
+        DisableImperialAi(session);
         session.Engine.State.Factions.AdjustResource("empire", "patrols", -99);
         session.Engine.State.Factions.AdjustResource("empire", "warrants", -99);
-        session.Engine.State.Factions.AdjustResource("empire", "heat", 4);
 
         Assert.Equal(0, session.Engine.State.ScheduledEvents.Events.Count(item => item.Kind == "empire_patrol"));
-        var deltas = session.Engine.AdvanceTurn();
+
+        // Replacements are logistics (FREE_FOLK_MOVEMENT S0): the patrol is re-manned on a slow
+        // turn cadence, then spent again once heat justifies it. Keep heat topped up so decay
+        // does not race the regeneration.
+        var deltas = new List<StateDelta>();
+        for (var step = 0; step < 6 && !session.Engine.State.ScheduledEvents.Events.Any(item => item.Kind == "empire_patrol"); step++)
+        {
+            var heat = session.Engine.State.Factions.ResourceValue("empire", "heat");
+            session.Engine.State.Factions.AdjustResource("empire", "heat", 4 - heat);
+            deltas.AddRange(session.Engine.AdvanceTurn());
+        }
 
         Assert.Equal(0, session.Engine.State.Factions.ResourceValue("empire", "patrols"));
         Assert.Contains(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_patrol");
@@ -1039,6 +1069,14 @@ public sealed class GameSessionCharacterizationTests
 
         Assert.True(cast.Success);
         Assert.True(session.Engine.State.Factions.StandingValue("charter_office", "imperial-threat") > 0);
+
+        // Heat is report-borne: every empire-bloc faction's alarm rises when the report lands.
+        var report = Assert.Single(session.Engine.State.ScheduledEvents.Events, item => item.Kind == "empire_report");
+        while (session.Engine.State.Turn < report.DueTurn)
+        {
+            session.Engine.AdvanceTurn();
+        }
+
         Assert.True(session.Engine.State.Factions.ResourceValue("charter_office", "heat") > 0);
     }
 
@@ -1074,6 +1112,18 @@ public sealed class GameSessionCharacterizationTests
         var point = controlled.Get<PositionComponent>().Position;
         RecordDeed(session, controlled, "wild_magic", 3, point, point, new[] { "damage" });
         session.Engine.AdvanceTurn();
+
+        // Heat is report-borne: advance until every pending report (the witnessed body swap
+        // and the wild magic both travel) has reached an imperial desk.
+        var reports = session.Engine.State.ScheduledEvents.Events
+            .Where(item => item.Kind == "empire_report")
+            .ToArray();
+        Assert.NotEmpty(reports);
+        var lastDue = reports.Max(item => item.DueTurn);
+        while (session.Engine.State.Turn < lastDue)
+        {
+            session.Engine.AdvanceTurn();
+        }
 
         Assert.True(session.Engine.State.Factions.ResourceValue("empire", "heat") > heatBefore);
         Assert.Contains(session.Engine.State.Legend.Tags, tag =>

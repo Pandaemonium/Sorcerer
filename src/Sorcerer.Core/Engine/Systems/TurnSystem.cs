@@ -27,6 +27,28 @@ public sealed class TurnSystem
     private readonly WorldTurnSystem _worldTurns = new();
     private readonly IBackgroundTextGenerator? _backgroundTextGenerator;
 
+    // Diegetic pursuit pacing (docs/FREE_FOLK_MOVEMENT.md, "The marble answers slowly"):
+    // word of the hunt travels ahead of the hunter, and the hunter takes real road time.
+    private const int WitchhunterTraceTurns = 8;
+    private const int WitchhunterArrivalTurns = 16;
+
+    // Names are a stopgap authored list until named hunters become data archetypes (plan
+    // §3.1); selection is deterministic per dispatch turn so replays agree.
+    private static readonly string[] WitchhunterNames =
+    {
+        "Censor-Pursuivant Adlen Vessik",
+        "Censor-Pursuivant Marta Krace",
+        "Pursuivant-Captain Odo Brandt",
+        "Censor-Pursuivant Ilse Havener",
+        "Pursuivant Gero Maltz",
+        "Censor-Pursuivant Wilhelmina Stroh",
+    };
+
+    // Set when an empire_report scheduled event lands heat during this turn's event
+    // resolution, so the same turn's world pump treats it as a reaction turn (no quiet-pump
+    // heat decay racing the pressure ladder).
+    private bool _empireReportArrivedThisTurn;
+
     public TurnSystem(
         GameEngine engine,
         GameState state,
@@ -47,6 +69,7 @@ public sealed class TurnSystem
     {
         var deltas = new List<StateDelta>();
         _state.Turn += 1;
+        _empireReportArrivedThisTurn = false;
         deltas.AddRange(ExpireStatuses());
         deltas.AddRange(ExpireBehaviors());
         deltas.AddRange(ApplyTerrainReactions());
@@ -58,7 +81,10 @@ public sealed class TurnSystem
         deltas.AddRange(ResolveTriggers());
         var worldReaction = ApplyWorldReactions();
         deltas.AddRange(worldReaction.Deltas);
-        deltas.AddRange(PropagateRumors(worldReaction.AppliedAny));
+        // A report landing on an imperial desk is deferred deed reaction: the turn it arrives
+        // counts as a reaction turn, so quiet-pump recovery cannot decay the fresh alarm before
+        // the pressure ladder gets to answer it.
+        deltas.AddRange(PropagateRumors(worldReaction.AppliedAny || _empireReportArrivedThisTurn));
         deltas.AddRange(EnqueueRumorDistortionJobs());
         deltas.AddRange(PumpBackgroundJobs());
         return deltas;
@@ -364,6 +390,22 @@ public sealed class TurnSystem
         {
             deltas.AddRange(ResolveEmpirePatrol(scheduled));
         }
+        else if (scheduled.Kind.Equals(WorldReactionSystem.EmpireReportEventKind, StringComparison.OrdinalIgnoreCase))
+        {
+            deltas.AddRange(ResolveEmpireReport(scheduled));
+        }
+        else if (scheduled.Kind.Equals("empire_warrant", StringComparison.OrdinalIgnoreCase))
+        {
+            deltas.AddRange(ResolveEmpireWarrant(scheduled));
+        }
+        else if (scheduled.Kind.Equals("empire_hunter_trace", StringComparison.OrdinalIgnoreCase))
+        {
+            deltas.AddRange(ResolveWitchhunterTrace(scheduled));
+        }
+        else if (scheduled.Kind.Equals("empire_hunter", StringComparison.OrdinalIgnoreCase))
+        {
+            deltas.AddRange(ResolveWitchhunterArrival(scheduled));
+        }
         else if (TryBuildScheduledConsequence(scheduled, out var consequence))
         {
             deltas.AddRange(_engine.ApplyConsequence(consequence).Deltas);
@@ -633,10 +675,10 @@ public sealed class TurnSystem
             deltas.AddRange(ApplyScheduledMessage(scheduled, text!, "scheduledEventMessage"));
         }
 
-        var position = FindPatrolSpawnPoint();
+        var position = FindRoadArrivalPoint();
         if (position is null)
         {
-            deltas.AddRange(ApplyScheduledMessage(scheduled, "An imperial patrol loses the trail before it can enter the room.", "scheduledEventFailed"));
+            deltas.AddRange(ApplyScheduledMessage(scheduled, "An imperial patrol loses the trail before it can enter the district.", "scheduledEventFailed"));
             return deltas;
         }
 
@@ -657,12 +699,12 @@ public sealed class TurnSystem
             aiPolicyId: "imperial_patrol",
             summoned: false,
             operation: "resolveEmpirePatrol",
-            message: "An imperial patrol-censor enters with a folder full of careful fear."));
+            message: "An imperial patrol-censor comes up the road with a folder full of careful fear."));
         if (!applied.Applied)
         {
             deltas.AddRange(ApplyScheduledMessage(
                 scheduled,
-                applied.Error ?? "An imperial patrol loses the trail before it can enter the room.",
+                applied.Error ?? "An imperial patrol loses the trail before it can enter the district.",
                 "scheduledEventFailed"));
         }
         else
@@ -672,6 +714,170 @@ public sealed class TurnSystem
 
         return deltas;
     }
+
+    // A report of the fugitive's activity physically arrives at an imperial desk and raises
+    // heat - unless everyone who was carrying the word has since died. Killing the witness
+    // before the report lands is real counterplay (docs/FREE_FOLK_MOVEMENT.md, "the marble
+    // answers slowly"). Overdue audits (cause=overdue) carry no witnesses and always land.
+    private IReadOnlyList<StateDelta> ResolveEmpireReport(ScheduledEventRecord scheduled)
+    {
+        var deltas = new List<StateDelta>();
+        var witnessIds = ReadPayloadString(scheduled.Payload, "witnessIds");
+        if (!string.IsNullOrWhiteSpace(witnessIds))
+        {
+            var anyCarrierAlive = witnessIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(id => _state.Entities.Values.Any(entity =>
+                    entity.Id.Value.Equals(id, StringComparison.OrdinalIgnoreCase)
+                    && entity.TryGet<ActorComponent>(out var actor)
+                    && actor.Alive));
+            if (!anyCarrierAlive)
+            {
+                deltas.AddRange(ApplyScheduledMessage(
+                    scheduled,
+                    "Whoever might have carried word of you is past telling; no report arrives.",
+                    "scheduledEventMessage"));
+                return deltas;
+            }
+        }
+
+        var text = ReadPayloadString(scheduled.Payload, "text")
+            ?? "Word of your deeds reaches an imperial desk.";
+        deltas.AddRange(ApplyScheduledMessage(scheduled, text, "scheduledEventMessage"));
+
+        var heat = ReadPayloadInt(scheduled.Payload, "heat") ?? 1;
+        foreach (var faction in _state.Factions.FactionsByRole("empire_bloc"))
+        {
+            deltas.AddRange(_engine.ApplyConsequence(WorldConsequence.AdjustFactionResource(
+                "scheduled_event",
+                faction.Id,
+                "heat",
+                Math.Max(1, heat),
+                evidence: scheduled.Id,
+                reason: "A report of the fugitive's activity arrived at an imperial desk.")).Deltas);
+        }
+
+        _empireReportArrivedThisTurn = true;
+        return deltas;
+    }
+
+    // The warrant's poster is paperwork; its teeth are a person. When a warrant matures the
+    // Censorate puts a named witchhunter on the road: word of the pursuit travels ahead of
+    // them (empire_hunter_trace), and they arrive later by the same road-edge rule as any
+    // other responder (empire_hunter). Named people are finite: one hunter at a time.
+    private IReadOnlyList<StateDelta> ResolveEmpireWarrant(ScheduledEventRecord scheduled)
+    {
+        var deltas = new List<StateDelta>();
+        deltas.AddRange(ApplyScheduledMessage(scheduled, ScheduledMessageText(scheduled), "scheduledEventMessage"));
+        if (HasActiveOrPendingWitchhunter())
+        {
+            return deltas;
+        }
+
+        var name = WitchhunterNames[Math.Abs(_state.Turn) % WitchhunterNames.Length];
+        var factionId = ReadPayloadString(scheduled.Payload, "factionId") ?? "empire";
+        deltas.AddRange(_engine.ApplyConsequence(WorldConsequence.ScheduleEvent(
+            "scheduled_event",
+            "empire_hunter_trace",
+            WitchhunterTraceTurns,
+            new Dictionary<string, object?>
+            {
+                ["name"] = name,
+                ["factionId"] = factionId,
+                ["text"] = $"Road talk: {name} of the Censorate has been showing your description at posts along the way.",
+            },
+            evidence: scheduled.Id,
+            reason: "The warrant put a witchhunter on the road; word travels ahead of the hunter.")).Deltas);
+        deltas.AddRange(_engine.ApplyConsequence(WorldConsequence.ScheduleEvent(
+            "scheduled_event",
+            "empire_hunter",
+            WitchhunterArrivalTurns,
+            new Dictionary<string, object?>
+            {
+                ["name"] = name,
+                ["factionId"] = factionId,
+            },
+            evidence: scheduled.Id,
+            reason: "The witchhunter travels; they arrive by road, not out of thin air.")).Deltas);
+        return deltas;
+    }
+
+    private IReadOnlyList<StateDelta> ResolveWitchhunterTrace(ScheduledEventRecord scheduled)
+    {
+        var deltas = new List<StateDelta>();
+        var name = ReadPayloadString(scheduled.Payload, "name") ?? "A Censorate witchhunter";
+        var text = ReadPayloadString(scheduled.Payload, "text")
+            ?? $"Road talk: {name} of the Censorate has been asking after your description.";
+        deltas.AddRange(ApplyScheduledMessage(scheduled, text, "scheduledEventMessage"));
+        deltas.AddRange(_engine.ApplyConsequence(WorldConsequence.RecordRumor(
+            "scheduled_event",
+            "hunter",
+            scheduled.Id,
+            _state.RegionId,
+            _state.RegionId,
+            $"{name} of the Censorate is asking the roads about a sorcerer.",
+            salience: 3,
+            tags: new[] { "empire", "witchhunter" },
+            evidence: scheduled.Id,
+            reason: "A witchhunter's questions leave a trail of road talk the player can hear about.")).Deltas);
+        return deltas;
+    }
+
+    private IReadOnlyList<StateDelta> ResolveWitchhunterArrival(ScheduledEventRecord scheduled)
+    {
+        var deltas = new List<StateDelta>();
+        var name = ReadPayloadString(scheduled.Payload, "name") ?? "A Censorate witchhunter";
+        var position = FindRoadArrivalPoint();
+        if (position is null)
+        {
+            deltas.AddRange(ApplyScheduledMessage(
+                scheduled,
+                $"{name} loses the trail before reaching the district; the roads will remember for them.",
+                "scheduledEventFailed"));
+            return deltas;
+        }
+
+        var applied = _engine.ApplyConsequence(WorldConsequence.SpawnEntity(
+            "scheduled_event",
+            name,
+            position.Value.X,
+            position.Value.Y,
+            prefix: "witchhunter",
+            glyph: 'H',
+            faction: ReadPayloadString(scheduled.Payload, "factionId") ?? "empire",
+            hp: 14,
+            attack: 3,
+            tags: new[] { "imperial", "censorate", "witchhunter" },
+            material: "body",
+            roles: new[] { "empire", "censorate", "hunter" },
+            controllerKind: "ai",
+            aiPolicyId: "imperial_patrol",
+            summoned: false,
+            operation: "resolveWitchhunter",
+            message: $"{name} steps off the road, unfolding a warrant with your outline on it."));
+        if (!applied.Applied)
+        {
+            deltas.AddRange(ApplyScheduledMessage(
+                scheduled,
+                applied.Error ?? $"{name} loses the trail before reaching the district.",
+                "scheduledEventFailed"));
+        }
+        else
+        {
+            deltas.AddRange(applied.Deltas);
+        }
+
+        return deltas;
+    }
+
+    private bool HasActiveOrPendingWitchhunter() =>
+        _state.ScheduledEvents.Events.Any(item =>
+            item.Kind.Equals("empire_hunter", StringComparison.OrdinalIgnoreCase)
+            || item.Kind.Equals("empire_hunter_trace", StringComparison.OrdinalIgnoreCase))
+        || _state.Entities.Values.Any(entity =>
+            entity.Id.Value.StartsWith("witchhunter_", StringComparison.OrdinalIgnoreCase)
+            && entity.TryGet<ActorComponent>(out var actor)
+            && actor.Alive);
 
     private IReadOnlyList<StateDelta> ApplyScheduledMessage(ScheduledEventRecord scheduled, string message, string operation) =>
         _engine.ApplyConsequence(WorldConsequence.Message(
@@ -1311,45 +1517,77 @@ public sealed class TurnSystem
     private string Verb(Entity entity, string secondPerson, string thirdPerson) =>
         entity.Id == _state.ControlledEntityId ? secondPerson : thirdPerson;
 
-    private GridPoint? FindPatrolSpawnPoint()
+    // Imperial responders arrive like anyone else: at the edge of the map, off the road,
+    // outside the player's sight (docs/FREE_FOLK_MOVEMENT.md, "arrival is travel, not
+    // spawn"). Nothing imperial ever materializes where the player can see it; if no unseen
+    // approach exists at all, the response fails rather than popping into view.
+    private GridPoint? FindRoadArrivalPoint()
     {
         var playerPosition = _state.ControlledEntity.TryGet<PositionComponent>(out var player)
             ? player.Position
             : new GridPoint(_state.Width / 2, _state.Height / 2);
-        var candidates = new[]
-        {
-            playerPosition.Translate(5, 0),
-            playerPosition.Translate(-5, 0),
-            playerPosition.Translate(0, 4),
-            playerPosition.Translate(0, -4),
-            new GridPoint(1, 1),
-            new GridPoint(_state.Width - 2, 1),
-            new GridPoint(1, _state.Height - 2),
-            new GridPoint(_state.Width - 2, _state.Height - 2),
-        };
+        var perception = new PerceptionSystem(_state, _statusRegistry);
 
-        foreach (var point in candidates)
+        var edgeCandidates = new List<GridPoint>();
+        for (var x = 1; x < _state.Width - 1; x++)
         {
-            if (CanSpawnAt(point))
-            {
-                return point;
-            }
+            edgeCandidates.Add(new GridPoint(x, 1));
+            edgeCandidates.Add(new GridPoint(x, _state.Height - 2));
         }
 
+        for (var y = 2; y < _state.Height - 2; y++)
+        {
+            edgeCandidates.Add(new GridPoint(1, y));
+            edgeCandidates.Add(new GridPoint(_state.Width - 2, y));
+        }
+
+        var unseenEdge = edgeCandidates
+            .Where(CanSpawnAt)
+            .Where(point => !PlayerCanSee(perception, playerPosition, point))
+            .OrderByDescending(point => Chebyshev(playerPosition, point))
+            .ThenBy(point => point.Y)
+            .ThenBy(point => point.X)
+            .Cast<GridPoint?>()
+            .FirstOrDefault();
+        if (unseenEdge is not null)
+        {
+            return unseenEdge;
+        }
+
+        // No usable edge tile: fall back to the farthest unseen interior tile. Never a tile
+        // the player can currently see.
+        GridPoint? best = null;
+        var bestDistance = -1;
         for (var y = 1; y < _state.Height - 1; y++)
         {
             for (var x = 1; x < _state.Width - 1; x++)
             {
                 var point = new GridPoint(x, y);
-                if (CanSpawnAt(point))
+                if (!CanSpawnAt(point) || PlayerCanSee(perception, playerPosition, point))
                 {
-                    return point;
+                    continue;
+                }
+
+                var distance = Chebyshev(playerPosition, point);
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    best = point;
                 }
             }
         }
 
-        return null;
+        return best;
     }
+
+    // "Seen" uses the game's one sight rule: within the default sight radius with line of
+    // sight - the same rule perception snapshots and witnessing use.
+    private static bool PlayerCanSee(PerceptionSystem perception, GridPoint playerPosition, GridPoint point) =>
+        Chebyshev(playerPosition, point) <= PerceptionSystem.DefaultSightRadius
+        && perception.HasLineOfSight(playerPosition, point);
+
+    private static int Chebyshev(GridPoint a, GridPoint b) =>
+        Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
     private bool CanSpawnAt(GridPoint point) =>
         point.X > 0

@@ -70,6 +70,11 @@ public static class JournalViewBuilder
                 "empire_warrant" => $"Warrant: a wanted poster is expected around turn {item.DueTurn}.",
                 "empire_patrol" => $"Pressure: an imperial patrol is expected around turn {item.DueTurn}.",
                 "empire_cordon" => $"Cordon: a manhunt cordon is expected to close around turn {item.DueTurn}.",
+                "empire_report" => IsOverdueReport(item)
+                    ? $"Silence: an imperial post will notice a missing patrol around turn {item.DueTurn}."
+                    : $"Word travels: someone who saw you is carrying a report toward an imperial desk (around turn {item.DueTurn}).",
+                "empire_hunter_trace" => $"Pursuit: road talk of a Censorate witchhunter should reach you around turn {item.DueTurn}.",
+                "empire_hunter" => $"Pursuit: a witchhunter is expected to reach the district around turn {item.DueTurn}.",
                 _ => $"Pressure: {item.Kind} is expected around turn {item.DueTurn}.",
             })
             .ToArray();
@@ -77,6 +82,10 @@ public static class JournalViewBuilder
 
         return messages;
     }
+
+    private static bool IsOverdueReport(ScheduledEventRecord item) =>
+        item.Payload.TryGetValue("cause", out var cause)
+        && WorldReactionSystem.OverdueReportCause.Equals(Convert.ToString(cause), StringComparison.OrdinalIgnoreCase);
 
     private static bool IsLeadPromise(WorldPromise promise) =>
         promise.Salience >= 3

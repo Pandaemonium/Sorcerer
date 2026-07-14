@@ -96,8 +96,19 @@ First implemented slice:
 - empire-bloc heat spends patrol/warrant/defense resources through budgeted `faction_pressure`
   world-turn moves into scheduled pressure; the resource, schedule, canon, and message changes
   return typed consequence deltas beside the wrapper move; a patrol can enter as a real hostile entity
+- **heat is report-borne** (FREE_FOLK_MOVEMENT S0): a deed schedules an `empire_report` that
+  raises heat only when it arrives at a desk after road time; the report names its living
+  witness carriers, and killing every carrier before it lands silences it. A silent kill of
+  the Empire's own raises nothing until a slow overdue audit notices the missing patrol.
+  Material losses (defense erosion from real anti-imperial victories) still land instantly —
+  it is attribution and alarm that must travel
+- imperial responders arrive diegetically: patrols and witchhunters enter at map-edge road
+  tiles outside the player's sight after a long fuse the journal forecasts, never spawning in
+  view; the warrant rung dispatches a **named witchhunter** whose road-talk trace rumor
+  travels ahead of their arrival, one hunter at a time
 - patrol pressure is bounded by active/pending patrol checks and response cooldown so escalation
-  does not become a constant spawn ratchet
+  does not become a constant spawn ratchet; spent patrols/warrants regenerate on a slow
+  turn-modulo logistics cadence, not every quiet pump
 - quiet deed-free turn pumps run `WorldTurnSystem` recovery before budgeted pressure moves,
   regenerating pressure resources and letting heat ebb through typed resource consequences; actual
   recovery changes also leave a hidden `faction_recovery` world-turn audit

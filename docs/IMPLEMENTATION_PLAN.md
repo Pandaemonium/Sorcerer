@@ -804,6 +804,13 @@ Create `RUN_ARC.md` when this phase starts; keep pacing/tuning there, not in cod
     organic capital approach). Each spends a finite resource, names its cause via a Censorate memo,
     shares one 8-turn cooldown, and degrades gracefully when the resource is short. Remaining: more
     authored templates (named hunters, bribery/redirection routes) and richer materialization.
+  - _Status (2026-07-14, FREE_FOLK_MOVEMENT S0):_ owner-directed pacing rework. Heat is now
+    **report-borne** (`empire_report` scheduled events with living witness carriers; overdue
+    audits for silent imperial losses), responders arrive at map-edge road tiles outside the
+    player's sight on a 12-turn fuse the journal forecasts, patrols/warrants regenerate on a
+    slow turn-modulo cadence, and the warrant rung dispatches a **named witchhunter** with a
+    road-talk trace rumor ahead of arrival. `ImperialResponsePacingTests` pins the contract;
+    see docs/FREE_FOLK_MOVEMENT.md "The marble answers slowly."
 
 ### 2.3 Progression as a capability portfolio
 

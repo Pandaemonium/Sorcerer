@@ -139,6 +139,9 @@ public sealed class WorldReactionSystem
     {
         if (deed.Visibility.Equals("secret", StringComparison.OrdinalIgnoreCase))
         {
+            // Even a perfectly quiet kill of the Empire's own is eventually noticed as silence:
+            // the post misses its patrol and opens a file (docs/FREE_FOLK_MOVEMENT.md).
+            ScheduleOverdueAudit(state, deed, messages, deltas, applyConsequence);
             return;
         }
 
@@ -156,24 +159,25 @@ public sealed class WorldReactionSystem
                 AddLegend(messages, deltas, applyConsequence, deed, "defiant", 1);
                 AdjustFactionStanding(messages, deltas, applyConsequence, "hollowmere", "gratitude", 2);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", 1);
-                RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
                 // Liberation erodes the empire's grip: a real anti-imperial victory spends a point of
                 // imperial defense, which later shows up as one fewer guard at the capital (organic
                 // capital approach -- see memory capital-organic-approach-design).
                 SpendEmpireDefenses(state, messages, deltas, applyConsequence, 1);
-                AddMessage(messages, deltas, applyConsequence, deed, "freed_prisoner", "By morning someone will have carried word of the rescue down the road.");
+                AddMessage(messages, deltas, applyConsequence, deed, "freed_prisoner",
+                    ScheduleEmpireReport(state, deed, 1, messages, deltas, applyConsequence)
+                        ? "By morning someone will have carried word of the rescue down the road."
+                        : "No one who would tell the Empire saw the rescue; only those who wanted it free know.");
                 break;
             case "body_swap":
                 AddLegend(messages, deltas, applyConsequence, deed, "uncanny", 2);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", deed.Magnitude);
-                RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude - 1));
+                ScheduleEmpireReport(state, deed, Math.Max(1, deed.Magnitude - 1), messages, deltas, applyConsequence);
                 AddMessage(messages, deltas, applyConsequence, deed, "body_swap", "Whoever watched that will be looking for someone willing to believe them.");
                 break;
             case "kill":
                 AddLegend(messages, deltas, applyConsequence, deed, "butcher", Math.Max(1, deed.Magnitude));
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "fear", deed.Magnitude);
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", deed.Magnitude);
-                RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
                 // Force route of the organic capital approach: cutting down an imperial in the open
                 // spends a point of the empire's finite defense, so beating its forces in the field
                 // means fewer guards stand at the throne later. The kill deed carries the victim's
@@ -183,11 +187,14 @@ public sealed class WorldReactionSystem
                     SpendEmpireDefenses(state, messages, deltas, applyConsequence, 1);
                 }
 
-                AddMessage(messages, deltas, applyConsequence, deed, "kill", "Someone will carry word of the killing to the next town before nightfall.");
+                AddMessage(messages, deltas, applyConsequence, deed, "kill",
+                    ScheduleEmpireReport(state, deed, Math.Max(1, deed.Magnitude), messages, deltas, applyConsequence)
+                        ? "Someone will carry word of the killing to the next town before nightfall."
+                        : "No one who would tell the Empire saw the killing; only the silence will speak, and slowly.");
                 break;
             case "attack":
                 AdjustEmpireBloc(state, messages, deltas, applyConsequence, "fear", Math.Max(1, deed.Magnitude - 1));
-                RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
+                ScheduleEmpireReport(state, deed, 1, messages, deltas, applyConsequence);
                 AddLegend(messages, deltas, applyConsequence, deed, "dangerous", 1);
                 break;
             case "wild_magic":
@@ -298,7 +305,7 @@ public sealed class WorldReactionSystem
         if (deed.Visibility.Equals("suspicious", StringComparison.OrdinalIgnoreCase))
         {
             AdjustEmpireBloc(state, messages, deltas, applyConsequence, "suspicion", Math.Max(1, deed.Magnitude));
-            RaiseEmpireHeat(state, messages, deltas, applyConsequence, 1);
+            ScheduleEmpireReport(state, deed, 1, messages, deltas, applyConsequence);
             var effectSeer = ResolveWitnessName(state, deed.EffectWitnesses, "A passerby");
             AddMessage(messages, deltas, applyConsequence, deed, "suspicious_wild_magic", $"{effectSeer} saw the magic flare, but not the hand that loosed it.", playerVisible: FirstReactionOfKind(state, "suspicious_wild_magic"));
             return;
@@ -313,7 +320,7 @@ public sealed class WorldReactionSystem
 
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "imperial-threat", Math.Max(1, deed.Magnitude));
         AdjustEmpireBloc(state, messages, deltas, applyConsequence, "notoriety", 1);
-        RaiseEmpireHeat(state, messages, deltas, applyConsequence, Math.Max(1, deed.Magnitude));
+        ScheduleEmpireReport(state, deed, Math.Max(1, deed.Magnitude), messages, deltas, applyConsequence);
         var actorSeer = ResolveWitnessName(state, deed.Witnesses, "A bystander");
         AddMessage(messages, deltas, applyConsequence, deed, "public_wild_magic", $"{actorSeer} saw you loose the wild magic, and the ones who watched are already telling each other what they think it was.", playerVisible: FirstReactionOfKind(state, "public_wild_magic"));
     }
@@ -332,18 +339,159 @@ public sealed class WorldReactionSystem
             delta,
             targetIsRole: true));
 
-    private static void RaiseEmpireHeat(
+    // --- Report-borne heat (docs/FREE_FOLK_MOVEMENT.md, "The marble answers slowly") ---
+    // The Empire's alarm is knowledge, and knowledge needs a carrier. A deed raises `heat`
+    // only when word of it physically arrives: a surviving witness willing to talk reaches an
+    // imperial desk after a travel delay, or - when the Empire's own people vanish with no
+    // witness left - an overdue audit eventually notices the silence. Material losses (dead
+    // soldiers, spent defenses) still land instantly; attribution and alarm must travel.
+
+    internal const string EmpireReportEventKind = "empire_report";
+    internal const string OverdueReportCause = "overdue";
+    internal const int ImperialReportTravelTurns = 4;
+    internal const int CivilianReportTravelTurns = 8;
+    internal const int OverdueAuditTurns = 18;
+
+    /// <summary>
+    /// Schedules the report that will raise empire heat once it reaches a desk. Returns true
+    /// when a living witness is carrying word; false when nothing (or only silence) will travel.
+    /// </summary>
+    private static bool ScheduleEmpireReport(
         GameState state,
+        DeedRecord deed,
+        int heat,
         List<string> messages,
         List<StateDelta> deltas,
-        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence,
-        int amount)
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
     {
-        foreach (var faction in state.Factions.FactionsByRole("empire_bloc"))
+        if (heat <= 0)
         {
-            AdjustFactionResource(messages, deltas, applyConsequence, faction.Id, "heat", Math.Max(0, amount));
+            return false;
         }
+
+        var reporters = ReportingWitnesses(state, deed);
+        if (reporters.Count == 0)
+        {
+            ScheduleOverdueAudit(state, deed, messages, deltas, applyConsequence);
+            return false;
+        }
+
+        // A surviving imperial reports through its own chain quickly; a civilian's word
+        // wanders toward a desk more slowly. Tuning lives in docs/FREE_FOLK_MOVEMENT.md.
+        var imperialReporter = reporters.Any(witness => IsEmpireBlocFaction(state, WitnessFactionId(witness)));
+        var travel = imperialReporter ? ImperialReportTravelTurns : CivilianReportTravelTurns;
+        ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.ScheduleEvent(
+            "world_reaction",
+            EmpireReportEventKind,
+            travel,
+            new Dictionary<string, object?>
+            {
+                ["heat"] = heat,
+                ["cause"] = deed.Kind,
+                ["placeKey"] = deed.PlaceKey,
+                ["witnessIds"] = string.Join(",", reporters.Select(witness => witness.Id.Value)),
+                ["text"] = $"Word of the {CleanKind(deed.Kind)} reaches an imperial desk; the district's file grows a page.",
+            },
+            evidence: deed.Id,
+            reason: "A witnessed deed needs a living carrier before the Empire's alarm can rise."));
+        return true;
     }
+
+    private static void ScheduleOverdueAudit(
+        GameState state,
+        DeedRecord deed,
+        List<string> messages,
+        List<StateDelta> deltas,
+        Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
+    {
+        if (!deed.Kind.Equals("kill", StringComparison.OrdinalIgnoreCase) || !VictimIsEmpireBloc(state, deed))
+        {
+            return;
+        }
+
+        // One pending audit is enough: five silent kills read as one discovered silence, not
+        // five separate files.
+        if (state.ScheduledEvents.Events.Any(item =>
+            item.Kind.Equals(EmpireReportEventKind, StringComparison.OrdinalIgnoreCase)
+            && item.Payload.TryGetValue("cause", out var cause)
+            && OverdueReportCause.Equals(Convert.ToString(cause), StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        ApplyConsequence(messages, deltas, applyConsequence, WorldConsequence.ScheduleEvent(
+            "world_reaction",
+            EmpireReportEventKind,
+            OverdueAuditTurns,
+            new Dictionary<string, object?>
+            {
+                ["heat"] = 2,
+                ["cause"] = OverdueReportCause,
+                ["placeKey"] = deed.PlaceKey,
+                ["text"] = "Somewhere up the road, an imperial post marks a patrol overdue and opens a file on the silence.",
+            },
+            evidence: deed.Id,
+            reason: "The Empire eventually notices its own silence even when no witness survives."));
+    }
+
+    // A witness carries word to the Empire only if they are alive, not the sorcerer, and not
+    // someone whose allegiance points away from an imperial desk (player faction, resistance
+    // cells, followers/allies). Dead witnesses file no reports.
+    private static IReadOnlyList<Entity> ReportingWitnesses(GameState state, DeedRecord deed)
+    {
+        return deed.Witnesses
+            .Concat(deed.EffectWitnesses ?? Array.Empty<string>())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(id => ResolveWitnessEntity(state, id))
+            .Where(witness => witness is not null && WouldReportToEmpire(state, witness))
+            .Select(witness => witness!)
+            .DistinctBy(witness => witness.Id.Value, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(witness => witness.Id.Value, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static bool WouldReportToEmpire(GameState state, Entity witness)
+    {
+        if (witness.Id == state.ControlledEntityId)
+        {
+            return false;
+        }
+
+        if (!witness.TryGet<ActorComponent>(out var actor) || !actor.Alive)
+        {
+            return false;
+        }
+
+        if (witness.TryGet<AiComponent>(out var ai)
+            && (ai.PolicyId.Equals("follower", StringComparison.OrdinalIgnoreCase)
+                || ai.PolicyId.Equals("ally", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var factionId = WitnessFactionId(witness);
+        if (string.IsNullOrWhiteSpace(factionId))
+        {
+            return true;
+        }
+
+        var role = state.Factions.Factions
+            .FirstOrDefault(faction => faction.Id.Equals(factionId, StringComparison.OrdinalIgnoreCase))
+            ?.Role;
+        return role is null
+            || (!role.Equals("player", StringComparison.OrdinalIgnoreCase)
+                && !role.Equals("resistance", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string WitnessFactionId(Entity witness) =>
+        witness.TryGet<ActorComponent>(out var actor) && !string.IsNullOrWhiteSpace(actor.Faction)
+            ? actor.Faction
+            : witness.TryGet<FactionComponent>(out var faction) ? faction.FactionId : string.Empty;
+
+    private static bool IsEmpireBlocFaction(GameState state, string factionId) =>
+        !string.IsNullOrWhiteSpace(factionId)
+        && state.Factions.FactionsByRole("empire_bloc").Any(faction =>
+            faction.Id.Equals(factionId, StringComparison.OrdinalIgnoreCase));
 
     // Spend the empire's finite defense capacity in response to a real anti-imperial victory. This
     // is the player-driven half of the organic capital approach: the capital guard is generated from

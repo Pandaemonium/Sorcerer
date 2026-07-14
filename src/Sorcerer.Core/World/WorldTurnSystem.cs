@@ -13,6 +13,17 @@ public sealed class WorldTurnSystem
     private const int WantStirCooldown = 12;
     private const int NpcApproachCooldown = 6;
 
+    // A dispatched patrol takes real road time to arrive (docs/FREE_FOLK_MOVEMENT.md, "the
+    // marble answers slowly"): long enough that the player can finish the current scene and
+    // choose to leave, hide, or prepare before contact.
+    private const int PatrolArrivalTurns = 12;
+
+    // Replacements are logistics, not respawns: spent patrols and warrants are re-manned from
+    // a garrison somewhere down the road, so they return on a slow turn cadence instead of
+    // every quiet pump. Heat still ebbs every quiet pump.
+    private const int PatrolRegenTurnModulo = 3;
+    private const int InformantRegenTurnModulo = 2;
+
     public IReadOnlyList<StateDelta> Apply(
         GameState state,
         string reason,
@@ -700,11 +711,11 @@ public sealed class WorldTurnSystem
                         if (!ApplyConsequence(localDeltas, applyConsequence, WorldConsequence.ScheduleEvent(
                             "world_turn",
                             "empire_patrol",
-                            2,
+                            PatrolArrivalTurns,
                             new Dictionary<string, object?>
                             {
                                 ["factionId"] = faction.Id,
-                                ["text"] = "An imperial patrol follows the color of your last working.",
+                                ["text"] = "Hoofbeats up the road: an imperial patrol reaches the district, asking after your description.",
                             })).Applied)
                         {
                             return false;
@@ -725,7 +736,7 @@ public sealed class WorldTurnSystem
                             reason,
                             "faction_pressure",
                             faction.Id,
-                            "The Empire spends a patrol to answer your legend.",
+                            "The Empire spends a patrol on you; riders take to the road.",
                             new Dictionary<string, object?>
                             {
                                 ["factionId"] = faction.Id,
@@ -799,9 +810,17 @@ public sealed class WorldTurnSystem
                 localDeltas =>
                 {
                     var adjustments = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-                    TrackAdjustment(adjustments, "patrols", RegenerateOne(state, faction.Id, "patrols", localDeltas, applyConsequence));
-                    TrackAdjustment(adjustments, "informants", RegenerateOne(state, faction.Id, "informants", localDeltas, applyConsequence));
-                    TrackAdjustment(adjustments, "warrants", RegenerateOne(state, faction.Id, "warrants", localDeltas, applyConsequence));
+                    if (state.Turn % PatrolRegenTurnModulo == 0)
+                    {
+                        TrackAdjustment(adjustments, "patrols", RegenerateOne(state, faction.Id, "patrols", localDeltas, applyConsequence));
+                        TrackAdjustment(adjustments, "warrants", RegenerateOne(state, faction.Id, "warrants", localDeltas, applyConsequence));
+                    }
+
+                    if (state.Turn % InformantRegenTurnModulo == 0)
+                    {
+                        TrackAdjustment(adjustments, "informants", RegenerateOne(state, faction.Id, "informants", localDeltas, applyConsequence));
+                    }
+
                     TrackAdjustment(adjustments, "heat", AdjustFactionResource(state, faction.Id, "heat", -1, deltas: localDeltas, applyConsequence: applyConsequence));
                     if (adjustments.Count == 0)
                     {
