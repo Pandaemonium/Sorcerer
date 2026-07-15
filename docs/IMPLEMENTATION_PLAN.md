@@ -985,6 +985,17 @@ New terrain rule: prefer tags/reaction metadata consumed by the shared terrain s
 
 ### 3.4 Encounter grammar, not authored combat scripts
 
+**Status: first slice implemented 2026-07-15.** `content/encounters/initial_encounters.json`
+authors four ingredients (guarded cache, keeper-holds-it, restricted threshold, rival claimant);
+`EncounterAssembler` (pure, stable-seeded) picks by stakes tier — promise salience + regional
+imperial presence + faction pressure, tier 0 = simple find — and the item-promise realizer plus an
+opt-in ambient pass in zone generation stage the casts through ordinary spawn/want consequences.
+The invariant held: no `EncounterLedger`, no scripted room graph; completion falls out of
+`ObjectiveProgressSystem`/promise/want facts, and every staging is resolvable by force (corpse
+looting voids inventory protection), stealth (shared concealment/LOS rules), or persuasion
+(cast wants/stakes text surfaces in dialogue context). One new AI behavior: a `"guard"` policy
+that holds an anchor and breaks pursuit beyond a short leash.
+
 Author reusable ingredients in data:
 
 - patrol crossing civilian witnesses;

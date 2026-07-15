@@ -443,7 +443,13 @@ ground for handoffs.
    claim), the requisition ledger (first item-promise vein of the promise mine, blanks
    included), and the relay signal bell. Access is restricted (credential/force/magic).
    Remaining for S2 proper: the cast (clerk, courier, post-captain), the watching cell as
-   giver, the courier-interception and forgery routes, and graded provenance outcomes._
+   giver, the courier-interception and forgery routes, and graded provenance outcomes.
+   Update 2026-07-15: the cast now has a general mechanism — the encounter grammar
+   (IMPLEMENTATION_PLAN §3.4, `content/encounters/initial_encounters.json`) stages guards,
+   keepers (the requisition-clerk cast is authored there), and restricted thresholds around
+   item promises, with a `guard` AI policy that holds an anchor. The waystation-specific
+   post-captain/courier ensemble and interception/forgery routes remain content work on top
+   of that grammar, not new engine work._
 3. **S3 — Provenance strategy** (Phase 2.2 extension): sweep scheduling reads theft-deed
    visibility; reroutes, countdowns, and false-plan marches work; aftermath texture in swept
    settlements. Exit: the quiet-heist and loud-heist runs produce different sweep behavior a

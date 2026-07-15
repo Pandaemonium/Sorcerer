@@ -606,6 +606,15 @@ will probably want:
 Do not add all of these preemptively. Add them when a payoff archetype or test
 needs them.
 
+Two of these arrived with the encounter grammar (2026-07-15), in smaller forms
+than sketched: deferred realization is not a stage field but ClaimedPlace
+re-anchoring — the restricted-site realizer spawns the threshold, re-anchors the
+promise's claimed place to the interior zone id via `update_promise`, and emits
+a `promiseRealizationDeferred` delta so the travel pass leaves the promise bound
+for the interior pass to realize. The deterministic realization seed is
+`WorldRoll.StableSeed(worldSeed, zoneId, promiseId, "encounter")`, which keys
+every encounter draw.
+
 ## Tests And Evals
 
 Focused tests should cover:
