@@ -285,7 +285,7 @@ public static class GeneratedJourneyFactory
             : string.IsNullOrWhiteSpace(horizontal)
                 ? vertical
                 : $"{vertical}-{horizontal}";
-        return $"{distance} {(distance == 1 ? "zone" : "zones")} {direction}";
+        return $"{distance} {(distance == 1 ? "length" : "lengths")} {direction}";
     }
 
     private static (int X, int Y) ParseZoneId(string zoneId)
@@ -608,7 +608,7 @@ public static class GeneratedObjectiveHandoffFactory
                 ? vertical
                 : $"{vertical}-{horizontal}";
         var distance = Math.Abs(dx) + Math.Abs(dy);
-        return $"{distance} {(distance == 1 ? "zone" : "zones")} {direction}".Trim();
+        return $"{distance} {(distance == 1 ? "length" : "lengths")} {direction}".Trim();
     }
 
     private static (int X, int Y) ParseZoneId(string zoneId)

@@ -624,27 +624,13 @@ public sealed class DialogueContextAssembler
 
     private IEnumerable<string> RegionTravelLines()
     {
-        yield return $"Current zone: {_engine.State.CurrentZoneId}; region: {_engine.State.RegionId}.";
-        if (TryParseZonePoint(_engine.State.CurrentZoneId, out var current))
+        // NPC-facing geography is diegetic: places are named, and travel is measured in bearings
+        // and "lengths", never in map coordinates. Objective distances reach the speaker through
+        // the promise/lead text; this card only tells them where they stand and which ways lead on.
+        yield return $"You are in {_engine.CurrentPlace.DisplayName}.";
+        foreach (var direction in new[] { "north", "east", "south", "west" })
         {
-            foreach (var (direction, point) in new[]
-            {
-                ("north", new GridPoint(current.X, current.Y - 1)),
-                ("east", new GridPoint(current.X + 1, current.Y)),
-                ("south", new GridPoint(current.X, current.Y + 1)),
-                ("west", new GridPoint(current.X - 1, current.Y)),
-            })
-            {
-                yield return $"Travel {direction}: zone {point.X},{point.Y}.";
-            }
-        }
-
-        foreach (var zoneId in _engine.State.Zones.Keys
-            .Where(id => !id.Equals(_engine.State.CurrentZoneId, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
-            .TakeLast(4))
-        {
-            yield return $"Known zone: {zoneId}.";
+            yield return $"Travel {direction}: a road leads onward from here.";
         }
 
         foreach (var promise in _engine.State.PromiseLedger.Promises
@@ -1286,21 +1272,6 @@ public sealed class DialogueContextAssembler
 
         return entity.TryGet<ActorComponent>(out var actor)
             && !actor.Faction.Equals("player", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryParseZonePoint(string zoneId, out GridPoint point)
-    {
-        point = new GridPoint(0, 0);
-        var parts = zoneId.Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length != 2
-            || !int.TryParse(parts[0], out var x)
-            || !int.TryParse(parts[1], out var y))
-        {
-            return false;
-        }
-
-        point = new GridPoint(x, y);
-        return true;
     }
 
     private static bool IsTravelLikePromise(WorldPromise promise) =>

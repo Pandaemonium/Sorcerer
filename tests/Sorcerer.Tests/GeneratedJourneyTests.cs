@@ -26,7 +26,9 @@ public sealed class GeneratedJourneyTests
         {
             Assert.Equal("item", template.RealizationKind);
             Assert.Contains("{landmark}", template.ClaimPattern, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("{destinationZone}", template.ClaimPattern, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("{direction}", template.ClaimPattern, StringComparison.OrdinalIgnoreCase);
+            // Spoken leads name a landmark and a bearing, never a raw map coordinate.
+            Assert.DoesNotContain("zone", template.ClaimPattern, StringComparison.OrdinalIgnoreCase);
         });
         Assert.Equal(
             loose.Handoffs.Select(template => template.Id).OrderBy(id => id).ToArray(),
@@ -64,7 +66,8 @@ public sealed class GeneratedJourneyTests
         Assert.NotNull(promise.ClaimedPlace);
         Assert.Contains(journalBefore.Messages, message =>
             message.StartsWith("Objective:", StringComparison.OrdinalIgnoreCase)
-            && message.Contains("zone", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("length", StringComparison.OrdinalIgnoreCase)
+            && !message.Contains("zone", StringComparison.OrdinalIgnoreCase)
             && message.Contains("drowned memory mill", StringComparison.OrdinalIgnoreCase));
 
         var destination = ParseZoneId(promise.ClaimedPlace!);
