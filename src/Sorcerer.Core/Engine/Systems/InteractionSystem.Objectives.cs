@@ -266,10 +266,17 @@ public sealed partial class InteractionSystem
 
             // Make the reputation payoff legible (owner request): the +1 gratitude above was real
             // but silent. Renderers colour this fixed shape gold (MessageKind.Standing).
+            // Generated contacts belong to the generic "neutral" faction, which has no name worth
+            // announcing ("neutral will remember this" reads as a bug), so credit them personally.
+            var remembererName = rememberedBy is not null
+                && !rememberedBy.Id.Equals("neutral", StringComparison.OrdinalIgnoreCase)
+                && !rememberedBy.Name.Equals("neutral", StringComparison.OrdinalIgnoreCase)
+                ? rememberedBy.Name
+                : giver.Name;
             if (rememberedBy is not null
                 && !ApplyOrRollback(WorldConsequence.Message(
                     $"objective_return:{giver.Id.Value}",
-                    $"{rememberedBy.Name} will remember this.",
+                    $"{remembererName} will remember this.",
                     targetEntityId: giver.Id.Value,
                     visibility: WorldConsequenceVisibility.Message,
                     sourceEntityId: giver.Id.Value,
