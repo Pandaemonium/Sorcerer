@@ -866,7 +866,33 @@ public sealed partial class PromiseRealizationSystem
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    private static string PromisePersonName(WorldPromise promise)
+    /// <summary>
+    /// A deterministic region-flavored name ("{given} {byname}") for a promise-realized actor the
+    /// promise text does not itself name, so travel payoffs get a person of the place instead of a
+    /// bland "promised stranger". Given and byname draw independently so the pool is given x byname.
+    /// Falls back to <paramref name="fallback"/> only when the region has no name forge.
+    /// </summary>
+    private static string ComposeRegionName(
+        WorldPromise promise,
+        RegionDefinition region,
+        int worldSeed,
+        string role,
+        string fallback)
+    {
+        var names = region.Population?.Names;
+        if (names is null || names.GivenNames.Count == 0 || names.ByNames.Count == 0)
+        {
+            return fallback;
+        }
+
+        var given = names.GivenNames[
+            WorldRoll.StableSeed(worldSeed, promise.Id, role, "given_name") % names.GivenNames.Count];
+        var byname = names.ByNames[
+            WorldRoll.StableSeed(worldSeed, promise.Id, role, "by_name") % names.ByNames.Count];
+        return $"{given} {byname}";
+    }
+
+    private static string PromisePersonName(WorldPromise promise, RegionDefinition region, int worldSeed)
     {
         if (UsefulSubject(promise) is { } subject)
         {
@@ -875,10 +901,10 @@ public sealed partial class PromiseRealizationSystem
 
         return promise.Text.Contains("Nannerl", StringComparison.OrdinalIgnoreCase)
             ? "Nannerl"
-            : "promised stranger";
+            : ComposeRegionName(promise, region, worldSeed, "person", "promised stranger");
     }
 
-    private static string PromiseMerchantName(WorldPromise promise)
+    private static string PromiseMerchantName(WorldPromise promise, RegionDefinition region, int worldSeed)
     {
         var text = promise.Text.Trim();
         if (text.Contains("Jimmer", StringComparison.OrdinalIgnoreCase))
@@ -899,7 +925,7 @@ public sealed partial class PromiseRealizationSystem
             }
         }
 
-        return "promised merchant";
+        return ComposeRegionName(promise, region, worldSeed, "merchant", "promised merchant");
     }
 
     // Threat naming/faction/stats now live in ThreatArchetypeGenerator (see
@@ -937,7 +963,7 @@ public sealed partial class PromiseRealizationSystem
         return "quiet folk-magic service";
     }
 
-    private static string PromiseServiceProviderName(WorldPromise promise)
+    private static string PromiseServiceProviderName(WorldPromise promise, RegionDefinition region, int worldSeed)
     {
         var text = promise.Text.Trim();
         foreach (var phrase in new[] { " can ", " offers ", " knows ", " keeps " })
@@ -953,7 +979,7 @@ public sealed partial class PromiseRealizationSystem
             }
         }
 
-        return "promised service keeper";
+        return ComposeRegionName(promise, region, worldSeed, "service", "promised service keeper");
     }
 
     private static string PromiseServiceEffect(WorldPromise promise)

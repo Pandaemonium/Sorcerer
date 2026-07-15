@@ -590,7 +590,7 @@ public sealed partial class PromiseRealizationSystem
             .Concat(new[] { "npc", "objective_contact" })
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var personName = PromisePersonName(promise);
+        var personName = PromisePersonName(promise, region, _state.Seed);
         var person = ApplyGeneratedSpawnEntity(
             WorldConsequence.SpawnEntity(
                 $"promise:{promise.Id}:travel",
@@ -705,7 +705,7 @@ public sealed partial class PromiseRealizationSystem
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var itemName = PromiseItemName(promise);
-        var merchantName = PromiseMerchantName(promise);
+        var merchantName = PromiseMerchantName(promise, region, _state.Seed);
         var detached = DetachedGeneratedState(entities);
         var transactionDeltas = new List<StateDelta>();
         var spawnConsequence = WorldConsequence.SpawnEntity(
@@ -805,7 +805,7 @@ public sealed partial class PromiseRealizationSystem
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var serviceName = PromiseServiceName(promise);
-        var providerName = PromiseServiceProviderName(promise);
+        var providerName = PromiseServiceProviderName(promise, region, _state.Seed);
         var detached = DetachedGeneratedState(entities);
         var transactionDeltas = new List<StateDelta>();
         var spawnConsequence = WorldConsequence.SpawnEntity(

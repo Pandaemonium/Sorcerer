@@ -5,8 +5,8 @@
       "centerMean": 2.8, "nearMean": 1.2, "wildMean": 0.2,
       "centerRadius": 0, "nearRadius": 1, "maxResidents": 5, "hermitChance": 1,
       "names": {
-        "given": ["Adra", "Beren", "Cassa", "Damas", "Elian", "Fara", "Galen", "Hesta"],
-        "bynames": ["Ninth-Desk", "Gray Ribbon", "of Intake", "Quiet Seal", "Three Copies", "Bell-Witness"]
+        "given": ["Adra", "Beren", "Cassa", "Damas", "Elian", "Fara", "Galen", "Hesta", "Ismene", "Junia", "Kelos", "Lucan", "Marcia", "Nevio", "Ostia", "Prisca", "Quentis", "Roana", "Servil", "Tacia", "Valeria", "Corvin"],
+        "bynames": ["Ninth-Desk", "Gray Ribbon", "of Intake", "Quiet Seal", "Three Copies", "Bell-Witness", "Cold Margin", "Sealed Docket", "of the Ledger", "Fourth Warrant", "Iron Stamp", "No Appeal", "Filed Twice", "Grey Cuff", "of Compliance", "Wax-True"]
       },
       "archetypes": [
         {
@@ -28,8 +28,8 @@
       "centerMean": 5.8, "nearMean": 2.6, "wildMean": 0.35,
       "centerRadius": 1, "nearRadius": 3, "maxResidents": 8, "hermitChance": 1,
       "names": {
-        "given": ["Aster", "Bela", "Corin", "Davia", "Edras", "Felice", "Gavr", "Iona", "Maro", "Neris"],
-        "bynames": ["White Ledger", "Seventh Arch", "Proper Measure", "Blue Docket", "of the Queue", "Narrow Seal", "Civic Bell", "Petition-Worn"]
+        "given": ["Aster", "Bela", "Corin", "Davia", "Edras", "Felice", "Gavr", "Iona", "Maro", "Neris", "Orsin", "Palla", "Quinn", "Rhea", "Sabin", "Tullia", "Vale", "Wren", "Aurel", "Cliona", "Doran", "Ester"],
+        "bynames": ["White Ledger", "Seventh Arch", "Proper Measure", "Blue Docket", "of the Queue", "Narrow Seal", "Civic Bell", "Petition-Worn", "Marble Voice", "First Column", "of the Rolls", "Grave Courtesy", "Signed Twice", "Throne-Adjacent", "Cold Vellum", "of the Census"]
       },
       "archetypes": [
         {
@@ -71,8 +71,8 @@
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 6,
       "centers": [{"x": 1, "y": 0}, {"x": 0, "y": 4}],
       "names": {
-        "given": ["Lio", "Maren", "Sella", "Tovin", "Edda", "Rusk", "Iven", "Nim", "Pella", "Orra"],
-        "bynames": ["Reed-Memory", "Eelwise", "Wet Hem", "Nine Knots", "Under-Willow", "Silt-Hand", "Ferry-Sworn", "Red Thread"]
+        "given": ["Lio", "Maren", "Sella", "Tovin", "Edda", "Rusk", "Iven", "Nim", "Pella", "Orra", "Bael", "Cressa", "Dellan", "Fenna", "Gove", "Halsa", "Jory", "Kesk", "Wynn", "Rowen", "Sten", "Willa"],
+        "bynames": ["Reed-Memory", "Eelwise", "Wet Hem", "Nine Knots", "Under-Willow", "Silt-Hand", "Ferry-Sworn", "Red Thread", "Marsh-Kept", "Low Water", "Heron's Cousin", "Two Oars", "Bog-Iron", "Rushlight", "Drowned-Name", "Reed-Debt"]
       },
       "archetypes": [
         {
@@ -108,7 +108,7 @@
       "regionId": "stalnaz_highlands",
       "centerMean": 4.2, "nearMean": 1.5, "wildMean": 0.18,
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 5,
-      "names": {"given": ["Asta", "Bryn", "Celyn", "Dara", "Eiran", "Fenn", "Gala", "Iri"], "bynames": ["Blue Note", "Afterlight", "Snow-Tuned", "Glass Palm", "Third Echo", "Cistern-Born"]},
+      "names": {"given": ["Asta", "Bryn", "Celyn", "Dara", "Eiran", "Fenn", "Gala", "Iri", "Joss", "Lein", "Mabon", "Nesta", "Oriel", "Perrin", "Rhian", "Sulien", "Talis", "Ula", "Vaun", "Ysold"], "bynames": ["Blue Note", "Afterlight", "Snow-Tuned", "Glass Palm", "Third Echo", "Cistern-Born", "Chime-Kept", "Pale Refrain", "High Cistern", "Frost Interval", "Quartz Voice", "Long Resonance", "Ice-Fluent", "Slate Chord", "of Thin Air", "Cold Register"]},
       "archetypes": [
         {
           "id": "light_tuner", "title": "light tuner", "glyph": "t", "tags": ["crystal", "music", "artisan", "merchant"], "roles": ["merchant", "resident"],
@@ -136,7 +136,7 @@
       "regionId": "brall_whaleholds",
       "centerMean": 4.6, "nearMean": 1.8, "wildMean": 0.2,
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 4,
-      "names": {"given": ["Aven", "Bera", "Hakon", "Jori", "Nio", "Ragna", "Siv", "Tor"], "bynames": ["Deep-Laugh", "Bone-Tale", "Tarhand", "Three Harpoons", "Ale-Oath", "Storm-Sworn"]},
+      "names": {"given": ["Aven", "Bera", "Hakon", "Jori", "Nio", "Ragna", "Siv", "Tor", "Ulfa", "Vitr", "Brand", "Dagny", "Eldr", "Frey", "Gunnar", "Halla", "Ingr", "Kelda", "Osk", "Yrsa"], "bynames": ["Deep-Laugh", "Bone-Tale", "Tarhand", "Three Harpoons", "Ale-Oath", "Storm-Sworn", "Whale-Debt", "Salt-Lung", "Iron Keel", "Cold Wake", "Nine Fathoms", "Blubber-Rich", "Oath-Drunk", "Gull-Fed", "Rope-Scarred", "Tide-Widow"]},
       "archetypes": [
         {
           "id": "bone_carver", "title": "whalebone carver", "glyph": "b", "tags": ["bone", "artisan", "merchant"], "roles": ["merchant", "resident"],
@@ -163,7 +163,7 @@
       "regionId": "ryolan_racefields",
       "centerMean": 4.8, "nearMean": 1.9, "wildMean": 0.22,
       "centerRadius": 0, "nearRadius": 3, "maxResidents": 8, "hermitChance": 4,
-      "names": {"given": ["Ari", "Boros", "Cyra", "Deyan", "Esen", "Kavi", "Mira", "Rolan"], "bynames": ["Red Wheel", "Dust-Oath", "Second Lap", "Copper Rein", "Sun Witness", "Broken Axle"]},
+      "names": {"given": ["Ari", "Boros", "Cyra", "Deyan", "Esen", "Kavi", "Mira", "Rolan", "Sabo", "Tevi", "Ulan", "Vasso", "Anka", "Denk", "Feyo", "Iska", "Levko", "Nadi", "Ravik", "Zoran"], "bynames": ["Red Wheel", "Dust-Oath", "Second Lap", "Copper Rein", "Sun Witness", "Broken Axle", "Fast Furlong", "Whip-Kind", "Mare's Word", "Track-Debt", "Loose Girth", "First Post", "Hoof-Lucky", "Dust Purse", "No Second", "Stirrup-Sworn"]},
       "archetypes": [
         {
           "id": "chariot_groom", "title": "chariot groom", "glyph": "g", "tags": ["horse", "chariot", "merchant"], "roles": ["merchant", "resident"],
@@ -191,7 +191,7 @@
       "regionId": "vint_weaveways",
       "centerMean": 5.0, "nearMean": 2.0, "wildMean": 0.2,
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 8, "hermitChance": 3,
-      "names": {"given": ["Amra", "Bex", "Cira", "Dovin", "Eli", "Fara", "Jessa", "Varo"], "bynames": ["Red Thread", "Loud Loom", "Nine Colors", "Counter-Knot", "Blue Sleeve", "Market Mouth"]},
+      "names": {"given": ["Amra", "Bex", "Cira", "Dovin", "Eli", "Fara", "Jessa", "Varo", "Hesper", "Ione", "Kelt", "Lira", "Mund", "Nessa", "Orin", "Prima", "Runa", "Sable", "Tavi", "Yann"], "bynames": ["Loud Loom", "Nine Colors", "Counter-Knot", "Blue Sleeve", "Market Mouth", "Warp-True", "Dye-Stained", "Long Selvage", "Second Shuttle", "Crimson Debt", "Tight Weave", "Frayed Oath", "Gold Thread", "Bolt-Rich", "Cross-Stitch", "Undyed"]},
       "archetypes": [
         {
           "id": "thread_broker", "title": "thread broker", "glyph": "t", "tags": ["thread", "merchant", "market"], "roles": ["merchant", "resident"],
@@ -219,7 +219,7 @@
       "regionId": "threen_canals",
       "centerMean": 4.5, "nearMean": 1.8, "wildMean": 0.18,
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 4,
-      "names": {"given": ["Alo", "Beni", "Caro", "Dessa", "Enn", "Fio", "Luma", "Tern"], "bynames": ["Canal Letter", "Copper Serif", "Lockside", "Wet Ink", "Third Bridge", "Patient Hand"]},
+      "names": {"given": ["Alo", "Beni", "Caro", "Dessa", "Enn", "Fio", "Luma", "Tern", "Gale", "Ivo", "Kesst", "Lento", "Nolo", "Piera", "Quen", "Reni", "Sabo", "Vesna", "Zell", "Doma"], "bynames": ["Canal Letter", "Copper Serif", "Lockside", "Wet Ink", "Third Bridge", "Patient Hand", "Slow Current", "Barge-Sworn", "Ink-Debt", "Low Lock", "Margin-Kept", "Sealed Post", "Ninth Bridge", "Reed-Paper", "Quiet Sluice", "of the Towpath"]},
       "archetypes": [
         {
           "id": "canal_engineer", "title": "canal engineer", "glyph": "e", "tags": ["canal", "engineer", "service_provider"], "roles": ["resident", "service_provider"],
@@ -246,7 +246,7 @@
       "regionId": "monteary_grasslands",
       "centerMean": 3.8, "nearMean": 1.4, "wildMean": 0.24,
       "centerRadius": 0, "nearRadius": 3, "maxResidents": 6, "hermitChance": 6,
-      "names": {"given": ["Aila", "Bran", "Cero", "Dari", "Elo", "Maia", "Naro", "Suna"], "bynames": ["Long Grass", "White Rein", "Quiet Hoof", "Herb-Song", "West Wind", "Foal-Kin"]},
+      "names": {"given": ["Aila", "Bran", "Cero", "Dari", "Elo", "Maia", "Naro", "Suna", "Tesk", "Vell", "Aro", "Denn", "Fira", "Halo", "Ivar", "Lonn", "Mesa", "Prai", "Sela", "Turi"], "bynames": ["Long Grass", "White Rein", "Quiet Hoof", "Herb-Song", "West Wind", "Foal-Kin", "Open Sky", "Tall Barley", "Grazing-Right", "Wind-Sworn", "Green Mile", "Two Wells", "Saddle-Kind", "Far Fence", "Dry Season", "Seed-Keeper"]},
       "archetypes": [
         {
           "id": "horse_listener", "title": "horse listener", "glyph": "h", "tags": ["horse", "healer", "service_provider"], "roles": ["resident", "service_provider"],
@@ -274,7 +274,7 @@
       "regionId": "ontrian_clanlands",
       "centerMean": 4.3, "nearMean": 1.7, "wildMean": 0.2,
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 7, "hermitChance": 5,
-      "names": {"given": ["Asha", "Boru", "Cenna", "Dorn", "Eira", "Kelan", "Mora", "Tavi"], "bynames": ["Hearth-Third", "Ash Cousin", "Stone Bowl", "Old Branch", "Ember Name", "Guest-Rope"]},
+      "names": {"given": ["Asha", "Boru", "Cenna", "Dorn", "Eira", "Kelan", "Mora", "Tavi", "Ulf", "Vesh", "Arn", "Della", "Fael", "Gorm", "Hessa", "Ib", "Lorca", "Nen", "Ruda", "Sorl"], "bynames": ["Hearth-Third", "Ash Cousin", "Stone Bowl", "Old Branch", "Ember Name", "Guest-Rope", "Elder-Kept", "Ninth Fire", "Long Memory", "Bone Cousin", "Threshold-Sworn", "Grey Lineage", "Fifth Hearth", "Ancestor-Fed", "Root-True", "Smoke-Named"]},
       "archetypes": [
         {
           "id": "hearth_cousin", "title": "hearth cousin", "glyph": "c", "tags": ["clan", "hearth", "host"], "roles": ["resident", "witness"],
@@ -301,7 +301,7 @@
       "regionId": "gontark_crags",
       "centerMean": 3.6, "nearMean": 1.2, "wildMean": 0.18,
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 6, "hermitChance": 8,
-      "names": {"given": ["Arka", "Brum", "Caz", "Dren", "Eka", "Gor", "Mava", "Tark"], "bynames": ["Shale-Tooth", "Seven Warnings", "Cliff Voice", "Black Rope", "Goat-Debt", "No Echo"]},
+      "names": {"given": ["Arka", "Brum", "Caz", "Dren", "Eka", "Gor", "Mava", "Tark", "Ozk", "Var", "Drok", "Esna", "Grell", "Hark", "Ione", "Krev", "Nask", "Pell", "Rurr", "Skarn"], "bynames": ["Shale-Tooth", "Seven Warnings", "Cliff Voice", "Black Rope", "Goat-Debt", "No Echo", "Scree-Born", "Third Curse", "Cold Ledge", "Loose Stone", "Ill-Wished", "Crag-Sworn", "Split Knuckle", "Nine Omens", "Sheer Drop", "Bitter Spring"]},
       "archetypes": [
         {
           "id": "curse_guide", "title": "curse-warning guide", "glyph": "g", "tags": ["curse", "guide", "service_provider"], "roles": ["resident", "service_provider"],
@@ -328,7 +328,7 @@
       "regionId": "parn_sunroads",
       "centerMean": 4.0, "nearMean": 1.5, "wildMean": 0.16,
       "centerRadius": 0, "nearRadius": 3, "maxResidents": 7, "hermitChance": 7,
-      "names": {"given": ["Aru", "Basa", "Djen", "Hara", "Iset", "Khemi", "Nura", "Sefu"], "bynames": ["Noon Shade", "Copper Sun", "Third Well", "Road-Born", "White Scarf", "Long Horizon"]},
+      "names": {"given": ["Aru", "Basa", "Djen", "Hara", "Iset", "Khemi", "Nura", "Sefu", "Tama", "Wadi", "Anhur", "Beket", "Denn", "Habi", "Kesi", "Meru", "Nebt", "Paser", "Reni", "Sabu"], "bynames": ["Noon Shade", "Copper Sun", "Third Well", "Road-Born", "White Scarf", "Long Horizon", "Dry Mile", "Sand-Sworn", "Dune-Debt", "Caravan-Kind", "Sun Ledger", "Ninth Oasis", "Bright Ash", "Far Well", "Heat-Patient", "Star-Guided"]},
       "archetypes": [
         {
           "id": "shade_seller", "title": "shade seller", "glyph": "s", "tags": ["shade", "merchant", "market"], "roles": ["merchant", "resident"],
@@ -356,7 +356,7 @@
       "regionId": "rentacosta_harbor",
       "centerMean": 5.2, "nearMean": 2.1, "wildMean": 0.18,
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 8, "hermitChance": 3,
-      "names": {"given": ["Ari", "Bela", "Canto", "Dela", "Enzo", "Lira", "Maro", "Sona"], "bynames": ["Low Tide", "Black Ink", "Bell-Shell", "Salt Ledger", "Second Voice", "Pearl Ear"]},
+      "names": {"given": ["Ari", "Bela", "Canto", "Dela", "Enzo", "Lira", "Maro", "Sona", "Tavio", "Vela", "Bruno", "Cira", "Delfo", "Gino", "Isa", "Loro", "Mena", "Orio", "Rina", "Salvo"], "bynames": ["Low Tide", "Black Ink", "Bell-Shell", "Salt Ledger", "Second Voice", "Pearl Ear", "Deep Draft", "Harbor-Sworn", "Coin-Wet", "Anchor-Kind", "Manifest-True", "Ninth Pier", "Brine-Debt", "Gull Market", "Spice-Handed", "Quay-Born"]},
       "archetypes": [
         {
           "id": "tide_broker", "title": "low-tide broker", "glyph": "b", "tags": ["tide", "merchant", "harbor"], "roles": ["merchant", "resident"],
@@ -384,7 +384,7 @@
       "regionId": "wild_border",
       "centerMean": 3.0, "nearMean": 1.0, "wildMean": 0.12,
       "centerRadius": 0, "nearRadius": 2, "maxResidents": 6, "hermitChance": 10,
-      "names": {"given": ["After", "Blue", "Clover", "Dusk", "Else", "Moth", "Rain", "Tomorrow"], "bynames": ["Late Shadow", "Bone Orchard", "Wrong Season", "Festival-Left", "Glass Root", "No Fixed Door"]},
+      "names": {"given": ["After", "Blue", "Clover", "Dusk", "Else", "Moth", "Rain", "Tomorrow", "Ember", "Hush", "Ink", "Lantern", "Never", "Opal", "Petal", "Quill", "Seldom", "Thistle", "Violet", "Wisp"], "bynames": ["Late Shadow", "Bone Orchard", "Wrong Season", "Festival-Left", "Glass Root", "No Fixed Door", "Half-Remembered", "Second Moon", "Backward Path", "Unlit Window", "Sugar Ghost", "Nine Evenings", "Off-Key", "Blessing-Cracked", "Mirror-Shy", "Almost-Here"]},
       "archetypes": [
         {
           "id": "festival_scavenger", "title": "festival scavenger", "glyph": "s", "tags": ["festival", "scavenger", "merchant"], "roles": ["merchant", "resident"],

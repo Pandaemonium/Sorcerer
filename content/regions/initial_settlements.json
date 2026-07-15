@@ -2,8 +2,8 @@
   "settlements": [
     {
       "regionId": "imperial_encounter",
-      "settlementNames": ["Containment Annex Nine", "The West Intake", "Marble Holding Ward"],
-      "hamletNames": ["Survey Camp Seven", "The Quiet Checkpoint"],
+      "settlementNames": ["Containment Annex Nine", "The West Intake", "Marble Holding Ward", "The Ledger Gate", "East Intake", "Compliance Yard"],
+      "hamletNames": ["Survey Camp Seven", "The Quiet Checkpoint", "Checkpoint Twelve", "The Filed Camp", "Warrant Post"],
       "primaryRadius": 1, "hamletCount": 0, "roadName": "the measured road", "roadTerrain": "scored_marble_road",
       "districts": [
         {"id":"intake_gate","name":"Intake Gate","summary":"Carts, confiscated wonders, and frightened clerks queue beneath numbered arches.","terrain":"intake_marble","featureName":"confiscation arch","featureDescription":"Brass measures in the arch record every object entering and leave a deliberate blank for those that escape.","featureGlyph":"A","featureMaterial":"marble","tags":["gate","containment","traffic"],"populationPercent":115},
@@ -14,8 +14,8 @@
     },
     {
       "regionId": "vigovian_capital",
-      "settlementNames": ["Vigovia", "The Reasonable City", "Odran's Marble Peace"],
-      "hamletNames": ["Outer Petition Camp", "Licensed Cart Rest"],
+      "settlementNames": ["Vigovia", "The Reasonable City", "Odran's Marble Peace", "The Charter Quarter", "High Petition", "Marble Concord"],
+      "hamletNames": ["Outer Petition Camp", "Licensed Cart Rest", "Toll Rest", "Census Camp", "The Sanctioned Fair"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the Imperial Processional", "roadTerrain": "processional_marble",
       "districts": [
         {"id":"censor_gate","name":"Censor Gate","summary":"Inspection queues braid through white arches while charter lamps search carts for metaphor.","terrain":"gate_marble","featureName":"civic inspection arch","featureDescription":"Its lenses compare each passerby against a person the state would find easier.","featureGlyph":"A","featureMaterial":"marble","tags":["gate","censorate","inspection"],"populationPercent":125},
@@ -26,8 +26,8 @@
     },
     {
       "regionId": "hollowmere_margin",
-      "settlementNames": ["Hushwater", "Nine-Reed Ferry", "Maren's Low Village"],
-      "hamletNames": ["Eelwise", "Under-Willow", "Red Thread Houses"],
+      "settlementNames": ["Hushwater", "Nine-Reed Ferry", "Maren's Low Village", "Silt Crossing", "Heron's Rest", "Two-Oar Landing"],
+      "hamletNames": ["Eelwise", "Under-Willow", "Red Thread Houses", "Wet Hem", "Bog-Iron Row", "Ferryman's Knot"],
       "primaryRadius": 1, "hamletCount": 2, "roadName": "the willow causeway", "roadTerrain": "reed_causeway",
       "districts": [
         {"id":"ferryward","name":"Ferryward","summary":"Punts knock against oath-posts while travelers negotiate which bank they promised to reach.","terrain":"wet_planks","featureName":"many-notched ferry bell","featureDescription":"Each notch records a crossing; one fresh notch records a boat that has not arrived.","featureGlyph":"b","featureMaterial":"bog_iron","tags":["ferry","gate","water"],"populationPercent":110},
@@ -38,8 +38,8 @@
     },
     {
       "regionId": "stalnaz_highlands",
-      "settlementNames": ["Bluecrown", "Afterlight Stair", "Queen's Resonance"],
-      "hamletNames": ["Frost Third", "Cistern Choir"],
+      "settlementNames": ["Bluecrown", "Afterlight Stair", "Queen's Resonance", "Glass Cistern", "Third Echo", "Palecrown"],
+      "hamletNames": ["Frost Third", "Cistern Choir", "Chime Hollow", "Snow Interval", "Quartz Rest"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the singing stair", "roadTerrain": "resonant_stone",
       "districts": [
         {"id":"echo_gate","name":"Echo Gate","summary":"Porters tune their loads before the mountain is allowed to hear them.","terrain":"echo_stone","featureName":"gate tuning fork","featureDescription":"The blue fork hums the true weight of every burden passing beneath it.","featureGlyph":"Y","featureMaterial":"crystal","tags":["gate","echo","porters"],"populationPercent":105},
@@ -50,8 +50,8 @@
     },
     {
       "regionId": "brall_whaleholds",
-      "settlementNames": ["Deep-Tale Hold", "Harpoon Hall", "Ragna's Whalehouse"],
-      "hamletNames": ["Tarhand Quay", "Third Cask"],
+      "settlementNames": ["Deep-Tale Hold", "Harpoon Hall", "Ragna's Whalehouse", "Storm-Sworn Hold", "Bone-Tale Landing", "Cold Wake"],
+      "hamletNames": ["Tarhand Quay", "Third Cask", "Gull Quay", "Ale-Oath Row", "Nine Fathoms"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the bone-post road", "roadTerrain": "whalebone_cobbles",
       "districts": [
         {"id":"harpoon_quay","name":"Harpoon Quay","summary":"Winches, black rope, and returning boats make every arrival sound heroic.","terrain":"tarred_quay","featureName":"communal harpoon winch","featureDescription":"The drum is broad enough to haul a whale or an especially stubborn version of events.","featureGlyph":"&","featureMaterial":"wood","tags":["harbor","gate","harpoon"],"populationPercent":120},
@@ -62,8 +62,8 @@
     },
     {
       "regionId": "ryolan_racefields",
-      "settlementNames": ["Redwheel", "The Witnessed Finish", "Copper Rein"],
-      "hamletNames": ["Second Lap", "Dust Oath"],
+      "settlementNames": ["Redwheel", "The Witnessed Finish", "Copper Rein", "Broken Axle", "Sunwitness", "First Post"],
+      "hamletNames": ["Second Lap", "Dust Oath", "Loose Girth", "Copper Furlong", "Mare's Word"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the public race-road", "roadTerrain": "packed_red_earth",
       "districts": [
         {"id":"starting_gate","name":"Starting Gate","summary":"Horses, wagers, and sworn witnesses crowd beneath copper starting bars.","terrain":"trampled_red_earth","featureName":"oath-starting frame","featureDescription":"Copper rings tighten when a rider intends to break the declared terms.","featureGlyph":"A","featureMaterial":"copper","tags":["gate","race","oath"],"populationPercent":135},
@@ -74,8 +74,8 @@
     },
     {
       "regionId": "vint_weaveways",
-      "settlementNames": ["Manycolor", "Counterknot", "The Public Loom"],
-      "hamletNames": ["Blue Sleeve", "Nine Dyes"],
+      "settlementNames": ["Manycolor", "Counterknot", "The Public Loom", "Warp-True", "Crimson Row", "The Long Selvage"],
+      "hamletNames": ["Blue Sleeve", "Nine Dyes", "Gold Thread", "Tight Weave", "Undyed Quarter"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the red-thread way", "roadTerrain": "woven_paving",
       "districts": [
         {"id":"cloth_gate","name":"Cloth Gate","summary":"Travel cloaks and tariff banners argue in color before anyone opens their mouth.","terrain":"banner_paving","featureName":"tariff color-frame","featureDescription":"Every imported cloth looks briefly guilty beneath the frame's imperial gray thread.","featureGlyph":"A","featureMaterial":"wood","tags":["gate","cloth","tariff"],"populationPercent":120},
@@ -86,8 +86,8 @@
     },
     {
       "regionId": "threen_canals",
-      "settlementNames": ["Three Locks", "Letterwater", "Copper Serif"],
-      "hamletNames": ["Low Bridge", "Wet Ink"],
+      "settlementNames": ["Three Locks", "Letterwater", "Copper Serif", "Ninth Bridge", "Patient Lock", "Towpath End"],
+      "hamletNames": ["Low Bridge", "Wet Ink", "Reed-Paper", "Quiet Sluice", "Barge Rest"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the lockkeeper walk", "roadTerrain": "canal_brick",
       "districts": [
         {"id":"lock_gate","name":"Lock Gate","summary":"Barges wait under lettering that explains water's obligations in exquisite detail.","terrain":"lockside_brick","featureName":"speaking depth gauge","featureDescription":"Copper numerals announce the water level in a voice borrowed from the last engineer.","featureGlyph":"|","featureMaterial":"copper","tags":["gate","canal","engineering"],"populationPercent":115},
@@ -98,8 +98,8 @@
     },
     {
       "regionId": "monteary_grasslands",
-      "settlementNames": ["White Rein", "Longgrass Hearth", "Mare's Listening"],
-      "hamletNames": ["Foal-Kin", "West Wind"],
+      "settlementNames": ["White Rein", "Longgrass Hearth", "Mare's Listening", "Open Sky", "Two Wells", "Green Mile"],
+      "hamletNames": ["Foal-Kin", "West Wind", "Tall Barley", "Far Fence", "Seed-Keeper's Rest"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the herd road", "roadTerrain": "short_grass_track",
       "districts": [
         {"id":"herd_gate","name":"Herd Gate","summary":"Low rails guide horses gently while humans queue with considerably less dignity.","terrain":"hoof_packed_grass","featureName":"listening rail","featureDescription":"White wood carries the unease of every horse touching the far end.","featureGlyph":"-","featureMaterial":"wood","tags":["gate","horse","herd"],"populationPercent":105},
@@ -110,8 +110,8 @@
     },
     {
       "regionId": "ontrian_clanlands",
-      "settlementNames": ["Many-Hearth", "Ash Cousins", "The Guest Rope"],
-      "hamletNames": ["Old Branch", "Third Ember"],
+      "settlementNames": ["Many-Hearth", "Ash Cousins", "The Guest Rope", "Ninth Fire", "Long Memory", "Stone Bowl"],
+      "hamletNames": ["Old Branch", "Third Ember", "Grey Lineage", "Root-True", "Smoke-Named Camp"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the cousin road", "roadTerrain": "hearthstone_path",
       "districts": [
         {"id":"guest_gate","name":"Guest Gate","summary":"Arrival cords sort strangers into guest, debtor, cousin, danger, and unresolved.","terrain":"cord_marked_stone","featureName":"kinship tying-post","featureDescription":"Old cords tighten or loosen as people state their names beneath them.","featureGlyph":"Y","featureMaterial":"wood","tags":["gate","kinship","guest"],"populationPercent":115},
@@ -122,8 +122,8 @@
     },
     {
       "regionId": "gontark_crags",
-      "settlementNames": ["Seven Warnings", "Shaletooth", "The Black Rope"],
-      "hamletNames": ["No Echo", "Goat Debt"],
+      "settlementNames": ["Seven Warnings", "Shaletooth", "The Black Rope", "Cliff Voice", "Cold Ledge", "Nine Omens"],
+      "hamletNames": ["No Echo", "Goat Debt", "Loose Stone", "Bitter Spring", "Split Knuckle"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the warning path", "roadTerrain": "marked_shale",
       "districts": [
         {"id":"warning_gate","name":"Warning Gate","summary":"Travelers compare charms beneath signs that disagree about the safest direction.","terrain":"warning_shale","featureName":"seventh warning frame","featureDescription":"Six warnings hang visibly; the frame casts the shadow of a seventh.","featureGlyph":"A","featureMaterial":"shale","tags":["gate","warning","curse"],"populationPercent":95},
@@ -134,8 +134,8 @@
     },
     {
       "regionId": "parn_sunroads",
-      "settlementNames": ["Third Well", "Noonshade", "Copper Sun"],
-      "hamletNames": ["White Scarf", "Long Horizon"],
+      "settlementNames": ["Third Well", "Noonshade", "Copper Sun", "Ninth Oasis", "Road-Born", "Far Well"],
+      "hamletNames": ["White Scarf", "Long Horizon", "Bright Ash", "Dune Rest", "Star-Guided Camp"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the caravan sun-road", "roadTerrain": "sun_baked_road",
       "districts": [
         {"id":"caravan_gate","name":"Caravan Gate","summary":"Shade contracts, water tallies, and arriving animals pass beneath mirrored sun-cloths.","terrain":"gate_sandstone","featureName":"sun-debt mirror","featureDescription":"The copper face shows how much noon each traveler still owes the road.","featureGlyph":"O","featureMaterial":"copper","tags":["gate","caravan","sun"],"populationPercent":115},
@@ -146,8 +146,8 @@
     },
     {
       "regionId": "rentacosta_harbor",
-      "settlementNames": ["Bell-Shell Harbor", "Lowtide Exchange", "Black Ink Quay"],
-      "hamletNames": ["Pearl Ear", "Second Voice"],
+      "settlementNames": ["Bell-Shell Harbor", "Lowtide Exchange", "Black Ink Quay", "Deep Draft", "Ninth Pier", "Salt Ledger"],
+      "hamletNames": ["Pearl Ear", "Second Voice", "Gull Market", "Quay-Born Row", "Brine Rest"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the bell-shell coastway", "roadTerrain": "shell_cobbles",
       "districts": [
         {"id":"tide_gate","name":"Tide Gate","summary":"Pilots sing arrivals through shell arches while customs clerks race the returning water.","terrain":"tide_wet_stone","featureName":"channel bell arch","featureDescription":"Different shells ring according to which hidden channel is currently honest.","featureGlyph":"A","featureMaterial":"shell","tags":["gate","tide","pilot"],"populationPercent":125},
@@ -158,8 +158,8 @@
     },
     {
       "regionId": "wild_border",
-      "settlementNames": ["Festival-Left", "No Fixed Door", "Tomorrow's Garden"],
-      "hamletNames": ["Late Shadow", "Wrong Season"],
+      "settlementNames": ["Festival-Left", "No Fixed Door", "Tomorrow's Garden", "Second Moon", "Backward Path", "Sugar Ghost"],
+      "hamletNames": ["Late Shadow", "Wrong Season", "Unlit Window", "Off-Key", "Nine Evenings"],
       "primaryRadius": 1, "hamletCount": 1, "roadName": "the path that answers", "roadTerrain": "responsive_flowers",
       "districts": [
         {"id":"moving_gate","name":"Moving Gate","summary":"A flower arch relocates between arrivals and insists this has always been the entrance.","terrain":"gate_blossom","featureName":"migratory flower arch","featureDescription":"Roots gather their soil into little bags whenever the road grows too certain.","featureGlyph":"A","featureMaterial":"living_wood","tags":["gate","flowers","moving"],"populationPercent":75},
