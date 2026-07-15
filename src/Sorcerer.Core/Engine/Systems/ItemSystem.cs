@@ -114,7 +114,7 @@ public sealed class ItemSystem
             .Where(entity => entity.TryGet<InventoryComponent>(out var held)
                 && held.Items.Any(pair => pair.Value > 0))
             .Where(entity => entity.TryGet<PositionComponent>(out var position)
-                && GameEngine.Distance(origin, position.Position) <= 1)
+                && GameEngine.StepDistance(origin, position.Position) <= 1)
             .OrderBy(entity => entity.Id.Value)
             .ToArray();
         foreach (var corpse in corpses)
@@ -1050,9 +1050,9 @@ public sealed class ItemSystem
         var candidates = _state.Entities.Values
             .Where(predicate)
             .Where(entity => entity.TryGet<PositionComponent>(out var position)
-                && GameEngine.Distance(origin, position.Position) <= range)
+                && GameEngine.StepDistance(origin, position.Position) <= range)
             .OrderBy(entity => entity.TryGet<PositionComponent>(out var position)
-                ? GameEngine.Distance(origin, position.Position)
+                ? GameEngine.StepDistance(origin, position.Position)
                 : int.MaxValue)
             .ThenBy(entity => entity.Id.Value)
             .ToArray();

@@ -903,6 +903,13 @@ public sealed class GameEngine
     public static int Distance(GridPoint a, GridPoint b) =>
         Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
 
+    /// <summary>The number of moves between two tiles under 8-directional movement (Chebyshev
+    /// distance). This is the correct "reach": a diagonally adjacent tile is one step away, so
+    /// interaction ranges (pick up, talk, examine, open, loot) use this rather than the Manhattan
+    /// <see cref="Distance"/>, which would call a single diagonal step "2 tiles" and unreachable.</summary>
+    public static int StepDistance(GridPoint a, GridPoint b) =>
+        Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+
     private static string PressureLabel(FactionRecord faction)
     {
         if (!faction.Role.Equals("empire_bloc", StringComparison.OrdinalIgnoreCase))

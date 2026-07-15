@@ -104,7 +104,7 @@ public sealed partial class InteractionSystem
 
         var nearest = candidates
             .Select(entity => new { Entity = entity, Position = entity.Get<PositionComponent>().Position })
-            .OrderBy(match => GameEngine.Distance(origin, match.Position))
+            .OrderBy(match => GameEngine.StepDistance(origin, match.Position))
             .ThenBy(match => match.Entity.Id.Value)
             .FirstOrDefault();
         if (nearest is null)
@@ -112,7 +112,9 @@ public sealed partial class InteractionSystem
             return null;
         }
 
-        var distance = GameEngine.Distance(origin, nearest.Position);
+        // Report reach in steps (Chebyshev), matching the reach checks: a diagonal neighbor reads
+        // as "1 tile", not "2 tiles", so the hint never contradicts what the player can reach.
+        var distance = GameEngine.StepDistance(origin, nearest.Position);
         var direction = CompassDirection(origin, nearest.Position);
         var tiles = distance == 1 ? "tile" : "tiles";
         return $"{nearest.Entity.Name} is out of reach - {distance} {tiles} {direction}.";

@@ -685,5 +685,5 @@ public sealed partial class InteractionSystem
         NormalizeId(value, fallback);
 
     private static int InteractionDistance(GridPoint a, GridPoint b) =>
-        Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+        GameEngine.StepDistance(a, b);
 }
