@@ -183,7 +183,8 @@ public static class RegionCatalog
             ReadString(root, "voiceSummary", ReadString(root, "voice_summary", "")),
             ReadStringList(root, "ambientLines", "ambient_lines"),
             ReadPlacement(root),
-            ReadPropGrammar(root));
+            ReadPropGrammar(root),
+            ReadGroundLoot(root));
 
     private static IReadOnlyList<RegionAffordanceCard> ReadAffordances(JsonElement root)
     {
@@ -212,6 +213,32 @@ public static class RegionCatalog
             ReadInt(value, "anchorX", ReadInt(value, "anchor_x", 0)),
             ReadInt(value, "anchorY", ReadInt(value, "anchor_y", 0)),
             Math.Max(0, ReadInt(value, "seedJitter", ReadInt(value, "seed_jitter", 0))));
+    }
+
+    private static RegionGroundLootDefinition? ReadGroundLoot(JsonElement root)
+    {
+        var value = root.TryGetProperty("groundLoot", out var camelValue)
+            ? camelValue
+            : root.TryGetProperty("ground_loot", out var snakeValue)
+                ? snakeValue
+                : default;
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var min = Math.Clamp(ReadInt(value, "min", 0), 0, 8);
+        var max = Math.Clamp(ReadInt(value, "max", Math.Max(2, min)), min, 8);
+        var goldMin = Math.Max(1, ReadInt(value, "goldMin", ReadInt(value, "gold_min", 3)));
+        var goldMax = Math.Max(goldMin, ReadInt(value, "goldMax", ReadInt(value, "gold_max", 10)));
+        return new RegionGroundLootDefinition(
+            min,
+            max,
+            Math.Clamp(ReadInt(value, "emptyChance", ReadInt(value, "empty_chance", 25)), 0, 100),
+            Math.Clamp(ReadInt(value, "usefulChance", ReadInt(value, "useful_chance", 20)), 0, 100),
+            goldMin,
+            goldMax,
+            Math.Clamp(ReadInt(value, "nearPropBias", ReadInt(value, "near_prop_bias", 70)), 0, 100));
     }
 
     private static RegionPropGrammarDefinition? ReadPropGrammar(JsonElement root)

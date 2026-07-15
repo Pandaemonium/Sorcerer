@@ -566,46 +566,8 @@ public sealed class GenerationSystem
         ApplyGeneratedTerrainDetails(generatedState, region, realm, entryDirection, deltas);
         ApplyGeneratedPlaceTerrain(generatedState, region, place, deltas);
         SpawnPlaceFeature(generatedState, region, place, deltas);
-        SpawnGeneratedProps(generatedState, region, realm, place, entryDirection, deltas);
-
-        var curio = CurioGenerator.Generate(region, realm, _state.Rng);
-        var curioDefinition = curio.ToDefinition();
-        var curioApplied = TryApplyGeneratedZoneConsequence(
-            generatedState,
-            WorldConsequence.SpawnItem(
-                "generation",
-                curio.Name,
-                (_state.Width / 2) + 2,
-                _state.Height / 2,
-                prefix: "zone_item",
-                glyph: curioDefinition.Glyph,
-                itemType: curio.Id,
-                material: curio.Material,
-                tags: curio.Tags,
-                quantity: 1,
-                value: curio.Value,
-                stackPolicy: curioDefinition.StackPolicy,
-                useProfile: curioDefinition.UseProfile,
-                equipmentSlot: curioDefinition.EquipmentSlot,
-                description: curio.Description,
-                visibility: WorldConsequenceVisibility.Hidden,
-                evidence: curio.Description,
-                reason: "Procedural zone generation created an ordinary item through the shared spawn lifecycle.",
-                operation: "generateZoneItem",
-                emitMessage: false,
-                details: new Dictionary<string, object?>
-                {
-                    ["zoneId"] = zoneId,
-                    ["regionId"] = region.Id,
-                    ["realmId"] = region.RealmId,
-                }),
-            deltas,
-            "zone item");
-        if (curioApplied.Applied)
-        {
-            _itemCatalog.Add(curioDefinition);
-        }
-
+        var propPoints = SpawnGeneratedProps(generatedState, region, realm, place, entryDirection, deltas);
+        SpawnGeneratedItems(generatedState, region, realm, propPoints, deltas);
         PopulateZone(generatedState, region, realm, place, entryDirection, deltas);
         if (region.Id.Equals("vigovian_capital", StringComparison.OrdinalIgnoreCase)
             && place.District?.Id.Equals("inner_court", StringComparison.OrdinalIgnoreCase) == true
@@ -864,6 +826,9 @@ public sealed class GenerationSystem
     private void CommitGeneratedZoneState(GameState generatedState)
     {
         _state.NextEntitySerial = generatedState.NextEntitySerial;
+        // Overwrites _state.Rng with the detached clone's state, reverting any draws made on
+        // _state.Rng during generation. Generation content must therefore roll on stable
+        // per-zone seeds (WorldRoll.StableSeed) or on generatedState.Rng, never on _state.Rng.
         _state.Rng = new DeterministicRng(generatedState.Rng.State);
     }
 
@@ -916,7 +881,7 @@ public sealed class GenerationSystem
         }
     }
 
-    private void SpawnGeneratedProps(
+    private IReadOnlyList<GridPoint> SpawnGeneratedProps(
         GameState generatedState,
         RegionDefinition region,
         RealmProfile realm,
@@ -927,8 +892,7 @@ public sealed class GenerationSystem
         var batch = RegionPropGenerator.Generate(region, realm, _state.Seed, generatedState.CurrentZoneId);
         if (region.Props is null)
         {
-            SpawnFallbackGeneratedProp(generatedState, region, realm, deltas);
-            return;
+            return SpawnFallbackGeneratedProp(generatedState, region, realm, deltas);
         }
 
         var positionRng = new DeterministicRng(WorldRoll.StableSeed(
@@ -937,6 +901,7 @@ public sealed class GenerationSystem
             region.Id,
             "prop_positions"));
         var reserved = PropReservedPoints(entryDirection);
+        var placedPoints = new List<GridPoint>();
         var ensembleAnchors = new Dictionary<string, GridPoint>(StringComparer.OrdinalIgnoreCase);
         foreach (var prop in batch.Props)
         {
@@ -1009,6 +974,89 @@ public sealed class GenerationSystem
             if (applied.Applied)
             {
                 reserved.Add(point.Value);
+                placedPoints.Add(point.Value);
+            }
+        }
+
+        return placedPoints;
+    }
+
+    private void SpawnGeneratedItems(
+        GameState generatedState,
+        RegionDefinition region,
+        RealmProfile realm,
+        IReadOnlyList<GridPoint> propPoints,
+        List<StateDelta> deltas)
+    {
+        var lootItems = ZoneLootGenerator.Generate(region, realm, _itemCatalog, _state.Seed, generatedState.CurrentZoneId);
+        if (lootItems.Count == 0)
+        {
+            return;
+        }
+
+        var positionRng = new DeterministicRng(WorldRoll.StableSeed(
+            _state.Seed,
+            generatedState.CurrentZoneId,
+            region.Id,
+            "item_positions"));
+        var nearPropBias = (region.GroundLoot ?? new RegionGroundLootDefinition()).NearPropBiasPercent;
+        // Items don't block movement, so FindOpenNear won't see earlier loot as occupied on its
+        // own; track placed tiles here to keep items from stacking on one another.
+        var occupied = generatedState.Entities.Values
+            .Where(entity => entity.TryGet<PositionComponent>(out _)
+                && entity.TryGet<PhysicalComponent>(out var physical)
+                && physical.BlocksMovement)
+            .Select(entity => entity.Get<PositionComponent>().Position)
+            .ToHashSet();
+        foreach (var item in lootItems)
+        {
+            var nearProp = propPoints.Count > 0 && positionRng.NextInt(0, 100) < nearPropBias;
+            var origin = nearProp
+                ? propPoints[positionRng.NextInt(0, propPoints.Count)]
+                : RandomInteriorPoint(generatedState, positionRng);
+            var point = FindOpenNear(origin, occupied, generatedState.BlockingTerrain);
+            if (point is null)
+            {
+                continue;
+            }
+
+            var applied = TryApplyGeneratedZoneConsequence(
+                generatedState,
+                WorldConsequence.SpawnItem(
+                    "generation",
+                    item.Definition.Name,
+                    point.Value.X,
+                    point.Value.Y,
+                    prefix: "zone_item",
+                    glyph: item.Definition.Glyph,
+                    itemType: item.Definition.Id,
+                    material: item.Definition.Material,
+                    tags: item.Definition.Tags,
+                    quantity: item.Quantity,
+                    value: item.Definition.Value,
+                    stackPolicy: item.Definition.StackPolicy,
+                    useProfile: item.Definition.UseProfile,
+                    equipmentSlot: item.Definition.EquipmentSlot,
+                    description: item.Description,
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    evidence: item.Description,
+                    reason: "Procedural zone generation created an ordinary item through the shared spawn lifecycle.",
+                    operation: "generateZoneItem",
+                    emitMessage: false,
+                    details: new Dictionary<string, object?>
+                    {
+                        ["zoneId"] = generatedState.CurrentZoneId,
+                        ["regionId"] = region.Id,
+                        ["realmId"] = region.RealmId,
+                        ["lootKind"] = item.LootKind,
+                        ["nearProp"] = nearProp,
+                    }),
+                deltas,
+                "zone item");
+            if (applied.Applied)
+            {
+                _itemCatalog.Add(item.Definition);
+                occupied.Add(point.Value);
             }
         }
     }
@@ -1238,7 +1286,7 @@ public sealed class GenerationSystem
         region.Interiors?.Definitions.FirstOrDefault(definition =>
             definition.Id.Equals(interiorId, StringComparison.OrdinalIgnoreCase));
 
-    private void SpawnFallbackGeneratedProp(
+    private IReadOnlyList<GridPoint> SpawnFallbackGeneratedProp(
         GameState generatedState,
         RegionDefinition region,
         RealmProfile realm,
@@ -1251,13 +1299,14 @@ public sealed class GenerationSystem
             .Append("generated")
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        TryApplyGeneratedZoneConsequence(
+        var fallbackPoint = new GridPoint(_state.Width / 2, _state.Height / 2);
+        var applied = TryApplyGeneratedZoneConsequence(
             generatedState,
             WorldConsequence.SpawnFixture(
                 "generation",
                 texture.Name,
-                _state.Width / 2,
-                _state.Height / 2,
+                fallbackPoint.X,
+                fallbackPoint.Y,
                 prefix: "zone_prop",
                 glyph: '&',
                 palette: "fixture",
@@ -1280,6 +1329,7 @@ public sealed class GenerationSystem
                 }),
             deltas,
             "zone feature");
+        return applied.Applied ? new[] { fallbackPoint } : Array.Empty<GridPoint>();
     }
 
     private HashSet<GridPoint> PropReservedPoints(Direction entryDirection)

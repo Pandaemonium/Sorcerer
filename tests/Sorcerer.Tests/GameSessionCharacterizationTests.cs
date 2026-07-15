@@ -8641,9 +8641,16 @@ public sealed class GameSessionCharacterizationTests
         await first.ExecuteAsync(new TravelCommand(Direction.East));
         await second.ExecuteAsync(new TravelCommand(Direction.East));
 
-        var firstCurio = Assert.Single(first.Engine.State.Entities.Values, IsGeneratedCurio);
-        var secondCurio = Assert.Single(second.Engine.State.Entities.Values, IsGeneratedCurio);
-        Assert.Equal(firstCurio.Name, secondCurio.Name);
+        var firstCurios = first.Engine.State.Entities.Values.Where(IsGeneratedCurio)
+            .OrderBy(entity => entity.Id.Value, StringComparer.Ordinal)
+            .ToArray();
+        var secondCurios = second.Engine.State.Entities.Values.Where(IsGeneratedCurio)
+            .OrderBy(entity => entity.Id.Value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.NotEmpty(firstCurios);
+        Assert.Equal(firstCurios.Select(entity => entity.Name), secondCurios.Select(entity => entity.Name));
+        var firstCurio = firstCurios[0];
+        var secondCurio = secondCurios[0];
         Assert.Equal(firstCurio.Get<ItemComponent>().Value, secondCurio.Get<ItemComponent>().Value);
         Assert.Contains("curio", firstCurio.Get<TagsComponent>().Tags);
         Assert.True(firstCurio.Has<DescriptionComponent>());

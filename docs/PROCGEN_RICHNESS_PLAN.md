@@ -57,9 +57,15 @@ settlements than Qud favors. Companion to [EMERGENT_WORLD.md](EMERGENT_WORLD.md)
   every rolled realm has a reachable, seed-jittered regional anchor.
 - `WorldRoll` rolls realm status/ruler/grip, including the one-free-rival old-kingdom rule, and
   atlas, travel, resolver, dialogue, generation, and population all quote that shared roll.
-- A generated zone now gets region terrain, one deterministic curio, a variable regional prop
-  batch (including possible empty/dense zones and ensembles), and a region-authored population
-  sample. Settlement centers produce crowds, shoulders thin out, and wilderness commonly has no
+- A generated zone now gets region terrain, a region-scaled ground-loot pass, a variable regional
+  prop batch (including possible empty/dense zones and ensembles), and a region-authored population
+  sample. Ground loot (implemented 2026-07-15) rolls 0–N items per zone from the region's
+  `groundLoot` block in `content/regions/*.json` — mostly generated curios that genuinely rotate
+  form/texture/material, occasionally a useful find (gold cache, regional ware, or authored catalog
+  item) — on the stable per-zone seeds `"ground_loot"` (content) and `"item_positions"` (placement),
+  with placement biased toward prop positions and resolved through the shared open-tile search.
+  Imperial regions run sparse (confiscation culture), folk/wild regions richer, and zones can
+  legitimately be empty. Settlement centers produce crowds, shoulders thin out, and wilderness commonly has no
   people; every resident has a forged local name, archetype, want, and knowledge, with selected
   roles carrying wares or services.
 - Playtest evidence (FEEL_LOG [21]): the capital is "at least 9 identical zones, each with

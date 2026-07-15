@@ -64,6 +64,15 @@ public sealed record RegionPropGrammarDefinition(
     IReadOnlyList<RegionPropHookDefinition>? Hooks = null,
     IReadOnlyList<RegionPropEnsembleDefinition>? Ensembles = null);
 
+public sealed record RegionGroundLootDefinition(
+    int Min = 0,
+    int Max = 2,
+    int EmptyChancePercent = 25,
+    int UsefulChancePercent = 20,
+    int GoldMin = 3,
+    int GoldMax = 10,
+    int NearPropBiasPercent = 70);
+
 public sealed record RegionPopulationCenterDefinition(int X, int Y);
 
 public sealed record RegionNameForgeDefinition(
@@ -198,6 +207,7 @@ public sealed record RegionDefinition(
     IReadOnlyList<string>? AmbientLines = null,
     RegionMapPlacement? Placement = null,
     RegionPropGrammarDefinition? Props = null,
+    RegionGroundLootDefinition? GroundLoot = null,
     RegionPopulationGrammarDefinition? Population = null,
     RegionSettlementGrammarDefinition? Settlement = null,
     RegionInteriorGrammarDefinition? Interiors = null);

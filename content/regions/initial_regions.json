@@ -96,6 +96,7 @@
   "regions": [
     {
       "id": "imperial_encounter",
+      "groundLoot": {"min": 0, "max": 1, "emptyChance": 45, "usefulChance": 15},
       "name": "Marble Containment Yard",
       "realmId": "empire",
       "traditionId": "charter_geometry",
@@ -158,6 +159,7 @@
     },
     {
       "id": "vigovian_capital",
+      "groundLoot": {"min": 0, "max": 1, "emptyChance": 50, "usefulChance": 15},
       "name": "Vigovian Capital",
       "realmId": "empire",
       "traditionId": "charter_geometry",
@@ -233,6 +235,7 @@
     },
     {
       "id": "hollowmere_margin",
+      "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 25},
       "name": "Hollowmere Margin",
       "realmId": "hollowmere",
       "traditionId": "reed_memory",
@@ -308,6 +311,7 @@
     },
     {
       "id": "stalnaz_highlands",
+      "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 25},
       "name": "Stalnazan Singing Heights",
       "realmId": "stalnaz",
       "traditionId": "crystal_song",
@@ -367,6 +371,7 @@
     },
     {
       "id": "brall_whaleholds",
+      "groundLoot": {"min": 1, "max": 2, "emptyChance": 20, "usefulChance": 30},
       "name": "Brall Whaleholds",
       "realmId": "brall",
       "traditionId": "bone_song",
@@ -426,6 +431,7 @@
     },
     {
       "id": "ryolan_racefields",
+      "groundLoot": {"min": 1, "max": 2, "emptyChance": 20, "usefulChance": 30},
       "name": "Ryolan Racefields",
       "realmId": "ryolan",
       "traditionId": "blood_oath",
@@ -485,6 +491,7 @@
     },
     {
       "id": "vint_weaveways",
+      "groundLoot": {"min": 1, "max": 2, "emptyChance": 20, "usefulChance": 30},
       "name": "Vintan Weaveways",
       "realmId": "vint",
       "traditionId": "woven_thread",
@@ -545,6 +552,7 @@
     },
     {
       "id": "threen_canals",
+      "groundLoot": {"min": 1, "max": 2, "emptyChance": 20, "usefulChance": 30},
       "name": "Canals of Threen",
       "realmId": "threen",
       "traditionId": "artisan_letters",
@@ -663,6 +671,7 @@
     },
     {
       "id": "ontrian_clanlands",
+      "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 25},
       "name": "Ontrian Clanlands",
       "realmId": "ontria",
       "traditionId": "ancestor_culture",
@@ -722,6 +731,7 @@
     },
     {
       "id": "gontark_crags",
+      "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 25},
       "name": "Gontark Crags",
       "realmId": "gontark",
       "traditionId": "curse_craft",
@@ -781,6 +791,7 @@
     },
     {
       "id": "parn_sunroads",
+      "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 30},
       "name": "Parn Sunroads",
       "realmId": "parn",
       "traditionId": "sound_ink",
@@ -840,6 +851,7 @@
     },
     {
       "id": "rentacosta_harbor",
+      "groundLoot": {"min": 1, "max": 2, "emptyChance": 20, "usefulChance": 30, "goldMax": 14},
       "name": "Rentacosta Harbor",
       "realmId": "rentacosta",
       "traditionId": "tide_trade",
