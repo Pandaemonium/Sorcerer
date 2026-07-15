@@ -150,11 +150,55 @@ public sealed partial class InteractionSystem
         var candidates = NearbyCandidates(
             entity => entity.Id != State.ControlledEntityId && entity.Has<ActorComponent>(),
             range: 2);
-        return candidates.FirstOrDefault(entity =>
-            normalized.Contains(NormalizeSearchText(entity.Id.Value), StringComparison.OrdinalIgnoreCase)
-            || EntityNameTokens(entity).Any(token => normalized.Contains(token, StringComparison.OrdinalIgnoreCase))
-            || (entity.TryGet<TagsComponent>(out var tags)
-                && tags.Tags.Any(tag => normalized.Contains(NormalizeSearchText(tag), StringComparison.OrdinalIgnoreCase))));
+
+        // The addressee is whoever the player names FIRST: "Nim, Lio sent me" addresses Nim, not
+        // the Lio mentioned as the sender. Rank candidates by the earliest position their name/id
+        // appears, and only fall back to tag mentions when no name matched, so a broad faction tag
+        // never outranks an actual name.
+        return EarliestMention(candidates, normalized, byName: true)
+            ?? EarliestMention(candidates, normalized, byName: false);
+    }
+
+    private static Entity? EarliestMention(IReadOnlyList<Entity> candidates, string normalizedText, bool byName)
+    {
+        Entity? best = null;
+        var bestIndex = int.MaxValue;
+        foreach (var entity in candidates)
+        {
+            var keys = byName
+                ? new[] { NormalizeSearchText(entity.Id.Value) }.Concat(EntityNameTokens(entity))
+                : entity.TryGet<TagsComponent>(out var tags)
+                    ? tags.Tags.Select(NormalizeSearchText)
+                    : Enumerable.Empty<string>();
+            var index = EarliestKeyIndex(normalizedText, keys);
+            if (index >= 0 && index < bestIndex)
+            {
+                best = entity;
+                bestIndex = index;
+            }
+        }
+
+        return best;
+    }
+
+    private static int EarliestKeyIndex(string normalizedText, IEnumerable<string> keys)
+    {
+        var earliest = -1;
+        foreach (var key in keys)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            var index = normalizedText.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0 && (earliest < 0 || index < earliest))
+            {
+                earliest = index;
+            }
+        }
+
+        return earliest;
     }
 
     private static string NormalizeDialoguePlayerText(string text, Entity target) =>
