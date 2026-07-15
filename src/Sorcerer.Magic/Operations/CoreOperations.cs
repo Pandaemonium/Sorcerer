@@ -280,7 +280,10 @@ public sealed class AddStatusOperation : OperationBase
             "addStatus",
             new[] { "status", "applyStatus" },
             "Apply a timed status to actors or objects.",
-            "Use status ids as reusable mechanics with vivid names. Fields: target, status, displayName, duration.")
+            "status must be a canonical mechanical id, not a flavor name: rooted (bound/immobilized, cannot move or act), "
+                + "frozen (encased, cannot move or act), stunned (dazed, skips its turn), burning or poisoned (loses health each turn), "
+                + "concealed (hidden from sight), regenerating (heals each turn), revealed. Put the vivid name in displayName, e.g. "
+                + "status \"rooted\" with displayName \"Legs Fused to Marble\". Fields: target, status, displayName, duration.")
     {
     }
 

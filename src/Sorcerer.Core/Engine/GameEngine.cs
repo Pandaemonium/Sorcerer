@@ -275,13 +275,21 @@ public sealed class GameEngine
                 continue;
             }
 
-            var imminent = distance <= 1;
+            var (held, subdued) = HostileRestraint(entity);
+            // A hostile the shared AI cannot act with (rooted/frozen/stunned) will neither advance
+            // nor strike this turn, so it is not imminent and the telegraph must say so instead of
+            // falsely reading "closing in" (GameView: the telegraph reflects changed state).
+            var imminent = distance <= 1 && !subdued;
             var direction = WorldPlaceGraph.DirectionText(
                 entityPosition.Position.X - origin.X,
                 entityPosition.Position.Y - origin.Y);
-            var telegraph = imminent
-                ? $"in striking range to the {direction} — it strikes if you hold position"
-                : $"closing in from the {direction}, {distance} tiles away";
+            var telegraph = held
+                ? $"bound in place to the {direction}, {distance} tiles away — it cannot move or strike"
+                : subdued
+                    ? $"reeling to the {direction}, {distance} tiles away — it cannot act"
+                    : imminent
+                        ? $"in striking range to the {direction} — it strikes if you hold position"
+                        : $"closing in from the {direction}, {distance} tiles away";
             threats.Add(new ThreatCard(entity.Id.Value, entity.Name, distance, imminent, telegraph));
         }
 
@@ -289,6 +297,31 @@ public sealed class GameEngine
             .OrderBy(threat => threat.Distance)
             .ThenBy(threat => threat.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    /// <summary>Whether an active status leaves a hostile unable to advance (BlocksMovement) or
+    /// unable to act at all (BlocksAction) this turn, so the threat telegraph can stay honest.</summary>
+    private (bool Held, bool Subdued) HostileRestraint(Entity entity)
+    {
+        if (!entity.TryGet<StatusContainerComponent>(out var container))
+        {
+            return (false, false);
+        }
+
+        var held = false;
+        var subdued = false;
+        foreach (var status in container.Statuses)
+        {
+            if (status.ExpiresTurn is not null && status.ExpiresTurn <= State.Turn)
+            {
+                continue;
+            }
+
+            held |= _statusRegistry.BlocksMovement(status.Id);
+            subdued |= _statusRegistry.BlocksAction(status.Id);
+        }
+
+        return (held, subdued);
     }
 
     public ActionResult Map(int radius = 8)

@@ -81,6 +81,7 @@ public sealed class StatusRegistry
                 "bound",
                 "sticky_webbed",
                 "immobilized",
+                "immobile",
                 "restrained",
                 "pinned",
                 "anchored",
@@ -93,11 +94,30 @@ public sealed class StatusRegistry
                 "boneless",
                 "crumpled",
                 "collapsed",
+                // Physical binding verbs a resolver reaches for when a spell locks feet/limbs in
+                // place. Chosen so none is a substring of another status word (e.g. "fused" is
+                // deliberately omitted because it is a substring of "confused").
+                "welded",
+                "cemented",
+                "mortared",
+                "shackled",
+                "manacled",
+                "cuffed",
+                "clamped",
+                "encased",
+                "entombed",
+                "glued",
+                "stuck",
+                "trapped",
+                // Safe to include even though "fused" is a substring of "confused": "confused" is
+                // a direct alias of stunned below, so it resolves before the substring pass, and
+                // in any compound ("confused_...") the longer "confused" wins the substring race.
+                "fused",
             },
             BlocksMovement: true,
             BlocksAction: true,
             DefaultDuration: 3));
-        registry.Add(new StatusDefinition("stunned", "stunned", new[] { "asleep", "dazed", "bewildered", "disoriented", "staggered" }, BlocksAction: true, DefaultDuration: 1));
+        registry.Add(new StatusDefinition("stunned", "stunned", new[] { "asleep", "dazed", "bewildered", "confused", "disoriented", "staggered" }, BlocksAction: true, DefaultDuration: 1));
         registry.Add(new StatusDefinition(
             "concealed",
             "concealed",
