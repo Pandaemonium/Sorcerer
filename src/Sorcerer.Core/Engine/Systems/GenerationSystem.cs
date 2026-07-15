@@ -568,6 +568,7 @@ public sealed class GenerationSystem
         SpawnPlaceFeature(generatedState, region, place, deltas);
         var propPoints = SpawnGeneratedProps(generatedState, region, realm, place, entryDirection, deltas);
         SpawnGeneratedItems(generatedState, region, realm, propPoints, deltas);
+        SpawnAmbientEncounter(generatedState, region, place, deltas);
         PopulateZone(generatedState, region, realm, place, entryDirection, deltas);
         if (region.Id.Equals("vigovian_capital", StringComparison.OrdinalIgnoreCase)
             && place.District?.Id.Equals("inner_court", StringComparison.OrdinalIgnoreCase) == true
@@ -979,6 +980,192 @@ public sealed class GenerationSystem
         }
 
         return placedPoints;
+    }
+
+    // Encounter ingredients are process-wide authored content, cached like RegionCatalog.
+    private static readonly Lazy<EncounterTemplateCatalog> DefaultEncounters = new(EncounterTemplateCatalog.LoadDefault);
+
+    /// <summary>
+    /// Unprompted encounters (IMPLEMENTATION_PLAN §3.4, ambient side): a region that opts in
+    /// via its "encounters" block occasionally stages a guarded prize — a coin cache under
+    /// watch, or a keeper carrying it — using the same assembler quest objectives use. Skips
+    /// the opening zone, settlements, and zones a bound promise already claims so staged
+    /// payoffs never pile up.
+    /// </summary>
+    private void SpawnAmbientEncounter(
+        GameState generatedState,
+        RegionDefinition region,
+        WorldPlaceProfile place,
+        List<StateDelta> deltas)
+    {
+        var chance = region.Encounters?.AmbientChancePercent ?? 0;
+        var zoneId = generatedState.CurrentZoneId;
+        if (chance <= 0
+            || zoneId.Equals("0,0", StringComparison.OrdinalIgnoreCase)
+            || place.Settlement is not null
+            || _state.PromiseLedger.Promises.Any(promise =>
+                promise.Status.Equals("bound", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(promise.ClaimedPlace, zoneId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var rng = new DeterministicRng(WorldRoll.StableSeed(_state.Seed, zoneId, region.Id, "ambient_encounter"));
+        if (rng.NextInt(0, 100) >= chance)
+        {
+            return;
+        }
+
+        var prizeName = "hidden coin cache";
+        var request = new EncounterRequest(
+            _state.Seed,
+            zoneId,
+            "ambient",
+            "ambient",
+            region,
+            prizeName,
+            PromiseSalience: 3,
+            FactionPressure: _state.Factions.IsHostile(region.RealmId, "player") ? 1 : 0,
+            InteriorAvailable: false,
+            ExcludedKinds: new[] { EncounterAssembler.KindRestrictedSite, EncounterAssembler.KindRivalClaimant });
+        var plan = EncounterAssembler.Assemble(request, DefaultEncounters.Value);
+        if (plan is null)
+        {
+            return;
+        }
+
+        var prizePosition = FindGeneratedOpenPoint(
+            generatedState,
+            RandomInteriorPoint(generatedState, rng));
+        var goldQuantity = 4 + (plan.Tier * 4) + rng.NextInt(0, 5);
+        var details = new Dictionary<string, object?>
+        {
+            ["zoneId"] = zoneId,
+            ["regionId"] = region.Id,
+            ["realmId"] = region.RealmId,
+            ["encounterId"] = plan.ArchetypeId,
+            ["encounterKind"] = plan.Kind,
+            ["encounterTier"] = plan.Tier,
+            ["encounterFaction"] = plan.FactionId,
+            ["ambient"] = true,
+        };
+        var keeperSpec = plan.ObjectivePlacement == "keeper_inventory"
+            ? plan.Casts.FirstOrDefault(spec => spec.HoldsObjective)
+            : null;
+        string? prizeHolderId = null;
+        if (keeperSpec is null)
+        {
+            var prizeApplied = TryApplyGeneratedZoneConsequence(
+                generatedState,
+                WorldConsequence.SpawnItem(
+                    "generation",
+                    prizeName,
+                    prizePosition.X,
+                    prizePosition.Y,
+                    prefix: "zone_item",
+                    glyph: '$',
+                    itemType: "gold",
+                    material: "gold",
+                    tags: new[] { "item", "coin", "cache", "guarded" },
+                    quantity: goldQuantity,
+                    value: 1,
+                    stackPolicy: "commodity",
+                    useProfile: "inert",
+                    description: $"A stash of coin somebody in {region.Name} meant to come back for.",
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    evidence: plan.CanonText,
+                    reason: "Ambient encounter generation staged a guarded prize through the shared spawn lifecycle.",
+                    operation: "generateZoneItem",
+                    emitMessage: false,
+                    details: details),
+                deltas,
+                "ambient encounter prize");
+            if (!prizeApplied.Applied)
+            {
+                return;
+            }
+        }
+
+        foreach (var spec in plan.Casts)
+        {
+            var desired = new GridPoint(
+                Math.Clamp(prizePosition.X + spec.Offset.X, 1, generatedState.Width - 2),
+                Math.Clamp(prizePosition.Y + spec.Offset.Y, 1, generatedState.Height - 2));
+            var castPosition = FindGeneratedOpenPoint(generatedState, desired);
+            var castApplied = TryApplyGeneratedZoneConsequence(
+                generatedState,
+                WorldConsequence.SpawnEntity(
+                    "generation",
+                    spec.Name,
+                    castPosition.X,
+                    castPosition.Y,
+                    prefix: "encounter_cast",
+                    glyph: spec.Glyph,
+                    faction: spec.FactionId,
+                    hp: spec.HitPoints,
+                    attack: spec.Attack,
+                    tags: spec.Tags.Concat(new[] { "npc", "encounter_cast", "ambient" })
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray(),
+                    material: "flesh",
+                    roles: spec.Roles.Concat(new[] { "encounter" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    controllerKind: "ai",
+                    aiPolicyId: spec.AiPolicyId,
+                    aiParameters: spec.AiPolicyId.Equals("guard", StringComparison.OrdinalIgnoreCase)
+                        ? new Dictionary<string, object?> { ["anchorX"] = prizePosition.X, ["anchorY"] = prizePosition.Y }
+                        : null,
+                    summoned: false,
+                    description: $"{spec.Title}. {spec.WantText}",
+                    interactableVerbs: spec.Verbs,
+                    bodyVigor: 3,
+                    includeMemory: true,
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    evidence: plan.CanonText,
+                    reason: "Ambient encounter generation staged a watcher through the shared spawn lifecycle.",
+                    operation: "encounterCast",
+                    emitMessage: false,
+                    wantText: spec.WantText,
+                    wantId: $"want_ambient_{NormalizeToken(zoneId)}_{NormalizeToken(spec.Name)}",
+                    wantStakes: spec.WantStakes,
+                    wantSalience: 2,
+                    wantTags: new[] { "want", "encounter", "generated_npc" },
+                    details: details),
+                deltas,
+                "ambient encounter cast");
+            if (castApplied.Applied && ReferenceEquals(spec, keeperSpec))
+            {
+                prizeHolderId = castApplied.TargetId;
+            }
+        }
+
+        if (keeperSpec is not null && prizeHolderId is not null)
+        {
+            TryApplyGeneratedZoneConsequence(
+                generatedState,
+                WorldConsequence.ModifyInventory(
+                    "generation",
+                    prizeHolderId,
+                    "gold",
+                    op: "add",
+                    amount: goldQuantity,
+                    evidence: plan.CanonText,
+                    operation: "ambientKeeperStock",
+                    details: details),
+                deltas,
+                "ambient keeper stock");
+            TryApplyGeneratedZoneConsequence(
+                generatedState,
+                WorldConsequence.ModifyInventory(
+                    "generation",
+                    prizeHolderId,
+                    "gold",
+                    op: "protect",
+                    evidence: plan.CanonText,
+                    operation: "ambientKeeperTreasure",
+                    details: details),
+                deltas,
+                "ambient keeper treasure");
+        }
     }
 
     private void SpawnGeneratedItems(

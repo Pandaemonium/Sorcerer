@@ -391,7 +391,9 @@ public sealed partial class PromiseRealizationSystem
             return false;
         }
 
-        if (LooksLikeZoneId(place))
+        // Interior zone ids are as specific as grid zone ids: a promise deferred behind a
+        // threshold must only realize inside that exact interior.
+        if (LooksLikeZoneId(place) || place.TrimStart().StartsWith("interior:", StringComparison.OrdinalIgnoreCase))
         {
             return !string.Equals(place.Trim(), context.ZoneId, StringComparison.OrdinalIgnoreCase);
         }

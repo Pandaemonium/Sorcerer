@@ -118,6 +118,14 @@ public sealed partial class PromiseRealizationSystem
                 continue;
             }
 
+            if (outcome.Deltas.Any(delta =>
+                delta.Operation.Equals("promiseRealizationDeferred", StringComparison.OrdinalIgnoreCase)))
+            {
+                // The handler staged the payoff behind a threshold and re-anchored the
+                // promise's claimed place; it stays bound and realizes on a later pass.
+                continue;
+            }
+
             var realized = UpdatePromiseStatus(plan.Promise, "realized", plan.RealizedIn, plan.Context.Trigger, deltas);
             if (realized is null)
             {

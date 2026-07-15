@@ -184,7 +184,8 @@ public static class RegionCatalog
             ReadStringList(root, "ambientLines", "ambient_lines"),
             ReadPlacement(root),
             ReadPropGrammar(root),
-            ReadGroundLoot(root));
+            ReadGroundLoot(root),
+            ReadEncounters(root));
 
     private static IReadOnlyList<RegionAffordanceCard> ReadAffordances(JsonElement root)
     {
@@ -239,6 +240,17 @@ public static class RegionCatalog
             goldMin,
             goldMax,
             Math.Clamp(ReadInt(value, "nearPropBias", ReadInt(value, "near_prop_bias", 70)), 0, 100));
+    }
+
+    private static RegionEncounterDefinition? ReadEncounters(JsonElement root)
+    {
+        if (!root.TryGetProperty("encounters", out var value) || value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return new RegionEncounterDefinition(
+            Math.Clamp(ReadInt(value, "ambientChance", ReadInt(value, "ambient_chance", 0)), 0, 100));
     }
 
     private static RegionPropGrammarDefinition? ReadPropGrammar(JsonElement root)

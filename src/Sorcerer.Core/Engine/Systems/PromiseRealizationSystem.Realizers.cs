@@ -93,7 +93,76 @@ public sealed partial class PromiseRealizationSystem
         AppendPromiseCanon("site", site.Id.Value, promise, $"{site.Name}: {promise.Text}", tags, "travel", deltas);
     }
 
+    // Encounter ingredients are process-wide authored content, cached like RegionCatalog.
+    private static readonly Lazy<EncounterTemplateCatalog> DefaultEncounters = new(EncounterTemplateCatalog.LoadDefault);
+
+    /// <summary>
+    /// An item promise is the quest-objective surface, so it realizes through the encounter
+    /// grammar (IMPLEMENTATION_PLAN §3.4): stakes tier picks between a bare find and a staged
+    /// situation (guards, a keeper, a rival, or a restricted threshold), all resolvable by
+    /// force, stealth, or persuasion through ordinary systems. Tier 0 keeps today's simple
+    /// spawn so low-stakes errands stay easy.
+    /// </summary>
     private void RealizeTravelItemPromise(
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
+    {
+        // Inside an interior the threshold has already been crossed — never defer again.
+        var excludedKinds = zoneId.StartsWith("interior:", StringComparison.OrdinalIgnoreCase)
+            ? new[] { EncounterAssembler.KindRestrictedSite }
+            : null;
+        var plan = PlanItemEncounter(promise, zoneId, region, excludedKinds);
+        switch (plan?.Kind.ToLowerInvariant())
+        {
+            case EncounterAssembler.KindGuardedCache:
+            case EncounterAssembler.KindRivalClaimant:
+                RealizeGuardedItemEncounter(plan, promise, zoneId, region, entities, deltas, placementOrigin);
+                break;
+            case EncounterAssembler.KindKeeper:
+                RealizeKeeperEncounter(plan, promise, zoneId, region, entities, deltas, placementOrigin);
+                break;
+            case EncounterAssembler.KindRestrictedSite:
+                RealizeRestrictedSiteEncounter(plan, promise, zoneId, region, entities, deltas, placementOrigin);
+                break;
+            default:
+                RealizeSimpleTravelItemPromise(promise, zoneId, region, entities, deltas, placementOrigin);
+                break;
+        }
+    }
+
+    private EncounterPlan? PlanItemEncounter(
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        IReadOnlyList<string>? excludedKinds)
+    {
+        var interiorAvailable =
+            GenerationSystem.InteriorForSiteTag(region, PromiseTagsWithClaim(promise, "site", region)) is not null;
+        var request = new EncounterRequest(
+            _state.Seed,
+            zoneId,
+            "promise",
+            promise.Id,
+            region,
+            PromiseItemName(promise),
+            promise.Salience,
+            FactionPressureFor(region),
+            interiorAvailable,
+            excludedKinds);
+        return EncounterAssembler.Assemble(request, DefaultEncounters.Value);
+    }
+
+    private int FactionPressureFor(RegionDefinition region) =>
+        _state.Factions.IsHostile(region.RealmId, "player")
+            || _state.Factions.StandingValue(region.RealmId, "hostile:player") > 0
+            ? 1
+            : 0;
+
+    private void RealizeSimpleTravelItemPromise(
         WorldPromise promise,
         string zoneId,
         RegionDefinition region,
@@ -135,6 +204,377 @@ public sealed partial class PromiseRealizationSystem
             entities,
             deltas);
         AppendPromiseCanon("item", item.Id.Value, promise, $"{item.Name}: {promise.Text}", tags, "travel", deltas);
+    }
+
+    /// <summary>Guarded cache and rival claimant: the objective stays a ground item (identical
+    /// payload to the simple spawn, so contracts and pickup wiring are untouched) with a staged
+    /// cast around it. Everything commits atomically or not at all.</summary>
+    private void RealizeGuardedItemEncounter(
+        EncounterPlan plan,
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
+    {
+        var itemName = PromiseItemName(promise);
+        var itemPosition = FindGeneratedOpenPointNear(entities, placementOrigin, 1, 0);
+        var tags = PromiseTags(promise, "item", region)
+            .Concat(new[] { "item" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var detached = DetachedGeneratedState(entities);
+        var transactionDeltas = new List<StateDelta>();
+        var itemConsequence = WorldConsequence.SpawnItem(
+            $"promise:{promise.Id}:travel",
+            itemName,
+            itemPosition.X,
+            itemPosition.Y,
+            prefix: "promise_item",
+            itemType: NormalizeToken(itemName),
+            material: "promise",
+            tags: tags,
+            stackPolicy: "unique",
+            description: $"This object exists because a claim became reachable: {promise.Text}",
+            promiseIds: new[] { promise.Id },
+            visibility: WorldConsequenceVisibility.Message,
+            evidence: promise.Text,
+            operation: "promiseItem",
+            emitMessage: false,
+            message: $"A promised object is waiting: {itemName}.",
+            details: EncounterDetails(plan, promise, zoneId, region, "item"));
+        if (TryApplyGeneratedEntityConsequence(detached, itemConsequence, transactionDeltas, deltas, "spawn encounter item") is not { } item)
+        {
+            return;
+        }
+
+        foreach (var spec in plan.Casts.Concat(plan.Rival is null ? Array.Empty<EncounterCastSpec>() : new[] { plan.Rival }))
+        {
+            if (SpawnEncounterCast(detached, plan, spec, promise, zoneId, region, itemPosition, transactionDeltas, deltas) is null)
+            {
+                return;
+            }
+        }
+
+        if (!TryApplyGeneratedCanon(
+            detached,
+            promise,
+            kind: "item",
+            subjectId: item.Id.Value,
+            summary: $"{item.Name}: {plan.CanonText}",
+            tags,
+            trigger: "travel",
+            transactionDeltas,
+            deltas,
+            out var canonId))
+        {
+            return;
+        }
+
+        CommitGeneratedTransaction(detached, entities, transactionDeltas, deltas);
+        AddCanonIdToLastDelta(deltas, canonId);
+    }
+
+    /// <summary>Keeper: a named NPC carries the objective as a treasured item. Persuasion,
+    /// trade, recruitment, or force all end with the item in the player's hands, which is the
+    /// only fact objective completion reads.</summary>
+    private void RealizeKeeperEncounter(
+        EncounterPlan plan,
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
+    {
+        var itemName = PromiseItemName(promise);
+        var keeperSpec = plan.Casts.FirstOrDefault(spec => spec.HoldsObjective) ?? plan.Casts.FirstOrDefault();
+        if (keeperSpec is null)
+        {
+            RealizeSimpleTravelItemPromise(promise, zoneId, region, entities, deltas, placementOrigin);
+            return;
+        }
+
+        var keeperPosition = FindGeneratedOpenPointNear(entities, placementOrigin, 1, 0);
+        var detached = DetachedGeneratedState(entities);
+        var transactionDeltas = new List<StateDelta>();
+        var keeper = SpawnEncounterCast(
+            detached, plan, keeperSpec, promise, zoneId, region, keeperPosition, transactionDeltas, deltas,
+            position: keeperPosition,
+            promiseAnchored: true);
+        if (keeper is null)
+        {
+            return;
+        }
+
+        var itemToken = NormalizeToken(itemName);
+        var addItem = WorldConsequence.ModifyInventory(
+            $"promise:{promise.Id}:travel",
+            keeper.Id.Value,
+            itemToken,
+            op: "add",
+            amount: 1,
+            evidence: promise.Text,
+            operation: "promiseKeeperStock",
+            details: EncounterDetails(plan, promise, zoneId, region, "item"));
+        var protectItem = WorldConsequence.ModifyInventory(
+            $"promise:{promise.Id}:travel",
+            keeper.Id.Value,
+            itemToken,
+            op: "protect",
+            evidence: promise.Text,
+            operation: "promiseKeeperTreasure",
+            details: EncounterDetails(plan, promise, zoneId, region, "item"));
+        if (!TryApplyGeneratedConsequence(detached, addItem, transactionDeltas, deltas, "stock keeper")
+            || !TryApplyGeneratedConsequence(detached, protectItem, transactionDeltas, deltas, "protect keeper stock"))
+        {
+            return;
+        }
+
+        foreach (var spec in plan.Casts.Where(spec => !ReferenceEquals(spec, keeperSpec))
+            .Concat(plan.Rival is null ? Array.Empty<EncounterCastSpec>() : new[] { plan.Rival }))
+        {
+            if (SpawnEncounterCast(detached, plan, spec, promise, zoneId, region, keeperPosition, transactionDeltas, deltas) is null)
+            {
+                return;
+            }
+        }
+
+        var tags = PromiseTags(promise, "item", region);
+        if (!TryApplyGeneratedCanon(
+            detached,
+            promise,
+            kind: "item",
+            subjectId: keeper.Id.Value,
+            summary: $"{keeper.Name} holds {itemName}: {plan.CanonText}",
+            tags,
+            trigger: "travel",
+            transactionDeltas,
+            deltas,
+            out var canonId))
+        {
+            return;
+        }
+
+        CommitGeneratedTransaction(detached, entities, transactionDeltas, deltas);
+        AddCanonIdToLastDelta(deltas, canonId);
+    }
+
+    /// <summary>Restricted site: the objective moves behind a region-authored interior
+    /// threshold. The entrance spawns now; the promise's claimed place re-anchors to the
+    /// interior zone and realization defers until the player gets inside — credential, talk,
+    /// force, or magic are all ordinary ways through the door.</summary>
+    private void RealizeRestrictedSiteEncounter(
+        EncounterPlan plan,
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas,
+        GridPoint placementOrigin)
+    {
+        var tags = PromiseTagsWithClaim(promise, "site", region);
+        var interior = GenerationSystem.InteriorForSiteTag(region, tags);
+        if (interior is null)
+        {
+            RealizeGuardedItemEncounter(plan, promise, zoneId, region, entities, deltas, placementOrigin);
+            return;
+        }
+
+        var position = FindGeneratedOpenPointNear(entities, placementOrigin, 1, -1);
+        var interiorZoneId = $"interior:{NormalizeToken(region.Id)}:{NormalizeToken(interior.Id)}:{zoneId}";
+        var entrance = new InteriorEntranceComponent(
+            interiorZoneId,
+            interior.Id,
+            interior.Name,
+            interior.Kind,
+            interior.Summary,
+            interior.AccessPolicy,
+            interior.RequiredItem,
+            zoneId,
+            position.X,
+            position.Y);
+        var itemName = PromiseItemName(promise);
+        var siteTags = tags
+            .Concat(new[] { "interior_entrance", interior.Id, interior.Kind, interior.AccessPolicy })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var detached = DetachedGeneratedState(entities);
+        var transactionDeltas = new List<StateDelta>();
+        var siteConsequence = WorldConsequence.SpawnFixture(
+            $"promise:{promise.Id}:travel",
+            interior.Name,
+            position.X,
+            position.Y,
+            prefix: "promise_site",
+            glyph: '?',
+            palette: "promise",
+            fixtureType: "promise_site",
+            material: region.TerrainTags.FirstOrDefault() ?? "stone",
+            tags: siteTags,
+            blocksMovement: false,
+            description: $"{promise.Text} {itemName} is kept beyond this threshold. {interior.Summary} "
+                + (interior.AccessPolicy.Equals("public", StringComparison.OrdinalIgnoreCase)
+                    ? "The threshold is public."
+                    : $"The threshold is restricted; {interior.RequiredItem ?? "permission, force, or magic"} is one ordinary way through."),
+            promiseIds: new[] { promise.Id },
+            interactableVerbs: new[] { "examine", "enter" },
+            interiorEntrance: entrance,
+            visibility: WorldConsequenceVisibility.Message,
+            evidence: promise.Text,
+            operation: "promiseSite",
+            emitMessage: false,
+            message: $"The promised {itemName} is held inside {interior.Name}.",
+            details: EncounterDetails(plan, promise, zoneId, region, "site", extra =>
+                extra["interiorId"] = interior.Id));
+        if (TryApplyGeneratedEntityConsequence(detached, siteConsequence, transactionDeltas, deltas, "spawn restricted site") is not { } site)
+        {
+            return;
+        }
+
+        foreach (var spec in plan.Casts)
+        {
+            if (SpawnEncounterCast(detached, plan, spec, promise, zoneId, region, position, transactionDeltas, deltas) is null)
+            {
+                return;
+            }
+        }
+
+        var reanchor = WorldConsequence.UpdatePromise(
+            $"promise:{promise.Id}:travel",
+            promise.Id,
+            claimedPlace: interiorZoneId,
+            evidence: promise.Text,
+            operation: "promiseDeferredToInterior",
+            details: new Dictionary<string, object?>
+            {
+                ["promiseId"] = promise.Id,
+                ["zoneId"] = zoneId,
+                ["interiorZoneId"] = interiorZoneId,
+                ["encounterId"] = plan.ArchetypeId,
+            });
+        if (!TryApplyGeneratedConsequence(detached, reanchor, transactionDeltas, deltas, "defer promise to interior"))
+        {
+            return;
+        }
+
+        if (!TryApplyGeneratedCanon(
+            detached,
+            promise,
+            kind: "site",
+            subjectId: site.Id.Value,
+            summary: $"{interior.Name} holds {itemName}: {plan.CanonText}",
+            siteTags,
+            trigger: "travel",
+            transactionDeltas,
+            deltas,
+            out var canonId))
+        {
+            return;
+        }
+
+        CommitGeneratedTransaction(detached, entities, transactionDeltas, deltas);
+        AddCanonIdToLastDelta(deltas, canonId);
+        // The deferral marker tells RealizeTravelPromises to leave the promise bound (not
+        // realized): the interior pass realizes the objective when the player gets inside.
+        deltas.Add(new StateDelta(
+            "promiseRealizationDeferred",
+            promise.Id,
+            $"The promised {itemName} waits inside {interior.Name}; the promise follows the player through the threshold.",
+            new Dictionary<string, object?>
+            {
+                ["promiseId"] = promise.Id,
+                ["interiorZoneId"] = interiorZoneId,
+                ["encounterId"] = plan.ArchetypeId,
+                ["encounterKind"] = plan.Kind,
+            }));
+    }
+
+    private Entity? SpawnEncounterCast(
+        GameState detached,
+        EncounterPlan plan,
+        EncounterCastSpec spec,
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        GridPoint anchor,
+        List<StateDelta> transactionDeltas,
+        List<StateDelta> deltas,
+        GridPoint? position = null,
+        bool promiseAnchored = false)
+    {
+        var castPosition = position
+            ?? FindGeneratedOpenPointNear(detached.Entities, anchor, spec.Offset.X, spec.Offset.Y);
+        var isRival = ReferenceEquals(spec, plan.Rival);
+        var tags = spec.Tags
+            .Concat(BasicPromiseTags(promise, "encounter"))
+            .Concat(new[] { "npc", "encounter_cast", isRival ? "rival_claimant" : plan.Kind })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var consequence = WorldConsequence.SpawnEntity(
+            $"promise:{promise.Id}:travel",
+            spec.Name,
+            castPosition.X,
+            castPosition.Y,
+            prefix: "encounter_cast",
+            glyph: spec.Glyph,
+            faction: spec.FactionId,
+            hp: spec.HitPoints,
+            attack: spec.Attack,
+            tags: tags,
+            material: "flesh",
+            roles: spec.Roles.Concat(new[] { "encounter" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            controllerKind: "ai",
+            aiPolicyId: spec.AiPolicyId,
+            aiParameters: spec.AiPolicyId.Equals("guard", StringComparison.OrdinalIgnoreCase)
+                ? new Dictionary<string, object?> { ["anchorX"] = anchor.X, ["anchorY"] = anchor.Y }
+                : null,
+            summoned: false,
+            description: $"{spec.Title}. {spec.WantText}",
+            promiseIds: promiseAnchored ? new[] { promise.Id } : null,
+            interactableVerbs: spec.Verbs,
+            bodyVigor: 3,
+            includeMemory: true,
+            visibility: WorldConsequenceVisibility.Message,
+            evidence: promise.Text,
+            operation: "encounterCast",
+            emitMessage: false,
+            message: $"{spec.Name} watches over the place.",
+            details: EncounterDetails(plan, promise, zoneId, region, "encounter", extra =>
+            {
+                extra["profileName"] = spec.Name;
+                extra["profileAppearance"] = spec.WantText;
+                extra["wantId"] = $"{PromiseWantId(promise, spec.HoldsObjective ? "keeper" : "encounter")}_{NormalizeToken(spec.Name)}";
+                extra["wantText"] = spec.WantText;
+                extra["wantSalience"] = Math.Clamp(promise.Salience, 2, 5);
+                extra["wantStakes"] = spec.WantStakes;
+                extra["wantTags"] = PromiseWantTags(promise, "encounter");
+            }));
+        return TryApplyGeneratedEntityConsequence(detached, consequence, transactionDeltas, deltas, "spawn encounter cast");
+    }
+
+    private static Dictionary<string, object?> EncounterDetails(
+        EncounterPlan plan,
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        string realizationKind,
+        Action<Dictionary<string, object?>>? amend = null)
+    {
+        var details = new Dictionary<string, object?>
+        {
+            ["promiseId"] = promise.Id,
+            ["zoneId"] = zoneId,
+            ["regionId"] = region.Id,
+            ["realizationKind"] = realizationKind,
+            ["encounterId"] = plan.ArchetypeId,
+            ["encounterKind"] = plan.Kind,
+            ["encounterTier"] = plan.Tier,
+            ["encounterFaction"] = plan.FactionId,
+        };
+        amend?.Invoke(details);
+        return details;
     }
 
     private void RealizeTravelPersonPromise(

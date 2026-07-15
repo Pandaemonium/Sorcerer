@@ -92,6 +92,21 @@ public sealed class PromiseLedger
         return updated;
     }
 
+    /// <summary>Re-anchors where the promise claims to pay off — used when a payoff moves
+    /// behind a threshold (e.g. a fetch objective deferred into an interior zone).</summary>
+    public WorldPromise? SetClaimedPlace(string id, string claimedPlace)
+    {
+        var index = _promises.FindIndex(promise => promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || string.IsNullOrWhiteSpace(claimedPlace))
+        {
+            return null;
+        }
+
+        var updated = _promises[index] with { ClaimedPlace = claimedPlace.Trim() };
+        _promises[index] = updated;
+        return updated;
+    }
+
     public WorldPromise? SetStatus(string id, string status, string? realizedIn = null)
     {
         var index = _promises.FindIndex(promise => promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase));

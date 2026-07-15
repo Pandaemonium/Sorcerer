@@ -97,6 +97,7 @@
     {
       "id": "imperial_encounter",
       "groundLoot": {"min": 0, "max": 1, "emptyChance": 45, "usefulChance": 15},
+      "encounters": {"ambientChance": 10},
       "name": "Marble Containment Yard",
       "realmId": "empire",
       "traditionId": "charter_geometry",
@@ -236,6 +237,7 @@
     {
       "id": "hollowmere_margin",
       "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 25},
+      "encounters": {"ambientChance": 6},
       "name": "Hollowmere Margin",
       "realmId": "hollowmere",
       "traditionId": "reed_memory",
@@ -312,6 +314,7 @@
     {
       "id": "stalnaz_highlands",
       "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 25},
+      "encounters": {"ambientChance": 6},
       "name": "Stalnazan Singing Heights",
       "realmId": "stalnaz",
       "traditionId": "crystal_song",
@@ -732,6 +735,7 @@
     {
       "id": "gontark_crags",
       "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 25},
+      "encounters": {"ambientChance": 8},
       "name": "Gontark Crags",
       "realmId": "gontark",
       "traditionId": "curse_craft",
@@ -792,6 +796,7 @@
     {
       "id": "parn_sunroads",
       "groundLoot": {"min": 1, "max": 3, "emptyChance": 15, "usefulChance": 30},
+      "encounters": {"ambientChance": 8},
       "name": "Parn Sunroads",
       "realmId": "parn",
       "traditionId": "sound_ink",

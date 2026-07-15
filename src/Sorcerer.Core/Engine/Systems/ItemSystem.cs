@@ -35,6 +35,11 @@ public sealed class ItemSystem
         var item = ResolveNearbyEntity(target, entity => entity.Has<ItemComponent>(), range: 1);
         if (item is null)
         {
+            if (TryLootCorpse(target, turnBefore) is { } looted)
+            {
+                return looted;
+            }
+
             var hint = InteractionSystem.OutOfReachHint(_engine, _state, target, entity => entity.Has<ItemComponent>());
             return ActionResult.Simple(
                 "pickup",
@@ -89,6 +94,90 @@ public sealed class ItemSystem
             Messages = applied.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
             Deltas = applied.Deltas.Concat(turnDeltas).ToArray(),
         };
+    }
+
+    /// <summary>
+    /// Recovering a named item from an adjacent corpse: death voids inventory protection, so
+    /// a keeper's treasured objective is lootable once they are dead. Requires an explicit
+    /// item or corpse name — a bare "pickup" never rifles the dead.
+    /// </summary>
+    private ActionResult? TryLootCorpse(string? target, int turnBefore)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return null;
+        }
+
+        var origin = _state.ControlledEntity.Get<PositionComponent>().Position;
+        var corpses = _state.Entities.Values
+            .Where(entity => entity.TryGet<ActorComponent>(out var actor) && !actor.Alive)
+            .Where(entity => entity.TryGet<InventoryComponent>(out var held)
+                && held.Items.Any(pair => pair.Value > 0))
+            .Where(entity => entity.TryGet<PositionComponent>(out var position)
+                && GameEngine.Distance(origin, position.Position) <= 1)
+            .OrderBy(entity => entity.Id.Value)
+            .ToArray();
+        foreach (var corpse in corpses)
+        {
+            var inventory = corpse.Get<InventoryComponent>();
+            var key = FindInventoryKey(inventory, target)
+                ?? FindInventoryKeyByToken(inventory, target)
+                ?? (corpse.Name.Contains(target.Trim(), StringComparison.OrdinalIgnoreCase)
+                    ? inventory.Items.First(pair => pair.Value > 0).Key
+                    : null);
+            if (key is null)
+            {
+                continue;
+            }
+
+            var quantity = Math.Max(1, inventory.Items.TryGetValue(key, out var carried) ? carried : 1);
+            var message = $"You take {key.Replace('_', ' ')} from {corpse.Name}'s corpse.";
+            var applied = _engine.ApplyConsequence(WorldConsequence.TransferItem(
+                "item",
+                corpse.Id.Value,
+                "give",
+                key,
+                quantity: quantity,
+                recipientEntityId: _state.ControlledEntityId.Value,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: _state.ControlledEntityId.Value,
+                evidence: corpse.Name,
+                operation: "lootCorpse",
+                message: message,
+                details: new Dictionary<string, object?> { ["allowProtected"] = true }));
+            if (!applied.Applied)
+            {
+                continue;
+            }
+
+            var turnDeltas = _engine.AdvanceTurn();
+            return new ActionResult
+            {
+                Action = "pickup",
+                Success = true,
+                ConsumedTurn = true,
+                TurnBefore = turnBefore,
+                TurnAfter = _state.Turn,
+                Messages = applied.Messages.Concat(turnDeltas.PlayerMessages()).ToArray(),
+                Deltas = applied.Deltas.Concat(turnDeltas).ToArray(),
+            };
+        }
+
+        return null;
+    }
+
+    // NPC inventories key items by normalized token ("witness_parcel"); the player types the
+    // spoken name ("witness parcel"). Compare in normalized space so both resolve.
+    private static string? FindInventoryKeyByToken(InventoryComponent inventory, string item)
+    {
+        var expected = NormalizeId(item, "item");
+        return inventory.Items.Keys.FirstOrDefault(key =>
+        {
+            var normalized = NormalizeId(key, "item");
+            return normalized.Equals(expected, StringComparison.OrdinalIgnoreCase)
+                || normalized.Contains(expected, StringComparison.OrdinalIgnoreCase)
+                || expected.Contains(normalized, StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     public ActionResult DropItem(string item)

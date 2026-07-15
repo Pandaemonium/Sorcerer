@@ -42,11 +42,12 @@ public sealed class AiSystem
             }
 
             // Enemies hunt the player; player-allies (e.g. summoned creatures) hunt the player's
-            // foes. Everyone else stays idle exactly as before.
+            // foes; guards drift back to their post. Everyone else stays idle exactly as before.
             var huntsPlayer = IsHostile(actor, player) && CanNoticeTarget(actor, player);
             var isAlly = !huntsPlayer && IsPlayerAlly(actor);
             var isFollower = !huntsPlayer && !isAlly && IsPlayerFollower(actor);
-            if (!huntsPlayer && !isAlly && !isFollower)
+            var isGuard = IsGuard(actor);
+            if (!huntsPlayer && !isAlly && !isFollower && !isGuard)
             {
                 continue;
             }
@@ -72,6 +73,42 @@ public sealed class AiSystem
                 // AI -- a low-maintenance company (Q29), directed by the player, not auto-swinging.
                 MaybeFollowLeader(deltas, actor, actorPosition.Position, player);
                 continue;
+            }
+
+            if (isGuard)
+            {
+                // Guards hold near their anchor: off-duty they drift home instead of wandering or
+                // joining fights; provoked, they fight like any hostile but break pursuit beyond
+                // the leash and walk back. Provocation, persuasion, and concealment all stay the
+                // shared faction/bond/perception rules -- nothing here decides hostility.
+                var anchor = GuardAnchor(actor);
+                if (!huntsPlayer)
+                {
+                    if (anchor is { } post && GameEngine.Distance(actorPosition.Position, post) > 1)
+                    {
+                        var home = StepToward(actorPosition.Position, post);
+                        if (CanEnter(home))
+                        {
+                            AddMoveDeltas(deltas, actor, home, "guard_return");
+                        }
+                    }
+
+                    continue;
+                }
+
+                if (anchor is { } leashPost
+                    && player.TryGet<PositionComponent>(out var quarry)
+                    && GameEngine.Distance(actorPosition.Position, leashPost) > GuardLeash
+                    && GameEngine.Distance(actorPosition.Position, quarry.Position) > 1)
+                {
+                    var back = StepToward(actorPosition.Position, leashPost);
+                    if (CanEnter(back))
+                    {
+                        AddMoveDeltas(deltas, actor, back, "guard_return");
+                    }
+
+                    continue;
+                }
             }
 
             // Coward/mimic are player-relative compulsions applied to enemies by behavior_control
@@ -146,6 +183,51 @@ public sealed class AiSystem
         (actor.TryGet<AiComponent>(out var ai) && ai.PolicyId.Equals("follower", StringComparison.OrdinalIgnoreCase))
         || (actor.TryGet<FactionComponent>(out var faction)
             && faction.Roles.Contains("follower", StringComparer.OrdinalIgnoreCase));
+
+    // How far a guard chases before breaking off and walking back to its post. Short by design:
+    // a guarded objective stays guarded, and luring the guard away is a legitimate tactic that
+    // costs the player distance, not a free win.
+    private const int GuardLeash = 4;
+
+    private static bool IsGuard(Entity actor) =>
+        actor.TryGet<AiComponent>(out var ai)
+        && ai.PolicyId.Equals("guard", StringComparison.OrdinalIgnoreCase);
+
+    private static GridPoint? GuardAnchor(Entity actor)
+    {
+        if (!actor.TryGet<AiComponent>(out var ai) || ai.Parameters is null)
+        {
+            return null;
+        }
+
+        return ReadAnchorCoordinate(ai.Parameters, "anchorX") is { } x
+            && ReadAnchorCoordinate(ai.Parameters, "anchorY") is { } y
+                ? new GridPoint(x, y)
+                : null;
+    }
+
+    // Anchor coordinates arrive as ints from spawn consequences but come back from saves as
+    // JsonElement numbers (or strings from hand-authored content); missing or malformed values
+    // degrade to "no anchor", i.e. the pre-guard idle behavior.
+    private static int? ReadAnchorCoordinate(IReadOnlyDictionary<string, object?> parameters, string key)
+    {
+        if (!parameters.TryGetValue(key, out var value) || value is null)
+        {
+            return null;
+        }
+
+        return value switch
+        {
+            int number => number,
+            long number => (int)number,
+            double number => (int)number,
+            string text when int.TryParse(text, out var parsed) => parsed,
+            System.Text.Json.JsonElement json
+                when json.ValueKind == System.Text.Json.JsonValueKind.Number
+                    && json.TryGetInt32(out var parsed) => parsed,
+            _ => null,
+        };
+    }
 
     // Keep a follower a step off the leader: close the gap when it has fallen behind (up to a
     // generous leash so a straggler still catches up), hold position when already alongside, and

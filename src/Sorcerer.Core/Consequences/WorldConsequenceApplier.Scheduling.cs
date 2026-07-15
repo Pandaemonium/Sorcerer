@@ -182,13 +182,17 @@ public sealed partial class WorldConsequenceApplier
         var clearEligibilityFailure = ReadBool(payload, "clearEligibilityFailure")
             ?? ReadBool(payload, "clear_eligibility_failure")
             ?? false;
+        var claimedPlace = FirstNonBlank(ReadString(payload, "claimedPlace"), ReadString(payload, "claimed_place"));
         var wantsBinding = !string.IsNullOrWhiteSpace(boundPlace)
             || !string.IsNullOrWhiteSpace(boundTargetId)
             || !string.IsNullOrWhiteSpace(triggerHint)
             || !string.IsNullOrWhiteSpace(realizationKind)
             || status.Equals("bound", StringComparison.OrdinalIgnoreCase);
         var wantsEligibilityUpdate = clearEligibilityFailure || hasEligibilityFailure;
-        if (!wantsBinding && string.IsNullOrWhiteSpace(status) && !wantsEligibilityUpdate)
+        if (!wantsBinding
+            && string.IsNullOrWhiteSpace(status)
+            && !wantsEligibilityUpdate
+            && string.IsNullOrWhiteSpace(claimedPlace))
         {
             return Reject(consequence, "Promise update did not include any changes.");
         }
@@ -217,6 +221,11 @@ public sealed partial class WorldConsequenceApplier
                 boundTargetId,
                 triggerHint,
                 realizationKind) ?? existing;
+        }
+
+        if (!string.IsNullOrWhiteSpace(claimedPlace))
+        {
+            updated = _state.PromiseLedger.SetClaimedPlace(updated.Id, claimedPlace) ?? updated;
         }
 
         if (!string.IsNullOrWhiteSpace(status) && !status.Equals("bound", StringComparison.OrdinalIgnoreCase))

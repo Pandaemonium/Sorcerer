@@ -143,7 +143,9 @@ public sealed partial class WorldConsequenceApplier
 
         if (!string.IsNullOrWhiteSpace(aiPolicy))
         {
-            entity.Set(new AiComponent(NormalizeToken(aiPolicy, "idle")));
+            var aiParameters = ReadDictionary(payload, "aiParameters")
+                ?? ReadDictionary(payload, "ai_parameters");
+            entity.Set(new AiComponent(NormalizeToken(aiPolicy, "idle"), aiParameters));
         }
 
         if (summoned)

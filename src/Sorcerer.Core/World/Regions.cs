@@ -73,6 +73,9 @@ public sealed record RegionGroundLootDefinition(
     int GoldMax = 10,
     int NearPropBiasPercent = 70);
 
+public sealed record RegionEncounterDefinition(
+    int AmbientChancePercent = 0);
+
 public sealed record RegionPopulationCenterDefinition(int X, int Y);
 
 public sealed record RegionNameForgeDefinition(
@@ -208,6 +211,7 @@ public sealed record RegionDefinition(
     RegionMapPlacement? Placement = null,
     RegionPropGrammarDefinition? Props = null,
     RegionGroundLootDefinition? GroundLoot = null,
+    RegionEncounterDefinition? Encounters = null,
     RegionPopulationGrammarDefinition? Population = null,
     RegionSettlementGrammarDefinition? Settlement = null,
     RegionInteriorGrammarDefinition? Interiors = null);

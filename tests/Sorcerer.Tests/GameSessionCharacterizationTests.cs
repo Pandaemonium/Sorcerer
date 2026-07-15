@@ -1332,14 +1332,28 @@ public sealed class GameSessionCharacterizationTests
             && Equals(delta.Details["kind"], "rumor_spread"));
         var itemPromise = session.Engine.State.PromiseLedger.Promises.Single(promise =>
             promise.Subject == "fine blade");
-        Assert.Contains(travel.Deltas, delta =>
-            delta.Operation == "promiseItem"
-            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.SpawnItem)
-            && Equals(delta.Details["promiseId"], itemPromise.Id)
-            && Equals(delta.Details["stackPolicy"], "unique"));
-        Assert.Contains(session.Engine.State.Entities.Values, entity =>
-            entity.Name == "promised blade"
-            && entity.TryGet<PromiseAnchorComponent>(out _));
+        Assert.Equal("realized", itemPromise.Status);
+        // The encounter grammar stages item promises: the blade lands on the ground (simple or
+        // guarded) or in a keeper's protected care — either way anchored to the promise.
+        var anchored = Assert.Single(session.Engine.State.Entities.Values, entity =>
+            entity.TryGet<PromiseAnchorComponent>(out var anchor)
+            && anchor.PromiseIds.Contains(itemPromise.Id, StringComparer.OrdinalIgnoreCase));
+        if (anchored.Has<ItemComponent>())
+        {
+            Assert.Equal("promised blade", anchored.Name);
+            Assert.Contains(travel.Deltas, delta =>
+                delta.Operation == "promiseItem"
+                && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.SpawnItem)
+                && Equals(delta.Details["promiseId"], itemPromise.Id)
+                && Equals(delta.Details["stackPolicy"], "unique"));
+        }
+        else
+        {
+            var held = anchored.Get<InventoryComponent>();
+            var key = Assert.Single(held.Items, pair =>
+                pair.Key.Contains("promised_blade", StringComparison.OrdinalIgnoreCase) && pair.Value > 0).Key;
+            Assert.Contains(key, held.TreasuredItems);
+        }
     }
 
     [Fact]

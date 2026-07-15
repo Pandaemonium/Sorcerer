@@ -1,0 +1,303 @@
+{
+  "archetypes": [
+    {
+      "id": "guarded_cache",
+      "kind": "guarded_cache",
+      "minTier": 1,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": true,
+      "formation": "ring",
+      "canonPattern": "{item} sits under {faction} watch in {region}.",
+      "weight": 4,
+      "tags": ["encounter", "guarded_cache"],
+      "casts": [
+        {
+          "factionId": "empire",
+          "weight": 3,
+          "minImperialPresence": 40,
+          "slots": [
+            {
+              "id": "imperial_sentry",
+              "role": "guard",
+              "titlePattern": "waystation sentry",
+              "glyph": "g",
+              "aiPolicyId": "guard",
+              "tags": ["objective_guard", "imperial", "law"],
+              "roles": ["guard", "soldier"],
+              "wantPattern": "Keep {item} in imperial custody until the requisition clears.",
+              "wantStakes": "Would stand aside for a stamped writ, a censor's word, or a bribe worth the risk of the ledger noticing.",
+              "minHitPoints": 8,
+              "maxHitPoints": 12,
+              "minAttack": 1,
+              "maxAttack": 3,
+              "interactableVerbs": ["talk", "examine"],
+              "countByTier": [1, 2, 3]
+            }
+          ]
+        },
+        {
+          "factionId": "hollowmere",
+          "weight": 2,
+          "minImperialPresence": 0,
+          "slots": [
+            {
+              "id": "reed_watcher",
+              "role": "guard",
+              "titlePattern": "reed-bank watcher",
+              "glyph": "w",
+              "aiPolicyId": "guard",
+              "tags": ["objective_guard", "folk", "watchful"],
+              "roles": ["guard", "resident"],
+              "wantPattern": "See that {item} stays where the household hid it until the right hands come.",
+              "wantStakes": "Would yield to someone the reeds vouch for: a fair trade, a household name, or proof the errand is honest.",
+              "minHitPoints": 7,
+              "maxHitPoints": 10,
+              "minAttack": 0,
+              "maxAttack": 2,
+              "interactableVerbs": ["talk", "give", "examine"],
+              "countByTier": [1, 2, 2]
+            }
+          ]
+        },
+        {
+          "factionId": "independent",
+          "weight": 2,
+          "minImperialPresence": 0,
+          "slots": [
+            {
+              "id": "hired_blade",
+              "role": "guard",
+              "titlePattern": "hired blade",
+              "glyph": "b",
+              "aiPolicyId": "guard",
+              "tags": ["objective_guard", "mercenary"],
+              "roles": ["guard"],
+              "wantPattern": "Get paid for watching {item}; nothing else in {region} is their problem.",
+              "wantStakes": "Loyal strictly to the purse: better coin, a safer contract, or a credible threat all outbid the current employer.",
+              "minHitPoints": 9,
+              "maxHitPoints": 13,
+              "minAttack": 1,
+              "maxAttack": 3,
+              "interactableVerbs": ["talk", "examine"],
+              "countByTier": [1, 1, 2]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "keeper_holds_it",
+      "kind": "keeper",
+      "minTier": 1,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": true,
+      "formation": "adjacent",
+      "canonPattern": "{keeper} keeps {item} close in {region}.",
+      "weight": 3,
+      "tags": ["encounter", "keeper"],
+      "casts": [
+        {
+          "factionId": "hollowmere",
+          "weight": 2,
+          "minImperialPresence": 0,
+          "slots": [
+            {
+              "id": "reed_keeper",
+              "role": "keeper",
+              "titlePattern": "reed-keeper",
+              "glyph": "p",
+              "aiPolicyId": "resident",
+              "tags": ["objective_keeper", "folk"],
+              "roles": ["keeper", "resident"],
+              "wantPattern": "Keep {item} safe the way it was entrusted, until its errand is proven honest.",
+              "wantStakes": "Would hand it over for proof of the errand, a fair trade, or to someone they have come to trust; would sooner drown it than give it to the Empire.",
+              "minHitPoints": 6,
+              "maxHitPoints": 9,
+              "minAttack": 0,
+              "maxAttack": 1,
+              "interactableVerbs": ["talk", "give", "recruit", "examine"],
+              "countByTier": [1, 1, 1]
+            },
+            {
+              "id": "keeper_kin",
+              "role": "guard",
+              "titlePattern": "keeper's kin",
+              "glyph": "k",
+              "aiPolicyId": "guard",
+              "tags": ["objective_guard", "folk"],
+              "roles": ["guard", "resident"],
+              "wantPattern": "Keep strangers at a respectful distance from the keeper.",
+              "wantStakes": "Follows the keeper's lead; earns trust when the keeper trusts.",
+              "minHitPoints": 7,
+              "maxHitPoints": 10,
+              "minAttack": 0,
+              "maxAttack": 2,
+              "interactableVerbs": ["talk", "examine"],
+              "countByTier": [0, 1, 2]
+            }
+          ]
+        },
+        {
+          "factionId": "empire",
+          "weight": 2,
+          "minImperialPresence": 40,
+          "slots": [
+            {
+              "id": "requisition_clerk",
+              "role": "keeper",
+              "titlePattern": "requisition clerk",
+              "glyph": "c",
+              "aiPolicyId": "resident",
+              "tags": ["objective_keeper", "imperial", "bureaucratic"],
+              "roles": ["keeper", "clerk"],
+              "wantPattern": "Hold {item} against the docket until someone with standing signs for it.",
+              "wantStakes": "Procedure is armor and exit both: a plausible writ, a superior's instruction, or a discreet arrangement that keeps the ledger clean would each free the item.",
+              "minHitPoints": 5,
+              "maxHitPoints": 7,
+              "minAttack": 0,
+              "maxAttack": 1,
+              "interactableVerbs": ["talk", "give", "examine"],
+              "countByTier": [1, 1, 1]
+            },
+            {
+              "id": "clerk_escort",
+              "role": "guard",
+              "titlePattern": "escort soldier",
+              "glyph": "g",
+              "aiPolicyId": "guard",
+              "tags": ["objective_guard", "imperial"],
+              "roles": ["guard", "soldier"],
+              "wantPattern": "Keep the clerk and the clerk's charge unbothered.",
+              "wantStakes": "Defers to the clerk's judgment and to anyone the clerk defers to.",
+              "minHitPoints": 8,
+              "maxHitPoints": 12,
+              "minAttack": 1,
+              "maxAttack": 3,
+              "interactableVerbs": ["talk", "examine"],
+              "countByTier": [0, 1, 2]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "behind_the_threshold",
+      "kind": "restricted_site",
+      "minTier": 2,
+      "maxTier": 3,
+      "requiresInterior": true,
+      "ambientEligible": false,
+      "formation": "adjacent",
+      "canonPattern": "{item} is held behind a restricted threshold in {region}.",
+      "weight": 2,
+      "tags": ["encounter", "restricted_site", "waystation"],
+      "casts": [
+        {
+          "factionId": "empire",
+          "weight": 1,
+          "minImperialPresence": 30,
+          "slots": [
+            {
+              "id": "threshold_warden",
+              "role": "guard",
+              "titlePattern": "threshold warden",
+              "glyph": "g",
+              "aiPolicyId": "guard",
+              "tags": ["objective_guard", "imperial", "threshold"],
+              "roles": ["guard", "soldier"],
+              "wantPattern": "Admit only credentialed traffic through the threshold that hides {item}.",
+              "wantStakes": "The post is the credential: papers, rank, or an order they can quote would open the way; so would nobody being alive to ask.",
+              "minHitPoints": 8,
+              "maxHitPoints": 12,
+              "minAttack": 1,
+              "maxAttack": 3,
+              "interactableVerbs": ["talk", "examine"],
+              "countByTier": [1, 1, 2]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rival_claimant",
+      "kind": "rival_claimant",
+      "minTier": 1,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": false,
+      "formation": "ring",
+      "canonPattern": "More than one hand reaches for {item} in {region}.",
+      "weight": 2,
+      "tags": ["encounter", "rival_claimant"],
+      "casts": [
+        {
+          "factionId": "hollowmere",
+          "weight": 2,
+          "minImperialPresence": 0,
+          "slots": [
+            {
+              "id": "rival_agent",
+              "role": "rival",
+              "titlePattern": "quiet claimant",
+              "glyph": "r",
+              "aiPolicyId": "resident",
+              "tags": ["rival_claimant", "folk"],
+              "roles": ["rival", "resident"],
+              "wantPattern": "Claim {item} for their own people before the stranger's patron gets it.",
+              "wantStakes": "Might share the prize, trade for it, or walk away convinced the stranger's cause serves their people better; will not fight fair for it.",
+              "minHitPoints": 7,
+              "maxHitPoints": 10,
+              "minAttack": 1,
+              "maxAttack": 2,
+              "interactableVerbs": ["talk", "give", "recruit", "examine"],
+              "countByTier": [1, 1, 1]
+            }
+          ]
+        },
+        {
+          "factionId": "independent",
+          "weight": 2,
+          "minImperialPresence": 0,
+          "slots": [
+            {
+              "id": "rival_freelancer",
+              "role": "rival",
+              "titlePattern": "rival collector",
+              "glyph": "r",
+              "aiPolicyId": "resident",
+              "tags": ["rival_claimant", "mercenary"],
+              "roles": ["rival"],
+              "wantPattern": "Take {item} first and sell it to whoever pays best.",
+              "wantStakes": "Everything is negotiable: a better offer, a partnership, or a convincing bluff about the item's worth would all change their plans.",
+              "minHitPoints": 8,
+              "maxHitPoints": 11,
+              "minAttack": 1,
+              "maxAttack": 3,
+              "interactableVerbs": ["talk", "give", "examine"],
+              "countByTier": [1, 1, 1]
+            },
+            {
+              "id": "rival_muscle",
+              "role": "guard",
+              "titlePattern": "collector's muscle",
+              "glyph": "b",
+              "aiPolicyId": "guard",
+              "tags": ["objective_guard", "mercenary"],
+              "roles": ["guard"],
+              "wantPattern": "Make sure the collector leaves with {item} and without trouble.",
+              "wantStakes": "Paid by the collector; stands down the moment the collector does.",
+              "minHitPoints": 9,
+              "maxHitPoints": 12,
+              "minAttack": 1,
+              "maxAttack": 3,
+              "interactableVerbs": ["talk", "examine"],
+              "countByTier": [0, 1, 1]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
