@@ -314,7 +314,8 @@ public sealed class EngineViewBuilder
             BuildRepertoire(),
             objectiveCards.FirstOrDefault(),
             objectiveCards.Skip(1).ToArray(),
-            _engine.DescribeThreats());
+            _engine.DescribeThreats(),
+            JournalViewBuilder.BuildStructured(_state));
     }
 
     public IReadOnlyList<ObjectiveCard> ObjectiveCards() =>

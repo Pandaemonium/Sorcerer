@@ -255,7 +255,41 @@ public sealed record GameView(
     IReadOnlyList<ObjectiveCard>? OtherObjectives = null,
     // Generous combat telegraphs: perceived hostiles nearest-first, each with what it is poised to
     // do next turn (tactical-mastery pillar). Empty/absent when nothing threatens the sorcerer.
-    IReadOnlyList<ThreatCard>? Threats = null);
+    IReadOnlyList<ThreatCard>? Threats = null,
+    // WP9: the same visible promises/claims/pressures the flat Journal lists, but typed into
+    // navigable sections with stable ids and source/carrier/destination, so renderers can filter
+    // and section rather than reprinting one flat string list.
+    JournalView? StructuredJournal = null);
+
+/// <summary>One navigable journal line: a promise, objective, rumor, or thread, with a stable id
+/// and, where known, who it came from, who carries it, and where it points.</summary>
+public sealed record JournalEntryCard(
+    string Id,
+    string Category,
+    string Text,
+    string Status,
+    int Salience,
+    string? Source = null,
+    string? Carrier = null,
+    string? Destination = null,
+    IReadOnlyList<string>? Tags = null);
+
+/// <summary>An approaching pressure with a due turn: a sweep, warrant, patrol, cordon, or hunter.</summary>
+public sealed record JournalPressureCard(
+    string Id,
+    string Kind,
+    string Text,
+    int DueTurn);
+
+/// <summary>WP9 structured journal: current objectives + explicit next steps, all active promises,
+/// actionable rumors/secrets, approaching pressure with deadlines, and resolved/transformed
+/// threads. Mystery may hide truth or outcome, but never the available next step.</summary>
+public sealed record JournalView(
+    IReadOnlyList<JournalEntryCard> Objectives,
+    IReadOnlyList<JournalEntryCard> Promises,
+    IReadOnlyList<JournalEntryCard> Rumors,
+    IReadOnlyList<JournalPressureCard> Pressures,
+    IReadOnlyList<JournalEntryCard> Threads);
 
 public sealed record WorldCard(
     string CurrentZoneId,

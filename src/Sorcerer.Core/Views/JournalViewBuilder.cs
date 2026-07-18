@@ -90,6 +90,96 @@ public static class JournalViewBuilder
         return messages;
     }
 
+    /// <summary>WP9: the same visible knowledge the flat journal lists, typed into navigable
+    /// sections with stable ids and provenance. Renderers filter/section this; the flat list stays
+    /// for back-compatible human output.</summary>
+    public static JournalView BuildStructured(GameState state)
+    {
+        var visiblePromises = state.PromiseLedger.Promises
+            .Where(promise => promise.PlayerVisible)
+            .ToArray();
+
+        var objectives = visiblePromises
+            .Where(IsLeadPromise)
+            .Where(promise => !ObjectiveIsComplete(state, promise))
+            .OrderByDescending(promise => promise.Salience)
+            .ThenBy(promise => promise.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(promise => Entry(state, promise, "objective"))
+            .ToArray();
+
+        var promises = visiblePromises
+            .Where(promise => !IsLeadPromise(promise))
+            .Where(promise => !ObjectiveIsComplete(state, promise))
+            .OrderByDescending(promise => promise.Salience)
+            .ThenBy(promise => promise.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(promise => Entry(state, promise, "promise"))
+            .ToArray();
+
+        var threads = visiblePromises
+            .Where(promise => ObjectiveIsComplete(state, promise))
+            .OrderBy(promise => promise.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(promise => Entry(state, promise, "thread"))
+            .ToArray();
+
+        var rumors = state.Claims.Records
+            .Where(claim => claim.PlayerVisible && claim.Salience >= 3)
+            .OrderByDescending(claim => claim.Salience)
+            .ThenBy(claim => claim.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(claim => new JournalEntryCard(
+                claim.Id,
+                "rumor",
+                claim.Text,
+                ClaimJournalStatus(state, claim),
+                claim.Salience,
+                SourcePhrase(state, claim.SpeakerId, claim.Source),
+                EntityName(state, claim.SpeakerId),
+                null,
+                claim.Tags.ToArray()))
+            .ToArray();
+
+        var knowsReaping = state.Claims.Records.Any(claim =>
+            claim.Tags.Contains("reaping", StringComparer.OrdinalIgnoreCase));
+        var pressures = state.ScheduledEvents.Events
+            .Where(item => item.Kind.StartsWith("empire_", StringComparison.OrdinalIgnoreCase))
+            .Where(item => knowsReaping || !item.Kind.Equals("empire_sweep", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.DueTurn)
+            .Select(item => new JournalPressureCard(item.Id, item.Kind, PressureText(item), item.DueTurn))
+            .ToArray();
+
+        return new JournalView(objectives, promises, rumors, pressures, threads);
+    }
+
+    private static JournalEntryCard Entry(GameState state, WorldPromise promise, string category)
+    {
+        var destination = string.IsNullOrWhiteSpace(promise.ClaimedPlace)
+            ? null
+            : RegionCatalog.ReadablePlace(promise.ClaimedPlace);
+        return new JournalEntryCard(
+            promise.Id,
+            category,
+            promise.Text,
+            PromiseJournalStatus(state, promise),
+            promise.Salience,
+            SourcePhrase(state, promise.SourceSpeakerId, promise.Source),
+            EntityName(state, promise.SourceSpeakerId),
+            destination,
+            Array.Empty<string>());
+    }
+
+    private static string PressureText(ScheduledEventRecord item) => item.Kind switch
+    {
+        "empire_warrant" => $"A wanted poster is expected around turn {item.DueTurn}.",
+        "empire_patrol" => $"An imperial patrol is expected around turn {item.DueTurn}.",
+        "empire_cordon" => $"A manhunt cordon is expected to close around turn {item.DueTurn}.",
+        "empire_report" => IsOverdueReport(item)
+            ? $"An imperial post will notice a missing patrol around turn {item.DueTurn}."
+            : $"Someone who saw you is carrying a report toward an imperial desk (around turn {item.DueTurn}).",
+        "empire_hunter_trace" => $"Road talk of a Censorate witchhunter should reach you around turn {item.DueTurn}.",
+        "empire_hunter" => $"A witchhunter is expected to reach the district around turn {item.DueTurn}.",
+        "empire_sweep" => $"The imperial sweep is expected to reach {SweepTarget(item)} around turn {item.DueTurn}.",
+        _ => $"{item.Kind} is expected around turn {item.DueTurn}.",
+    };
+
     private static bool IsOverdueReport(ScheduledEventRecord item) =>
         item.Payload.TryGetValue("cause", out var cause)
         && WorldReactionSystem.OverdueReportCause.Equals(Convert.ToString(cause), StringComparison.OrdinalIgnoreCase);
