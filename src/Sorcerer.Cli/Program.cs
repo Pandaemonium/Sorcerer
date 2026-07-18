@@ -45,6 +45,15 @@ public static class Program
             backgroundAudit);
         var audit = new JsonlSpellAuditSink(Path.Combine("logs", "wild_magic_audit.jsonl"));
         var dialogueAudit = new JsonlDialogueAuditSink(Path.Combine("logs", "dialogue_audit.jsonl"));
+        if (options.ContentReport)
+        {
+            return await ContentReportRunner.RunAsync(
+                options.ContentReportSeeds,
+                options.Seed,
+                options.ContentReportOutput,
+                options.Json);
+        }
+
         if (options.Eval)
         {
             return await SpellEvalHarness.RunAsync(provider, audit, options.Json);
@@ -566,7 +575,10 @@ public sealed record CliOptions(
     int? BuildAttunement = null,
     int? BuildComposure = null,
     string? BuildCharterBonus = null,
-    string? Effort = null)
+    string? Effort = null,
+    bool ContentReport = false,
+    int ContentReportSeeds = 20,
+    string? ContentReportOutput = null)
 {
     /// <summary>The character-creation flags folded into a sanitized build, or null when none
     /// were passed — absent flags keep today's origin-only behavior exactly. All flags are
@@ -632,6 +644,9 @@ public sealed record CliOptions(
         int? buildAttunement = null;
         int? buildComposure = null;
         string? buildCharterBonus = null;
+        var contentReport = false;
+        var contentReportSeeds = 20;
+        string? contentReportOutput = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -758,6 +773,15 @@ public sealed record CliOptions(
                 case "--checkpoint" when index + 1 < args.Length:
                     checkpointPath = args[++index];
                     break;
+                case "--content-report":
+                    contentReport = true;
+                    break;
+                case "--content-report-seeds" when index + 1 < args.Length:
+                    contentReportSeeds = Math.Max(1, ReadPositiveInt(args[++index], contentReportSeeds));
+                    break;
+                case "--content-report-out" when index + 1 < args.Length:
+                    contentReportOutput = args[++index];
+                    break;
             }
         }
 
@@ -798,7 +822,10 @@ public sealed record CliOptions(
             buildAttunement,
             buildComposure,
             buildCharterBonus,
-            effort);
+            effort,
+            contentReport,
+            contentReportSeeds,
+            contentReportOutput);
     }
 
     private static int ReadPositiveInt(string value, int fallback) =>

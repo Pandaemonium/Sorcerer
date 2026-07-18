@@ -108,6 +108,10 @@ references inside them to Python modules or the old name.
   command/consequence/time/view spines, complexity budget, hotspot-convergence prerequisite,
   binding owner calibration, gameplay-first work packages, deletion-first pre-EA policy, live
   Gemini playtest loop, phase gates, and Opus execution protocol through 1.0.
+- [CONTENT_SPRINT_PLAN.md](CONTENT_SPRINT_PLAN.md): owner-calibrated one-day content sprint for a
+  shockingly lush first hour — region packs, a large item corpus, district-aware scenes, shared
+  enemy/pet archetypes, the organic waystation, multi-person Bralli dialogue, Free Folk content,
+  journal/hotkey legibility, exact content floors, live-Gemini CLI evidence, and finish gates.
 - [RUN_ARC.md](RUN_ARC.md): derived Escape/Foothold/War/Reach pacing for the target Marble Yard →
   Hollowmere → Brall → capital transect; it records that Brall is target geography, not a chapter
   gate.

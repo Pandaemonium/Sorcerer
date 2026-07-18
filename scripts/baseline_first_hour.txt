@@ -1,0 +1,19 @@
+# WP0 before-evidence: a live first-hour route through the current content.
+# Exercises live Gemini for both a wild cast and dialogue.
+inspect
+map
+atlas
+journal
+rumors
+cast I gather the loose light in the cell and coax the lock to remember being open
+inspect
+talk Who holds the keys to this ward, and what would move you to look away?
+travel east
+inspect
+atlas
+talk What crossing is this, and who here needs something a stranger could provide?
+rumors
+travel east
+inspect
+journal
+character
