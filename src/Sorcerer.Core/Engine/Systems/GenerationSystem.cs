@@ -1175,7 +1175,13 @@ public sealed class GenerationSystem
         IReadOnlyList<GridPoint> propPoints,
         List<StateDelta> deltas)
     {
-        var lootItems = ZoneLootGenerator.Generate(region, realm, _itemCatalog, _state.Seed, generatedState.CurrentZoneId);
+        var lootItems = ZoneLootGenerator.Generate(
+            region,
+            realm,
+            _itemCatalog,
+            _state.Seed,
+            generatedState.CurrentZoneId,
+            _state.SpawnedUniqueItemIds);
         if (lootItems.Count == 0)
         {
             return;

@@ -292,6 +292,12 @@ public static class ContentReportRunner
                 if (entity.TryGet<MerchantComponent>(out var merchant) && merchant.Wares.Count > 0)
                 {
                     merchants.Add(name);
+                    // Stock is part of first-hour item variety (the diversity gate combines loot,
+                    // stock, carried gear, documents, and encounter objects).
+                    foreach (var ware in merchant.Wares.Where(pair => pair.Value > 0).Select(pair => pair.Key))
+                    {
+                        items.Add(ware);
+                    }
                 }
 
                 continue;

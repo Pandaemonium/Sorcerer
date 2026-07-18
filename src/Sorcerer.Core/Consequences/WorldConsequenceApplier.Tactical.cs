@@ -258,7 +258,8 @@ public sealed partial class WorldConsequenceApplier
     private StateDelta ApplyImmediateDamageDelta(Entity target, int amount, string damageType)
     {
         var actor = target.Get<ActorComponent>();
-        var actual = Math.Max(1, amount - actor.Defense);
+        var equipmentDefense = target.TryGet<EquipmentEffectComponent>(out var effect) ? effect.Defense : 0;
+        var actual = Math.Max(1, amount - actor.Defense - equipmentDefense);
         var updated = actor with { HitPoints = Math.Max(0, actor.HitPoints - actual) };
         target.Set(updated);
         if (!updated.Alive)
@@ -298,17 +299,29 @@ public sealed partial class WorldConsequenceApplier
 
     private static int ScaleByResistance(Entity target, int amount, string damageType)
     {
-        if (!target.TryGet<ResistanceComponent>(out var resistance))
+        var resist = 0;
+        var weak = 0;
+        if (target.TryGet<ResistanceComponent>(out var resistance))
+        {
+            resist += resistance.Resistances.GetValueOrDefault(damageType);
+            weak += resistance.Weaknesses.GetValueOrDefault(damageType);
+        }
+
+        // Worn gear contributes resistance/weakness through the same derived cache combat reads for
+        // defense, so an armour tag or a cursed item shifts incoming damage without touching base stats.
+        if (target.TryGet<EquipmentEffectComponent>(out var effect))
+        {
+            resist += effect.Resistances.GetValueOrDefault(damageType);
+            weak += effect.Weaknesses.GetValueOrDefault(damageType);
+        }
+
+        if (resist == 0 && weak == 0)
         {
             return amount;
         }
 
-        var resistPercent = resistance.Resistances.TryGetValue(damageType, out var resist)
-            ? Math.Clamp(resist, 0, 95)
-            : 0;
-        var weakPercent = resistance.Weaknesses.TryGetValue(damageType, out var weak)
-            ? Math.Clamp(weak, 0, 200)
-            : 0;
+        var resistPercent = Math.Clamp(resist, 0, 95);
+        var weakPercent = Math.Clamp(weak, 0, 200);
         var scaled = amount * (100 - resistPercent + weakPercent) / 100.0;
         return Math.Max(0, (int)Math.Round(scaled, MidpointRounding.AwayFromZero));
     }

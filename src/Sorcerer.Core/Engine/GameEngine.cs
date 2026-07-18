@@ -23,7 +23,7 @@ public sealed class GameEngine
     private readonly BodySwapSystem _bodySwapSystem;
     private readonly GenerationSystem _generationSystem;
     private readonly InteractionSystem _interactionSystem;
-    private readonly ItemCatalog _itemCatalog = ItemCatalog.CreateMinimal();
+    private readonly ItemCatalog _itemCatalog = ItemCatalog.LoadDefault();
     private readonly LoreCatalog _loreCatalog = LoreCatalog.LoadDefault();
     private readonly InventoryService _inventoryService;
     private readonly ItemSystem _itemSystem;
@@ -714,6 +714,11 @@ public sealed class GameEngine
         IReadOnlyDictionary<string, object?>? details = null)
     {
         var attackerActor = attacker.Get<ActorComponent>();
+        // Re-stamp both derived equipment caches at strike time so combat reads fresh effects
+        // regardless of equip history (the damage/resistance site reads the defender's cache).
+        var attackerEffect = EquipmentEffectService.Recompute(attacker, _itemCatalog);
+        EquipmentEffectService.Recompute(defender, _itemCatalog);
+        var effectiveAttack = Math.Max(0, attackerActor.Attack + attackerEffect.Attack);
         var consequenceDetails = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["attacker"] = attacker.Id.Value,
@@ -730,7 +735,7 @@ public sealed class GameEngine
         var attackResult = ApplyConsequence(WorldConsequence.Damage(
             source,
             defender.Id.Value,
-            attackerActor.Attack,
+            effectiveAttack,
             damageType,
             sourceEntityId: attacker.Id.Value,
             evidence: evidence ?? $"{attacker.Name} attacked {defender.Name}.",

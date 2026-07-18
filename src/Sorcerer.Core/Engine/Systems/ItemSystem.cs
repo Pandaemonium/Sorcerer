@@ -467,7 +467,7 @@ public sealed class ItemSystem
             return ActionResult.Simple("equip", false, false, turnBefore, _state.Turn, $"{key} cannot be equipped.");
         }
 
-        var message = $"You equip {key} in your {slot}.";
+        var message = EquipMessage(key, slot);
         var applied = _engine.ApplyConsequence(WorldConsequence.UpdateEquipment(
             "item",
             actor.Id.Value,
@@ -494,6 +494,7 @@ public sealed class ItemSystem
             };
         }
 
+        EquipmentEffectService.Recompute(actor, _itemCatalog);
         var turnDeltas = _engine.AdvanceTurn();
         return new ActionResult
         {
@@ -547,6 +548,7 @@ public sealed class ItemSystem
             };
         }
 
+        EquipmentEffectService.Recompute(_state.ControlledEntity, _itemCatalog);
         var turnDeltas = _engine.AdvanceTurn();
         return new ActionResult
         {
@@ -599,6 +601,7 @@ public sealed class ItemSystem
             };
         }
 
+        EquipmentEffectService.Recompute(_state.ControlledEntity, _itemCatalog);
         var turnDeltas = _engine.AdvanceTurn();
         return new ActionResult
         {
@@ -642,6 +645,7 @@ public sealed class ItemSystem
                 };
             }
 
+            EquipmentEffectService.Recompute(_state.ControlledEntity, _itemCatalog);
             return new ActionResult
             {
                 Action = "unfocus",
@@ -689,6 +693,7 @@ public sealed class ItemSystem
             };
         }
 
+        EquipmentEffectService.Recompute(_state.ControlledEntity, _itemCatalog);
         return new ActionResult
         {
             Action = "unfocus",
@@ -1159,6 +1164,14 @@ public sealed class ItemSystem
                 || (definition is not null
                     && (key.Equals(definition.Id, StringComparison.OrdinalIgnoreCase)
                         || key.Equals(definition.Name, StringComparison.OrdinalIgnoreCase)))));
+    }
+
+    private string EquipMessage(string key, string slot)
+    {
+        var summary = EquipmentEffectService.Summary(_itemCatalog.Find(key)?.Modifier);
+        return string.IsNullOrEmpty(summary)
+            ? $"You equip {key} in your {slot}."
+            : $"You equip {key} in your {slot}. {summary}";
     }
 
     private static int ParseProfileAmount(string profile, int fallback)

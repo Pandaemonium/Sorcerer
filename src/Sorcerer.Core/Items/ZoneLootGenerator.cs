@@ -27,7 +27,8 @@ public static class ZoneLootGenerator
         RealmProfile realm,
         ItemCatalog catalog,
         int worldSeed,
-        string zoneId)
+        string zoneId,
+        ISet<string>? excludeUniqueIds = null)
     {
         var loot = region.GroundLoot ?? new RegionGroundLootDefinition();
         var rng = new DeterministicRng(WorldRoll.StableSeed(worldSeed, zoneId, region.Id, "ground_loot"));
@@ -43,13 +44,20 @@ public static class ZoneLootGenerator
             return Array.Empty<GeneratedZoneLootItem>();
         }
 
+        var spawnedUniques = excludeUniqueIds ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<GeneratedZoneLootItem>(count);
         for (var i = 0; i < count; i++)
         {
             var useful = rng.NextInt(0, 100) < loot.UsefulChancePercent
-                ? GenerateUseful(region, catalog, loot, rng)
+                ? GenerateUseful(region, catalog, loot, rng, spawnedUniques)
                 : null;
-            items.Add(useful ?? GenerateCurio(region, realm, rng));
+            var chosen = useful ?? GenerateCurio(region, realm, rng);
+            if (chosen.Definition.IsUnique)
+            {
+                spawnedUniques.Add(chosen.Definition.Id);
+            }
+
+            items.Add(chosen);
         }
 
         return items;
@@ -65,7 +73,8 @@ public static class ZoneLootGenerator
         RegionDefinition region,
         ItemCatalog catalog,
         RegionGroundLootDefinition loot,
-        IRng rng)
+        IRng rng,
+        ISet<string> spawnedUniques)
     {
         var warePool = WarePool(region, catalog);
         // 40 gold / 40 regional ware / 20 authored; ware weight folds into the others when the
@@ -87,21 +96,40 @@ public static class ZoneLootGenerator
                 $"A {ware.Name}, dropped or abandoned somewhere in {region.Name}.");
         }
 
+        // Region-weighted authored draw: cultural items surface where they belong, and a unique
+        // already produced this run drops out of the pool so distinctive finds never recur.
         var authoredPool = catalog.Items
             .Where(item => item.Kind is not ("currency" or "key"))
-            .OrderBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+            .Where(item => !(item.IsUnique && spawnedUniques.Contains(item.Id)))
+            .Select(item => (Item: item, Weight: item.RegionWeight(region.Id)))
+            .Where(entry => entry.Weight > 0)
+            .OrderBy(entry => entry.Item.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (authoredPool.Length == 0)
         {
             return null;
         }
 
-        var authored = authoredPool[rng.NextInt(0, authoredPool.Length)];
+        var total = authoredPool.Sum(entry => entry.Weight);
+        var pick = rng.NextInt(0, total);
+        var authored = authoredPool[^1].Item;
+        foreach (var entry in authoredPool)
+        {
+            pick -= entry.Weight;
+            if (pick < 0)
+            {
+                authored = entry.Item;
+                break;
+            }
+        }
+
         return new GeneratedZoneLootItem(
             authored,
             Quantity: 1,
             KindAuthored,
-            $"A {authored.Name} left behind in {region.Name}.");
+            string.IsNullOrWhiteSpace(authored.Description)
+                ? $"A {authored.Name} left behind in {region.Name}."
+                : authored.Description);
     }
 
     private static GeneratedZoneLootItem? GenerateGoldCache(

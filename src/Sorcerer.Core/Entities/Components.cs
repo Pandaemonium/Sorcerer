@@ -56,6 +56,31 @@ public sealed record EquipmentComponent(
     public static EquipmentComponent Empty() => new(new Dictionary<string, string>(), new HashSet<string>());
 }
 
+/// <summary>
+/// The derived combat/resolver payload of everything an entity currently has equipped (WP2,
+/// docs/CONTENT_SPRINT_PLAN.md). It is a cache recomputed by EquipmentEffectService whenever
+/// equipment changes and re-stamped at combat time; base ActorComponent stats are never mutated by
+/// equip/unequip. Readers add these on top of base stats: attack at the strike site, defense and
+/// resistance/weakness at the damage site, focus bias in resolver context.
+/// </summary>
+public sealed record EquipmentEffectComponent(
+    int Attack,
+    int Defense,
+    IReadOnlyDictionary<string, int> Resistances,
+    IReadOnlyDictionary<string, int> Weaknesses,
+    IReadOnlyList<string> FocusBias) : IEntityComponent
+{
+    public static EquipmentEffectComponent Empty { get; } = new(
+        0,
+        0,
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+        Array.Empty<string>());
+
+    public bool IsMeaningful =>
+        Attack != 0 || Defense != 0 || Resistances.Count > 0 || Weaknesses.Count > 0 || FocusBias.Count > 0;
+}
+
 public sealed record ItemComponent(
     string ItemType,
     int Value,

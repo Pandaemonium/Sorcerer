@@ -57,7 +57,12 @@ public sealed record ItemCard(
     IReadOnlyList<string> Tags,
     bool Protected,
     bool Equipped,
-    bool Focused);
+    bool Focused,
+    string Kind = "",
+    string Rarity = "common",
+    string Description = "",
+    string Effects = "",
+    string SpellBias = "");
 
 public sealed record ReagentCard(
     string Name,

@@ -160,7 +160,7 @@ public sealed class RegionalPopulationGenerationTests
         var bonds = await session.ExecuteAsync(new BondsCommand(apothecary.Name));
 
         Assert.True(wares.Success);
-        Assert.Contains(wares.Messages, message => message.Contains("red tincture", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(wares.Messages, message => message.Contains("marsh febrifuge", StringComparison.OrdinalIgnoreCase));
         Assert.True(services.Success);
         Assert.Contains(services.Messages, message => message.Contains("reed remedy", StringComparison.OrdinalIgnoreCase));
         Assert.True(give.Success);

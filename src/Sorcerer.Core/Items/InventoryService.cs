@@ -40,7 +40,12 @@ public sealed class InventoryService
                     inventory.TreasuredItems.Contains(pair.Key),
                     equippedItems.Contains(pair.Key),
                     equipment.FocusSlots.Any(slot => equipment.Slots.TryGetValue(slot, out var item)
-                        && item.Equals(pair.Key, StringComparison.OrdinalIgnoreCase)));
+                        && item.Equals(pair.Key, StringComparison.OrdinalIgnoreCase)),
+                    Kind: definition?.Kind ?? "",
+                    Rarity: definition?.Rarity ?? "common",
+                    Description: definition?.Description ?? "",
+                    Effects: EquipmentEffectService.Summary(definition?.Modifier),
+                    SpellBias: definition?.SpellBias ?? "");
             })
             .ToArray();
     }

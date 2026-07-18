@@ -75,7 +75,22 @@
           ],
           "wares": [
             {
-              "item": "grave salt",
+              "item": "powdered scrimshaw",
+              "min": 1,
+              "max": 3
+            },
+            {
+              "item": "flask of whale oil",
+              "min": 1,
+              "max": 3
+            },
+            {
+              "item": "bone luck-token",
+              "min": 1,
+              "max": 4
+            },
+            {
+              "item": "skin of storm-ale",
               "min": 1,
               "max": 3
             }
@@ -122,7 +137,8 @@
             "harbor"
           ],
           "roles": [
-            "resident"
+            "resident",
+            "merchant"
           ],
           "descriptions": [
             "Tar-black cord circles both wrists where a snapped line once chose not to kill.",
@@ -135,7 +151,24 @@
           "centerWeight": 3,
           "nearWeight": 5,
           "wildWeight": 2,
-          "knowledgeTier": 1
+          "knowledgeTier": 1,
+          "wares": [
+            {
+              "item": "bone-tipped harpoon",
+              "min": 1,
+              "max": 1
+            },
+            {
+              "item": "tarred rope harness",
+              "min": 1,
+              "max": 2
+            },
+            {
+              "item": "coil of tarred rope",
+              "min": 1,
+              "max": 3
+            }
+          ]
         }
       ]
     }

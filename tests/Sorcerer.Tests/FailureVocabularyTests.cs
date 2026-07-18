@@ -109,7 +109,7 @@ public sealed class FailureVocabularyTests
         // Drain the player's coin so the purchase is unaffordable.
         session.Engine.State.ControlledEntity.Get<InventoryComponent>().Items["gold"] = 0;
 
-        var result = await session.ExecuteAsync(new BuyCommand("red tincture"));
+        var result = await session.ExecuteAsync(new BuyCommand("marsh febrifuge"));
 
         Assert.False(result.Success);
         Assert.False(result.ConsumedTurn);

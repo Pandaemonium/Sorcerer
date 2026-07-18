@@ -65,7 +65,8 @@
           ],
           "roles": [
             "functionary",
-            "empire"
+            "empire",
+            "merchant"
           ],
           "descriptions": [
             "A gray-sleeved clerk counts confiscated marvels without looking directly at them.",
@@ -78,7 +79,29 @@
           "centerWeight": 4,
           "nearWeight": 2,
           "wildWeight": 0,
-          "knowledgeTier": 2
+          "knowledgeTier": 2,
+          "wares": [
+            {
+              "item": "flask of lamp oil",
+              "min": 1,
+              "max": 3
+            },
+            {
+              "item": "pouch of coarse salt",
+              "min": 1,
+              "max": 4
+            },
+            {
+              "item": "inspector's waxed gloves",
+              "min": 1,
+              "max": 1
+            },
+            {
+              "item": "vial of permit ink",
+              "min": 1,
+              "max": 2
+            }
+          ]
         },
         {
           "id": "censor_aide",

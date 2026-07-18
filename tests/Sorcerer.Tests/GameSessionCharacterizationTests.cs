@@ -8448,7 +8448,7 @@ public sealed class GameSessionCharacterizationTests
             && Equals(delta.Details["populationArchetype"], "reed_apothecary")
             && Equals(delta.Details["populationHabitat"], "center")
             && !delta.IsPlayerVisible());
-        Assert.Equal(2, travel.Deltas.Count(delta =>
+        Assert.Equal(5, travel.Deltas.Count(delta =>
             delta.Operation == "generateResidentWares"
             && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.OfferTrade)
             && Equals(delta.Details["stockSource"], "regional_population")));
@@ -8456,8 +8456,10 @@ public sealed class GameSessionCharacterizationTests
             entity.TryGet<TagsComponent>(out var tags)
             && tags.Tags.Contains("reed_apothecary", StringComparer.OrdinalIgnoreCase));
         Assert.True(resident.TryGet<MerchantComponent>(out var merchant));
-        Assert.InRange(merchant.Wares["red tincture"], 1, 2);
-        Assert.InRange(merchant.Wares["grave salt"], 1, 3);
+        // WP2 routed merchants through the authored regional corpus (docs/CONTENT_SPRINT_PLAN.md);
+        // the reed apothecary now stocks Hollowmere medicine and river goods.
+        Assert.InRange(merchant.Wares["marsh febrifuge"], 1, 2);
+        Assert.InRange(merchant.Wares["bundle of reed pith"], 2, 5);
     }
 
     [Fact]
@@ -8688,26 +8690,28 @@ public sealed class GameSessionCharacterizationTests
 
         await session.ExecuteAsync(new TravelCommand(Direction.East));
         var wares = await session.ExecuteAsync(new WaresCommand());
-        var buy = await session.ExecuteAsync(new BuyCommand("red tincture"));
-        var sell = await session.ExecuteAsync(new SellCommand("red tincture"));
+        // WP2 stocks the reed apothecary from the authored Hollowmere corpus; a round-trip buy/sell
+        // returns to the starting gold regardless of the ware chosen.
+        var buy = await session.ExecuteAsync(new BuyCommand("marsh febrifuge"));
+        var sell = await session.ExecuteAsync(new SellCommand("marsh febrifuge"));
         var inventory = session.Engine.State.ControlledEntity.Get<InventoryComponent>();
 
         Assert.True(wares.Success);
-        Assert.Contains(wares.Messages, message => message.Contains("red tincture", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(wares.Messages, message => message.Contains("marsh febrifuge", StringComparison.OrdinalIgnoreCase));
         Assert.True(buy.Success);
-        Assert.Contains(buy.Messages, message => message.Contains("buy red tincture", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(buy.Messages, message => message.Contains("buy marsh febrifuge", StringComparison.OrdinalIgnoreCase));
         var buyTrade = Assert.Single(buy.Deltas, delta => delta.Operation == "executeTrade");
         Assert.Equal(WorldConsequenceTypes.ExecuteTrade, buyTrade.Details["consequenceType"]);
         Assert.Equal("buy", buyTrade.Details["mode"]);
-        Assert.Equal("red tincture", buyTrade.Details["item"]);
+        Assert.Equal("marsh febrifuge", buyTrade.Details["item"]);
         Assert.True(sell.Success);
-        Assert.Contains(sell.Messages, message => message.Contains("sell red tincture", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(sell.Messages, message => message.Contains("sell marsh febrifuge", StringComparison.OrdinalIgnoreCase));
         var sellTrade = Assert.Single(sell.Deltas, delta => delta.Operation == "executeTrade");
         Assert.Equal(WorldConsequenceTypes.ExecuteTrade, sellTrade.Details["consequenceType"]);
         Assert.Equal("sell", sellTrade.Details["mode"]);
-        Assert.Equal("red tincture", sellTrade.Details["item"]);
+        Assert.Equal("marsh febrifuge", sellTrade.Details["item"]);
         Assert.Equal(15, inventory.Items["gold"]);
-        Assert.DoesNotContain(inventory.Items, pair => pair.Key.Equals("red tincture", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(inventory.Items, pair => pair.Key.Equals("marsh febrifuge", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

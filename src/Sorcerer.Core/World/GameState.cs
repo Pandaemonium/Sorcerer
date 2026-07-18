@@ -114,6 +114,10 @@ public sealed class GameState
 
     public Dictionary<string, object?> WorldFlags { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Ids of distinctive (unique/bounded) items already produced by generation this run,
+    /// so a unique find never recurs across zones (WP2, docs/CONTENT_SPRINT_PLAN.md).</summary>
+    public HashSet<string> SpawnedUniqueItemIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public Entity ControlledEntity => Entities[ControlledEntityId];
 
     public EntityId NextEntityId(string prefix) =>
