@@ -715,6 +715,39 @@ public sealed class ItemSystem
         return ActionResult.Simple("reagents", true, false, _state.Turn, _state.Turn, messages);
     }
 
+    public ActionResult Inventory()
+    {
+        var cards = _inventoryService.BuildInventoryCards(_state.ControlledEntity);
+        var messages = cards.Count == 0
+            ? new[] { "You are carrying nothing." }
+            : cards.Select(card =>
+            {
+                var flags = new List<string>();
+                if (card.Equipped)
+                {
+                    flags.Add("equipped");
+                }
+                if (card.Focused)
+                {
+                    flags.Add("focused");
+                }
+                if (card.Protected)
+                {
+                    flags.Add("protected");
+                }
+                if (!string.IsNullOrWhiteSpace(card.Alteration))
+                {
+                    flags.Add($"altered: {card.Alteration}");
+                }
+
+                var kind = string.IsNullOrWhiteSpace(card.Kind) ? "item" : card.Kind;
+                var state = flags.Count == 0 ? "" : $"; {string.Join(", ", flags)}";
+                var effects = string.IsNullOrWhiteSpace(card.Effects) ? "" : $" Effects: {card.Effects}.";
+                return $"{card.Quantity}x {card.Name} [{kind}; value {card.Value}{state}].{effects}";
+            }).ToArray();
+        return ActionResult.Simple("inventory", true, false, _state.Turn, _state.Turn, messages);
+    }
+
     public ActionResult Wares(string? target)
     {
         var turn = _state.Turn;
@@ -919,7 +952,7 @@ public sealed class ItemSystem
         }
 
         var definition = _itemCatalog.Find(key);
-        var price = Math.Max(1, definition?.Value ?? 1);
+        var price = AlteredItemPrice(_state.ControlledEntity, merchant, key, Math.Max(1, definition?.Value ?? 1));
         if (merchantComponent.Gold < price)
         {
             return new ActionResult
@@ -982,6 +1015,29 @@ public sealed class ItemSystem
         return FindInventoryKey(inventory, item) is not null;
     }
 
+    private static int AlteredItemPrice(Entity seller, Entity merchant, string item, int basePrice)
+    {
+        if (!seller.TryGet<ItemAlterationComponent>(out var alterations)
+            || !alterations.Profiles.TryGetValue(item, out var profileId))
+        {
+            return basePrice;
+        }
+
+        var faction = merchant.TryGet<FactionComponent>(out var membership)
+            ? membership.FactionId
+            : merchant.TryGet<ActorComponent>(out var actor) ? actor.Faction : "neutral";
+        var multiplier = profileId.ToLowerInvariant() switch
+        {
+            "altered_charter_touched" when faction.Contains("empire", StringComparison.OrdinalIgnoreCase) => 1.5,
+            "altered_charter_touched" when faction.Contains("free", StringComparison.OrdinalIgnoreCase) => 0.5,
+            "altered_wild_stained" when faction.Contains("free", StringComparison.OrdinalIgnoreCase) => 1.5,
+            "altered_wild_stained" when faction.Contains("empire", StringComparison.OrdinalIgnoreCase) => 0.5,
+            "altered_bone_bound" when faction.Contains("brall", StringComparison.OrdinalIgnoreCase) => 1.5,
+            _ => 1.0,
+        };
+        return Math.Max(1, (int)Math.Round(basePrice * multiplier, MidpointRounding.AwayFromZero));
+    }
+
     public bool IsCarrying(Entity entity, string item) =>
         entity.TryGet<InventoryComponent>(out var inventory)
         && FindInventoryKey(inventory, item) is not null;
@@ -1032,7 +1088,10 @@ public sealed class ItemSystem
 
         return inventory.Items.Keys.FirstOrDefault(key =>
             key.Contains(item, StringComparison.OrdinalIgnoreCase)
-            || item.Contains(key, StringComparison.OrdinalIgnoreCase));
+            || item.Contains(key, StringComparison.OrdinalIgnoreCase)
+            || NormalizeId(key, "item").Equals(NormalizeId(item, "item"), StringComparison.OrdinalIgnoreCase)
+            || NormalizeId(_itemCatalog.Find(key)?.Name ?? "", "item")
+                .Equals(NormalizeId(item, "item"), StringComparison.OrdinalIgnoreCase));
     }
 
     private string InventoryKey(Entity entity, ItemComponent item)

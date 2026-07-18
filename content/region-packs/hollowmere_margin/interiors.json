@@ -104,6 +104,70 @@
                 "road"
               ]
             }
+          ],
+          "actors": [
+            {
+              "id": "relay_gate_clerk",
+              "name": "Sera Fold, relay gate clerk",
+              "glyph": "c",
+              "placement": "threshold",
+              "faction": "neutral",
+              "hitPoints": 8,
+              "attack": 1,
+              "aiPolicyId": "resident",
+              "tags": ["empire", "clerk", "gatekeeper", "waystation", "bargain"],
+              "roles": ["clerk", "gatekeeper", "witness"],
+              "description": "Sera keeps three permit queues in her head and dislikes the sweep officers who make every exception her fault.",
+              "want": "Finish this shift without admitting the sweep's schedule has made the road less safe.",
+              "wantStakes": "A precise favor, useful paperwork, or evidence against her supervisor could turn procedure into permission.",
+              "initialItems": ["blank_permit", "permit_ink"]
+            },
+            {
+              "id": "relay_sealed_courier",
+              "name": "Tomas Gray-Rein, delayed courier",
+              "glyph": "p",
+              "placement": "threshold",
+              "faction": "neutral",
+              "hitPoints": 9,
+              "attack": 2,
+              "aiPolicyId": "resident",
+              "tags": ["empire", "courier", "credential", "schedule", "waystation"],
+              "roles": ["courier", "witness"],
+              "description": "A sealed satchel is chained to Tomas's belt; his second-best compliance writ is tucked where a trade, trick, or threat might reach it.",
+              "want": "Replace a lame relay horse without being marked late at the next post.",
+              "wantStakes": "He will exchange spare papers for something that solves the delay, or yield them to a convincing danger.",
+              "initialItems": ["compliance_writ"]
+            },
+            {
+              "id": "relay_records_clerk",
+              "name": "Ola Red-Rule, records clerk",
+              "glyph": "r",
+              "placement": "interior",
+              "faction": "neutral",
+              "hitPoints": 8,
+              "attack": 1,
+              "aiPolicyId": "resident",
+              "tags": ["empire", "clerk", "records", "waystation"],
+              "roles": ["clerk", "resident", "witness"],
+              "description": "Ola has begun annotating the sweep ledger in a private system of tiny eel-shaped commas.",
+              "want": "Keep one Hollowmere household off the next reconciliation list without being caught changing the arithmetic.",
+              "wantStakes": "A quiet ally could earn a confession, a warning route, or help opening the sealed dispatch case."
+            },
+            {
+              "id": "relay_post_warden",
+              "name": "relay post warden",
+              "glyph": "W",
+              "placement": "interior",
+              "faction": "empire",
+              "hitPoints": 13,
+              "attack": 4,
+              "aiPolicyId": "guard",
+              "tags": ["empire", "yard_warden", "bruiser", "melee", "waystation"],
+              "roles": ["warden", "guard"],
+              "description": "The warden watches the schedule cases rather than the door; paperwork is the objective and violence is only one way to change that.",
+              "want": "Keep the dispatch cases sealed until the next authorized handoff.",
+              "wantStakes": "Compliance, bribery, distraction, intimidation, or a better order can all displace that duty."
+            }
           ]
         },
         {

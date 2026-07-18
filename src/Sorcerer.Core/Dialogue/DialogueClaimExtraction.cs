@@ -16,7 +16,9 @@ public sealed record DialogueClaimRequest(
     IReadOnlyList<ClaimRecord> RecentClaims,
     string? ListenerEntityId = null,
     IReadOnlyList<string>? SelectedParserCapabilityIds = null,
-    IReadOnlyList<DialogueParserCapabilityCard>? ParserCapabilityCards = null);
+    IReadOnlyList<DialogueParserCapabilityCard>? ParserCapabilityCards = null,
+    string? SpeakerWant = null,
+    IReadOnlyList<string>? ListenerInventory = null);
 
 public sealed record DialogueParserCapabilityCard(
     string Id,
@@ -139,6 +141,17 @@ public static class DialogueParserCapabilityCatalog
                 "Use offer_trade for offers only; buy/sell/request commands execute transactions.",
             }),
         new DialogueParserCapabilityCard(
+            "bargains",
+            "Typed Bargains",
+            "Concrete alternative settlements proposed by this speaker for an active debt or negotiation.",
+            new[]
+            {
+                "Use proposals.bargain only when the NPC clearly states terms. claimantEntityId must be the speaker id.",
+                "Each option has id, label, and 1-5 typed terms. Kinds: currency, item, service, standing, concession, deadline.",
+                "currency: quantity; item/service: resourceId plus quantity when relevant; standing: factionId, standingAxis, standingDelta; deadline: dueTurn or dueInTurns.",
+                "A deadline constrains a service; it is never a settlement by itself. Use the speaker's exact want id as a service resourceId when one is supplied.",
+            }),
+        new DialogueParserCapabilityCard(
             "typed_consequences",
             "Typed Consequences",
             "Generic typed consequences when no narrower dialogue action fits.",
@@ -250,6 +263,11 @@ public static class DialogueParserCapabilityCatalog
         if (ContainsAny(text, "service", "trade", "sell", "buy", "wares", "stock", "merchant", "cost", "gold", "grave salt"))
         {
             selected.Add("services_trade");
+        }
+
+        if (ContainsAny(text, "bargain", "terms", "settle", "settlement", "deal", "agreement", "pay", "payment", "concession", "deadline", "in exchange", "stand down"))
+        {
+            selected.Add("bargains");
         }
 
         if (ContainsAny(text, "curse", "status", "transform", "consequence", "mark you", "mark myself"))

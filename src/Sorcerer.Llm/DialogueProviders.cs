@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Dialogue;
+using Sorcerer.Core.World;
 using Sorcerer.Llm.Configuration;
 
 namespace Sorcerer.Llm;
@@ -59,6 +60,28 @@ public sealed class MockDialogueProvider : IDialogueProvider
         DialogueRequest request,
         CancellationToken cancellationToken)
     {
+        if (request.Participants is { Count: >= 2 } group)
+        {
+            var utterances = group.Take(4).Select((participant, index) =>
+                new DialogueUtteranceResponse(
+                    participant.EntityId,
+                    index == 0
+                        ? $"On that question, {participant.Name} says what matters to them is {PlayerFacingWant(participant.Want)}."
+                        : $"{participant.Name} answers the last voice from their own side of the matter.",
+                    "plain",
+                    index == 0 ? "answer" : "argue")).ToArray();
+            var groupResponse = new DialogueResponse(
+                string.Join("\n", utterances.Select(utterance => $"{utterance.SpeakerEntityId}: {utterance.SpokenText}")),
+                Intent: "group_exchange",
+                Utterances: utterances);
+            return Task.FromResult(new DialogueProviderResult(
+                Name,
+                JsonSerializer.Serialize(groupResponse, JsonOptions),
+                TechnicalFailure: false,
+                Error: null,
+                Response: groupResponse));
+        }
+
         var lower = request.PlayerText.ToLowerInvariant();
         var claims = new List<DialogueClaimProposal>();
         var memories = new List<DialogueMemoryProposal>();
@@ -301,6 +324,20 @@ public sealed class MockDialogueProvider : IDialogueProvider
             Response: response));
     }
 
+    private static string PlayerFacingWant(string? want)
+    {
+        if (string.IsNullOrWhiteSpace(want))
+        {
+            return "what happens here next";
+        }
+
+        var colon = want.IndexOf(':');
+        var text = want.StartsWith("Want id ", StringComparison.OrdinalIgnoreCase) && colon >= 0
+            ? want[(colon + 1)..]
+            : want;
+        return text.Trim().TrimEnd('.');
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = false,
@@ -346,7 +383,7 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
         timeout.CancelAfter(_timeout);
 
         var first = await _chat.ChatAsync(
-            OllamaDialogueProvider.SystemPrompt(),
+            OllamaDialogueProvider.SystemPrompt(request),
             OllamaDialogueProvider.UserPrompt(request, retryNote: null),
             temperature: 0.35,
             maxTokens: 1024,
@@ -366,8 +403,13 @@ public sealed class OpenAiCompatibleDialogueProvider : IDialogueProvider
             return Success(first.Content, response, first.Stats);
         }
 
+        if (request.Participants is { Count: >= 2 })
+        {
+            return Failure(first.Content, parseError ?? degeneration ?? "Group dialogue response was invalid.", first.Stats);
+        }
+
         var retry = await _chat.ChatAsync(
-            OllamaDialogueProvider.SystemPrompt() + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
+            OllamaDialogueProvider.SystemPrompt(request) + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
             OllamaDialogueProvider.UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
             temperature: 0.2,
             maxTokens: 1024,
@@ -434,7 +476,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
 
         var first = await ChatAsync(
             "dialogue",
-            SystemPrompt(),
+            SystemPrompt(request),
             UserPrompt(request, retryNote: null),
             temperature: 0.35,
             maxTokens: 1024,
@@ -453,9 +495,17 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             return Success(first.Content, response, first.Stats);
         }
 
+        // A group exchange is intentionally one provider call: retrying could silently replace a
+        // participant's already-materialized voice. Invalid speaker attribution is a technical
+        // failure and consumes no turn.
+        if (request.Participants is { Count: >= 2 })
+        {
+            return Failure(first.Content, parseError ?? degeneration ?? "Group dialogue response was invalid.");
+        }
+
         var retry = await ChatAsync(
             "dialogue-repair",
-            SystemPrompt() + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
+            SystemPrompt(request) + " This is a repair attempt. Return valid JSON only, with a non-empty spokenText that answers the player.",
             UserPrompt(request, parseError ?? degeneration ?? "The previous response was unusable."),
             temperature: 0.2,
             maxTokens: 1024,
@@ -557,6 +607,60 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
                 return false;
             }
 
+            if (request.Participants is { Count: >= 2 })
+            {
+                if (!root.TryGetProperty("utterances", out var utteranceRoot) || utteranceRoot.ValueKind != JsonValueKind.Array)
+                {
+                    error = "Group dialogue JSON did not contain an utterances array.";
+                    return false;
+                }
+
+                var authorized = request.Participants.Select(participant => participant.EntityId)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var utterances = new List<DialogueUtteranceResponse>();
+                foreach (var element in utteranceRoot.EnumerateArray().Take(8))
+                {
+                    if (element.ValueKind != JsonValueKind.Object)
+                    {
+                        error = "Group utterance was not an object.";
+                        return false;
+                    }
+
+                    var speakerId = ReadString(element, "speakerEntityId", "speakerId", "speaker");
+                    var line = ReadString(element, "spokenText", "spoken", "text", "line");
+                    if (string.IsNullOrWhiteSpace(speakerId) || !authorized.Contains(speakerId) || string.IsNullOrWhiteSpace(line))
+                    {
+                        error = string.IsNullOrWhiteSpace(speakerId) || !authorized.Contains(speakerId ?? "")
+                            ? "Group utterance used an unauthorized speaker id."
+                            : "Group utterance contained empty speech.";
+                        return false;
+                    }
+
+                    var utteranceProposals = element.TryGetProperty("proposals", out var utteranceProposalRoot)
+                        && utteranceProposalRoot.ValueKind == JsonValueKind.Object
+                            ? ParseProposals(utteranceProposalRoot, request, line)
+                            : null;
+                    utterances.Add(new DialogueUtteranceResponse(
+                        speakerId.Trim(),
+                        line.Trim(),
+                        ReadString(element, "delivery", "tone"),
+                        ReadString(element, "intent"),
+                        utteranceProposals));
+                }
+
+                if (utterances.Count < 2)
+                {
+                    error = "Group dialogue requires at least two attributed utterances.";
+                    return false;
+                }
+
+                response = new DialogueResponse(
+                    string.Join("\n", utterances.Select(utterance => $"{utterance.SpeakerEntityId}: {utterance.SpokenText}")),
+                    Intent: "group_exchange",
+                    Utterances: utterances);
+                return true;
+            }
+
             var spokenText = ReadString(root, "spokenText", "spoken", "text", "reply", "line");
             if (string.IsNullOrWhiteSpace(spokenText))
             {
@@ -622,12 +726,85 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         var bond = ParseBond(proposals, request);
         var want = ParseWant(proposals, request);
         var actions = ParseActions(proposals).ToArray();
+        var bargain = ParseBargain(proposals, request);
         return new DialogueProposalSet(
             Claims: claims,
             Memories: memories,
             Bond: bond,
             Want: want,
-            Actions: actions);
+            Actions: actions,
+            Bargain: bargain);
+    }
+
+    private static BargainOffer? ParseBargain(JsonElement proposals, DialogueRequest request)
+    {
+        if (!proposals.TryGetProperty("bargain", out var bargain)
+            || bargain.ValueKind != JsonValueKind.Object
+            || !bargain.TryGetProperty("options", out var optionRoot)
+            || optionRoot.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var options = new List<BargainOption>();
+        foreach (var option in optionRoot.EnumerateArray().Take(4))
+        {
+            if (option.ValueKind != JsonValueKind.Object
+                || !option.TryGetProperty("terms", out var termRoot)
+                || termRoot.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var terms = new List<BargainTerm>();
+            foreach (var term in termRoot.EnumerateArray().Take(5))
+            {
+                if (term.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var dueTurn = ReadOptionalInt(term, "dueTurn", "due_turn");
+                var dueIn = ReadOptionalInt(term, "dueInTurns", "due_in_turns");
+                if (dueTurn is null && dueIn is not null)
+                {
+                    dueTurn = request.Turn + Math.Max(1, dueIn.Value);
+                }
+
+                terms.Add(new BargainTerm(
+                    ReadString(term, "id", "termId", "term_id") ?? $"term_{terms.Count + 1}",
+                    ReadString(term, "kind", "type") ?? "",
+                    ReadString(term, "text", "description") ?? "",
+                    Math.Max(1, ReadInt(term, 1, "quantity", "amount")),
+                    ReadString(term, "resourceId", "resource_id", "item", "service"),
+                    ReadString(term, "factionId", "faction_id", "faction"),
+                    ReadString(term, "standingAxis", "standing_axis", "axis"),
+                    ReadInt(term, 0, "standingDelta", "standing_delta", "delta"),
+                    dueTurn));
+            }
+
+            if (terms.Count > 0)
+            {
+                options.Add(new BargainOption(
+                    ReadString(option, "id", "optionId", "option_id") ?? $"option_{options.Count + 1}",
+                    ReadString(option, "label", "name") ?? $"option {options.Count + 1}",
+                    terms));
+            }
+        }
+
+        if (options.Count == 0)
+        {
+            return null;
+        }
+
+        var expiresTurn = ReadOptionalInt(bargain, "expiresTurn", "expires_turn");
+        var expiresIn = ReadOptionalInt(bargain, "expiresInTurns", "expires_in_turns");
+        return new BargainOffer(
+            ReadString(bargain, "claimantEntityId", "claimant_entity_id") ?? request.Speaker.EntityId,
+            ReadString(bargain, "summary", "text") ?? "Choose one concrete settlement.",
+            options,
+            request.Turn,
+            expiresTurn ?? (expiresIn is null ? null : request.Turn + Math.Max(1, expiresIn.Value)));
     }
 
     private static IEnumerable<DialogueClaimProposal> ParseClaims(
@@ -1152,15 +1329,36 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
     private static string Normalize(string text) =>
         new(text.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
-    internal static string SystemPrompt() =>
-        "Sorcerer NPC dialogue. Return only JSON: "
-        + "{\"spokenText\":\"NPC speech\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\"}. "
-        + "Speak only as the speaker: no narration, markdown, stage directions, omniscience, or extra fields. "
-        + "Answer the newest player line directly in 3-6 concrete sentences; a blank line inside spokenText is okay. "
-        + "Use supplied speaker/listener/scene/cards/history only. Player claims are not truth; speak from NPC knowledge, uncertainty, motives, want, and bond. "
-        // Voice (docs/AESTHETICS_AND_TONE.md, narration voice): grounded and specific, not portentous.
-        + "Sound like a particular person with local concerns. Use concrete names, roads, work, prices, weather. Avoid cosmic phrases like \"the world remembers\" unless this NPC would talk that way. "
-        + "If regionVoice/history exist, honor them. Do not output claims/proposals/mechanics; a parser runs later. Character refusal is valid spokenText.";
+    internal static string SystemPrompt() => SystemPrompt(request: null);
+
+    internal static string SystemPrompt(DialogueRequest? request)
+    {
+        if (request?.Participants is { Count: >= 2 })
+        {
+            return "Sorcerer group dialogue. Return one JSON object with exactly one utterances key: {\"utterances\":[{\"speakerEntityId\":\"one exact supplied participant id\",\"spokenText\":\"one complete sentence\",\"delivery\":\"plain|warm|wary|hostile\",\"intent\":\"answer|argue|ask|inform|confide|refuse\",\"proposals\":null}]}. "
+                + "Produce 2-4 short utterances forming one coherent exchange. Never repeat a JSON key. Never output an array of ids as proposals. Each spokenText must be one complete sentence under 180 characters. Use only exact ids in participants; never speak as the player, narrator, or an unlisted entity. Each voice must reflect its own tags, faction, profile, want, and knowledge. Participants may disagree and answer one another. "
+                + "At most one utterance may have non-null proposals. Its exact wrapper is {\"claims\":[],\"memories\":[],\"bond\":null,\"want\":null,\"actions\":[],\"bargain\":null}; omit no wrapper fields and use null for an unused bargain. Only when that same spoken line creates a concrete mechanic may the corresponding field be nonempty. A typed bargain is {claimantEntityId,summary,options:[{id,label,terms:[{id,kind,text,quantity,resourceId,factionId,standingAxis,standingDelta,dueInTurns}]}]}; kinds are currency, item, service, standing, concession, deadline, and claimantEntityId must equal that utterance's speakerEntityId. A deadline must accompany a service. All entity ids must be the player or supplied participants. Never emit a generic consequence action. No narration, markdown, stage directions, omniscience, or invented mechanics.";
+        }
+
+        var prompt = "Sorcerer NPC dialogue. Return only JSON: "
+            + "{\"spokenText\":\"NPC speech\",\"delivery\":\"hushed|warm|wary|hostile|plain\",\"intent\":\"answer|refuse|inform|confide|threaten|ask|evade\"}. "
+            + "Speak only as the speaker: no narration, markdown, stage directions, omniscience, or extra fields. "
+            + "Answer the newest player line directly in 3-6 concrete sentences; a blank line inside spokenText is okay. "
+            + "Use supplied speaker/listener/scene/cards/history only. Player claims are not truth; speak from NPC knowledge, uncertainty, motives, want, and bond. "
+            // Voice (docs/AESTHETICS_AND_TONE.md, narration voice): grounded and specific, not portentous.
+            + "Sound like a particular person with local concerns. Use concrete names, roads, work, prices, weather. Avoid cosmic phrases like \"the world remembers\" unless this NPC would talk that way. "
+            + "If regionVoice/history exist, honor them. Do not output claims/proposals/mechanics; a parser runs later. Character refusal is valid spokenText.";
+        if (request is not null && BargainLanguage(request.PlayerText))
+        {
+            prompt += " If stating settlement terms, name only gold or an exact unprotected listener inventory entry. Gold/items must be given directly to the speaker, not discarded elsewhere; protected entries are unavailable. A service must concern the speaker's supplied want. State a concrete if-X-then-Y exchange, or clearly refuse.";
+        }
+
+        return prompt;
+    }
+
+    private static bool BargainLanguage(string text) =>
+        new[] { "bargain", "terms", "settle", "deal", "stand down", "in exchange", "gold amount", "deadline" }
+            .Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase));
 
     // Stable context first so a local backend can reuse the KV prefix across turns of one
     // conversation; the volatile tail (recent exchange, this turn's line, any retry note) changes
@@ -1175,6 +1373,8 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
             ["scene"] = CompactScene(request.Scene),
             ["turn"] = request.Turn,
         };
+
+        AddIfAny(payload, "participants", (request.Participants ?? Array.Empty<DialogueParticipantCard>()).Select(CompactParticipant));
 
         AddIfAny(payload, "selectedCards", request.SelectedContextCardIds);
         AddIfAny(payload, "cards", (request.ContextCards ?? Array.Empty<DialogueContextCardPayload>())
@@ -1205,6 +1405,7 @@ public sealed class OllamaDialogueProvider : IDialogueProvider
         AddText(value, "description", participant.Description, 240);
         AddText(value, "bond", participant.BondSummary, 160);
         AddText(value, "want", participant.Want, 240);
+        AddIfAny(value, "inventory", (participant.Inventory ?? Array.Empty<string>()).Take(12));
         return value;
     }
 

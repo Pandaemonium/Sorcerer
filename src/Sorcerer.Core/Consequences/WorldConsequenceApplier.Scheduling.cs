@@ -106,6 +106,15 @@ public sealed partial class WorldConsequenceApplier
             realizationKind,
             ReadBool(payload, "autoBind") ?? true);
         var finalPromise = bound ?? promise;
+        if (payload.TryGetValue("journey", out var journeyValue) && journeyValue is JourneyPlan journey)
+        {
+            finalPromise = _state.PromiseLedger.SetJourney(finalPromise.Id, journey, status: "active") ?? finalPromise;
+        }
+        var costProfileId = FirstNonBlank(ReadString(payload, "costProfileId"), ReadString(payload, "cost_profile_id"));
+        if (!string.IsNullOrWhiteSpace(costProfileId))
+        {
+            finalPromise = _state.PromiseLedger.SetCostProfile(finalPromise.Id, costProfileId) ?? finalPromise;
+        }
         var promiseNoun = finalPromise.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase) ? "curse" : "promise";
         var defaultMessage = finalPromise.Status == "bound"
             ? $"A {promiseNoun} binds to {finalPromise.BoundTargetId ?? finalPromise.BoundPlace}: {finalPromise.Text}"
@@ -135,7 +144,8 @@ public sealed partial class WorldConsequenceApplier
                 ("sourceClaimId", finalPromise.SourceClaimId),
                 ("sourceSpeakerId", finalPromise.SourceSpeakerId),
                 ("sourceListenerSoulId", finalPromise.SourceListenerSoulId),
-                ("sourceConfidence", finalPromise.SourceConfidence)));
+                ("sourceConfidence", finalPromise.SourceConfidence),
+                ("costProfileId", finalPromise.CostProfileId)));
         return AppliedFromDelta(consequence, delta);
     }
 
@@ -183,6 +193,7 @@ public sealed partial class WorldConsequenceApplier
             ?? ReadBool(payload, "clear_eligibility_failure")
             ?? false;
         var claimedPlace = FirstNonBlank(ReadString(payload, "claimedPlace"), ReadString(payload, "claimed_place"));
+        var journey = payload.TryGetValue("journey", out var journeyValue) ? journeyValue as JourneyPlan : null;
         var wantsBinding = !string.IsNullOrWhiteSpace(boundPlace)
             || !string.IsNullOrWhiteSpace(boundTargetId)
             || !string.IsNullOrWhiteSpace(triggerHint)
@@ -192,7 +203,8 @@ public sealed partial class WorldConsequenceApplier
         if (!wantsBinding
             && string.IsNullOrWhiteSpace(status)
             && !wantsEligibilityUpdate
-            && string.IsNullOrWhiteSpace(claimedPlace))
+            && string.IsNullOrWhiteSpace(claimedPlace)
+            && journey is null)
         {
             return Reject(consequence, "Promise update did not include any changes.");
         }
@@ -231,6 +243,11 @@ public sealed partial class WorldConsequenceApplier
         if (!string.IsNullOrWhiteSpace(status) && !status.Equals("bound", StringComparison.OrdinalIgnoreCase))
         {
             updated = _state.PromiseLedger.SetStatus(updated.Id, status, realizedIn) ?? updated;
+        }
+
+        if (journey is not null)
+        {
+            updated = _state.PromiseLedger.SetJourney(updated.Id, journey, status) ?? updated;
         }
 
         if (wantsEligibilityUpdate)

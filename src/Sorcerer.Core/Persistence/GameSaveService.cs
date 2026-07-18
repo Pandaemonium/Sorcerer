@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
+using Sorcerer.Core.Items;
 using Sorcerer.Core.Magic;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Runtime;
@@ -445,11 +446,16 @@ public sealed record EntitySave(
     string Name,
     List<ComponentSave> Components)
 {
+    private static readonly Lazy<ItemCatalog> EquipmentCatalog = new(ItemCatalog.LoadDefault);
+
     public static EntitySave FromEntity(Entity entity) =>
         new(
             entity.Id.Value,
             entity.Name,
             entity.Components
+                // Derived from EquipmentComponent + item content. Persisting this cache makes old
+                // saves stale when item balance changes and previously made equipped saves crash.
+                .Where(component => component is not EquipmentEffectComponent)
                 .Select(ComponentSave.FromComponent)
                 .OrderBy(component => component.Type, StringComparer.OrdinalIgnoreCase)
                 .ToList());
@@ -460,6 +466,11 @@ public sealed record EntitySave(
         foreach (var component in Components ?? new List<ComponentSave>())
         {
             SetComponent(entity, component.ToComponent());
+        }
+
+        if (entity.TryGet<EquipmentComponent>(out var equipment) && equipment.Slots.Count > 0)
+        {
+            EquipmentEffectService.Recompute(entity, EquipmentCatalog.Value);
         }
 
         return entity;
@@ -500,6 +511,9 @@ public sealed record EntitySave(
                 entity.Set(typed);
                 break;
             case EquipmentComponent typed:
+                entity.Set(typed);
+                break;
+            case ItemAlterationComponent typed:
                 entity.Set(typed);
                 break;
             case ItemComponent typed:
@@ -618,6 +632,7 @@ public sealed record ComponentSave(
                 "equipment",
                 ("slots", SortStringMap(value.Slots)),
                 ("focusSlots", value.FocusSlots.OrderBy(item => item, StringComparer.OrdinalIgnoreCase).ToArray())),
+            ItemAlterationComponent value => New("itemAlterations", ("profiles", SortStringMap(value.Profiles))),
             ItemComponent value => New(
                 "item",
                 ("itemType", value.ItemType),
@@ -723,6 +738,7 @@ public sealed record ComponentSave(
             "equipment" => new EquipmentComponent(
                 ReadStringMap(fields, "slots"),
                 new HashSet<string>(ReadStringList(fields, "focusSlots"), StringComparer.OrdinalIgnoreCase)),
+            "itemalterations" => new ItemAlterationComponent(ReadStringMap(fields, "profiles")),
             "item" => new ItemComponent(
                 ReadString(fields, "itemType"),
                 ReadInt(fields, "value"),

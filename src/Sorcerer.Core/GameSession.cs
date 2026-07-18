@@ -87,9 +87,7 @@ public sealed partial class GameSession
         IDialogueParserRouter? dialogueParserRouter = null,
         Characters.CharacterBuild? build = null)
     {
-        var state = TestScenarios.ImperialEncounter(originId, memorials, build);
-        state.Seed = Math.Max(1, seed);
-        state.Rng = new DeterministicRng(state.Seed);
+        var state = TestScenarios.ImperialEncounter(originId, memorials, build, seed);
         return new GameSession(state, magic, claimExtractor, dialogueProvider, dialogueRouter, dialogueAudit, backgroundTextGenerator, dialogueParser, dialogueParserRouter);
     }
 
@@ -125,6 +123,7 @@ public sealed partial class GameSession
             ClearTargetCommand => ClearTarget(),
             MapCommand map => Engine.Map(map.Radius),
             TravelCommand travel => Engine.Travel(travel.Direction),
+            JourneyCommand journey => Engine.Journey(journey.Destination),
             AtlasCommand => Engine.Atlas(),
             PickupCommand pickup => Engine.Pickup(pickup.Target),
             DropCommand drop => Engine.DropItem(drop.Item),
@@ -135,7 +134,9 @@ public sealed partial class GameSession
             UnfocusCommand unfocus => Engine.UnfocusItem(unfocus.SlotOrItem),
             ProtectItemCommand protect => ProtectItem(protect.Item, protectedState: true),
             UnprotectItemCommand unprotect => ProtectItem(unprotect.Item, protectedState: false),
+            InventoryCommand => Engine.Inventory(),
             ReagentsCommand => Engine.Reagents(),
+            ThreatsCommand => Engine.Threats(),
             WaresCommand wares => Engine.Wares(wares.Target),
             BuyCommand buy => Engine.Buy(buy.Item, buy.Target),
             SellCommand sell => Engine.Sell(sell.Item, sell.Target),
@@ -145,7 +146,20 @@ public sealed partial class GameSession
             RumorsCommand => Engine.Rumors(),
             CharacterCommand => Engine.CharacterSheet(),
             TalkCommand talk => await TalkAsync(talk, cancellationToken),
-            GroupTalkCommand groupTalk => GroupTalk(groupTalk.Text),
+            GroupTalkCommand groupTalk => await GroupTalkAsync(groupTalk.Text, cancellationToken),
+            SettleCommand settle => SettleObligation(settle.Target),
+            BargainsCommand bargains => await ListBargainsAfterPendingDialogueAsync(bargains.Target),
+            FulfillCommand fulfill => FulfillAgreement(fulfill.Reference),
+            OfferCommand offer => OfferToActor(offer.Text),
+            BargainCommand bargain => BeginBargain(bargain.Target),
+            ConcedeCommand concede => ConcedeToActor(concede.Target),
+            IntimidateCommand intimidate => IntimidateActor(intimidate.Target),
+            ExchangeCommand exchange => ExchangeWithActor(exchange.Text),
+            CleanseCommand cleanse => CleanseCost(cleanse.Reference),
+            BraceCommand => Brace(),
+            CounterCommand counter => CounterIntent(counter.Text),
+            BreachCommand breach => BreachThreshold(breach.Target),
+            ForgeCommand forge => ForgeCredential(forge.Text),
             GiveCommand give => Engine.Give(give.Item, give.Target),
             RecruitCommand recruit => Engine.Recruit(recruit.Target),
             BondsCommand bonds => Engine.Bonds(bonds.Target),
@@ -329,7 +343,7 @@ public sealed partial class GameSession
             consumedTurn: false,
             Engine.State.Turn,
             Engine.State.Turn,
-                "Commands: inspect, map, travel, atlas, move, wait, target, pickup, drop, use, equip, focus, open, enter, leave, read, examine, talk, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, charter, echoes, echo, protect, unprotect, reagents, wares, buy, sell, services, request, journal, rumors, character, standing, followers, jobs, save, load, quit.");
+                "Commands: inspect, map, travel, journey, atlas, move, wait, target, inventory, threats, pickup, drop, use, equip, focus, brace, counter, open, breach, forge, enter, leave, read, examine, talk, gather, offer, bargain, bargains, settle, fulfill, concede, intimidate, exchange, give, recruit, bonds, possess, cast, begin_cast, await_cast, cancel_cast, charter, echoes, echo, cleanse, protect, unprotect, reagents, wares, buy, sell, services, request, journal, rumors, character, standing, followers, jobs, save, load, quit.");
 
     private async Task<ActionResult> SaveGameAsync(string path, CancellationToken cancellationToken)
     {
@@ -685,9 +699,12 @@ public sealed partial class GameSession
             or JournalCommand
             or RumorsCommand
             or CharacterCommand
+            or InventoryCommand
             or ReagentsCommand
+            or ThreatsCommand
             or WaresCommand
             or ServicesCommand
+            or BargainsCommand
             or BondsCommand
             or StandingCommand
             or FollowersCommand

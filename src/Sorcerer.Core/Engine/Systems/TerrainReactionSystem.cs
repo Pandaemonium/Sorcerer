@@ -26,10 +26,7 @@ public sealed class TerrainReactionSystem
             .OrderBy(entity => entity.Id.Value))
         {
             var point = entity.Get<PositionComponent>().Position;
-            if (!_state.Terrain.TryGetValue(point, out var terrain))
-            {
-                continue;
-            }
+            var terrain = _state.Terrain.TryGetValue(point, out var ground) ? ground : "dry_floor";
 
             deltas.AddRange(ApplyEntityTerrainReaction(entity, point, terrain));
         }
@@ -41,6 +38,35 @@ public sealed class TerrainReactionSystem
     {
         var deltas = new List<StateDelta>();
         var normalized = terrain.Trim().ToLowerInvariant();
+        if (HasActiveCostProfile(entity, "curse_tide_debt_body"))
+        {
+            var tide = IsWater(normalized)
+                ? _engine.ApplyConsequence(WorldConsequence.Heal(
+                    "borrowed_tide",
+                    entity.Id.Value,
+                    1,
+                    visibility: WorldConsequenceVisibility.Message,
+                    sourceEntityId: entity.Id.Value,
+                    evidence: terrain,
+                    reason: "Borrowed Tide closes wounds on wet ground.",
+                    operation: "borrowedTideWet"))
+                : _state.Turn % 2 == 0
+                    ? _engine.ApplyConsequence(WorldConsequence.Damage(
+                        "borrowed_tide",
+                        entity.Id.Value,
+                        1,
+                        "dryness",
+                        visibility: WorldConsequenceVisibility.Message,
+                        sourceEntityId: entity.Id.Value,
+                        evidence: terrain,
+                        reason: "Borrowed Tide reopens wounds on dry ground every other turn.",
+                        operation: "borrowedTideDry"))
+                    : null;
+            if (tide is not null)
+            {
+                deltas.AddRange(tide.Deltas);
+            }
+        }
         if (IsWater(normalized) && HasActiveStatus(entity, "burning"))
         {
             deltas.AddRange(_engine.ApplyConsequence(WorldConsequence.RemoveStatus(
@@ -115,6 +141,14 @@ public sealed class TerrainReactionSystem
             instance.Id.Equals(status, StringComparison.OrdinalIgnoreCase)
             && (instance.ExpiresTurn is null || instance.ExpiresTurn > _state.Turn));
     }
+
+    private bool HasActiveCostProfile(Entity entity, string profileId) =>
+        _state.PromiseLedger.Promises.Any(promise =>
+            promise.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase)
+            && promise.Status is not "cleared" and not "fulfilled"
+            && promise.CostProfileId?.Equals(profileId, StringComparison.OrdinalIgnoreCase) == true
+            && (string.IsNullOrWhiteSpace(promise.BoundTargetId)
+                || promise.BoundTargetId.Equals(entity.Id.Value, StringComparison.OrdinalIgnoreCase)));
 
     private static bool IsWater(string terrain) =>
         terrain.Contains("water", StringComparison.OrdinalIgnoreCase)

@@ -402,6 +402,123 @@ public sealed class OllamaDialogueProviderTests
         Assert.Contains("bogus", selection.UnknownSelectedCapabilityIds);
     }
 
+    [Fact]
+    public void BargainLanguageSelectsTypedBargainCapabilityAndSuppliesItsSchema()
+    {
+        var route = DialogueParserCapabilityCatalog.BuildRouteRequest(
+            ClaimRequest("Pay seven gold or repair my rain tally by tomorrow, and I will stand down."));
+
+        var selected = DialogueParserCapabilityCatalog.DeterministicCapabilityIds(route);
+        var bargain = Assert.Single(DialogueParserCapabilityCatalog.CardsFor(new[] { "bargains" }));
+        var detailPrompt = OllamaDialogueClaimExtractor.DetailSystemPrompt(
+            ClaimRequest("Give one grave salt and I will stand down.") with
+            {
+                SelectedParserCapabilityIds = new[] { "bargains" },
+            });
+
+        Assert.Contains("bargains", selected);
+        Assert.Contains("currency", string.Join(" ", bargain.Lines), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("service", string.Join(" ", bargain.Lines), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standing", string.Join(" ", bargain.Lines), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("concession", string.Join(" ", bargain.Lines), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("deadline", string.Join(" ", bargain.Lines), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"bargain\"", detailPrompt, StringComparison.Ordinal);
+        Assert.Contains("never output field-name placeholders", detailPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("do/give/pay X", detailPrompt, StringComparison.Ordinal);
+        Assert.Contains("bargain MUST be non-null", detailPrompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DialogueGeneratorReceivesExactListenerInventoryForGroundedTerms()
+    {
+        var request = Request("What item would settle this?") with
+        {
+            Listener = new DialogueParticipantCard(
+                "player",
+                "You",
+                new[] { "sorcerer" },
+                Inventory: new[] { "charcoal wand x1", "grave salt x2" }),
+        };
+
+        var prompt = OllamaDialogueProvider.UserPrompt(request, retryNote: null);
+        var system = OllamaDialogueProvider.SystemPrompt(request);
+
+        Assert.Contains("charcoal wand x1", prompt, StringComparison.Ordinal);
+        Assert.Contains("grave salt x2", prompt, StringComparison.Ordinal);
+        Assert.Contains("exact unprotected listener inventory entry", system, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PostSpeechParserMaterializesEveryTypedBargainTermKind()
+    {
+        var content = """
+            {
+              "proposals": {
+                "bargain": {
+                  "claimantEntityId": "prisoner_1",
+                  "summary": "Choose a real settlement.",
+                  "options": [
+                    {
+                      "id": "payment",
+                      "label": "pay and concede",
+                      "terms": [
+                        {"id":"coin","kind":"currency","text":"Pay seven gold.","quantity":7},
+                        {"id":"salt","kind":"item","text":"Give grave salt.","resourceId":"grave salt","quantity":1},
+                        {"id":"standing","kind":"standing","text":"Yield freedom standing.","factionId":"hollowmere","standingAxis":"freedom","standingDelta":-2},
+                        {"id":"concession","kind":"concession","text":"Surrender the salvage claim."}
+                      ]
+                    },
+                    {
+                      "id": "service",
+                      "label": "repair the tally",
+                      "terms": [
+                        {"id":"repair","kind":"service","text":"Repair the rain tally.","resourceId":"prisoner_1_want"},
+                        {"id":"deadline","kind":"deadline","text":"Before tomorrow.","dueInTurns":4}
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """;
+
+        var parsed = OllamaDialogueProvider.TryParseProposalEnvelope(
+            content,
+            Request("What exact terms settle this?"),
+            "Pay seven gold or repair the tally.",
+            out var proposals,
+            out var error);
+
+        Assert.True(parsed, error);
+        var offer = Assert.IsType<Sorcerer.Core.World.BargainOffer>(proposals!.Bargain);
+        var kinds = offer.Options.SelectMany(option => option.Terms).Select(term => term.Kind).ToHashSet();
+        Assert.Equal(Sorcerer.Core.World.BargainTermKinds.All.Order(), kinds.Order());
+        Assert.Equal(4, offer.Options.Single(option => option.Id == "service").Terms.Single(term => term.Kind == "deadline").DueTurn);
+    }
+
+    [Fact]
+    public void GroupPromptAllowsNarrowTypedProposalsButForbidsGenericConsequenceEscape()
+    {
+        var request = Request("What do all of you demand?") with
+        {
+            Participants = new[]
+            {
+                new DialogueParticipantCard("speaker_a", "Ada", new[] { "resident" }, Want: "Want id ada_want: recover the ferry bell"),
+                new DialogueParticipantCard("speaker_b", "Bela", new[] { "resident" }),
+            },
+        };
+
+        var prompt = OllamaDialogueProvider.SystemPrompt(request);
+
+        Assert.Contains("proposals", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("typed bargain", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("claimantEntityId", prompt, StringComparison.Ordinal);
+        Assert.Contains("Never repeat a JSON key", prompt, StringComparison.Ordinal);
+        Assert.Contains("Never output an array of ids as proposals", prompt, StringComparison.Ordinal);
+        Assert.Contains("At most one utterance", prompt, StringComparison.Ordinal);
+        Assert.Contains("Never emit a generic consequence action", prompt, StringComparison.Ordinal);
+    }
+
     private static DialogueRequest Request(string playerText) =>
         new(
             0,

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sorcerer.Core.Views;
+using Sorcerer.Core.World;
 using Sorcerer.Magic.Capabilities;
 using Sorcerer.Magic.Resolution;
 
@@ -37,6 +38,7 @@ internal static class SpellPromptBuilder
         var builder = new StringBuilder();
         builder.Append(CoreRules);
         builder.Append("\n\n").Append(ConsequenceTypesLine);
+        builder.Append("\n\n").Append(CostProfileGuidance);
         if (!string.IsNullOrWhiteSpace(request.CapabilityIndex))
         {
             builder.Append("\n\nCapability names for one bounded retry: ");
@@ -167,7 +169,10 @@ internal static class SpellPromptBuilder
                 Shorten(promise.Text, 220),
                 EmptyToNull(promise.Subject),
                 EmptyToNull(promise.BoundPlace ?? promise.ClaimedPlace),
-                EmptyToNull(promise.TriggerHint)))
+                EmptyToNull(promise.TriggerHint),
+                EmptyToNull(promise.BoundTargetId),
+                EmptyToNull(promise.CostProfileId),
+                promise.Stacks > 1 ? promise.Stacks : null))
             .ToArray();
         var reagents = (view.Reagents ?? Array.Empty<ReagentCard>())
             .Select(reagent => new ResolverWireReagent(
@@ -199,6 +204,7 @@ internal static class SpellPromptBuilder
                     ? null
                     : view.Caster.Statuses.Select(status => new ResolverWireStatus(
                         status.Id,
+                        EmptyToNull(status.DisplayName),
                         status.Intensity,
                         status.ExpiresTurn)).ToArray()),
             targets.Length == 0 ? null : targets,
@@ -310,6 +316,26 @@ internal static class SpellPromptBuilder
         + "offer_service, request_service, add_merchant_stock, offer_trade, record_rumor, add_canon, add_legend, "
         + "spawn_fixture, spawn_item, spawn_entity, set_world_flag, adjust_faction_standing, schedule_event, message.";
 
+    // Static across casts, so this compact content-authored menu remains prompt-cacheable. The
+    // resolver may select a profile, but the engine still re-resolves the id and applies the
+    // resulting journal thread authoritatively.
+    private static readonly string CostProfileGuidance = BuildCostProfileGuidance();
+
+    private static string BuildCostProfileGuidance()
+    {
+        var profiles = CostProfileCatalog.Default.Profiles
+            .Where(profile => profile.Kind is "debt" or "curse" or "altered_item")
+            .OrderBy(profile => profile.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(profile =>
+                $"{profile.Id} ({profile.Kind}, {profile.Name}): {Shorten(profile.Condition, 120)} "
+                + $"Counterplay: {Shorten(profile.ClearRoutes.FirstOrDefault() ?? "endure it", 100)}")
+            .ToArray();
+        return "For a story-generating major cost, prefer one supported cost profile as "
+            + "{\"type\":\"curse\",\"profileId\":\"exact_id\"}. Available profiles: "
+            + string.Join(" | ", profiles)
+            + ". Debts create claimants, curses enforce their listed runtime condition, and altered-item profiles modify a concrete carried/focused item; do not invent a profile id.";
+    }
+
     private sealed record ResolverWireContext(
         ResolverWireCaster Caster,
         IReadOnlyList<ResolverWireTarget>? Targets,
@@ -328,7 +354,7 @@ internal static class SpellPromptBuilder
         IReadOnlyList<int> Mana,
         IReadOnlyList<ResolverWireStatus>? Statuses);
 
-    private sealed record ResolverWireStatus(string Id, int Intensity, int? Expires);
+    private sealed record ResolverWireStatus(string Id, string? Name, int Intensity, int? Expires);
 
     private sealed record ResolverWireTarget(
         string Id,
@@ -349,7 +375,10 @@ internal static class SpellPromptBuilder
         string Text,
         string? Subject,
         string? Place,
-        string? Trigger);
+        string? Trigger,
+        string? Target,
+        string? CostProfileId,
+        int? Stacks);
 
     private sealed record ResolverWireLens(
         int Vigor,

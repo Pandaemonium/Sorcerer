@@ -13,9 +13,7 @@ public static class JournalViewBuilder
             .ToArray();
         var leads = visiblePromises
             .Where(IsLeadPromise)
-            .Select(promise => ObjectiveIsComplete(state, promise)
-                ? $"Completed objective: [{PromiseJournalStatus(state, promise)}] {promise.Text}"
-                : $"Objective: [{PromiseJournalStatus(state, promise)}] {promise.Text}")
+            .Select(promise => $"{LeadJournalLabel(promise)}: [{PromiseJournalStatus(state, promise)}] {promise.Text}")
             .ToArray();
         var otherPromises = visiblePromises
             .Where(promise => !IsLeadPromise(promise))
@@ -206,6 +204,11 @@ public static class JournalViewBuilder
             || (promise.Status.Equals("realized", StringComparison.OrdinalIgnoreCase)
                 && !NormalizeJournalToken(promise.RealizationKind ?? promise.Kind).Equals("person", StringComparison.OrdinalIgnoreCase));
     }
+
+    private static string LeadJournalLabel(WorldPromise promise) =>
+        promise.Status.Equals("cleared", StringComparison.OrdinalIgnoreCase)
+            ? "Completed objective"
+            : "Objective";
 
     private static string PromiseJournalStatus(GameState state, WorldPromise promise)
     {

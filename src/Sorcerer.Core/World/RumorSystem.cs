@@ -593,10 +593,23 @@ public static class RumorSystem
             "body_swap" => $"{actor} walked out wearing another face in {place}.",
             "kill" => $"{actor} left a death in {place}.",
             "attack" => $"{actor} struck first in {place}.",
+            "wild_magic" when !string.IsNullOrWhiteSpace(deed.Summary) =>
+                $"{actor} worked wild magic in {place}. Witnesses describe it this way: {ShortDeedSummary(deed.Summary)}",
             "wild_magic" => $"{actor} worked wild magic in {place}.",
             "charter_magic" => $"{actor} worked licensed-looking magic in {place}.",
             _ => $"people in {place} are still talking about what {actor} did.",
         };
+    }
+
+    private static string ShortDeedSummary(string summary)
+    {
+        var collapsed = string.Join(' ', summary.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (collapsed.Length <= 180)
+        {
+            return collapsed;
+        }
+
+        return collapsed[..177].TrimEnd() + "…";
     }
 
     private static string RegionFromPlace(string placeKey, string fallback)

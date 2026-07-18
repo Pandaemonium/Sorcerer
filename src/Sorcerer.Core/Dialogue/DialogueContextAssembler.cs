@@ -669,7 +669,8 @@ public sealed class DialogueContextAssembler
     {
         foreach (var deed in _engine.State.Deeds.Records.TakeLast(5))
         {
-            yield return $"Deed {deed.Id} turn {deed.Turn}: {deed.Kind} magnitude {deed.Magnitude} at {deed.PlaceKey}, {deed.Visibility}, tags {string.Join(",", deed.Tags)}.";
+            yield return $"Deed {deed.Id} turn {deed.Turn}: {deed.Kind} magnitude {deed.Magnitude} at {deed.PlaceKey}, {deed.Visibility}, tags {string.Join(",", deed.Tags)}."
+                + (string.IsNullOrWhiteSpace(deed.Summary) ? "" : $" What happened: {deed.Summary}");
         }
 
         foreach (var suspicion in _engine.State.Suspicions.Records.TakeLast(4))
@@ -1095,6 +1096,11 @@ public sealed class DialogueContextAssembler
         }
 
         var tags = TagsFor(entity).ToArray();
+        var hollowName = entity.Id == _engine.State.ControlledEntityId
+            && _engine.State.PromiseLedger.Promises.Any(promise =>
+                promise.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase)
+                && promise.Status is not "cleared" and not "fulfilled"
+                && promise.CostProfileId?.Equals("curse_hollow_name", StringComparison.OrdinalIgnoreCase) == true);
         var faction = entity.TryGet<ActorComponent>(out var actor) ? actor.Faction : null;
         var profile = entity.TryGet<ProfileComponent>(out var profileComponent)
             ? string.Join(
@@ -1108,13 +1114,18 @@ public sealed class DialogueContextAssembler
                     profileComponent.Backstory,
                 }.Where(text => !string.IsNullOrWhiteSpace(text)))
             : null;
+        if (hollowName)
+        {
+            profile = $"Their name will not remain in memory between meetings. {profile}".Trim();
+        }
         var description = entity.TryGet<DescriptionComponent>(out var descriptionComponent)
             ? descriptionComponent.Text
             : null;
         var inventory = entity.TryGet<InventoryComponent>(out var inventoryComponent)
             ? inventoryComponent.Items
                 .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(pair => $"{pair.Key} x{pair.Value}")
+                .Select(pair => $"{pair.Key} x{pair.Value}"
+                    + (inventoryComponent.TreasuredItems.Contains(pair.Key) ? " [protected]" : ""))
                 .ToArray()
             : Array.Empty<string>();
         var wares = entity.TryGet<MerchantComponent>(out var merchant)
@@ -1135,7 +1146,7 @@ public sealed class DialogueContextAssembler
             : null);
         return new DialogueParticipantCard(
             entity.Id.Value,
-            entity.Name,
+            hollowName ? "a sorcerer whose name will not hold" : entity.Name,
             tags,
             faction,
             profile,
@@ -1316,7 +1327,7 @@ public sealed class DialogueContextAssembler
         }
 
         var stakes = string.IsNullOrWhiteSpace(want.Stakes) ? "" : $" Stakes: {want.Stakes}";
-        return $"{want.Text} (salience {want.Salience}).{stakes}";
+        return $"Want id {want.Id}: {want.Text} (salience {want.Salience}).{stakes}";
     }
 
     private static IEnumerable<string> TextTokens(string text)

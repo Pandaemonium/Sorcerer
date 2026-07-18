@@ -48,6 +48,16 @@ The existing opening seed already has useful bones:
 - faction pressure and patrol response when public magic escalates — report-borne and
   road-arriving per FREE_FOLK_MOVEMENT S0
 
+Ordinary GUI new runs roll a fresh positive world seed; setting `SORCERER_SEED` pins one for
+reproduction, and seed 7 remains the stable characterization/test fixture. The seed is active
+before the opening graph, sweep, and claim sources are built. Non-fixture runs choose an incident
+line and two confiscated magical irregularities from small authored corpora, including their map
+positions and actionable `ClaimSourceComponent` hooks. Hollowmere's near edge contains several
+real fringe hamlets, so the sweep warning and rescued-captive handoff can begin east, south-east,
+or south-west rather than always using the same one-length route. The promised contact's next
+handoff continues from that actual destination, producing varied two-leg opening journeys while
+remaining deterministic for a supplied seed.
+
 Keep this shape, but make it less like a small combat chamber and more like a compressed
 Sorcerer situation: a place full of people, objects, claims, and unstable futures.
 
@@ -74,7 +84,8 @@ should show that promises can come from dialogue, documents, props, deeds, and s
 that all of them flow through the same ledger.
 
 Documents and props should use `ClaimSourceComponent` rather than opening-specific handlers.
-Reading the containment notice, examining a brazier, or inspecting an evidence tag can surface
+Reading the containment notice, examining a brazier, or inspecting one of the seed-selected
+confiscated irregularities can surface
 authored claim seeds, record them through `record_claim`, mint rumors through `record_rumor`, and
 bind only the salient ones through `create_promise`. That keeps the first room dense while
 exercising the same claim, rumor, and promise machinery later books, road signs, shrine plaques,

@@ -3,6 +3,7 @@ using Sorcerer.Core.Dialogue;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Engine.Systems;
 using Sorcerer.Core.Entities;
+using Sorcerer.Core.Items;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Runtime;
@@ -104,6 +105,7 @@ public sealed partial class WorldConsequenceApplier
         {
             inventory.Items.Remove(item);
             inventory.TreasuredItems.Remove(item);
+            ReconcileItemOwnership(target.Entity, inventory, item);
         }
         else
         {
@@ -180,11 +182,22 @@ public sealed partial class WorldConsequenceApplier
         var quantity = item.TryGet<StackComponent>(out var stack) ? Math.Max(1, stack.Quantity) : Math.Max(1, ReadInt(payload, "quantity") ?? 1);
         var key = FirstNonBlank(ReadString(payload, "itemName"), item.Name, itemComponent.ItemType)!;
         AdjustInventory(actor, inventory, key, quantity);
+        if (item.TryGet<ItemAlterationComponent>(out var itemAlterations)
+            && itemAlterations.Profiles.TryGetValue(item.Name, out var itemProfile))
+        {
+            var actorAlterations = actor.TryGet<ItemAlterationComponent>(out var existingAlterations)
+                ? existingAlterations
+                : ItemAlterationComponent.Empty();
+            actorAlterations.Profiles[key] = itemProfile;
+            actor.Set(actorAlterations);
+        }
         _state.Entities.Remove(item.Id);
         var summary = FirstNonBlank(
             ReadString(payload, "message"),
             ReadString(payload, "summary"),
-            quantity == 1 ? $"{actor.Name} picks up {key}." : $"{actor.Name} picks up {quantity} {key}.")!;
+            quantity == 1
+                ? $"{Subject(actor)} {Verb(actor, "pick", "picks")} up {key}."
+                : $"{Subject(actor)} {Verb(actor, "pick", "picks")} up {quantity} {key}.")!;
         var operation = ReadString(payload, "operation") ?? "pickup";
         var delta = new StateDelta(
             operation,
@@ -239,6 +252,10 @@ public sealed partial class WorldConsequenceApplier
             return Reject(consequence, "Drop transfer has no position.");
         }
 
+        var droppedProfile = actor.TryGet<ItemAlterationComponent>(out var actorAlterations)
+            && actorAlterations.Profiles.TryGetValue(key, out var alteration)
+                ? alteration
+                : null;
         AdjustInventory(actor, inventory, key, -quantity);
         var itemType = NormalizeToken(FirstNonBlank(ReadString(payload, "itemType"), ReadString(payload, "item_type"), key)!, "item");
         var tags = NormalizeTags(ReadStringList(payload, "tags").Concat(new[] { "item" }));
@@ -256,9 +273,19 @@ public sealed partial class WorldConsequenceApplier
                 FirstNonBlank(ReadString(payload, "useProfile"), ReadString(payload, "use_profile"), "inert")!,
                 FirstNonBlank(ReadString(payload, "equipmentSlot"), ReadString(payload, "equipment_slot"))))
             .Set(new StackComponent(quantity));
+        if (!string.IsNullOrWhiteSpace(droppedProfile))
+        {
+            dropped.Set(new ItemAlterationComponent(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [key] = droppedProfile,
+            }));
+        }
         _state.Entities[dropped.Id] = dropped;
 
-        var summary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), $"{actor.Name} drops {key}.")!;
+        var summary = FirstNonBlank(
+            ReadString(payload, "message"),
+            ReadString(payload, "summary"),
+            $"{Subject(actor)} {Verb(actor, "drop", "drops")} {key}.")!;
         var operation = ReadString(payload, "operation") ?? "drop";
         var delta = new StateDelta(
             operation,
@@ -331,14 +358,26 @@ public sealed partial class WorldConsequenceApplier
             recipient.Set(recipientInventory);
         }
 
+        var transferredProfile = actor.TryGet<ItemAlterationComponent>(out var actorAlterations)
+            && actorAlterations.Profiles.TryGetValue(key, out var alteration)
+                ? alteration
+                : null;
         AdjustInventory(actor, inventory, key, -quantity);
         AdjustInventory(recipient, recipientInventory, key, quantity);
+        if (!string.IsNullOrWhiteSpace(transferredProfile))
+        {
+            var recipientAlterations = recipient.TryGet<ItemAlterationComponent>(out var existingRecipientAlterations)
+                ? existingRecipientAlterations
+                : ItemAlterationComponent.Empty();
+            recipientAlterations.Profiles[key] = transferredProfile;
+            recipient.Set(recipientAlterations);
+        }
         var summary = FirstNonBlank(
             ReadString(payload, "message"),
             ReadString(payload, "summary"),
             quantity == 1
-                ? $"{actor.Name} gives {key} to {recipient.Name}."
-                : $"{actor.Name} gives {quantity} {key} to {recipient.Name}.")!;
+                ? $"{Subject(actor)} {Verb(actor, "give", "gives")} {key} to {recipient.Name}."
+                : $"{Subject(actor)} {Verb(actor, "give", "gives")} {quantity} {key} to {recipient.Name}.")!;
         var operation = ReadString(payload, "operation") ?? "give";
         var delta = new StateDelta(
             operation,
@@ -638,6 +677,7 @@ public sealed partial class WorldConsequenceApplier
         {
             inventory.Items.Remove(key);
             inventory.TreasuredItems.Remove(key);
+            ReconcileItemOwnership(entity, inventory, key);
         }
         else
         {
@@ -645,6 +685,53 @@ public sealed partial class WorldConsequenceApplier
         }
 
         entity.Set(inventory);
+    }
+
+    /// <summary>
+    /// Inventory is authoritative for ownership. Removing the final copy also removes its
+    /// alteration provenance and equipment/focus references; otherwise a paid-away wand could
+    /// remain mechanically active as a ghost item.
+    /// </summary>
+    private static void ReconcileItemOwnership(Entity entity, InventoryComponent inventory, string item)
+    {
+        if (inventory.Items.Keys.Any(key => key.Equals(item, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        if (entity.TryGet<ItemAlterationComponent>(out var alterations))
+        {
+            foreach (var key in alterations.Profiles.Keys
+                .Where(key => key.Equals(item, StringComparison.OrdinalIgnoreCase))
+                .ToArray())
+            {
+                alterations.Profiles.Remove(key);
+            }
+
+            if (alterations.Profiles.Count == 0)
+            {
+                entity.Remove<ItemAlterationComponent>();
+            }
+            else
+            {
+                entity.Set(alterations);
+            }
+        }
+
+        if (entity.TryGet<EquipmentComponent>(out var equipment))
+        {
+            foreach (var slot in equipment.Slots
+                .Where(pair => pair.Value.Equals(item, StringComparison.OrdinalIgnoreCase))
+                .Select(pair => pair.Key)
+                .ToArray())
+            {
+                equipment.Slots.Remove(slot);
+                equipment.FocusSlots.Remove(slot);
+            }
+
+            entity.Set(equipment);
+            EquipmentEffectService.Recompute(entity, ItemCatalog.LoadDefault());
+        }
     }
 
     private static string? FindWareKey(MerchantComponent merchant, string item)

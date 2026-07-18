@@ -31,6 +31,7 @@ public sealed class CapabilityRoutingTests
     [InlineData("make the statue come alive and guard the door", "animation")]
     [InlineData("unravel the ward waiting behind me", "dispelling")]
     [InlineData("break the enchantment on the captain's blade", "dispelling")]
+    [InlineData("cure Borrowed Tide and send it back to the marsh", "dispelling")]
     [InlineData("show me where the emperor stands", "divination")]
     [InlineData("divine what the prisoner wants most", "divination")]
     [InlineData("spread a rumor that my shadow arrives before me", "rumor_legend")]
@@ -139,6 +140,25 @@ public sealed class CapabilityRoutingTests
         var context = Assert.IsType<Sorcerer.Core.Views.MagicContextView>(Assert.Single(provider.Requests).Context);
         Assert.Contains(context.Visible, entity => entity.Id == "prisoner_1");
         Assert.DoesNotContain(context.Visible, entity => entity.Visibility == "hidden_from_player" && entity.Id != "prisoner_1");
+    }
+
+    [Fact]
+    public async Task WaysAndSealsReceivesNamedHiddenDoorAndItsKnownPromise()
+    {
+        var provider = new CapturingSpellProvider();
+        var controller = new WildMagicController(provider);
+        var session = GameSession.CreateImperialEncounter(controller);
+
+        await controller.ResolveAsync(
+            session.Engine,
+            new CastCommand("make the cell door's lock forget its shape"),
+            System.Threading.CancellationToken.None);
+
+        var request = Assert.Single(provider.Requests);
+        Assert.Contains(request.SelectedCapabilities ?? Array.Empty<Sorcerer.Magic.Capabilities.CapabilityCard>(), card => card.Id == "ways_and_seals");
+        var context = Assert.IsType<Sorcerer.Core.Views.MagicContextView>(request.Context);
+        Assert.Contains(context.Visible, entity => entity.Id == "cell_door_1");
+        Assert.Contains(context.KnownPromises, promise => promise.Text.Contains("Lio", System.StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

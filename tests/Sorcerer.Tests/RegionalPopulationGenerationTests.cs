@@ -1,5 +1,6 @@
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
+using Sorcerer.Core.Engine;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.World;
@@ -19,7 +20,10 @@ public sealed class RegionalPopulationGenerationTests
         Assert.Equal(14, catalog.Regions.Count);
         // WP7 added the Hollowmere Free Folk watching cell, safe-haven provider, Kindled radical,
         // and a pro-Empire refuser (docs/CONTENT_SPRINT_PLAN.md).
-        Assert.Equal(49, catalog.Regions.Sum(region => region.Population?.Archetypes.Count ?? 0));
+        Assert.True(catalog.Regions.Sum(region => region.Population?.Archetypes.Count ?? 0) >= 57);
+        Assert.True(catalog.Region("imperial_encounter")!.Population!.Archetypes.Count >= 5);
+        Assert.True(catalog.Region("hollowmere_margin")!.Population!.Archetypes.Count >= 10);
+        Assert.True(catalog.Region("brall_whaleholds")!.Population!.Archetypes.Count >= 8);
         foreach (var region in catalog.Regions)
         {
             var population = Assert.IsType<RegionPopulationGrammarDefinition>(region.Population);
@@ -104,6 +108,34 @@ public sealed class RegionalPopulationGenerationTests
     }
 
     [Fact]
+    public void RequiredHollowmereMerchantRollsAFreshNonEmptyAssortmentAcrossSeeds()
+    {
+        var region = RegionCatalog.LoadDefault().Region("hollowmere_margin")!;
+        var anchor = (region.Placement!.AnchorX, region.Placement.AnchorY);
+        var assortments = Enumerable.Range(1, 20)
+            .Select(seed =>
+            {
+                var realm = WorldRoll.Create(seed).RealmFor(region.RealmId);
+                var resident = RegionPopulationGenerator.Generate(
+                        seed,
+                        $"{anchor.AnchorX},{anchor.AnchorY}",
+                        region,
+                        realm,
+                        anchor)
+                    .Residents
+                    .Single(item => item.ArchetypeId == "reed_apothecary");
+                return resident.Wares.Select(ware => ware.Item).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            })
+            .ToArray();
+
+        Assert.All(assortments, Assert.NotEmpty);
+        Assert.True(assortments.Select(set => string.Join("|", set.OrderBy(item => item))).Distinct().Count() >= 8);
+        Assert.All(assortments.SelectMany(set => set).Distinct(StringComparer.OrdinalIgnoreCase), item =>
+            Assert.True(assortments.Count(set => set.Contains(item)) < assortments.Length,
+                $"{item} should not appear in every seed"));
+    }
+
+    [Fact]
     public void CapitalCenterProducesDistinctNamedRolesAndGuaranteedCommerce()
     {
         const int seed = 90;
@@ -121,6 +153,66 @@ public sealed class RegionalPopulationGenerationTests
             Assert.Contains("knowledge_", string.Join('|', resident.Tags), StringComparison.OrdinalIgnoreCase);
         });
         Assert.Contains(batch.Residents, resident => resident.ArchetypeId == "bone_broker" && resident.Wares.Count >= 2);
+    }
+
+    [Theory]
+    [InlineData("hollowmere_margin", "1,0", "reed_apothecary", "freefolk_shelterwright", "hollowmere_loyalist")]
+    [InlineData("brall_whaleholds", "16,0", "bone_carver", "tale_witness", "ale_house_host")]
+    public void SettlementCentersPreserveTheirAuthoredThreeVoiceEnsemble(
+        string regionId,
+        string zoneId,
+        string first,
+        string second,
+        string third)
+    {
+        const int seed = 7;
+        var region = RegionCatalog.LoadDefault().Region(regionId)!;
+        var realm = WorldRoll.Create(seed).RealmFor(region.RealmId);
+        var parts = zoneId.Split(',');
+        var anchor = (int.Parse(parts[0]), int.Parse(parts[1]));
+        var batch = RegionPopulationGenerator.Generate(seed, zoneId, region, realm, anchor);
+
+        Assert.Equal(RegionPopulationGenerator.CenterHabitat, batch.Habitat);
+        Assert.Contains(batch.Residents, resident => resident.ArchetypeId == first);
+        Assert.Contains(batch.Residents, resident => resident.ArchetypeId == second);
+        Assert.Contains(batch.Residents, resident => resident.ArchetypeId == third);
+        if (regionId == "hollowmere_margin")
+        {
+            var loyalist = Assert.Single(batch.Residents, resident => resident.ArchetypeId == "hollowmere_loyalist");
+            Assert.Equal("hollowmere", loyalist.FactionId);
+            Assert.Contains("empire", loyalist.Tags, StringComparer.OrdinalIgnoreCase);
+            Assert.Contains("stability", loyalist.Tags, StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (regionId == "brall_whaleholds")
+        {
+            var host = Assert.Single(batch.Residents, resident => resident.ArchetypeId == "ale_house_host");
+            Assert.True(host.Wares.Count >= 3);
+            Assert.Contains(host.Services, service => service.Id == "witness_backed_introduction");
+        }
+    }
+
+    [Fact]
+    public void MerchantAndServiceRolesAlwaysExposeTheirAdvertisedInteraction()
+    {
+        var regions = RegionCatalog.LoadDefault().Regions.Where(region => region.Population is not null);
+        foreach (var region in regions)
+        {
+            foreach (var archetype in region.Population!.Archetypes)
+            {
+                if (archetype.Roles.Contains("merchant", StringComparer.OrdinalIgnoreCase))
+                {
+                    Assert.True(archetype.Wares.Count > 0,
+                        $"{region.Id}/{archetype.Id} advertises merchant but has no wares");
+                }
+
+                if (archetype.Roles.Contains("service_provider", StringComparer.OrdinalIgnoreCase))
+                {
+                    Assert.True(archetype.Services.Count > 0,
+                        $"{region.Id}/{archetype.Id} advertises service_provider but has no services");
+                }
+            }
+        }
     }
 
     [Fact]
@@ -168,6 +260,61 @@ public sealed class RegionalPopulationGenerationTests
         Assert.True(give.Success);
         Assert.True(talk.Success);
         Assert.True(bonds.Success);
+    }
+
+    [Fact]
+    public void SettlementArrivalPresentsItsPeopleSignatureAndPetsWithinAReadableWalk()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 6);
+
+        session.Engine.Travel(Direction.East);
+
+        var state = session.Engine.State;
+        var player = state.ControlledEntity.Get<PositionComponent>().Position;
+        var residents = state.Entities.Values
+            .Where(entity => entity.TryGet<TagsComponent>(out var tags)
+                && tags.Tags.Contains("regional_population", StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        var features = state.Entities.Values
+            .Where(entity => entity.TryGet<TagsComponent>(out var tags)
+                && tags.Tags.Contains("place_feature", StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        var pets = state.Entities.Values
+            .Where(entity => entity.TryGet<TagsComponent>(out var tags)
+                && tags.Tags.Contains("pet", StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.True(residents.Count(entity => GameEngine.StepDistance(player, entity.Get<PositionComponent>().Position) <= 4) >= 2);
+        Assert.Contains(features, entity => GameEngine.StepDistance(player, entity.Get<PositionComponent>().Position) <= 5);
+        Assert.NotEmpty(pets);
+        Assert.Contains(pets, entity => GameEngine.StepDistance(player, entity.Get<PositionComponent>().Position) <= 6);
+    }
+
+    [Fact]
+    public void AmbientEncounterGeneratedForArrivalIsNotHiddenAcrossTheMap()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 52);
+        session.Engine.Travel(Direction.South);
+
+        var state = session.Engine.State;
+        var player = state.ControlledEntity.Get<PositionComponent>().Position;
+        var encounter = state.Entities.Values
+            .Where(entity => entity.TryGet<TagsComponent>(out var tags)
+                && tags.Tags.Contains("encounter_cast", StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.NotEmpty(encounter);
+        Assert.All(encounter, entity =>
+            Assert.InRange(GameEngine.StepDistance(player, entity.Get<PositionComponent>().Position), 1, 8));
+    }
+
+    [Fact]
+    public void ReferenceTransectDoesNotPutTheCapitalWestOfTheOpeningYard()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 15);
+
+        session.Engine.Travel(Direction.West);
+
+        Assert.Equal("hollowmere_margin", session.Engine.State.RegionId);
     }
 
     private static string Signature(IEnumerable<RegionPopulationBatch> batches) =>

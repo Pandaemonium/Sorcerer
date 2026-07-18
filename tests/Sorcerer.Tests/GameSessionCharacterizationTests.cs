@@ -8448,18 +8448,19 @@ public sealed class GameSessionCharacterizationTests
             && Equals(delta.Details["populationArchetype"], "reed_apothecary")
             && Equals(delta.Details["populationHabitat"], "center")
             && !delta.IsPlayerVisible());
-        Assert.Equal(5, travel.Deltas.Count(delta =>
-            delta.Operation == "generateResidentWares"
-            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.OfferTrade)
-            && Equals(delta.Details["stockSource"], "regional_population")));
         var resident = Assert.Single(session.Engine.State.Entities.Values, entity =>
             entity.TryGet<TagsComponent>(out var tags)
             && tags.Tags.Contains("reed_apothecary", StringComparer.OrdinalIgnoreCase));
         Assert.True(resident.TryGet<MerchantComponent>(out var merchant));
-        // WP2 routed merchants through the authored regional corpus (docs/CONTENT_SPRINT_PLAN.md);
-        // the reed apothecary now stocks Hollowmere medicine and river goods.
-        Assert.InRange(merchant.Wares["marsh febrifuge"], 1, 2);
-        Assert.InRange(merchant.Wares["bundle of reed pith"], 2, 5);
+        var residentWareDeltas = travel.Deltas.Where(delta =>
+            delta.Operation == "generateResidentWares"
+            && delta.Target.Equals(resident.Id.Value, StringComparison.OrdinalIgnoreCase)
+            && Equals(delta.Details["consequenceType"], WorldConsequenceTypes.OfferTrade)
+            && Equals(delta.Details["stockSource"], "regional_population"))
+            .ToArray();
+        Assert.NotEmpty(residentWareDeltas);
+        Assert.Equal(merchant.Wares.Count, residentWareDeltas.Length);
+        Assert.All(merchant.Wares, ware => Assert.InRange(ware.Value, 1, 5));
     }
 
     [Fact]

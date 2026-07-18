@@ -80,7 +80,31 @@ public sealed class ItemCatalog
 
     public IReadOnlyCollection<ItemDefinition> Items => _items.Values;
 
-    public void Add(ItemDefinition item) => _items[item.Id] = item;
+    public void Add(ItemDefinition item)
+    {
+        if (string.IsNullOrWhiteSpace(item.Id))
+        {
+            throw new ContentPackException("Item definitions require a non-empty id.");
+        }
+
+        if (!_items.TryAdd(item.Id, item))
+        {
+            throw new ContentPackException($"Item id '{item.Id}' is defined more than once.");
+        }
+    }
+
+    /// <summary>Registers a procedural definition if the authored catalog does not already own
+    /// its id. Zone loot frequently reuses an authored definition (for example, a whetstone); that
+    /// is not a duplicate authoring error and must not replace the canonical authored row.</summary>
+    public void RegisterGenerated(ItemDefinition item)
+    {
+        if (string.IsNullOrWhiteSpace(item.Id))
+        {
+            throw new ContentPackException("Generated item definitions require a non-empty id.");
+        }
+
+        _items.TryAdd(item.Id, item);
+    }
 
     public ItemDefinition? Find(string idOrName) =>
         _items.TryGetValue(idOrName, out var item)

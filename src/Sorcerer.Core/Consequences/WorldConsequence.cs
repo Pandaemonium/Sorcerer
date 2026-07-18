@@ -1,5 +1,6 @@
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Consequences;
 
@@ -20,6 +21,11 @@ public static class WorldConsequenceTypes
     public const string SpawnFixture = "spawn_fixture";
     public const string CreatePromise = "create_promise";
     public const string UpdatePromise = "update_promise";
+    public const string OfferBargain = "offer_bargain";
+    public const string AcceptBargain = "accept_bargain";
+    public const string FulfillBargain = "fulfill_bargain";
+    public const string AlterItem = "alter_item";
+    public const string ResolveCost = "resolve_cost";
     public const string Message = "message";
     public const string ModifyInventory = "modify_inventory";
     public const string TransferItem = "transfer_item";
@@ -99,6 +105,11 @@ public static class WorldConsequenceTypes
             SpawnFixture or "spawnfixture" => SpawnFixture,
             CreatePromise or "createpromise" => CreatePromise,
             UpdatePromise or "updatepromise" => UpdatePromise,
+            OfferBargain or "offerbargain" => OfferBargain,
+            AcceptBargain or "acceptbargain" => AcceptBargain,
+            FulfillBargain or "fulfillbargain" => FulfillBargain,
+            AlterItem or "alteritem" => AlterItem,
+            ResolveCost or "resolvecost" or "clear_cost" or "clearcost" => ResolveCost,
             ModifyInventory or "modifyinventory" => ModifyInventory,
             TransferItem or "transferitem" => TransferItem,
             UpdateEquipment or "updateequipment" => UpdateEquipment,
@@ -170,7 +181,7 @@ public static class WorldConsequenceTypes
     {
         Damage, Heal, RestoreMana, AdjustActorResource, MoveEntity, SetTerrain, UpdateTerrain,
         ApplyStatus, RemoveStatus, AccelerateStatus, SpawnEntity, SpawnItem, SpawnFixture,
-        CreatePromise, UpdatePromise, Message, ModifyInventory, TransferItem, UpdateEquipment,
+        CreatePromise, UpdatePromise, OfferBargain, AcceptBargain, FulfillBargain, AlterItem, ResolveCost, Message, ModifyInventory, TransferItem, UpdateEquipment,
         AddTags, RemoveTags, ChangeFaction, UpdateControl, SetControlledEntity, SwapSouls,
         SetWorldFlag, UpdateRunStatus, SetSelectedTarget, QueueBackgroundJob, UpdateBackgroundJob,
         ScheduleEvent, UpdateScheduledEvent, CreateTrigger, UpdateTrigger, AdjustFactionStanding,
@@ -751,6 +762,8 @@ public sealed record WorldConsequence(
         bool emitMessage = true,
         string? message = null,
         string? stackMessageTemplate = null,
+        string? costProfileId = null,
+        JourneyPlan? journey = null,
         IReadOnlyDictionary<string, object?>? details = null) =>
         new(
             WorldConsequenceTypes.CreatePromise,
@@ -781,7 +794,9 @@ public sealed record WorldConsequence(
                 ("autoBind", autoBind),
                 ("emitMessage", emitMessage),
                 ("message", message),
-                ("stackMessageTemplate", stackMessageTemplate)));
+                ("stackMessageTemplate", stackMessageTemplate),
+                ("costProfileId", costProfileId),
+                ("journey", journey)));
 
     public static WorldConsequence UpdatePromise(
         string source,
@@ -804,6 +819,7 @@ public sealed record WorldConsequence(
         string operation = "updatePromise",
         bool emitMessage = false,
         string? message = null,
+        JourneyPlan? journey = null,
         IReadOnlyDictionary<string, object?>? details = null) =>
         new(
             WorldConsequenceTypes.UpdatePromise,
@@ -829,7 +845,142 @@ public sealed record WorldConsequence(
                 ("clearEligibilityFailure", clearEligibilityFailure),
                 ("operation", operation),
                 ("emitMessage", emitMessage),
+                ("message", message),
+                ("journey", journey)));
+
+    public static WorldConsequence OfferBargain(
+        string source,
+        string promiseId,
+        BargainOffer offer,
+        string visibility = WorldConsequenceVisibility.Journal,
+        string? sourceEntityId = null,
+        string? evidence = null,
+        string? reason = null,
+        string operation = "offerBargain",
+        bool emitMessage = true,
+        string? message = null,
+        IReadOnlyDictionary<string, object?>? details = null) =>
+        new(
+            WorldConsequenceTypes.OfferBargain,
+            source,
+            sourceEntityId,
+            promiseId,
+            Visibility: visibility,
+            Evidence: evidence,
+            Reason: reason,
+            Payload: MergePayload(
+                details,
+                ("promiseId", promiseId),
+                ("offer", offer),
+                ("operation", operation),
+                ("emitMessage", emitMessage),
                 ("message", message)));
+
+    public static WorldConsequence AcceptBargain(
+        string source,
+        string promiseId,
+        string optionId,
+        string actorEntityId,
+        string visibility = WorldConsequenceVisibility.Message,
+        string? evidence = null,
+        string? reason = null,
+        string operation = "acceptBargain",
+        IReadOnlyDictionary<string, object?>? details = null) =>
+        new(
+            WorldConsequenceTypes.AcceptBargain,
+            source,
+            actorEntityId,
+            promiseId,
+            Visibility: visibility,
+            Evidence: evidence,
+            Reason: reason,
+            Payload: MergePayload(
+                details,
+                ("promiseId", promiseId),
+                ("optionId", optionId),
+                ("actorEntityId", actorEntityId),
+                ("operation", operation)));
+
+    public static WorldConsequence FulfillBargain(
+        string source,
+        string promiseId,
+        string termId,
+        string actorEntityId,
+        string action = "fulfill",
+        string visibility = WorldConsequenceVisibility.Message,
+        string? evidence = null,
+        string? reason = null,
+        string operation = "fulfillBargain",
+        IReadOnlyDictionary<string, object?>? details = null) =>
+        new(
+            WorldConsequenceTypes.FulfillBargain,
+            source,
+            actorEntityId,
+            promiseId,
+            Visibility: visibility,
+            Evidence: evidence,
+            Reason: reason,
+            Payload: MergePayload(
+                details,
+                ("promiseId", promiseId),
+                ("termId", termId),
+                ("actorEntityId", actorEntityId),
+                ("action", action),
+                ("operation", operation)));
+
+    public static WorldConsequence AlterItem(
+        string source,
+        string carrierEntityId,
+        string item,
+        string profileId,
+        string action = "apply",
+        string visibility = WorldConsequenceVisibility.Message,
+        string? sourceEntityId = null,
+        string? evidence = null,
+        string? reason = null,
+        string operation = "alterItem",
+        IReadOnlyDictionary<string, object?>? details = null) =>
+        new(
+            WorldConsequenceTypes.AlterItem,
+            source,
+            sourceEntityId,
+            carrierEntityId,
+            Visibility: visibility,
+            Evidence: evidence,
+            Reason: reason,
+            Payload: MergePayload(
+                details,
+                ("item", item),
+                ("profileId", profileId),
+                ("action", action),
+                ("operation", operation)));
+
+    public static WorldConsequence ResolveCost(
+        string source,
+        string targetEntityId,
+        string? profileId = null,
+        string? item = null,
+        string category = "curse",
+        string visibility = WorldConsequenceVisibility.Message,
+        string? sourceEntityId = null,
+        string? evidence = null,
+        string? reason = null,
+        string operation = "resolveCost",
+        IReadOnlyDictionary<string, object?>? details = null) =>
+        new(
+            WorldConsequenceTypes.ResolveCost,
+            source,
+            sourceEntityId,
+            targetEntityId,
+            Visibility: visibility,
+            Evidence: evidence,
+            Reason: reason,
+            Payload: MergePayload(
+                details,
+                ("profileId", profileId),
+                ("item", item),
+                ("category", category),
+                ("operation", operation)));
 
     public static WorldConsequence Message(
         string source,
@@ -1570,7 +1721,8 @@ public sealed record WorldConsequence(
         string? evidence = null,
         string? reason = null,
         string operation = "recordDeed",
-        IReadOnlyDictionary<string, object?>? details = null) =>
+        IReadOnlyDictionary<string, object?>? details = null,
+        string? summary = null) =>
         new(
             WorldConsequenceTypes.RecordDeed,
             source,
@@ -1588,6 +1740,7 @@ public sealed record WorldConsequence(
                 ("effectX", effectX),
                 ("effectY", effectY),
                 ("tags", tags ?? Array.Empty<string>()),
+                ("summary", summary),
                 ("operation", operation)));
 
     public static WorldConsequence UpdateDeed(
@@ -2244,7 +2397,8 @@ public sealed record WorldConsequence(
         string? reason = null,
         string operation = "updateBond",
         int maxDelta = 2,
-        IReadOnlyDictionary<string, object?>? details = null) =>
+        IReadOnlyDictionary<string, object?>? details = null,
+        string? subjectSoulId = null) =>
         new(
             WorldConsequenceTypes.UpdateBond,
             source,
@@ -2262,7 +2416,8 @@ public sealed record WorldConsequence(
                 ("resentmentDelta", resentmentDelta),
                 ("posture", posture),
                 ("operation", operation),
-                ("maxDelta", maxDelta)));
+                ("maxDelta", maxDelta),
+                ("subjectSoulId", subjectSoulId)));
 
     public static WorldConsequence UpdateWant(
         string source,

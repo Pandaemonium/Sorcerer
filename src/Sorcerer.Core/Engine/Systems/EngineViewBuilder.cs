@@ -179,6 +179,14 @@ public sealed class EngineViewBuilder
             includePromises
                 ? _state.PromiseLedger.Promises
                     .Where(promise => promise.PlayerVisible)
+                    // A routed cleansing cast has a four-promise budget. Durable active curses
+                    // must win that budget over unrelated old leads or the resolver can see the
+                    // status chip but not the authoritative record that actually drives it.
+                    .OrderByDescending(promise =>
+                        promise.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase)
+                        && promise.Status is not "cleared" and not "fulfilled")
+                    .ThenByDescending(promise => promise.Salience)
+                    .ThenBy(promise => promise.Id, StringComparer.OrdinalIgnoreCase)
                     .Take(routedContext ? MagicContextPromiseCap : int.MaxValue)
                     .Select(ToResolverPromiseCard)
                     .ToArray()
@@ -893,7 +901,7 @@ public sealed class EngineViewBuilder
                 return;
             }
 
-            var reachable = GameEngine.Distance(actorPosition, position) <= range;
+            var reachable = GameEngine.StepDistance(actorPosition, position) <= range;
             actions.Add(new ContextActionCard(
                 id,
                 label,
@@ -916,11 +924,49 @@ public sealed class EngineViewBuilder
             Add("recruit", "Recruit", $"recruit {entity.Id.Value}", 2);
             Add("give", "Give...", $"give  to {entity.Name}", 2, presentation: "compose");
             Add("possess", "Possess", $"possess {entity.Id.Value}", 1);
+            var anchoredObligation = entity.TryGet<PromiseAnchorComponent>(out var anchor)
+                ? anchor.PromiseIds.Select(id => _state.PromiseLedger.Promises.FirstOrDefault(promise =>
+                        promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase)
+                        && (promise.Kind.Equals("debt", StringComparison.OrdinalIgnoreCase)
+                            || promise.Kind.Equals("bargain", StringComparison.OrdinalIgnoreCase))
+                        && promise.Status is not "cleared" and not "fulfilled" and not "breached"))
+                    .FirstOrDefault(promise => promise is not null)
+                : null;
+            if (anchoredObligation?.BargainOffer is { } offer)
+            {
+                Add("terms", "Review Terms", $"bargains {anchoredObligation.Id}", 2);
+                Add(
+                    "settle",
+                    offer.Options.Count == 1 ? $"Accept {offer.Options[0].Label}" : "Choose Terms...",
+                    offer.Options.Count == 1
+                        ? $"settle {entity.Id.Value} with {offer.Options[0].Id}"
+                        : $"settle {entity.Id.Value} with ",
+                    2,
+                    presentation: offer.Options.Count == 1 ? "execute" : "compose");
+            }
+            else if (anchoredObligation is not null)
+            {
+                Add("bargain", "Ask for Terms", $"bargain {entity.Id.Value}", 2);
+            }
+            else
+            {
+                Add("bargain", "Bargain", $"bargain {entity.Id.Value}", 2);
+            }
+
+            Add("intimidate", "Intimidate", $"intimidate {entity.Id.Value}", 4);
+            Add("concede", "Concede", $"concede {entity.Id.Value}", 5);
+            Add("exchange", "Exchange...", $"exchange  for  with {entity.Id.Value}", 5, presentation: "compose");
+            Add("counter", "Counter Intent...", $"counter {entity.Id.Value} with ", 3, presentation: "compose");
         }
 
         if (entity.Has<DoorComponent>())
         {
             Add("open", "Open", $"open {entity.Id.Value}", 1);
+        }
+
+        if (entity.Has<InteriorEntranceComponent>())
+        {
+            Add("breach", "Force Entry", $"breach {entity.Id.Value}", 2);
         }
 
         if (entity.Has<ItemComponent>())
@@ -1166,7 +1212,10 @@ public sealed class EngineViewBuilder
             promise.Source,
             promise.Subject,
             promise.ClaimedPlace,
-            TriggerHint: promise.TriggerHint);
+            BoundTargetId: promise.BoundTargetId,
+            TriggerHint: promise.TriggerHint,
+            CostProfileId: promise.CostProfileId,
+            Stacks: promise.Stacks);
 
     private static PromiseCard ToPromiseCard(WorldPromise promise) =>
         new(
@@ -1189,7 +1238,9 @@ public sealed class EngineViewBuilder
             promise.SourceClaimId,
             promise.SourceSpeakerId,
             promise.SourceListenerSoulId,
-            promise.SourceConfidence);
+            promise.SourceConfidence,
+            promise.CostProfileId,
+            promise.Stacks);
 
     private static ClaimCard ToClaimCard(ClaimRecord claim) =>
         new(

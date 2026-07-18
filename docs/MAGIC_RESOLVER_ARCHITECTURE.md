@@ -321,6 +321,15 @@ remain semantic promise/debt text. Curse costs use the same `create_promise` con
 operation `cost:curse`, including stacking metadata, so a debt paid by magic is still an ordinary
 promise/debt record for later payoff systems.
 
+Content-authored curse profiles are durable too: their promise, not the status chip alone, owns
+their runtime behavior. Routed cleansing context therefore prioritizes active visible curses and
+exposes the bound target and exact `costProfileId` alongside the caster's status id and display
+name. A curing resolution uses `resolveCurse`, which submits the shared `resolve_cost` consequence
+and transactionally clears the promise plus linked status. `removeStatus` remains appropriate for
+temporary conditions, but cannot silently end a promise-backed curse while leaving its cadence
+active. Wild curing is still an ordinary validated spell and should carry a meaningful post-cast
+cost.
+
 Live-provider feel tests should check that prose and mechanics agree. If the model says an
 enemy is pinned, asleep, frozen, charmed, burning, or otherwise altered, the applied engine
 operations should make that state matter immediately or the audit should reveal why repair

@@ -183,6 +183,31 @@
               "clerks_row": 4,
               "intake_gate": 3
             }
+          },
+          {
+            "id": "seal_press",
+            "name": "credential seal-press",
+            "glyph": "T",
+            "fixtureType": "office_furniture",
+            "description": "Interchangeable brass dies wait beneath a locked arm, each able to make a lie look administratively tired.",
+            "tags": ["seal", "forgery", "credential", "brass"],
+            "districtWeights": {
+              "clerks_row": 6,
+              "evidence_yard": 2
+            }
+          },
+          {
+            "id": "courier_tack_rack",
+            "name": "courier tack-rack",
+            "glyph": "r",
+            "fixtureType": "storage",
+            "description": "Satchel straps, rain capes, and one unattended gray courier coat hang beneath a departure slate.",
+            "tags": ["courier", "uniform", "satchel", "disguise"],
+            "blocksMovement": false,
+            "districtWeights": {
+              "intake_gate": 5,
+              "clerks_row": 3
+            }
           }
         ],
         "materials": [
@@ -277,7 +302,8 @@
             "text": "NOTICE IS GIVEN that {name} remains subject to inspection under the current containment schedule.",
             "tags": [
               "notice",
-              "law"
+              "law",
+              "teaches_charter:surveyor_edict_1"
             ]
           },
           {
@@ -300,7 +326,8 @@
               "schedule",
               "sweep",
               "free_folk",
-              "route_hint"
+              "route_hint",
+              "teaches_charter:ward_step_1"
             ],
             "claimTags": [
               "sweep",
@@ -321,7 +348,8 @@
             "tags": [
               "warrant",
               "evidence",
-              "provenance"
+              "provenance",
+              "teaches_charter:cleansing_writ_1"
             ],
             "claimTags": [
               "warrant",
@@ -347,6 +375,18 @@
               "courier",
               "manifest",
               "schedule"
+            ]
+          },
+          {
+            "kind": "readable",
+            "weight": 1,
+            "title": "Checkpoint barrier inspection card",
+            "text": "The card diagrams a Bulwark Edict as four numbered strokes, with the warning that the fourth line must close before the first is challenged.",
+            "tags": [
+              "charter_manual",
+              "checkpoint",
+              "defense",
+              "teaches_charter:bulwark_edict_1"
             ]
           }
         ],
@@ -430,6 +470,24 @@
                 "x": 0,
                 "y": 1
               }
+            ]
+          },
+          {
+            "id": "forgery_corner",
+            "weight": 2,
+            "members": [
+              { "base": "seal_press", "material": "brass", "condition": "misfiled", "x": 0, "y": 0 },
+              { "base": "audit_desk", "material": "marble", "condition": "scrubbed", "x": 1, "y": 0 },
+              { "base": "permit_box", "material": "charter_glass", "condition": "sealed", "x": 0, "y": 1 }
+            ]
+          },
+          {
+            "id": "courier_transfer",
+            "weight": 2,
+            "members": [
+              { "base": "courier_tack_rack", "material": "brass", "condition": "numbered", "x": 0, "y": 0 },
+              { "base": "courier_slot", "material": "marble", "condition": "sealed", "x": 1, "y": 0 },
+              { "base": "queue_rail", "material": "brass", "condition": "overturned", "x": 0, "y": 1 }
             ]
           }
         ]

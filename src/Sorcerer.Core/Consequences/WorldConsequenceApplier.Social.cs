@@ -162,6 +162,7 @@ public sealed partial class WorldConsequenceApplier
         var origin = new GridPoint(originX.Value, originY.Value);
         var effectPoint = effectX is null ? (GridPoint?)null : new GridPoint(effectX.Value, effectY!.Value);
         var tags = NormalizeTags(ReadStringList(payload, "tags"));
+        var deedSummary = FirstNonBlank(ReadString(payload, "summary"), consequence.Evidence);
         var capture = engine.PlanDeedCapture(
             actor.Entity!,
             kind,
@@ -181,7 +182,8 @@ public sealed partial class WorldConsequenceApplier
             plan.Tags,
             plan.EffectWitnesses,
             plan.AttributedSoulId,
-            plan.AttributionStatus);
+            plan.AttributionStatus,
+            deedSummary);
         var operation = ReadString(payload, "operation") ?? "recordDeed";
         var summary = $"Deed recorded: {deed.Kind} ({deed.Visibility}).";
         var delta = new StateDelta(
@@ -200,6 +202,7 @@ public sealed partial class WorldConsequenceApplier
                 ("effectWitnesses", deed.EffectWitnesses ?? Array.Empty<string>()),
                 ("attributedSoulId", deed.AttributedSoulId),
                 ("attributionStatus", deed.AttributionStatus),
+                ("deedSummary", deed.Summary),
                 ("tags", deed.Tags),
                 ("playerVisible", ReadBool(payload, "playerVisible") ?? IsVisible(consequence.Visibility))));
         var messages = MaybeVisibleMessage(consequence, summary);
@@ -924,7 +927,10 @@ public sealed partial class WorldConsequenceApplier
 
         var operation = ReadString(payload, "operation") ?? "updateBond";
         var entity = EntityById(entityId);
-        if (entity is null)
+        var explicitSubjectSoulId = FirstNonBlank(
+            ReadString(payload, "subjectSoulId"),
+            ReadString(payload, "subject_soul_id"));
+        if (entity is null && string.IsNullOrWhiteSpace(explicitSubjectSoulId))
         {
             return new WorldConsequenceApplyResult(
                 false,
@@ -949,18 +955,23 @@ public sealed partial class WorldConsequenceApplier
         }
 
         var maxDelta = Math.Max(0, ReadInt(payload, "maxDelta") ?? _defaultBondDeltaLimit);
+        var subjectSoulId = explicitSubjectSoulId ?? SoulIdFor(entity!);
         var bond = _state.Bonds.Adjust(
-            SoulIdFor(entity),
+            subjectSoulId,
             targetSoulId,
             ClampDelta(ReadInt(payload, "loyaltyDelta") ?? 0, maxDelta),
             ClampDelta(ReadInt(payload, "fearDelta") ?? 0, maxDelta),
             ClampDelta(ReadInt(payload, "admirationDelta") ?? 0, maxDelta),
             ClampDelta(ReadInt(payload, "resentmentDelta") ?? 0, maxDelta),
             FirstNonBlank(ReadString(payload, "posture")));
-        var summary = $"{Possessive(entity)} posture shifts: {BondSummary(bond)}.";
+        var subjectLabel = entity is null ? subjectSoulId : Possessive(entity);
+        var summary = entity is null
+            ? $"{subjectLabel}'s posture shifts: {BondSummary(bond)}."
+            : $"{subjectLabel} posture shifts: {BondSummary(bond)}.";
+        var resultTarget = entity?.Id.Value ?? subjectSoulId;
         var delta = new StateDelta(
             operation,
-            entity.Id.Value,
+            resultTarget,
             summary,
             Details(
                 consequence,
@@ -971,7 +982,7 @@ public sealed partial class WorldConsequenceApplier
                 ("posture", bond.Posture)));
         return Applied(
             consequence,
-            entity.Id.Value,
+            resultTarget,
             MaybeVisibleMessage(consequence, summary),
             delta,
             ("loyalty", bond.Loyalty),

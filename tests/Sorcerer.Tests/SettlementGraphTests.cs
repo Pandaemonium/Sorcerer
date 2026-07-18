@@ -101,6 +101,27 @@ public sealed class SettlementGraphTests
     }
 
     [Fact]
+    public void BroadRegionJourneyResolvesToItsPrimarySettlementWhileLandmarksRemainExplicit()
+    {
+        var graph = WorldPlaceGraph.Create(19, RegionCatalog.LoadDefault());
+        var brallRegion = RegionCatalog.LoadDefault().Regions.Single(region =>
+            region.Name.Contains("Brall", StringComparison.OrdinalIgnoreCase));
+        var brallPrimary = graph.Settlements.Single(settlement =>
+            settlement.IsPrimary && settlement.RegionId.Equals(brallRegion.Id, StringComparison.OrdinalIgnoreCase));
+        var brallLandmark = graph.Landmarks.Single(landmark =>
+            landmark.RegionId.Equals(brallRegion.Id, StringComparison.OrdinalIgnoreCase));
+
+        var broad = Assert.IsType<JourneyDestination>(graph.ResolveDestination("Brall", "0,0", "containment_yard"));
+        var explicitLandmark = Assert.IsType<JourneyDestination>(
+            graph.ResolveDestination(brallLandmark.Name, "0,0", "containment_yard"));
+
+        Assert.Equal($"{brallPrimary.CenterX},{brallPrimary.CenterY}", broad.ZoneId);
+        Assert.Equal(WorldPlaceKinds.Settlement, broad.Kind);
+        Assert.Equal(brallLandmark.ZoneId, explicitLandmark.ZoneId);
+        Assert.Equal(WorldPlaceKinds.Landmark, explicitLandmark.Kind);
+    }
+
+    [Fact]
     public async Task CapitalWalkCrossesNamedDistrictsAndAtlasQuotesTheSameGraph()
     {
         var session = GameSession.CreateImperialEncounter(new WildMagicController(new MockSpellProvider()), seed: 7);

@@ -289,7 +289,8 @@ public sealed class WorldReactionSystem
         var actor = deed.AttributionStatus.Equals("attributed", StringComparison.OrdinalIgnoreCase)
             ? deed.ActorSoulId
             : "someone unnamed";
-        return $"{CleanKind(deed.Kind)} in {ReadablePlace(deed.PlaceKey)} by {actor}.";
+        var specific = string.IsNullOrWhiteSpace(deed.Summary) ? "" : $" {deed.Summary}";
+        return $"{CleanKind(deed.Kind)} in {ReadablePlace(deed.PlaceKey)} by {actor}.{specific}";
     }
 
     private static string CleanKind(string kind) => kind.Replace('_', ' ');
@@ -367,6 +368,14 @@ public sealed class WorldReactionSystem
         List<StateDelta> deltas,
         Func<WorldConsequence, WorldConsequenceApplyResult> applyConsequence)
     {
+        var colorMarkStacks = state.PromiseLedger.Promises
+            .Where(promise => promise.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase)
+                && promise.Status is not "cleared" and not "fulfilled"
+                && promise.CostProfileId?.Equals("curse_marked_by_color", StringComparison.OrdinalIgnoreCase) == true
+                && (string.IsNullOrWhiteSpace(promise.BoundTargetId)
+                    || promise.BoundTargetId.Equals(state.ControlledEntityId.Value, StringComparison.OrdinalIgnoreCase)))
+            .Sum(promise => Math.Max(1, promise.Stacks));
+        heat += colorMarkStacks;
         if (heat <= 0)
         {
             return false;

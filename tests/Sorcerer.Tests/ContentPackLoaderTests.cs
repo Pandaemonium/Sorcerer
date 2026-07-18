@@ -78,6 +78,19 @@ public sealed class ContentPackLoaderTests
         Assert.True(basePosition < dependentPosition, "a dependency must load before its dependent");
     }
 
+    [Fact]
+    public void ManifestIdMayDifferFromNestedDirectoryName()
+    {
+        using var tree = new PackTree();
+        tree.WritePack("category/base_folder", id: "base");
+        tree.WritePack("category/dependent_folder", id: "dependent", dependencies: new[] { "base" });
+
+        var entries = ContentPackLoader.LoadLoose(tree.Root);
+
+        Assert.True(FirstIndex(entries, "base") < FirstIndex(entries, "dependent"));
+        Assert.DoesNotContain(entries, entry => entry.PackId.Equals("base_folder", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static int FirstIndex(IReadOnlyList<ContentPackEntry> entries, string packId)
     {
         for (var index = 0; index < entries.Count; index++)

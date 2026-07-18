@@ -11,8 +11,16 @@
       "hermitChance": 6,
       "centers": [
         {
+          "x": -1,
+          "y": 1
+        },
+        {
           "x": 1,
           "y": 0
+        },
+        {
+          "x": 1,
+          "y": 2
         },
         {
           "x": 0,
@@ -91,27 +99,50 @@
             {
               "item": "marsh febrifuge",
               "min": 1,
-              "max": 2
+              "max": 2,
+              "chancePercent": 55
             },
             {
               "item": "flask of eel oil",
               "min": 1,
-              "max": 3
+              "max": 3,
+              "chancePercent": 55
             },
             {
               "item": "string of smoked eel",
               "min": 1,
-              "max": 4
+              "max": 4,
+              "chancePercent": 55
             },
             {
               "item": "bundle of reed pith",
               "min": 2,
-              "max": 5
+              "max": 5,
+              "chancePercent": 55
             },
             {
               "item": "healer's poultice",
               "min": 1,
-              "max": 2
+              "max": 2,
+              "chancePercent": 55
+            },
+            {
+              "item": "handful of memory silt",
+              "min": 1,
+              "max": 3,
+              "chancePercent": 55
+            },
+            {
+              "item": "eelglass bead",
+              "min": 1,
+              "max": 2,
+              "chancePercent": 55
+            },
+            {
+              "item": "carved bone pet-whistle",
+              "min": 1,
+              "max": 1,
+              "chancePercent": 45
             }
           ],
           "services": [
@@ -369,6 +400,7 @@
           "centerWeight": 2,
           "nearWeight": 3,
           "wildWeight": 3,
+          "requiredAtCenter": true,
           "knowledgeTier": 3
         },
         {
@@ -404,7 +436,7 @@
           "id": "hollowmere_loyalist",
           "title": "reconciled householder",
           "glyph": "c",
-          "factionId": "empire",
+          "factionId": "hollowmere",
           "tags": [
             "empire",
             "client",
@@ -427,7 +459,43 @@
           "centerWeight": 3,
           "nearWeight": 3,
           "wildWeight": 1,
+          "requiredAtCenter": true,
           "knowledgeTier": 2
+        },
+        {
+          "id": "menagerie_healer",
+          "title": "marsh menagerie-healer",
+          "glyph": "h",
+          "tags": ["pet", "keeper", "healer", "market", "hollowmere"],
+          "roles": ["resident", "service_provider", "merchant"],
+          "descriptions": [
+            "Three incompatible kinds of fur cling to an apron pocket full of warm river stones.",
+            "A reed whistle at their throat speaks more dialects than the healer admits to knowing."
+          ],
+          "wants": [
+            "Calm the imported glass-antler kit before an inspector classifies its panic as wild magic.",
+            "Convince one wealthy household to pay for the mud-swallow's medicine instead of buying a prettier animal."
+          ],
+          "wares": [
+            { "item": "carved bone pet-whistle", "min": 1, "max": 2, "chancePercent": 80 },
+            { "item": "string of smoked eel", "min": 1, "max": 4, "chancePercent": 70 },
+            { "item": "healer's poultice", "min": 1, "max": 2, "chancePercent": 55 }
+          ],
+          "services": [
+            {
+              "id": "creature_calming",
+              "name": "creature calming",
+              "effectKind": "record_memory",
+              "description": "The healer teaches a frightened creature your smell and leaves it a calm memory of your hands.",
+              "goldCost": 6,
+              "targetHint": "a nearby frightened or escaped creature",
+              "tags": ["pet", "calm", "bond", "hollowmere"]
+            }
+          ],
+          "centerWeight": 4,
+          "nearWeight": 3,
+          "wildWeight": 1,
+          "knowledgeTier": 3
         }
       ]
     }

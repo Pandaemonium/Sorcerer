@@ -80,8 +80,22 @@ public sealed class GameEngine
     public ActionResult Travel(Direction direction)
     {
         var turnBefore = State.Turn;
-        var travelDeltas = _generationSystem.Travel(direction);
+        var pursuers = _aiSystem.PursuersForTravel();
+        var travelDeltas = _generationSystem.Travel(direction, pursuers);
         var turnDeltas = AdvanceTurn();
+        var pursuitDeltas = pursuers.Count == 0
+            ? Array.Empty<StateDelta>()
+            : ApplyConsequence(WorldConsequence.Message(
+                "travel",
+                pursuers.Count == 1
+                    ? "A hostile crosses the boundary after you; this pursuit is not escaped."
+                    : $"{pursuers.Count} hostiles cross the boundary after you; this pursuit is not escaped.",
+                targetEntityId: State.ControlledEntityId.Value,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: "Engaged hostiles saw the controlled body leave the zone.",
+                operation: "pursuitContinues")).Deltas.ToArray();
+        var deltas = travelDeltas.Concat(turnDeltas).Concat(pursuitDeltas).ToArray();
         return new ActionResult
         {
             Action = "travel",
@@ -89,8 +103,184 @@ public sealed class GameEngine
             ConsumedTurn = true,
             TurnBefore = turnBefore,
             TurnAfter = State.Turn,
-            Messages = travelDeltas.PlayerMessages().Concat(turnDeltas.PlayerMessages()).ToArray(),
-            Deltas = travelDeltas.Concat(turnDeltas).ToArray(),
+            Messages = deltas.PlayerMessages().ToArray(),
+            Deltas = deltas,
+        };
+    }
+
+    /// <summary>
+    /// Cross several uneventful zone legs toward a named place.  The route pauses for at most two
+    /// ambient generated scenes; authored promise payoffs, the destination, and pursuit interrupt
+    /// immediately and do not consume that budget.
+    /// </summary>
+    public ActionResult Journey(string destinationText)
+    {
+        var turnBefore = State.Turn;
+        var destination = _generationSystem.ResolveJourneyDestination(destinationText);
+        if (destination is null)
+        {
+            return ActionResult.Simple(
+                "journey",
+                false,
+                false,
+                turnBefore,
+                State.Turn,
+                $"No mapped destination matches '{destinationText}'. Use atlas to review known place names.");
+        }
+
+        var active = State.PromiseLedger.Promises
+            .LastOrDefault(promise => promise.Kind.Equals("journey", StringComparison.OrdinalIgnoreCase)
+                && promise.Status.Equals("active", StringComparison.OrdinalIgnoreCase));
+        if (active?.Journey is not null
+            && !active.Journey.DestinationZoneId.Equals(destination.ZoneId, StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyConsequence(WorldConsequence.UpdatePromise(
+                "journey",
+                active.Id,
+                status: "abandoned",
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: "The player named a different overland destination.",
+                operation: "abandonJourney"));
+            active = null;
+        }
+
+        JourneyPlan plan;
+        if (active?.Journey is { } existingPlan)
+        {
+            plan = existingPlan;
+        }
+        else
+        {
+            plan = new JourneyPlan(
+                destination.Id,
+                destination.Name,
+                destination.ZoneId,
+                SceneBudget: 2,
+                StartedTurn: State.Turn);
+            var created = ApplyConsequence(WorldConsequence.CreatePromise(
+                "journey",
+                "journey",
+                $"Travel to {destination.Name}.",
+                triggerHint: "journey",
+                visibility: WorldConsequenceVisibility.Journal,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: "The player deliberately began a named overland journey.",
+                operation: "beginJourney",
+                playerVisible: true,
+                salience: 3,
+                claimedPlace: destination.ZoneId,
+                bindPlace: destination.ZoneId,
+                useCurrentRegionAsClaimedPlace: false,
+                emitMessage: false,
+                journey: plan));
+            active = State.PromiseLedger.Promises.FirstOrDefault(promise => promise.Id == created.TargetId)
+                ?? State.PromiseLedger.Promises.Last(promise => promise.Journey is not null);
+        }
+
+        if (_generationSystem.JourneyDistanceTo(destination) == 0)
+        {
+            ApplyConsequence(WorldConsequence.UpdatePromise(
+                "journey", active.Id, status: "completed", realizedIn: State.CurrentZoneId,
+                sourceEntityId: State.ControlledEntityId.Value, evidence: "The journey destination is the current zone.",
+                operation: "completeJourney"));
+            return ActionResult.Simple("journey", true, false, turnBefore, State.Turn, $"You are already at {destination.Name}.");
+        }
+
+        var deltas = new List<StateDelta>();
+        var crossedThisCommand = 0;
+        var interruptedBy = "progress";
+        const int ambientStride = 3;
+        const int safetyLegLimit = 48;
+        while (_generationSystem.JourneyDistanceTo(destination) > 0 && crossedThisCommand < safetyLegLimit)
+        {
+            var pursuers = _aiSystem.PursuersForTravel();
+            var direction = _generationSystem.JourneyDirectionTo(destination);
+            var travel = _generationSystem.Travel(direction, pursuers);
+            deltas.AddRange(travel);
+            deltas.AddRange(AdvanceTurn());
+            crossedThisCommand++;
+            plan = plan with { ZonesCrossed = plan.ZonesCrossed + 1 };
+
+            if (pursuers.Count > 0)
+            {
+                interruptedBy = "pursuit";
+                var pursuit = ApplyConsequence(WorldConsequence.Message(
+                    "journey",
+                    pursuers.Count == 1
+                        ? "Your route breaks into a chase: a hostile follows you across the boundary."
+                        : $"Your route breaks into a chase: {pursuers.Count} hostiles follow you across the boundary.",
+                    targetEntityId: State.ControlledEntityId.Value,
+                    visibility: WorldConsequenceVisibility.Message,
+                    sourceEntityId: State.ControlledEntityId.Value,
+                    evidence: "An engaged hostile crossed during compressed journey travel.",
+                    operation: "journeyInterruptedByPursuit"));
+                deltas.AddRange(pursuit.Deltas);
+                break;
+            }
+
+            if (_generationSystem.JourneyDistanceTo(destination) == 0)
+            {
+                interruptedBy = "destination";
+                break;
+            }
+
+            if (travel.Any(delta => delta.Operation.Equals("realizePromise", StringComparison.OrdinalIgnoreCase)))
+            {
+                interruptedBy = "promise";
+                break;
+            }
+
+            if (plan.ScenesSpent < plan.SceneBudget && crossedThisCommand >= ambientStride)
+            {
+                plan = plan with { ScenesSpent = plan.ScenesSpent + 1 };
+                interruptedBy = "ambient_scene";
+                var pause = ApplyConsequence(WorldConsequence.Message(
+                    "journey",
+                    $"You pause where the road has become interesting (journey scene {plan.ScenesSpent}/{plan.SceneBudget}). Continue with 'journey {destination.Name}' when ready.",
+                    targetEntityId: State.ControlledEntityId.Value,
+                    visibility: WorldConsequenceVisibility.Message,
+                    sourceEntityId: State.ControlledEntityId.Value,
+                    evidence: "The bounded ambient-scene budget paused a compressed route.",
+                    operation: "journeyScene"));
+                deltas.AddRange(pause.Deltas);
+                break;
+            }
+        }
+
+        var complete = _generationSystem.JourneyDistanceTo(destination) == 0;
+        var updated = ApplyConsequence(WorldConsequence.UpdatePromise(
+            "journey",
+            active.Id,
+            status: complete ? "completed" : "active",
+            realizedIn: complete ? State.CurrentZoneId : null,
+            sourceEntityId: State.ControlledEntityId.Value,
+            evidence: "Journey progress was committed after all crossed legs succeeded.",
+            operation: complete ? "completeJourney" : "updateJourney",
+            emitMessage: complete,
+            message: complete ? $"You reach {destination.Name}." : null,
+            journey: plan,
+            details: new Dictionary<string, object?>
+            {
+                ["destination"] = destination.Name,
+                ["destinationZoneId"] = destination.ZoneId,
+                ["zonesCrossed"] = crossedThisCommand,
+                ["totalZonesCrossed"] = plan.ZonesCrossed,
+                ["scenesSpent"] = plan.ScenesSpent,
+                ["sceneBudget"] = plan.SceneBudget,
+                ["interruptedBy"] = interruptedBy,
+                ["complete"] = complete,
+            }));
+        deltas.AddRange(updated.Deltas);
+
+        return new ActionResult
+        {
+            Action = "journey",
+            Success = true,
+            ConsumedTurn = crossedThisCommand > 0,
+            TurnBefore = turnBefore,
+            TurnAfter = State.Turn,
+            Messages = deltas.PlayerMessages().ToArray(),
+            Deltas = deltas,
         };
     }
 
@@ -264,7 +454,10 @@ public sealed class GameEngine
                 continue;
             }
 
-            if (!IsHostile(player, entity) || !CanPerceiveSubject(player, entity))
+            // Telegraph what this actor will do to the player. Relationship hostility can be
+            // asymmetric (a claimant may honor a personal settlement even while the player still
+            // opposes their institution), so use the same actor -> player orientation as AiSystem.
+            if (!IsHostile(entity, player) || !CanPerceiveSubject(player, entity))
             {
                 continue;
             }
@@ -276,27 +469,111 @@ public sealed class GameEngine
             }
 
             var (held, subdued) = HostileRestraint(entity);
+            var compelled = ActiveCompelledThreatState(entity);
+            var archetype = AiSystem.ArchetypeFor(entity);
+            var committed = entity.TryGet<BehaviorTagsComponent>(out var behaviors)
+                && behaviors.Tags.TryGetValue("tactical_committed", out var commitmentExpiry)
+                && (commitmentExpiry is null || commitmentExpiry > State.Turn);
+            var rangedIntent = archetype is not null
+                && (archetype.BehaviorTags.Contains("ranged", StringComparer.OrdinalIgnoreCase)
+                    || archetype.BehaviorTags.Contains("caster", StringComparer.OrdinalIgnoreCase));
+            var intentReach = rangedIntent ? 5 : 1;
+            var willCommit = compelled is null
+                && !held
+                && !subdued
+                && archetype is not null
+                && !committed
+                && distance <= intentReach;
             // A hostile the shared AI cannot act with (rooted/frozen/stunned) will neither advance
             // nor strike this turn, so it is not imminent and the telegraph must say so instead of
             // falsely reading "closing in" (GameView: the telegraph reflects changed state).
-            var imminent = distance <= 1 && !subdued;
+            var imminent = distance <= 1 && !subdued && compelled is null && archetype is null;
             var direction = WorldPlaceGraph.DirectionText(
                 entityPosition.Position.X - origin.X,
                 entityPosition.Position.Y - origin.Y);
+            var rangeText = distance == 1 ? "1 tile" : $"{distance} tiles";
             var telegraph = held
-                ? $"bound in place to the {direction}, {distance} tiles away — it cannot move or strike"
+                ? $"bound in place to the {direction}, {rangeText} away — it cannot move or strike"
                 : subdued
-                    ? $"reeling to the {direction}, {distance} tiles away — it cannot act"
+                    ? $"reeling to the {direction}, {rangeText} away — it cannot act"
+                    : compelled is not null
+                        ? $"{compelled.Telegraph} to the {direction}, {rangeText} away — it will not make its ordinary attack"
+                    : willCommit
+                        ? $"poised to commit an intent to the {direction}, {rangeText} away: {archetype!.Intent}; counter: {archetype.Counter}"
+                    : committed && archetype is not null
+                        ? $"committed to the {direction}, {rangeText} away: {archetype.Intent}; counter: {archetype.Counter}"
                     : imminent
                         ? $"in striking range to the {direction} — it strikes if you hold position"
-                        : $"closing in from the {direction}, {distance} tiles away";
-            threats.Add(new ThreatCard(entity.Id.Value, entity.Name, distance, imminent, telegraph));
+                        : archetype is not null
+                            ? $"closing in from the {direction}, {rangeText} away; intent: {archetype.Intent}; counter: {archetype.Counter}"
+                            : $"closing in from the {direction}, {rangeText} away";
+            threats.Add(new ThreatCard(
+                entity.Id.Value,
+                entity.Name,
+                distance,
+                compelled is null && (imminent || committed),
+                telegraph,
+                compelled?.Intent ?? archetype?.Intent,
+                compelled is null ? archetype?.Counter : null,
+                compelled is not null
+                    ? "An active magical compulsion currently suppresses its ordinary attack."
+                    : archetype is null ? null : "Inspect, counter with a matching item, brace in defensive gear, move, bargain, or cast."));
         }
 
         return threats
             .OrderBy(threat => threat.Distance)
             .ThenBy(threat => threat.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private sealed record CompelledThreatState(string Intent, string Telegraph);
+
+    private CompelledThreatState? ActiveCompelledThreatState(Entity entity)
+    {
+        if (!entity.TryGet<BehaviorTagsComponent>(out var behaviors))
+        {
+            return null;
+        }
+
+        bool Active(string tag) => behaviors.Tags.TryGetValue(tag, out var expiry)
+            && (expiry is null || expiry > State.Turn);
+        return Active("freeze_dread")
+            ? new("freeze in dread", "frozen by dread")
+            : Active("dance")
+                ? new("dance instead of attacking", "compelled to dance")
+                : Active("coward")
+                    ? new("flee from you", "compelled to flee")
+                    : Active("mimic")
+                        ? new("copy your last movement", "compelled to mimic your movement")
+                        : null;
+    }
+
+    public ActionResult Threats()
+    {
+        var threats = DescribeThreats();
+        var messages = threats.Count == 0
+            ? new[] { "You perceive no immediate threats." }
+            : threats.Select(threat =>
+            {
+                var details = new List<string> { $"{threat.Name}: {threat.Telegraph}." };
+                if (!string.IsNullOrWhiteSpace(threat.Intent)
+                    && !threat.Telegraph.Contains(threat.Intent, StringComparison.OrdinalIgnoreCase))
+                {
+                    details.Add($"Intent: {threat.Intent}.");
+                }
+                if (!string.IsNullOrWhiteSpace(threat.Counter)
+                    && !threat.Telegraph.Contains(threat.Counter, StringComparison.OrdinalIgnoreCase))
+                {
+                    details.Add($"Counter: {threat.Counter}.");
+                }
+                if (!string.IsNullOrWhiteSpace(threat.EquipmentHint))
+                {
+                    details.Add(threat.EquipmentHint);
+                }
+
+                return string.Join(" ", details);
+            }).ToArray();
+        return ActionResult.Simple("threats", true, false, State.Turn, State.Turn, messages);
     }
 
     /// <summary>Whether an active status leaves a hostile unable to advance (BlocksMovement) or
@@ -442,6 +719,8 @@ public sealed class GameEngine
 
     public ActionResult Reagents() => _itemSystem.Reagents();
 
+    public ActionResult Inventory() => _itemSystem.Inventory();
+
     public ActionResult Wares(string? target = null) => _itemSystem.Wares(target);
 
     public ActionResult Buy(string item, string? target = null) => _itemSystem.Buy(item, target);
@@ -515,6 +794,10 @@ public sealed class GameEngine
     public ActionResult Standing()
     {
         var messages = State.Factions.Factions
+            .Where(faction => !faction.Role.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+                || faction.Standing.Count > 0
+                || faction.Resources.Count > 0
+                || faction.HostileRoles.Count > 0)
             .OrderBy(faction => faction.Id)
             .Select(faction =>
             {
@@ -644,6 +927,8 @@ public sealed class GameEngine
     {
         var messageCount = State.Messages.Count;
         var structuredDeltas = _turnSystem.AdvanceTurn().ToList();
+        structuredDeltas.AddRange(ApplyBargainDeadlines());
+        structuredDeltas.AddRange(ApplyCurseCadence());
         structuredDeltas.AddRange(ApplyPendingSuspicionUpdates());
         structuredDeltas.AddRange(RecordControlledExploration("perception", "recordExploration"));
 
@@ -675,6 +960,91 @@ public sealed class GameEngine
         }
 
         return structuredDeltas.Concat(messageDeltas).ToArray();
+    }
+
+    private IReadOnlyList<StateDelta> ApplyBargainDeadlines()
+    {
+        var deltas = new List<StateDelta>();
+        foreach (var promise in State.PromiseLedger.Promises
+            .Where(candidate => candidate.BargainAgreement?.Status.Equals("active", StringComparison.OrdinalIgnoreCase) == true)
+            .Where(candidate => candidate.BargainAgreement!.Terms.Any(term =>
+                term.Kind.Equals(BargainTermKinds.Deadline, StringComparison.OrdinalIgnoreCase)
+                && term.DueTurn is { } due
+                && due < State.Turn))
+            .ToArray())
+        {
+            var applied = ApplyConsequence(WorldConsequence.FulfillBargain(
+                "agreement_deadline",
+                promise.Id,
+                "deadline",
+                State.ControlledEntityId.Value,
+                action: "breach",
+                visibility: WorldConsequenceVisibility.Message,
+                evidence: $"Turn {State.Turn} passed the agreement deadline.",
+                reason: "Expired typed deadlines breach still-pending agreements.",
+                operation: "breachBargainDeadline"));
+            deltas.AddRange(applied.Deltas);
+        }
+
+        return deltas;
+    }
+
+    private IReadOnlyList<StateDelta> ApplyCurseCadence()
+    {
+        if (State.Turn == 0
+            || State.Turn % 12 != 0
+            || !State.PromiseLedger.Promises.Any(promise =>
+                promise.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase)
+                && promise.Status is not "cleared" and not "fulfilled"
+                && promise.CostProfileId?.Equals("curse_hollow_name", StringComparison.OrdinalIgnoreCase) == true
+                && (string.IsNullOrWhiteSpace(promise.BoundTargetId)
+                    || promise.BoundTargetId.Equals(State.ControlledEntityId.Value, StringComparison.OrdinalIgnoreCase))))
+        {
+            return Array.Empty<StateDelta>();
+        }
+
+        var playerSoul = State.ControlledEntity.TryGet<SoulComponent>(out var controlledSoul)
+            ? controlledSoul.SoulId
+            : State.ControlledEntityId.Value;
+        var deltas = new List<StateDelta>();
+        foreach (var bond in State.Bonds.Bonds
+            .Where(record => record.TargetSoulId.Equals(playerSoul, StringComparison.OrdinalIgnoreCase))
+            .ToArray())
+        {
+            var subject = State.Entities.Values.FirstOrDefault(entity =>
+                entity.TryGet<SoulComponent>(out var soul)
+                    ? soul.SoulId.Equals(bond.SubjectSoulId, StringComparison.OrdinalIgnoreCase)
+                    : entity.Id.Value.Equals(bond.SubjectSoulId, StringComparison.OrdinalIgnoreCase));
+            deltas.AddRange(ApplyConsequence(WorldConsequence.UpdateBond(
+                "hollow_name",
+                subject?.Id.Value ?? bond.SubjectSoulId,
+                playerSoul,
+                loyaltyDelta: -1,
+                fearDelta: 0,
+                admirationDelta: -1,
+                resentmentDelta: 0,
+                posture: null,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: $"Hollow Name cadence at turn {State.Turn}.",
+                reason: "The active identity curse erodes remembered bonds once per world-day cadence.",
+                operation: "hollowNameBondDecay",
+                maxDelta: 1,
+                subjectSoulId: bond.SubjectSoulId)).Deltas);
+        }
+
+        if (deltas.Count > 0)
+        {
+            deltas.AddRange(ApplyConsequence(WorldConsequence.Message(
+                "hollow_name",
+                "Your name slips loose again; people who knew you remember one degree less.",
+                targetEntityId: State.ControlledEntityId.Value,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: State.ControlledEntityId.Value,
+                evidence: $"Hollow Name cadence at turn {State.Turn}.",
+                operation: "hollowNameCadence")).Deltas);
+        }
+
+        return deltas;
     }
 
     private IReadOnlyList<StateDelta> ApplyPendingSuspicionUpdates()

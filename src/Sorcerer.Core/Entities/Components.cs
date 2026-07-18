@@ -81,6 +81,13 @@ public sealed record EquipmentEffectComponent(
         Attack != 0 || Defense != 0 || Resistances.Count > 0 || Weaknesses.Count > 0 || FocusBias.Count > 0;
 }
 
+/// <summary>Per-inventory-key magical provenance. The item keeps its ordinary identity.</summary>
+public sealed record ItemAlterationComponent(Dictionary<string, string> Profiles) : IEntityComponent
+{
+    public static ItemAlterationComponent Empty() =>
+        new(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+}
+
 public sealed record ItemComponent(
     string ItemType,
     int Value,

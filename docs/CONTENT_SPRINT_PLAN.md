@@ -1,10 +1,20 @@
 # Content Sprint Plan — A Shockingly Lush First Hour
 
-Status: owner-calibrated 2026-07-17. This is the execution plan for one uninterrupted day of
-AI-driven development, intended to produce roughly three human-development weeks of player-visible
-content progress. It is subordinate to `GRAND_VISION.md` on intent and to
-`IMPLEMENTATION_PLAN.md` on engine discipline, but it supersedes their normal sequencing for this
-specific owner-directed content sprint.
+Status: implemented and integration-reviewed 2026-07-17. This was the execution plan for one
+uninterrupted day of AI-driven development, intended to produce roughly three human-development
+weeks of player-visible content progress. It is subordinate to `GRAND_VISION.md` on intent and to
+`IMPLEMENTATION_PLAN.md` on engine discipline, but it superseded their normal sequencing for this
+specific owner-directed content sprint. Measured results and review corrections are recorded in
+`baseline/CONTENT_SPRINT_EVIDENCE.md`.
+
+The package sequence and its four originally deferred acceptance slices are complete. The relay
+waystation is a staffed systemic set-piece with seven ordinary-state entry routes; live group talk
+uses one provider response; curses, debts, and altered items have runtime enforcement and
+counterplay; and journey, typed bargains, nonviolent closure, tactical intent, equipment bracing,
+and legible inventory/threat commands were completed in the follow-up playtest pass. Charter
+acquisition hooks, typed Godot journal rendering, and a rebindable journal hotkey were completed
+during integration review. The remaining presentation work is human visual/controls QA, not an
+unimplemented gameplay slice.
 
 The sprint thesis:
 

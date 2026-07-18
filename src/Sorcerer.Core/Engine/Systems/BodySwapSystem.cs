@@ -351,7 +351,10 @@ public sealed class BodySwapSystem
             return deltas;
         }
 
-        var message = $"Your soul crosses into {newBody.Name}; {oldBody.Name} staggers with someone else behind the eyes.";
+        var formerBodyName = oldBody.Name.Equals("You", StringComparison.OrdinalIgnoreCase)
+            ? "your former body"
+            : oldBody.Name;
+        var message = $"Your soul crosses into {newBody.Name}; {formerBodyName} staggers with someone else behind the eyes.";
         if (!TryApplyPossessionConsequence(
             WorldConsequence.Message(
             "body_swap",

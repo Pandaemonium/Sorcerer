@@ -12,6 +12,29 @@ namespace Sorcerer.Tests;
 public sealed class FreeFolkContentTests
 {
     [Fact]
+    public async Task ServiceListingUsesEightDirectionInteractionReach()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        var playerPosition = session.Engine.State.ControlledEntity.Get<PositionComponent>().Position;
+        var provider = new Entity(EntityId.Create("diagonal_provider"), "diagonal shelterwright")
+            .Set(new PositionComponent(new GridPoint(playerPosition.X + 2, playerPosition.Y + 1)))
+            .Set(new ActorComponent(8, 8, 0, 0, 0, 0, "neutral"))
+            .Set(new ServiceComponent(new[]
+            {
+                new ServiceOffer("dry_floor", "dry floor", "A place to rest within two actual moves.", "rest"),
+            }));
+        session.Engine.State.Entities[provider.Id] = provider;
+
+        var result = await session.ExecuteAsync(new ServicesCommand());
+
+        Assert.True(result.Success, string.Join(" | ", result.Messages));
+        Assert.Contains(result.Messages, message => message.Contains("dry floor", StringComparison.OrdinalIgnoreCase));
+        var providerCard = Assert.Single(session.View().Entities, entity => entity.Id == provider.Id.Value);
+        var serviceAction = Assert.Single(providerCard.Actions!, action => action.Id == "services");
+        Assert.True(serviceAction.Enabled);
+    }
+
+    [Fact]
     public void HollowmereCarriesAVulnerableFreeFolkNetworkAndAProEmpireRefuser()
     {
         var region = RegionCatalog.LoadDefault().Region("hollowmere_margin")!;

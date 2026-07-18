@@ -114,7 +114,8 @@ public sealed record RegionNameForgeDefinition(
 public sealed record RegionWareDefinition(
     string Item,
     int MinQuantity = 1,
-    int MaxQuantity = 1);
+    int MaxQuantity = 1,
+    int ChancePercent = 100);
 
 public sealed record RegionServiceDefinition(
     string Id,
@@ -203,6 +204,28 @@ public sealed record RegionInteriorFeatureDefinition(
     string? Readable = null,
     IReadOnlyList<Entities.ClaimSeed>? Claims = null);
 
+/// <summary>
+/// A data-authored member of an interior set-piece. Threshold actors appear beside the exterior
+/// entrance; interior actors appear only after entry. Initial items use the ordinary inventory
+/// consequence after spawn, so couriers and clerks can carry credentials players may trade for,
+/// steal through body control, or otherwise manipulate through shared systems.
+/// </summary>
+public sealed record RegionInteriorActorDefinition(
+    string Id,
+    string Name,
+    char Glyph,
+    string Placement,
+    string Faction,
+    int HitPoints,
+    int Attack,
+    string AiPolicyId,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> Roles,
+    string Description,
+    string Want,
+    string WantStakes,
+    IReadOnlyList<string> InitialItems);
+
 public sealed record RegionInteriorDefinition(
     string Id,
     string Name,
@@ -213,7 +236,8 @@ public sealed record RegionInteriorDefinition(
     string AccessPolicy,
     string? RequiredItem,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<RegionInteriorFeatureDefinition> Features);
+    IReadOnlyList<RegionInteriorFeatureDefinition> Features,
+    IReadOnlyList<RegionInteriorActorDefinition>? Actors = null);
 
 // A binding attaches an interior either to a settlement district (DistrictId) or to any
 // promise-site fixture carrying SiteTag - so a promised place ("imperial relay waystation")

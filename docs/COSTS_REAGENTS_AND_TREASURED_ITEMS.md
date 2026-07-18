@@ -172,6 +172,12 @@ turns. `modify_inventory` rejects insufficient `consume`/`remove`/`subtract` req
 time, so costs and service payments remain authoritative even when an earlier preflight was too
 permissive.
 
+Active curse profiles are resolver-visible by display name, linked status, bound target, and exact
+profile id. A free-form curing spell must use `resolveCurse`; the operation delegates to the same
+`resolve_cost` consequence used by `cleanse` and charter forms, so the durable promise and all
+profile-owned runtime state end together. `removeStatus` only removes an ordinary temporary
+condition and is deliberately not a shortcut around curse counterplay.
+
 ## Focus Versus Sacrifice
 
 Focus and reagent sacrifice are different choices:

@@ -90,7 +90,85 @@ public sealed partial class PromiseRealizationSystem
                 }),
             entities,
             deltas);
+        if (interior is not null)
+        {
+            SpawnInteriorActorsAtThreshold(interior, promise, zoneId, region, position, entities, deltas);
+        }
         AppendPromiseCanon("site", site.Id.Value, promise, $"{site.Name}: {promise.Text}", tags, "travel", deltas);
+    }
+
+    private void SpawnInteriorActorsAtThreshold(
+        RegionInteriorDefinition interior,
+        WorldPromise promise,
+        string zoneId,
+        RegionDefinition region,
+        GridPoint anchor,
+        Dictionary<EntityId, Entity> entities,
+        List<StateDelta> deltas)
+    {
+        var actors = (interior.Actors ?? Array.Empty<RegionInteriorActorDefinition>())
+            .Where(actor => actor.Placement.Equals("threshold", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        for (var index = 0; index < actors.Length; index++)
+        {
+            var actor = actors[index];
+            var point = FindGeneratedOpenPointNear(entities, anchor, index + 1, index % 2 == 0 ? 1 : -1);
+            var spawned = ApplyGeneratedSpawnEntity(
+                WorldConsequence.SpawnEntity(
+                    $"interior:{interior.Id}",
+                    actor.Name,
+                    point.X,
+                    point.Y,
+                    prefix: $"threshold_{NormalizeToken(actor.Id)}",
+                    glyph: actor.Glyph,
+                    faction: actor.Faction,
+                    hp: actor.HitPoints,
+                    attack: actor.Attack,
+                    tags: actor.Tags.Concat(new[] { actor.Id, interior.Id, "threshold_actor", "npc" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    material: "flesh",
+                    roles: actor.Roles,
+                    controllerKind: "ai",
+                    aiPolicyId: actor.AiPolicyId,
+                    summoned: false,
+                    description: actor.Description,
+                    promiseIds: new[] { promise.Id },
+                    interactableVerbs: new[] { "talk", "give", "examine" },
+                    includeMemory: true,
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    evidence: actor.Description,
+                    reason: "Interior grammar populated its exterior threshold cast.",
+                    operation: "spawnThresholdActor",
+                    emitMessage: false,
+                    wantText: actor.Want,
+                    wantId: $"{actor.Id}_want",
+                    wantStakes: actor.WantStakes,
+                    wantTags: actor.Tags,
+                    details: new Dictionary<string, object?>
+                    {
+                        ["zoneId"] = zoneId,
+                        ["regionId"] = region.Id,
+                        ["interiorId"] = interior.Id,
+                        ["placement"] = "threshold",
+                    }),
+                entities,
+                deltas);
+            foreach (var item in actor.InitialItems)
+            {
+                ApplyGeneratedConsequence(
+                    WorldConsequence.ModifyInventory(
+                        $"interior:{interior.Id}",
+                        spawned.Id.Value,
+                        item,
+                        "add",
+                        1,
+                        sourceEntityId: spawned.Id.Value,
+                        reason: "Authored threshold actors carry manipulable set-piece inventory.",
+                        operation: "seedThresholdInventory"),
+                    entities,
+                    deltas,
+                    "seed threshold inventory");
+            }
+        }
     }
 
     // Encounter ingredients are process-wide authored content, cached like RegionCatalog.

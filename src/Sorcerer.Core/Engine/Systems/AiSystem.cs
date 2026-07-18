@@ -1,5 +1,6 @@
 using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
+using Sorcerer.Core.Items;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
 using Sorcerer.Core.Status;
@@ -9,6 +10,8 @@ namespace Sorcerer.Core.Engine.Systems;
 
 public sealed class AiSystem
 {
+    private static readonly Lazy<ItemCatalog> DefaultItems = new(ItemCatalog.LoadDefault);
+
     private readonly GameEngine _engine;
     private readonly GameState _state;
     private readonly StatusRegistry _statusRegistry;
@@ -148,6 +151,46 @@ public sealed class AiSystem
             }
 
             var distance = GameEngine.Distance(actorPosition.Position, targetPosition.Position);
+            var archetype = ArchetypeFor(actor);
+            var rangedIntent = archetype is not null
+                && (archetype.BehaviorTags.Contains("ranged", StringComparer.OrdinalIgnoreCase)
+                    || archetype.BehaviorTags.Contains("caster", StringComparer.OrdinalIgnoreCase));
+            var intentReach = rangedIntent ? 5 : 1;
+
+            // Data-authored hostiles commit before their signature action. This spends an AI turn
+            // on a visible promise and gives movement, equipment, items, bargaining, and magic a
+            // real interruption window. Non-archetype actors retain the simple legacy AI.
+            if (archetype is not null && distance <= intentReach)
+            {
+                if (HasActiveBehavior(actor, "disrupted"))
+                {
+                    continue;
+                }
+
+                if (!HasActiveBehavior(actor, "tactical_committed"))
+                {
+                    deltas.AddRange(CommitIntent(actor, target, archetype, rangedIntent));
+                    continue;
+                }
+
+                deltas.AddRange(ClearCommittedIntent(actor));
+                deltas.AddRange(_engine.AttackEntity(
+                    actor,
+                    target,
+                    damageType: rangedIntent ? "projectile" : "physical",
+                    source: "tactical_intent",
+                    evidence: $"{actor.Name} completed its telegraphed intent: {archetype.Intent}",
+                    reason: archetype.Intent,
+                    operation: rangedIntent ? "rangedIntentAttack" : "committedAttack",
+                    details: new Dictionary<string, object?>
+                    {
+                        ["archetypeId"] = archetype.Id,
+                        ["counter"] = archetype.Counter,
+                        ["attackKind"] = rangedIntent ? "ranged" : "melee",
+                    }));
+                continue;
+            }
+
             if (distance <= 1)
             {
                 deltas.AddRange(_engine.AttackEntity(actor, target));
@@ -291,6 +334,69 @@ public sealed class AiSystem
         deltas.AddRange(applied.Deltas);
     }
 
+    private IReadOnlyList<StateDelta> CommitIntent(
+        Entity actor,
+        Entity target,
+        ActorArchetypeDefinition archetype,
+        bool ranged)
+    {
+        var applied = _engine.ApplyConsequence(WorldConsequence.SetBehavior(
+            "tactical_intent",
+            actor.Id.Value,
+            "tactical_committed",
+            duration: 2,
+            visibility: WorldConsequenceVisibility.Hidden,
+            sourceEntityId: actor.Id.Value,
+            evidence: $"{actor.Name} visibly commits against {target.Name}.",
+            reason: archetype.Intent,
+            operation: "commitTacticalIntent",
+            details: new Dictionary<string, object?>
+            {
+                ["archetypeId"] = archetype.Id,
+                ["intent"] = archetype.Intent,
+                ["counter"] = archetype.Counter,
+                ["targetEntityId"] = target.Id.Value,
+                ["reach"] = ranged ? 5 : 1,
+                ["playerVisible"] = false,
+            }));
+        var message = new StateDelta(
+            "telegraphIntent",
+            actor.Id.Value,
+            $"{actor.Name} commits: {archetype.Intent}. Counter: {archetype.Counter}.",
+            new Dictionary<string, object?>
+            {
+                ["archetypeId"] = archetype.Id,
+                ["intent"] = archetype.Intent,
+                ["counter"] = archetype.Counter,
+                ["playerVisible"] = true,
+            });
+        return applied.Applied ? applied.Deltas.Concat(new[] { message }).ToArray() : applied.Deltas;
+    }
+
+    private IReadOnlyList<StateDelta> ClearCommittedIntent(Entity actor)
+    {
+        var applied = _engine.ApplyConsequence(WorldConsequence.UpdateBehavior(
+            "tactical_intent",
+            actor.Id.Value,
+            "tactical_committed",
+            "complete",
+            sourceEntityId: actor.Id.Value,
+            reason: "The prepared action resolves.",
+            operation: "resolveTacticalIntent"));
+        return applied.Deltas;
+    }
+
+    internal static ActorArchetypeDefinition? ArchetypeFor(Entity entity)
+    {
+        if (!entity.TryGet<TagsComponent>(out var tags))
+        {
+            return null;
+        }
+
+        return ActorArchetypeCatalog.Default.Archetypes.FirstOrDefault(archetype =>
+            tags.Tags.Contains(archetype.Id, StringComparer.OrdinalIgnoreCase));
+    }
+
     private bool HasActiveBehavior(Entity entity, string tag) =>
         entity.TryGet<BehaviorTagsComponent>(out var behaviors)
         && behaviors.Tags.TryGetValue(tag, out var expiry)
@@ -304,11 +410,37 @@ public sealed class AiSystem
             .Where(entity => entity.Id != actor.Id)
             .Where(entity => entity.TryGet<ActorComponent>(out var targetActor)
                 && targetActor.Alive
-                && IsHostile(actor, entity)
+                // This query means "who is hostile to the controlled actor?" Personal settlements
+                // can be asymmetric, so preserve the same candidate -> player orientation used by
+                // threat cards and actor turns.
+                && IsHostile(entity, actor)
                 && CanNoticeTarget(actor, entity))
             .OrderBy(entity => GameEngine.Distance(origin, entity.Get<PositionComponent>().Position))
             .ThenBy(entity => entity.Id.Value)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Hostiles already engaged closely enough to see the controlled body cross an edge keep
+    /// chasing into the next zone. Guard-post policies deliberately keep their leash.
+    /// </summary>
+    public IReadOnlySet<EntityId> PursuersForTravel()
+    {
+        var controlled = _state.ControlledEntity;
+        if (!controlled.TryGet<PositionComponent>(out var origin))
+        {
+            return new HashSet<EntityId>();
+        }
+
+        return _state.Entities.Values
+            .Where(entity => entity.Id != controlled.Id)
+            .Where(entity => entity.TryGet<ActorComponent>(out var actor) && actor.Alive)
+            .Where(entity => entity.TryGet<PositionComponent>(out var position)
+                && GameEngine.Distance(position.Position, origin.Position) <= 8)
+            .Where(entity => !IsGuard(entity))
+            .Where(entity => IsHostile(entity, controlled) && CanNoticeTarget(entity, controlled))
+            .Select(entity => entity.Id)
+            .ToHashSet();
     }
 
     public bool IsHostile(Entity actor, Entity target)
@@ -319,10 +451,26 @@ public sealed class AiSystem
             return false;
         }
 
+        // Restricted interiors need to honor the same capabilities that admitted someone at the
+        // threshold. Otherwise a forged or traded credential works on the door and immediately
+        // becomes meaningless to the first guard inside. Force and overt magic grant access to the
+        // map but deliberately do not grant authorization here.
+        if (target.Id == _state.ControlledEntityId
+            && IsInteriorGuard(actor)
+            && HasAuthorizedInteriorPresence(target))
+        {
+            return false;
+        }
+
         if (target.Id == _state.ControlledEntityId
             && _state.Bonds.TryGet(SoulIdFor(actor), SoulIdFor(target), out var bond))
         {
             if (bond.Posture.Equals("follower", StringComparison.OrdinalIgnoreCase)
+                || bond.Posture.Equals("settled", StringComparison.OrdinalIgnoreCase)
+                || bond.Posture.Equals("agreement", StringComparison.OrdinalIgnoreCase)
+                || bond.Posture.Equals("bargained", StringComparison.OrdinalIgnoreCase)
+                || bond.Posture.Equals("intimidated", StringComparison.OrdinalIgnoreCase)
+                || bond.Posture.Equals("conceded", StringComparison.OrdinalIgnoreCase)
                 || bond.Loyalty >= 5)
             {
                 return false;
@@ -337,6 +485,52 @@ public sealed class AiSystem
 
         return _state.Factions.IsHostile(actorStats.Faction, targetStats.Faction);
     }
+
+    private bool HasAuthorizedInteriorPresence(Entity target)
+    {
+        if ((target.TryGet<ActorComponent>(out var actor)
+                && actor.Faction.Equals("empire", StringComparison.OrdinalIgnoreCase))
+            || (target.TryGet<FactionComponent>(out var faction)
+                && (faction.FactionId.Equals("empire", StringComparison.OrdinalIgnoreCase)
+                    || faction.Roles.Any(IsRecognizedOffice)))
+            || (target.TryGet<TagsComponent>(out var tags)
+                && tags.Tags.Any(IsRecognizedOffice)))
+        {
+            return true;
+        }
+
+        if (target.TryGet<InventoryComponent>(out var inventory)
+            && inventory.Items.Any(pair => pair.Value > 0
+                && DefaultItems.Value.Find(pair.Key) is { } item
+                && item.Tags.Any(tag => tag.Equals("credential", StringComparison.OrdinalIgnoreCase)
+                    || tag.Equals("access", StringComparison.OrdinalIgnoreCase))))
+        {
+            return true;
+        }
+
+        var targetSoul = SoulIdFor(target);
+        return _state.Bonds.Bonds.Any(bond =>
+            bond.TargetSoulId.Equals(targetSoul, StringComparison.OrdinalIgnoreCase)
+            && bond.Loyalty >= 5
+            && bond.Posture is "agreement" or "settled" or "bargained");
+    }
+
+    private static bool IsInteriorGuard(Entity entity) =>
+        entity.TryGet<TagsComponent>(out var tags)
+        && tags.Tags.Contains("interior_actor", StringComparer.OrdinalIgnoreCase)
+        && ((entity.TryGet<FactionComponent>(out var faction) && faction.Roles.Any(IsGuardOffice))
+            || tags.Tags.Any(IsGuardOffice));
+
+    private static bool IsRecognizedOffice(string value) =>
+        value.Equals("courier", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("clerk", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("warden", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("gatekeeper", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsGuardOffice(string value) =>
+        value.Equals("guard", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("warden", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("gatekeeper", StringComparison.OrdinalIgnoreCase);
 
     // Delegates to PerceptionSystem's shared concealment rule (via GameEngine) so AI targeting
     // and deed/witness capture use exactly one definition of "concealed."

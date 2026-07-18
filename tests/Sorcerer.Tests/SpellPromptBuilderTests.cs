@@ -5,6 +5,7 @@ using Sorcerer.Core;
 using Sorcerer.Core.Views;
 using Sorcerer.Llm;
 using Sorcerer.Magic.Capabilities;
+using Sorcerer.Magic.Costs;
 using Sorcerer.Magic.Operations;
 using Sorcerer.Magic.Resolution;
 using Xunit;
@@ -42,6 +43,10 @@ public sealed class SpellPromptBuilderTests
         Assert.Contains("consequenceType:", system);
         Assert.Contains("Capability names for one bounded retry", system);
         Assert.Contains("Operation guidance", system);
+        Assert.Contains("debt_imperial_ledger", system);
+        Assert.Contains("curse_iron_thirst", system);
+        Assert.Contains("altered_charter_touched", system);
+        Assert.Contains("profileId", system);
         // Operation guidance is rendered as "- name: ..." lines, one per advertised op.
         Assert.Contains("- createTiles:", system);
     }
@@ -78,6 +83,55 @@ public sealed class SpellPromptBuilderTests
         Assert.True(terrain.RootElement.TryGetProperty("terrain", out _));
         Assert.True(prophecy.RootElement.TryGetProperty("promises", out _));
         Assert.True(prophecy.RootElement.TryGetProperty("lore", out _));
+    }
+
+    [Fact]
+    public void CleansingContextExposesTheDurableCurseAndItsExactProfileId()
+    {
+        const string spellText = "cure Borrowed Tide and return its water to the marsh";
+        var session = GameSession.CreateImperialEncounter();
+        SpellCostApplier.Apply(session.Engine, new[]
+        {
+            new SpellCost("curse", new Dictionary<string, object?>
+            {
+                ["profileId"] = "curse_tide_debt_body",
+            }),
+        });
+        var capabilities = CapabilityRegistry.CreateDefault();
+        var registry = OperationRegistry.CreateDefault();
+        var selected = capabilities.Select(spellText);
+        var index = registry.ToRoutedIndex(
+            selected.SelectMany(card => card.EffectTypes),
+            capabilities.AllEffectTypes());
+        var required = selected
+            .SelectMany(card => card.RequiredContext)
+            .ToHashSet(System.StringComparer.OrdinalIgnoreCase);
+        var context = session.Engine.MagicContext(index, required, spellText);
+        var request = new SpellRequest(
+            spellText,
+            context,
+            index.Names,
+            selected,
+            capabilities.CapabilityNames());
+
+        Assert.Contains("resolveCurse", index.Names, System.StringComparer.OrdinalIgnoreCase);
+        var curse = Assert.Single(context.KnownPromises, promise =>
+            promise.CostProfileId == "curse_tide_debt_body");
+        Assert.Equal("player", curse.BoundTargetId);
+        Assert.Contains(context.Caster.Statuses, status =>
+            status.Id == "borrowed_tide" && status.DisplayName == "Borrowed Tide");
+
+        using var document = JsonDocument.Parse(SpellPromptBuilder.WireContextJson(request));
+        var wireCurse = document.RootElement.GetProperty("promises")
+            .EnumerateArray()
+            .Single(promise =>
+                promise.TryGetProperty("costProfileId", out var profileId)
+                && profileId.GetString() == "curse_tide_debt_body");
+        Assert.Equal("player", wireCurse.GetProperty("target").GetString());
+        var wireStatus = document.RootElement.GetProperty("caster").GetProperty("statuses")
+            .EnumerateArray()
+            .Single(status => status.GetProperty("id").GetString() == "borrowed_tide");
+        Assert.Equal("Borrowed Tide", wireStatus.GetProperty("name").GetString());
     }
 
     [Theory]

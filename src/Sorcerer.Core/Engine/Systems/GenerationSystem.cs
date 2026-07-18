@@ -158,13 +158,24 @@ public sealed class GenerationSystem
 
     private WorldRoll CurrentWorld => WorldRoll.Create(_state.Seed);
 
-    public IReadOnlyList<StateDelta> Travel(Direction direction)
+    public JourneyDestination? ResolveJourneyDestination(string query) =>
+        _places.ResolveDestination(query, _state.CurrentZoneId, _state.RegionId);
+
+    public int JourneyDistanceTo(JourneyDestination destination) =>
+        WorldPlaceGraph.ZoneDistance(_state.CurrentZoneId, destination.ZoneId);
+
+    public Direction JourneyDirectionTo(JourneyDestination destination) =>
+        WorldPlaceGraph.DirectionToward(_state.CurrentZoneId, destination.ZoneId);
+
+    public IReadOnlyList<StateDelta> Travel(
+        Direction direction,
+        IReadOnlySet<EntityId>? additionalTravelers = null)
     {
         var fromZone = _state.CurrentZoneId;
         var fromRegion = CurrentRegion;
         var fromRealm = CurrentWorld.RealmFor(fromRegion.RealmId);
         var targetZone = NeighborZoneId(fromZone, direction);
-        var travelers = TravelingEntities().Select(entity => entity.Clone()).ToArray();
+        var travelers = TravelingEntities(additionalTravelers).Select(entity => entity.Clone()).ToArray();
         _state.Zones[fromZone] = CaptureZone(fromZone, exclude: travelers.Select(entity => entity.Id).ToHashSet());
 
         var generatedDeltas = new List<StateDelta>();
@@ -566,12 +577,12 @@ public sealed class GenerationSystem
         InitializeGeneratedTerrain(generatedState, region);
         ApplyGeneratedTerrainDetails(generatedState, region, realm, entryDirection, deltas);
         ApplyGeneratedPlaceTerrain(generatedState, region, place, deltas);
-        SpawnPlaceFeature(generatedState, region, place, deltas);
+        SpawnPlaceFeature(generatedState, region, place, entryDirection, deltas);
         var propPoints = SpawnGeneratedProps(generatedState, region, realm, place, entryDirection, deltas);
         SpawnGeneratedItems(generatedState, region, realm, propPoints, deltas);
-        SpawnAmbientEncounter(generatedState, region, place, deltas);
+        SpawnAmbientEncounter(generatedState, region, place, entryDirection, deltas);
         PopulateZone(generatedState, region, realm, place, entryDirection, deltas);
-        SpawnGeneratedCreatures(generatedState, region, place, deltas);
+        SpawnGeneratedCreatures(generatedState, region, place, entryDirection, deltas);
         if (region.Id.Equals("vigovian_capital", StringComparison.OrdinalIgnoreCase)
             && place.District?.Id.Equals("inner_court", StringComparison.OrdinalIgnoreCase) == true
             && place.Settlement is { } capital
@@ -701,10 +712,10 @@ public sealed class GenerationSystem
 
         var featurePoints = new[]
         {
-            new GridPoint(generatedState.Width / 2, generatedState.Height / 2),
-            new GridPoint((generatedState.Width / 2) + 5, (generatedState.Height / 2) - 3),
-            new GridPoint((generatedState.Width / 2) - 5, (generatedState.Height / 2) + 3),
-            new GridPoint((generatedState.Width / 2) + 6, (generatedState.Height / 2) + 4),
+            exitPoint.Translate(4, 0),
+            exitPoint.Translate(6, -3),
+            exitPoint.Translate(6, 3),
+            exitPoint.Translate(9, 0),
         };
         for (var index = 0; index < interior.Features.Count; index++)
         {
@@ -762,6 +773,79 @@ public sealed class GenerationSystem
                     && entity.TryGet<PositionComponent>(out var documentPosition)
                     && documentPosition.Position == position);
                 document?.Set(new ClaimSourceComponent(feature.Claims));
+            }
+        }
+
+        var interiorActors = (interior.Actors ?? Array.Empty<RegionInteriorActorDefinition>())
+            .Where(actor => actor.Placement.Equals("interior", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        for (var index = 0; index < interiorActors.Length; index++)
+        {
+            var actor = interiorActors[index];
+            var position = FindGeneratedOpenPoint(
+                generatedState,
+                exitPoint.Translate(4 + (index * 2), index % 2 == 0 ? -2 : 2));
+            TryApplyGeneratedZoneConsequence(
+                generatedState,
+                WorldConsequence.SpawnEntity(
+                    "generation",
+                    actor.Name,
+                    position.X,
+                    position.Y,
+                    prefix: $"interior_actor_{NormalizeToken(actor.Id)}",
+                    glyph: actor.Glyph,
+                    faction: actor.Faction,
+                    hp: actor.HitPoints,
+                    attack: actor.Attack,
+                    tags: actor.Tags.Concat(new[] { actor.Id, interior.Id, "interior_actor", "npc" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    material: "flesh",
+                    roles: actor.Roles,
+                    controllerKind: "ai",
+                    aiPolicyId: actor.AiPolicyId,
+                    summoned: false,
+                    description: actor.Description,
+                    interactableVerbs: new[] { "talk", "give", "examine" },
+                    includeMemory: true,
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    evidence: actor.Description,
+                    reason: "Authored regional interior grammar instantiated a resident actor.",
+                    operation: "generateInteriorActor",
+                    emitMessage: false,
+                    wantText: actor.Want,
+                    wantId: $"{actor.Id}_want",
+                    wantStakes: actor.WantStakes,
+                    wantTags: actor.Tags,
+                    details: new Dictionary<string, object?>
+                    {
+                        ["zoneId"] = entrance.InteriorZoneId,
+                        ["regionId"] = region.Id,
+                        ["interiorId"] = interior.Id,
+                        ["placement"] = "interior",
+                    }),
+                deltas,
+                "interior actor");
+            var spawned = generatedState.Entities.Values.FirstOrDefault(entity =>
+                entity.Name.Equals(actor.Name, StringComparison.OrdinalIgnoreCase)
+                && entity.TryGet<PositionComponent>(out var actorPosition)
+                && actorPosition.Position == position);
+            if (spawned is not null)
+            {
+                foreach (var item in actor.InitialItems)
+                {
+                    TryApplyGeneratedZoneConsequence(
+                        generatedState,
+                        WorldConsequence.ModifyInventory(
+                            "generation",
+                            spawned.Id.Value,
+                            item,
+                            "add",
+                            1,
+                            sourceEntityId: spawned.Id.Value,
+                            reason: "Authored interior actors carry ordinary inventory.",
+                            operation: "seedInteriorInventory"),
+                        deltas,
+                        "interior actor inventory");
+                }
             }
         }
 
@@ -1011,6 +1095,7 @@ public sealed class GenerationSystem
         GameState generatedState,
         RegionDefinition region,
         WorldPlaceProfile place,
+        Direction entryDirection,
         List<StateDelta> deltas)
     {
         var chance = region.Encounters?.AmbientChancePercent ?? 0;
@@ -1049,9 +1134,12 @@ public sealed class GenerationSystem
             return;
         }
 
+        // An encounter generated for the zone the player just entered must become play, not
+        // debug-only population on the far side of a 40x30 map. Keep it a few turns inward from
+        // the arrival edge: visible enough to read and avoid, far enough away to preserve choice.
         var prizePosition = FindGeneratedOpenPoint(
             generatedState,
-            RandomInteriorPoint(generatedState, rng));
+            TravelEncounterOrigin(generatedState, entryDirection, rng));
         var goldQuantity = 4 + (plan.Tier * 4) + rng.NextInt(0, 5);
         var details = new Dictionary<string, object?>
         {
@@ -1194,6 +1282,7 @@ public sealed class GenerationSystem
         GameState generatedState,
         RegionDefinition region,
         WorldPlaceProfile place,
+        Direction entryDirection,
         List<StateDelta> deltas)
     {
         var pets = _actors.PetsFor(region.Id);
@@ -1224,7 +1313,10 @@ public sealed class GenerationSystem
                 pets,
                 candidate => Math.Max(1, candidate.HabitatWeight(habitat) * Math.Max(1, candidate.RegionWeight(region.Id))),
                 rng);
-            var position = FindGeneratedOpenPoint(generatedState, RandomInteriorPoint(generatedState, rng));
+            var desired = inSettlement
+                ? SettlementCreatureSpawnOrigin(generatedState, entryDirection, index)
+                : RandomInteriorPoint(generatedState, rng);
+            var position = FindGeneratedOpenPoint(generatedState, desired);
             var hp = rng.NextInt(pet.MinHitPoints, Math.Max(pet.MinHitPoints, pet.MaxHitPoints) + 1);
             var attack = rng.NextInt(pet.MinAttack, Math.Max(pet.MinAttack, pet.MaxAttack) + 1);
             var verbs = pet.Verbs.Count > 0 ? pet.Verbs : new[] { "examine", "recruit" };
@@ -1380,7 +1472,7 @@ public sealed class GenerationSystem
                 "zone item");
             if (applied.Applied)
             {
-                _itemCatalog.Add(item.Definition);
+                _itemCatalog.RegisterGenerated(item.Definition);
                 occupied.Add(point.Value);
             }
         }
@@ -1483,6 +1575,7 @@ public sealed class GenerationSystem
         GameState generatedState,
         RegionDefinition region,
         WorldPlaceProfile place,
+        Direction entryDirection,
         List<StateDelta> deltas)
     {
         var district = place.District;
@@ -1501,9 +1594,12 @@ public sealed class GenerationSystem
             .Concat(new[] { "place_feature", "significant_site" })
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        // District thresholds and landmarks are the player's first orientation point. Spawning
+        // them at map center made a settlement arrival look empty and hid public interiors behind
+        // ten-plus turns of undirected walking.
         var position = FindGeneratedOpenPoint(
             generatedState,
-            new GridPoint(generatedState.Width / 2, generatedState.Height / 2));
+            SignificantFeatureSpawnOrigin(generatedState, entryDirection));
         var interior = district is not null
             && place.Settlement?.IsPrimary == true
             ? InteriorForDistrict(region, district.Id)
@@ -1867,7 +1963,7 @@ public sealed class GenerationSystem
     {
         var position = FindGeneratedOpenPoint(
             generatedState,
-            PopulationSpawnOrigin(generatedState, entryDirection, index));
+            PopulationSpawnOrigin(generatedState, entryDirection, index, place.Settlement is not null));
         var verbs = new List<string> { "talk", "give", "recruit" };
         if (journey is not null)
         {
@@ -2009,18 +2105,29 @@ public sealed class GenerationSystem
     private static GridPoint PopulationSpawnOrigin(
         GameState generatedState,
         Direction entryDirection,
-        int index)
+        int index,
+        bool clusterAtArrival)
     {
+        var arrivalAnchor = ResidentArrivalAnchor(generatedState, entryDirection);
         if (index == 0)
         {
-            return entryDirection switch
+            return arrivalAnchor;
+        }
+
+        if (clusterAtArrival)
+        {
+            var arrivalOffsets = new[]
             {
-                Direction.East => new GridPoint(3, generatedState.Height / 2),
-                Direction.West => new GridPoint(generatedState.Width - 4, generatedState.Height / 2),
-                Direction.South => new GridPoint(generatedState.Width / 2, 3),
-                Direction.North => new GridPoint(generatedState.Width / 2, generatedState.Height - 4),
-                _ => new GridPoint((generatedState.Width / 2) - 1, (generatedState.Height / 2) - 2),
+                new GridPoint(0, -1),
+                new GridPoint(0, 1),
+                new GridPoint(1, 0),
+                new GridPoint(1, -2),
+                new GridPoint(1, 2),
+                new GridPoint(2, -2),
+                new GridPoint(2, 2),
             };
+            var arrivalOffset = OrientInward(arrivalOffsets[(index - 1) % arrivalOffsets.Length], entryDirection);
+            return ClampInterior(generatedState, arrivalAnchor.Translate(arrivalOffset.X, arrivalOffset.Y));
         }
 
         var offsets = new[]
@@ -2039,6 +2146,59 @@ public sealed class GenerationSystem
             Math.Clamp((generatedState.Width / 2) + offset.X, 1, generatedState.Width - 2),
             Math.Clamp((generatedState.Height / 2) + offset.Y, 1, generatedState.Height - 2));
     }
+
+    private static GridPoint ResidentArrivalAnchor(GameState state, Direction direction) => direction switch
+    {
+        Direction.East => new GridPoint(3, state.Height / 2),
+        Direction.West => new GridPoint(state.Width - 4, state.Height / 2),
+        Direction.South => new GridPoint(state.Width / 2, 3),
+        Direction.North => new GridPoint(state.Width / 2, state.Height - 4),
+        _ => new GridPoint((state.Width / 2) - 1, (state.Height / 2) - 2),
+    };
+
+    private static GridPoint SignificantFeatureSpawnOrigin(GameState state, Direction direction)
+    {
+        var anchor = ResidentArrivalAnchor(state, direction);
+        var inward = OrientInward(new GridPoint(2, 0), direction);
+        return ClampInterior(state, anchor.Translate(inward.X, inward.Y));
+    }
+
+    private static GridPoint SettlementCreatureSpawnOrigin(GameState state, Direction direction, int index)
+    {
+        var anchor = ResidentArrivalAnchor(state, direction);
+        var offsets = new[]
+        {
+            new GridPoint(2, -2),
+            new GridPoint(2, 2),
+            new GridPoint(3, 0),
+        };
+        var offset = OrientInward(offsets[index % offsets.Length], direction);
+        return ClampInterior(state, anchor.Translate(offset.X, offset.Y));
+    }
+
+    private static GridPoint TravelEncounterOrigin(GameState state, Direction direction, IRng rng)
+    {
+        var anchor = ResidentArrivalAnchor(state, direction);
+        var lateral = rng.NextInt(-3, 4);
+        var inward = rng.NextInt(3, 5);
+        var offset = OrientInward(new GridPoint(inward, lateral), direction);
+        return ClampInterior(state, anchor.Translate(offset.X, offset.Y));
+    }
+
+    // Local offsets are expressed as (inward, lateral) for an east-edge arrival and rotated for
+    // the other three edges. This keeps all arrival composition data renderer-agnostic.
+    private static GridPoint OrientInward(GridPoint offset, Direction direction) => direction switch
+    {
+        Direction.East => offset,
+        Direction.West => new GridPoint(-offset.X, offset.Y),
+        Direction.South => new GridPoint(offset.Y, offset.X),
+        Direction.North => new GridPoint(offset.Y, -offset.X),
+        _ => offset,
+    };
+
+    private static GridPoint ClampInterior(GameState state, GridPoint point) => new(
+        Math.Clamp(point.X, 1, state.Width - 2),
+        Math.Clamp(point.Y, 1, state.Height - 2));
 
     private void SpawnGeneratedEmperor(
         GameState generatedState,
@@ -2357,11 +2517,12 @@ public sealed class GenerationSystem
             ? "You enter the destination zone."
             : $"{traveler.Name} enters the destination zone.";
 
-    private IReadOnlyList<Entity> TravelingEntities()
+    private IReadOnlyList<Entity> TravelingEntities(IReadOnlySet<EntityId>? additionalTravelers = null)
     {
         var playerSoulId = SoulIdFor(_state.ControlledEntity);
         return _state.Entities.Values
             .Where(entity => entity.Id == _state.ControlledEntityId
+                || additionalTravelers?.Contains(entity.Id) == true
                 || (_state.Bonds.TryGet(SoulIdFor(entity), playerSoulId, out var bond)
                     && (bond.Posture.Equals("follower", StringComparison.OrdinalIgnoreCase) || bond.Loyalty >= 5)))
             .OrderBy(entity => entity.Id == _state.ControlledEntityId ? 0 : 1)
@@ -2438,6 +2599,58 @@ public sealed class GenerationSystem
             return true;
         }
 
+        // Credentials are capabilities, not one magic item name. Any authored carried item tagged
+        // credential/access can satisfy a restricted civil threshold, which lets forged writs,
+        // courier papers, and traded permits share the same rule.
+        if (_state.ControlledEntity.TryGet<InventoryComponent>(out inventory)
+            && inventory.Items.Any(pair => pair.Value > 0
+                && _itemCatalog.Find(pair.Key) is { } item
+                && item.Tags.Any(tag => tag.Equals("credential", StringComparison.OrdinalIgnoreCase)
+                    || tag.Equals("access", StringComparison.OrdinalIgnoreCase))))
+        {
+            return true;
+        }
+
+        // Possession is a first-class route: the checkpoint judges the current body and office,
+        // not an invisible player identity. A courier/clerk/warden body naturally passes.
+        var controlled = _state.ControlledEntity;
+        if ((controlled.TryGet<ActorComponent>(out var controlledActor)
+                && controlledActor.Faction.Equals("empire", StringComparison.OrdinalIgnoreCase))
+            || (controlled.TryGet<FactionComponent>(out var controlledFaction)
+                && (controlledFaction.FactionId.Equals("empire", StringComparison.OrdinalIgnoreCase)
+                    || controlledFaction.Roles.Any(role => role is "courier" or "clerk" or "warden")))
+            || (controlled.TryGet<TagsComponent>(out var controlledTags)
+                && controlledTags.Tags.Any(tag => tag is "courier" or "clerk" or "warden" or "gatekeeper")))
+        {
+            return true;
+        }
+
+        // Concealment already gates perception and pursuit. At a non-blocking authored threshold it
+        // also permits a stealth entry, so this route comes from world state rather than site code.
+        if (controlled.TryGet<StatusContainerComponent>(out var statuses)
+            && statuses.Statuses.Any(status => status.Id.Equals("concealed", StringComparison.OrdinalIgnoreCase)
+                && (status.ExpiresTurn is null || status.ExpiresTurn > _state.Turn)))
+        {
+            return true;
+        }
+
+        // A clerk/courier personally allied or bound by accepted terms can grant access while they
+        // remain at the threshold. This is the ordinary bond ledger, not a waystation flag.
+        var controlledSoul = SoulIdFor(controlled);
+        var thresholdAllies = _state.Entities.Values
+            .Where(entity => entity.Id != controlled.Id
+                && entity.TryGet<PositionComponent>(out var position)
+                && GameEngine.Distance(position.Position, new GridPoint(entrance.ExteriorX, entrance.ExteriorY)) <= 3)
+            .Where(entity => entity.TryGet<FactionComponent>(out var faction)
+                && faction.Roles.Any(role => role is "clerk" or "courier" or "gatekeeper"));
+        if (thresholdAllies.Any(entity =>
+            _state.Bonds.TryGet(SoulIdFor(entity), controlledSoul, out var bond)
+            && (bond.Loyalty >= 3
+                || bond.Posture is "agreement" or "bargained" or "follower" or "settled")))
+        {
+            return true;
+        }
+
         var interiorToken = NormalizeToken(entrance.InteriorId);
         if (entranceEntity.TryGet<TagsComponent>(out var tags)
             && tags.Tags.Select(NormalizeToken).Any(tag => tag is "open" or "unlocked" or "forced_open" or "access_granted" or "permission_granted"
@@ -2483,7 +2696,7 @@ public sealed class GenerationSystem
             return _regions.Region("vigovian_capital")!;
         }
 
-        if ((x == 1 && y == 0) || (x == 0 && y == 1) || (x == 1 && y == 1))
+        if ((Math.Abs(x) == 1 && y == 0) || (x == 0 && y == 1) || (x == 1 && y == 1))
         {
             return _regions.Region("hollowmere_margin")!;
         }

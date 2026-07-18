@@ -16,7 +16,7 @@ public sealed class ZoneLootGenerationTests
     {
         var region = RegionCatalog.LoadDefault().Region("hollowmere_margin")!
             with
-            { GroundLoot = new RegionGroundLootDefinition(Min: 1, Max: 1, EmptyChancePercent: 0, UsefulChancePercent: 0) };
+        { GroundLoot = new RegionGroundLootDefinition(Min: 1, Max: 1, EmptyChancePercent: 0, UsefulChancePercent: 0) };
         var realm = WorldRoll.Create(71).RealmFor(region.RealmId);
         var catalog = ItemCatalog.CreateMinimal();
 
@@ -52,15 +52,15 @@ public sealed class ZoneLootGenerationTests
     {
         var region = RegionCatalog.LoadDefault().Region("hollowmere_margin")!
             with
-            {
-                GroundLoot = new RegionGroundLootDefinition(
+        {
+            GroundLoot = new RegionGroundLootDefinition(
                     Min: 1,
                     Max: 1,
                     EmptyChancePercent: 0,
                     UsefulChancePercent: 100,
                     GoldMin: 3,
                     GoldMax: 10),
-            };
+        };
         var realm = WorldRoll.Create(71).RealmFor(region.RealmId);
         var catalog = ItemCatalog.CreateMinimal();
 
@@ -84,7 +84,7 @@ public sealed class ZoneLootGenerationTests
         var registry = RegionCatalog.LoadDefault();
         var barren = registry.Region("hollowmere_margin")!
             with
-            { GroundLoot = new RegionGroundLootDefinition(Min: 1, Max: 3, EmptyChancePercent: 100) };
+        { GroundLoot = new RegionGroundLootDefinition(Min: 1, Max: 3, EmptyChancePercent: 100) };
         var defaulted = registry.Region("hollowmere_margin")! with { GroundLoot = null };
         var realm = WorldRoll.Create(71).RealmFor(barren.RealmId);
         var catalog = ItemCatalog.CreateMinimal();

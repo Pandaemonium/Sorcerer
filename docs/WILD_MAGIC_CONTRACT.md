@@ -89,6 +89,7 @@ Recommended first effects:
 - `createTiles`
 - `addStatus`
 - `removeStatus`
+- `resolveCurse`
 - `summon`
 - `createEntity`
 - `transformEntity`
@@ -139,6 +140,11 @@ becoming climbable, or a sign becoming a door should use this general transforma
 `addCurse` may be semantic or mechanical. Mechanical curses should name a template (`close`, `far`,
 `narrow`, `straight-path`, `anchored`) so the engine can reject later accepted resolutions that break
 that limit before mutation.
+
+`resolveCurse` ends a durable, profile-backed curse. Use the exact `costProfileId` exposed on the
+matching active curse promise (or omit it only when the target has one active curse). The operation
+routes through `resolve_cost`, clearing both the authoritative promise and its linked status.
+`removeStatus` is only for temporary conditions and does not settle a durable curse record.
 
 Resolver context may include one distilled `lore` card only when a selected capability requests
 regional/canon context. Lore is voice and canon guidance only. It does not mutate state or create mechanics

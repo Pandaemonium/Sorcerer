@@ -1,5 +1,67 @@
 namespace Sorcerer.Core.World;
 
+/// <summary>
+/// Durable, player-visible progress for an intentional overland journey.  Empty map legs may be
+/// compressed, but the route can only spend this many pauses on ambient scenes; authored promise
+/// payoffs, destinations, and active pursuers always interrupt independently of that budget.
+/// </summary>
+public sealed record JourneyPlan(
+    string DestinationId,
+    string DestinationName,
+    string DestinationZoneId,
+    int SceneBudget = 2,
+    int ScenesSpent = 0,
+    int ZonesCrossed = 0,
+    int StartedTurn = 0);
+
+public static class BargainTermKinds
+{
+    public const string Currency = "currency";
+    public const string Item = "item";
+    public const string Service = "service";
+    public const string Standing = "standing";
+    public const string Concession = "concession";
+    public const string Deadline = "deadline";
+
+    public static IReadOnlySet<string> All { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        Currency, Item, Service, Standing, Concession, Deadline,
+    };
+}
+
+/// <summary>A concrete, engine-verifiable term.  Text explains it; the other fields enforce it.</summary>
+public sealed record BargainTerm(
+    string Id,
+    string Kind,
+    string Text,
+    int Quantity = 1,
+    string? ResourceId = null,
+    string? FactionId = null,
+    string? StandingAxis = null,
+    int StandingDelta = 0,
+    int? DueTurn = null,
+    string Status = "pending");
+
+public sealed record BargainOption(
+    string Id,
+    string Label,
+    IReadOnlyList<BargainTerm> Terms);
+
+public sealed record BargainOffer(
+    string ClaimantEntityId,
+    string Summary,
+    IReadOnlyList<BargainOption> Options,
+    int CreatedTurn,
+    int? ExpiresTurn = null);
+
+public sealed record BargainAgreement(
+    string ClaimantEntityId,
+    string OptionId,
+    IReadOnlyList<BargainTerm> Terms,
+    int AcceptedTurn,
+    string Status = "active",
+    string? ActorSoulId = null);
+
 public sealed record WorldPromise(
     string Id,
     string Kind,
@@ -22,7 +84,11 @@ public sealed record WorldPromise(
     string? SourceClaimId = null,
     string? SourceSpeakerId = null,
     string? SourceListenerSoulId = null,
-    int? SourceConfidence = null);
+    int? SourceConfidence = null,
+    JourneyPlan? Journey = null,
+    BargainOffer? BargainOffer = null,
+    BargainAgreement? BargainAgreement = null,
+    string? CostProfileId = null);
 
 public sealed class PromiseLedger
 {
@@ -167,6 +233,70 @@ public sealed class PromiseLedger
         }
 
         var updated = _promises[index] with { Stacks = _promises[index].Stacks + 1 };
+        _promises[index] = updated;
+        return updated;
+    }
+
+    public WorldPromise? SetJourney(string id, JourneyPlan journey, string? status = null)
+    {
+        var index = _promises.FindIndex(promise => promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var updated = _promises[index] with
+        {
+            Journey = journey,
+            Status = string.IsNullOrWhiteSpace(status) ? _promises[index].Status : status.Trim(),
+            BoundPlace = journey.DestinationZoneId,
+        };
+        _promises[index] = updated;
+        return updated;
+    }
+
+    public WorldPromise? SetBargainOffer(string id, BargainOffer? offer)
+    {
+        var index = _promises.FindIndex(promise => promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var updated = _promises[index] with { BargainOffer = offer };
+        _promises[index] = updated;
+        return updated;
+    }
+
+    public WorldPromise? SetBargainAgreement(string id, BargainAgreement? agreement, string? status = null)
+    {
+        var index = _promises.FindIndex(promise => promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var updated = _promises[index] with
+        {
+            BargainAgreement = agreement,
+            Status = string.IsNullOrWhiteSpace(status) ? _promises[index].Status : status.Trim(),
+        };
+        _promises[index] = updated;
+        return updated;
+    }
+
+    public WorldPromise? SetCostProfile(string id, string? profileId)
+    {
+        var index = _promises.FindIndex(promise => promise.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var updated = _promises[index] with
+        {
+            CostProfileId = string.IsNullOrWhiteSpace(profileId) ? null : profileId.Trim(),
+        };
         _promises[index] = updated;
         return updated;
     }

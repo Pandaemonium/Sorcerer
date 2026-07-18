@@ -3,6 +3,7 @@ using Sorcerer.Core.Commands;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Magic;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.World;
 using Sorcerer.Llm;
 using Sorcerer.Magic;
 using Xunit;
@@ -16,6 +17,27 @@ public sealed class CharterFormsTests
     {
         Assert.True(CharterSpellbook.Default.Spells.Count >= 12,
             $"expected >=12 charter forms, found {CharterSpellbook.Default.Spells.Count}");
+    }
+
+    [Fact]
+    public void EveryNewCharterFormHasAnInWorldReadableTeacher()
+    {
+        var expected = new[]
+        {
+            "ward_step_1",
+            "cleansing_writ_1",
+            "surveyor_edict_1",
+            "bulwark_edict_1",
+            "furrow_edict_1",
+        };
+        var teachingTags = RegionCatalog.LoadDefault().Regions
+            .SelectMany(region => region.Props?.Hooks ?? Array.Empty<RegionPropHookDefinition>())
+            .SelectMany(hook => hook.Tags ?? Array.Empty<string>())
+            .Where(tag => tag.StartsWith("teaches_charter:", StringComparison.OrdinalIgnoreCase))
+            .Select(tag => tag["teaches_charter:".Length..])
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.All(expected, spellId => Assert.Contains(spellId, teachingTags));
     }
 
     [Theory]

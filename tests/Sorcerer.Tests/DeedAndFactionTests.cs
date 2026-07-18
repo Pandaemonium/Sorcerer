@@ -20,6 +20,27 @@ public sealed class DeedAndFactionTests
     private static readonly Entity[] NoWitnesses = Array.Empty<Entity>();
 
     [Fact]
+    public void WildMagicRumorsRetainTheSpecificEventInsteadOfCollapsingToOneGenericLine()
+    {
+        var state = GameSession.CreateImperialEncounter(seed: 7).Engine.State;
+        var copper = state.Deeds.Append(
+            1, "player_soul", "wild_magic", 3, "imperial_encounter:3,5", "public",
+            tags: new[] { "summon" }, summary: "A copper lion tore itself out of the brazier and roared at the clerks.");
+        var finches = state.Deeds.Append(
+            2, "player_soul", "wild_magic", 3, "imperial_encounter:3,5", "public",
+            tags: new[] { "animate" }, summary: "Iron filings became sunrise finches and nested in the charter seals.");
+
+        var copperRumor = RumorSystem.ConsequenceFromDeed(state, copper)!;
+        var finchRumor = RumorSystem.ConsequenceFromDeed(state, finches)!;
+        var copperText = Convert.ToString(copperRumor.Payload!["text"])!;
+        var finchText = Convert.ToString(finchRumor.Payload!["text"])!;
+
+        Assert.Contains("copper lion", copperText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("sunrise finches", finchText, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(copperText, finchText);
+    }
+
+    [Fact]
     public void WitnesslessDeedIsSecretAndUnattributed()
     {
         var session = GameSession.CreateImperialEncounter(seed: 7);

@@ -1,4 +1,5 @@
 using Godot;
+using Sorcerer.Core.Views;
 
 namespace Sorcerer.Godot;
 
@@ -12,7 +13,9 @@ public partial class Journal : Control
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (@event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+        if (@event is InputEventKey { Pressed: true, Echo: false } key
+            && (key.Keycode == Key.Escape
+                || Keybindings.ActionForKey(key.Keycode) == BindableAction.OpenJournal))
         {
             // Handled-flag first: GoBack swaps scenes, which detaches this node and nulls GetViewport().
             GetViewport().SetInputAsHandled();
@@ -69,11 +72,83 @@ public partial class Journal : Control
         };
         stack.AddChild(body);
 
-        var journal = SessionHost.Session?.View().Journal ?? Array.Empty<string>();
-        body.Text = journal.Count == 0
+        var view = SessionHost.Session?.View();
+        body.Text = view?.StructuredJournal is { } journal
+            ? FormatStructured(journal)
+            : FormatLegacy(view?.Journal ?? Array.Empty<string>());
+    }
+
+    private static string FormatStructured(JournalView journal)
+    {
+        var sections = new List<string>();
+        AddEntries(sections, "Objectives", journal.Objectives, UiTheme.Wild);
+        AddEntries(sections, "Promises", journal.Promises, UiTheme.Focus);
+        AddEntries(sections, "Rumors & secrets", journal.Rumors, UiTheme.Warning);
+
+        if (journal.Pressures.Count > 0)
+        {
+            var lines = journal.Pressures.Select(pressure =>
+                $"{UiTheme.Colorize(UiTheme.Escape(pressure.Kind.Replace('_', ' ')), UiTheme.Danger)}"
+                + $" [turn {pressure.DueTurn}] — {UiTheme.Escape(pressure.Text)}");
+            sections.Add(Section("Approaching pressure", lines));
+        }
+
+        AddEntries(sections, "Delivered & resolved threads", journal.Threads, UiTheme.Empire);
+        return sections.Count == 0
+            ? "No journal entries are visible yet."
+            : string.Join("\n\n", sections);
+    }
+
+    private static void AddEntries(
+        ICollection<string> sections,
+        string title,
+        IReadOnlyList<JournalEntryCard> entries,
+        Color color)
+    {
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        sections.Add(Section(title, entries.Select(entry => FormatEntry(entry, color))));
+    }
+
+    private static string Section(string title, IEnumerable<string> lines) =>
+        $"[font_size=17]{UiTheme.Colorize(UiTheme.Escape(title), UiTheme.Wild)}[/font_size]\n"
+        + string.Join("\n", lines.Select(line => $"  • {line}"));
+
+    private static string FormatEntry(JournalEntryCard entry, Color color)
+    {
+        var metadata = new List<string>();
+        if (!string.IsNullOrWhiteSpace(entry.Status))
+        {
+            metadata.Add(entry.Status);
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.Carrier))
+        {
+            metadata.Add($"carrier: {entry.Carrier}");
+        }
+        else if (!string.IsNullOrWhiteSpace(entry.Source))
+        {
+            metadata.Add(entry.Source);
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.Destination))
+        {
+            metadata.Add($"toward {entry.Destination}");
+        }
+
+        var suffix = metadata.Count == 0
+            ? ""
+            : $" [color={UiTheme.Muted.ToHtml()}]({UiTheme.Escape(string.Join("; ", metadata))})[/color]";
+        return $"{UiTheme.Colorize(UiTheme.Escape(entry.Text), color)}{suffix}";
+    }
+
+    private static string FormatLegacy(IReadOnlyList<string> journal) =>
+        journal.Count == 0
             ? "No journal entries are visible yet."
             : string.Join("\n\n", journal.Select(FormatLine));
-    }
 
     private static string FormatLine(string line)
     {

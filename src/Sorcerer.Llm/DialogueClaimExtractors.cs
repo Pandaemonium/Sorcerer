@@ -458,7 +458,7 @@ public sealed class OllamaDialogueParserRouter : IDialogueParserRouter
         + "{\"hasMechanics\":true|false,\"selectedCapabilityIds\":[\"claims\"],\"reason\":\"short\"}. "
         + "Use listed ids only. Pick the minimum: usually [] or [claims], max 2; use 3 only when unmistakable. "
         + "claims covers facts, rumors, routes, stock, places, people, threats, and laws. "
-        + "Add memory, promises, canon, bond_want, local_actions, services_trade, or typed_consequences only when the NPC explicitly creates that mechanic. "
+        + "Add memory, promises, canon, bond_want, local_actions, services_trade, bargains, or typed_consequences only when the NPC explicitly creates that mechanic. "
         + "Player claims are not binding.";
 
     internal static string UserPrompt(DialogueParserRouteRequest request) =>
@@ -639,7 +639,7 @@ public sealed class OpenAiCompatibleDialogueClaimExtractor : IDialogueClaimExtra
         CancellationToken cancellationToken)
     {
         var detail = await _chat.ChatAsync(
-            OllamaDialogueClaimExtractor.DetailSystemPrompt(),
+            OllamaDialogueClaimExtractor.DetailSystemPrompt(request),
             OllamaDialogueClaimExtractor.DetailUserPrompt(request),
             temperature: 0.1,
             maxTokens: 650,
@@ -758,7 +758,7 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
     {
         var detail = await ChatAsync(
             "dialogue-parser-detail",
-            DetailSystemPrompt(),
+            DetailSystemPrompt(request),
             DetailUserPrompt(request),
             temperature: 0.1,
             maxTokens: 650,
@@ -887,8 +887,8 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
 
     internal static string RouterSystemPrompt() =>
         "Dialogue mechanics router. Return only JSON: "
-        + "{\"hasMechanics\":true|false,\"families\":[\"claims|memories|bond|want|actions|services|trade|consequence\"],\"reason\":\"short\"}. "
-        + "True only for NPC-spoken facts, promises, canon, memories, bond/want shifts, local actions, services/trade, or consequences. "
+        + "{\"hasMechanics\":true|false,\"families\":[\"claims|memories|bond|want|actions|services|trade|bargains|consequence\"],\"reason\":\"short\"}. "
+        + "True only for NPC-spoken facts, promises, canon, memories, bond/want shifts, local actions, services/trade, typed bargains, or consequences. "
         + "Player claims are not binding. False for greetings, mood, or refusals with no durable/local effect.";
 
     internal static string RouterUserPrompt(DialogueClaimRequest request) =>
@@ -901,10 +901,22 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
             npcDialogue = request.DialogueLines,
         }, JsonOptions);
 
-    internal static string DetailSystemPrompt() =>
-        "Sorcerer post-speech dialogue parser. Return only JSON: {\"proposals\":{\"claims\":[],\"memories\":[],\"bond\":null,\"want\":null,\"actions\":[]}}. "
+    internal static string DetailSystemPrompt(DialogueClaimRequest? request = null)
+    {
+        if (request?.SelectedParserCapabilityIds?.Contains("bargains", StringComparer.OrdinalIgnoreCase) == true)
+        {
+            return "Sorcerer typed-bargain parser. Return only this exact wrapper shape: {\"proposals\":{\"claims\":[],\"memories\":[],\"bond\":null,\"want\":null,\"actions\":[],\"bargain\":{\"claimantEntityId\":\"exact speaker id\",\"summary\":\"short\",\"options\":[{\"id\":\"stable_option_id\",\"label\":\"short\",\"terms\":[{\"id\":\"stable_term_id\",\"kind\":\"currency|item|service|standing|concession|deadline\",\"text\":\"short\",\"quantity\":1,\"resourceId\":\"exact resource\",\"factionId\":null,\"standingAxis\":null,\"standingDelta\":0,\"dueInTurns\":null}]}]}}}. "
+                + "The router selected bargains because the NPC reply appears to state a conditional exchange. If it truly says do/give/pay X and the NPC will do Y, bargain MUST be non-null and must encode every demanded term. claimantEntityId is the exact speaker id. currency uses resourceId gold and the spoken quantity; item uses an exact unprotected listenerInventory name; service uses the exact speakerWant id; deadline may only accompany service. A concession records a surrendered right but does not transfer an item. Never invent a resource, never use a protected item, never output field-name placeholders, and keep all other proposal families empty. If the NPC actually refused without terms, use bargain:null instead.";
+        }
+
+        var prompt = "Sorcerer post-speech dialogue parser. Return exactly one JSON object: {\"proposals\":{\"claims\":[],\"memories\":[],\"bond\":null,\"want\":null,\"actions\":[],\"bargain\":null}}. "
+        + "Every claims, memories, and actions element must be a full JSON object, never a string or reference id. A claim object is {text,category,subject,salience,confidence,playerVisible,bindAsPromise,realizationKind,triggerHint,targetEntityId,merchantId,itemName,tags}. "
+        + "A typed bargain object is {claimantEntityId,summary,options:[{id,label,terms:[{id,kind,text,quantity,resourceId,factionId,standingAxis,standingDelta,dueInTurns}]}]}. When the NPC plainly says 'do/give/pay X and I will Y', extract the bargain rather than merely restating it as claims. Use exact speaker/want/inventory ids supplied in the request; never invent a payable item and never demand an inventory entry marked protected. "
         + "Parse only mechanics plainly supported by the NPC reply/context. Never convert player inventions into claims. "
         + "Use only selected capability guidance; omit unsupported families. Salience 1-5; 3+ only for useful routes, stock, people, secrets, places, threats, or tactics. Keep text short.";
+
+        return prompt;
+    }
 
     internal static string DetailUserPrompt(DialogueClaimRequest request) =>
         JsonSerializer.Serialize(new
@@ -914,8 +926,12 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
             scene = $"{request.RegionId}/{request.CurrentZoneId}",
             player = request.PlayerText,
             npc = request.DialogueLines,
+            speakerWant = request.SpeakerWant,
+            listenerInventory = request.ListenerInventory ?? Array.Empty<string>(),
             capIds = request.SelectedParserCapabilityIds ?? Array.Empty<string>(),
             caps = (request.ParserCapabilityCards ?? DialogueParserCapabilityCatalog.All)
+                .Where(card => request.SelectedParserCapabilityIds?.Contains("bargains", StringComparer.OrdinalIgnoreCase) != true
+                    || card.Id.Equals("bargains", StringComparison.OrdinalIgnoreCase))
                 .Select(CompactParserCapability)
                 .ToArray(),
             memories = request.RecentMemories
@@ -929,7 +945,7 @@ public sealed class OllamaDialogueClaimExtractor : IDialogueClaimExtractor, IDia
         }, JsonOptions);
 
     private static string CompactParserCapability(DialogueParserCapabilityCard card) =>
-        TrimText($"{card.Id}: {card.Summary} {string.Join(' ', card.Lines)}", 700);
+        TrimText($"{card.Id}: {card.Summary} {string.Join(' ', card.Lines)}", 900);
 
     private static string TrimText(string text, int maxLength)
     {

@@ -104,7 +104,8 @@ public sealed record DeedRecord(
     IReadOnlyList<string> Tags,
     IReadOnlyList<string>? EffectWitnesses = null,
     string? AttributedSoulId = null,
-    string AttributionStatus = "attributed");
+    string AttributionStatus = "attributed",
+    string? Summary = null);
 
 public sealed class DeedLedger
 {
@@ -126,7 +127,8 @@ public sealed class DeedLedger
         IEnumerable<string>? tags = null,
         IEnumerable<string>? effectWitnesses = null,
         string? attributedSoulId = null,
-        string attributionStatus = "attributed")
+        string attributionStatus = "attributed",
+        string? summary = null)
     {
         var record = new DeedRecord(
             $"deed_{_records.Count + 1}",
@@ -140,7 +142,8 @@ public sealed class DeedLedger
             (tags ?? Array.Empty<string>()).ToArray(),
             (effectWitnesses ?? Array.Empty<string>()).ToArray(),
             attributedSoulId ?? actorSoulId,
-            attributionStatus);
+            attributionStatus,
+            summary);
         _records.Add(record);
         return record;
     }

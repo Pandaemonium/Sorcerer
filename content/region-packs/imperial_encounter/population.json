@@ -128,6 +128,63 @@
           "nearWeight": 2,
           "wildWeight": 1,
           "knowledgeTier": 2
+        },
+        {
+          "id": "sealed_courier",
+          "title": "sealed-order courier",
+          "glyph": "u",
+          "tags": ["empire", "courier", "schedule", "credential"],
+          "roles": ["functionary", "empire", "witness"],
+          "descriptions": [
+            "A rain-dark satchel is chained to the courier's belt, while a second uniform is folded beneath the saddle blanket.",
+            "They keep checking the yard clock and the same unsealed route docket."
+          ],
+          "wants": [
+            "Leave before the next audit discovers that one order in the satchel names the wrong household.",
+            "Find a plausible substitute to carry the northern packet through the wet road."
+          ],
+          "centerWeight": 3,
+          "nearWeight": 4,
+          "wildWeight": 1,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "evidence_porter",
+          "title": "confiscation porter",
+          "glyph": "p",
+          "tags": ["empire", "worker", "evidence", "keys"],
+          "roles": ["resident", "witness", "functionary"],
+          "descriptions": [
+            "Colored dust shines through every seam of the porter's regulation gray gloves.",
+            "A trolley key, a cage key, and somebody else's cell key hang from one overburdened ring."
+          ],
+          "wants": [
+            "Move the singing crate off the public tally before it teaches the other evidence to answer.",
+            "Trade one dangerous key for a way out of the night shift."
+          ],
+          "centerWeight": 4,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "permit_petitioner",
+          "title": "containment petitioner",
+          "glyph": "q",
+          "tags": ["civilian", "queue", "confiscation", "claimant"],
+          "roles": ["resident", "witness", "claimant"],
+          "descriptions": [
+            "They clutch a numbered receipt for a family wonder the ledger insists never arrived.",
+            "Marble dust rims good traveling shoes; this is not their first day in the queue."
+          ],
+          "wants": [
+            "Recover the harmless household spirit boxed somewhere in Evidence Yard.",
+            "Learn which clerk can correct a vanished docket without requiring another season of petitions."
+          ],
+          "centerWeight": 3,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "knowledgeTier": 2
         }
       ]
     }

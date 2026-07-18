@@ -27,18 +27,33 @@ public static class EquipmentEffectService
         foreach (var (slot, itemKey) in equipment.Slots.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
         {
             var modifier = catalog.Find(itemKey)?.Modifier;
-            if (modifier is null)
+            if (modifier is not null)
             {
-                continue;
+                attack += modifier.Attack;
+                defense += modifier.Defense;
+                Merge(resistances, modifier.Resistances);
+                Merge(weaknesses, modifier.Weaknesses);
+                if (equipment.FocusSlots.Contains(slot) && !string.IsNullOrWhiteSpace(modifier.FocusBias))
+                {
+                    focusBias.Add(modifier.FocusBias);
+                }
             }
 
-            attack += modifier.Attack;
-            defense += modifier.Defense;
-            Merge(resistances, modifier.Resistances);
-            Merge(weaknesses, modifier.Weaknesses);
-            if (equipment.FocusSlots.Contains(slot) && !string.IsNullOrWhiteSpace(modifier.FocusBias))
+            if (equipment.FocusSlots.Contains(slot)
+                && entity.TryGet<ItemAlterationComponent>(out var alterations)
+                && alterations.Profiles.TryGetValue(itemKey, out var profileId))
             {
-                focusBias.Add(modifier.FocusBias);
+                var alterationBias = profileId.ToLowerInvariant() switch
+                {
+                    "altered_charter_touched" => "charter authority, precise lawful bindings, seals, credentials",
+                    "altered_wild_stained" => "wild color, exuberant transformations, volatile living matter",
+                    "altered_bone_bound" => "witnessed deeds, names carved as evidence, ancestral obligation",
+                    _ => "",
+                };
+                if (!string.IsNullOrWhiteSpace(alterationBias))
+                {
+                    focusBias.Add(alterationBias);
+                }
             }
         }
 

@@ -83,6 +83,24 @@ public sealed partial class InteractionSystem
                 range: 2);
         }
 
+        // Protect explicit proper names before fuzzy nearby-token matching. Otherwise
+        // "Tovin Bog-Iron" could silently address nearby Fenna Bog-Iron when Tovin was across the
+        // settlement, sending the live dialogue provider the wrong authoritative speaker.
+        var explicitMention = ResolveExplicitActorNameMention(text);
+        if (explicitMention is not null && !CanReach(State.ControlledEntity, explicitMention, range: 2))
+        {
+            return new DialoguePreparation(
+                null,
+                ActionResult.Simple(
+                    "talk",
+                    false,
+                    false,
+                    turnBefore,
+                    State.Turn,
+                    $"{explicitMention.Name} is not close enough to talk to."));
+        }
+
+        target ??= explicitMention;
         target ??= ResolveNearbyActorMention(text);
         if (target is null)
         {
@@ -432,7 +450,7 @@ public sealed partial class InteractionSystem
         }
 
         var stakes = string.IsNullOrWhiteSpace(want.Stakes) ? "" : $" Stakes: {want.Stakes}";
-        return $"{want.Text} (salience {want.Salience}).{stakes}";
+        return $"Want id {want.Id}: {want.Text} (salience {want.Salience}).{stakes}";
     }
 
     private string PlayerLegendSummary()

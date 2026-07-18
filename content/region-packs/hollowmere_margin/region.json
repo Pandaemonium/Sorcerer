@@ -205,6 +205,55 @@
               "ferryward": 5,
               "reed_market": 2
             }
+          },
+          {
+            "id": "shell_bathing_trough",
+            "name": "warm shell-bathing trough",
+            "glyph": "~",
+            "fixtureType": "pet_fixture",
+            "description": "Steam curls over shallow water where imported shellbacks soak the chill from their hinge-joints.",
+            "tags": ["pet", "water", "care", "shellback"],
+            "blocksMovement": false,
+            "districtWeights": { "reed_market": 5, "water_shrines": 3 }
+          },
+          {
+            "id": "rope_aviary",
+            "name": "reed-rope aviary",
+            "glyph": "%",
+            "fixtureType": "pet_fixture",
+            "description": "Knotted reed tunnels let tiny climbing birds vanish overhead and reappear inside customers' pockets.",
+            "tags": ["pet", "bird", "market", "climbing"],
+            "blocksSight": true,
+            "districtWeights": { "reed_market": 6 }
+          },
+          {
+            "id": "keeper_feed_cabinet",
+            "name": "many-diet feed cabinet",
+            "glyph": "C",
+            "fixtureType": "storage",
+            "description": "Dozens of labeled drawers hold beetle flour, sour fruit, live reeds, blue salt, and one carefully stoppered thunderstorm.",
+            "tags": ["pet", "feed", "component", "keeper"],
+            "districtWeights": { "reed_market": 5, "ferryward": 2 }
+          },
+          {
+            "id": "creature_clinic_sling",
+            "name": "menagerie clinic sling",
+            "glyph": "u",
+            "fixtureType": "pet_fixture",
+            "description": "A willow sling can cradle anything from a wounded mud-swallow to an antlered cat without admitting surprise.",
+            "tags": ["pet", "healing", "clinic", "restraint"],
+            "blocksMovement": false,
+            "districtWeights": { "reed_market": 4, "water_shrines": 4 }
+          },
+          {
+            "id": "memory_perch",
+            "name": "name-whispering perch",
+            "glyph": "Y",
+            "fixtureType": "shrine_fixture",
+            "description": "Every creature that rests here hears its keeper's name repeated through wet willow until it can find the way home.",
+            "tags": ["pet", "memory", "shrine", "bond"],
+            "blocksMovement": false,
+            "districtWeights": { "water_shrines": 6, "reed_market": 1 }
           }
         ],
         "materials": [
@@ -492,6 +541,42 @@
                 "x": 0,
                 "y": 1
               }
+            ]
+          },
+          {
+            "id": "menagerie_clinic",
+            "weight": 2,
+            "members": [
+              { "base": "creature_clinic_sling", "material": "willow", "condition": "patched", "x": 0, "y": 0 },
+              { "base": "medicine_bench", "material": "eelglass", "condition": "votive", "x": 1, "y": 0 },
+              { "base": "keeper_feed_cabinet", "material": "river_reed", "condition": "imperial_tagged", "x": 0, "y": 1 }
+            ]
+          },
+          {
+            "id": "escaped_pet_search",
+            "weight": 2,
+            "members": [
+              { "base": "pet_crate", "material": "willow", "condition": "escaped", "x": 0, "y": 0 },
+              { "base": "keeper_feed_cabinet", "material": "river_reed", "condition": "escaped", "x": 1, "y": 0 },
+              { "base": "shelter_sign", "material": "willow", "condition": "patched", "x": -1, "y": 1 }
+            ]
+          },
+          {
+            "id": "shrine_menagerie",
+            "weight": 1,
+            "members": [
+              { "base": "memory_perch", "material": "willow", "condition": "singing", "x": 0, "y": 0 },
+              { "base": "shell_bathing_trough", "material": "eelglass", "condition": "votive", "x": 1, "y": 0 },
+              { "base": "water_shrine", "material": "bog_iron", "condition": "silted", "x": 0, "y": 1 }
+            ]
+          },
+          {
+            "id": "aviary_inspection",
+            "weight": 1,
+            "members": [
+              { "base": "rope_aviary", "material": "river_reed", "condition": "imperial_tagged", "x": 0, "y": 0 },
+              { "base": "inspection_post", "material": "bog_iron", "condition": "patched", "x": 1, "y": 0 },
+              { "base": "pet_crate", "material": "willow", "condition": "escaped", "x": 0, "y": 1 }
             ]
           }
         ]

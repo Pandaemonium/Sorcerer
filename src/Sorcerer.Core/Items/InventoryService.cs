@@ -1,5 +1,6 @@
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Views;
+using Sorcerer.Core.World;
 
 namespace Sorcerer.Core.Items;
 
@@ -23,6 +24,9 @@ public sealed class InventoryService
             ? equipped
             : EquipmentComponent.Empty();
         var equippedItems = new HashSet<string>(equipment.Slots.Values, StringComparer.OrdinalIgnoreCase);
+        var alterations = entity.TryGet<ItemAlterationComponent>(out var altered)
+            ? altered.Profiles
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         return inventory.Items
             .OrderBy(pair => pair.Key)
@@ -30,6 +34,8 @@ public sealed class InventoryService
             {
                 var definition = _catalog.Find(pair.Key);
                 var value = definition?.Value ?? 1;
+                alterations.TryGetValue(pair.Key, out var alterationId);
+                var alteration = string.IsNullOrWhiteSpace(alterationId) ? null : CostProfileCatalog.Default.Find(alterationId);
                 return new ItemCard(
                     pair.Key,
                     definition?.Name ?? pair.Key,
@@ -45,7 +51,9 @@ public sealed class InventoryService
                     Rarity: definition?.Rarity ?? "common",
                     Description: definition?.Description ?? "",
                     Effects: EquipmentEffectService.Summary(definition?.Modifier),
-                    SpellBias: definition?.SpellBias ?? "");
+                    SpellBias: definition?.SpellBias ?? "",
+                    AlterationProfileId: alteration?.Id,
+                    Alteration: alteration is null ? null : $"{alteration.Name}: {alteration.Condition}");
             })
             .ToArray();
     }

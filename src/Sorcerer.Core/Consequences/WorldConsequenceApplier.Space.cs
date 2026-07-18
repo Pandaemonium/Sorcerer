@@ -391,6 +391,44 @@ public sealed partial class WorldConsequenceApplier
         }
 
         var door = EntityById(doorId);
+        if (door is not null
+            && door.TryGet<InteriorEntranceComponent>(out var entrance)
+            && !door.TryGet<DoorComponent>(out _))
+        {
+            var thresholdActorId = ReadString(payload, "actorId") ?? consequence.SourceEntityId;
+            var thresholdActor = string.IsNullOrWhiteSpace(thresholdActorId) ? null : EntityById(thresholdActorId);
+            var thresholdReach = consequence.Source.Equals("wild_magic", StringComparison.OrdinalIgnoreCase) ? 12 : 2;
+            if (thresholdActor is not null && !CanReach(thresholdActor, door, range: thresholdReach))
+            {
+                return Reject(consequence, $"{thresholdActor.Name} cannot reach {door.Name}.");
+            }
+
+            var tags = door.TryGet<TagsComponent>(out var existingTags)
+                ? existingTags.Tags.ToList()
+                : new List<string>();
+            foreach (var tag in new[] { "open", "unlocked", "access_granted", $"access_{NormalizeToken(entrance.InteriorId, "interior")}" })
+            {
+                if (!tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                {
+                    tags.Add(tag);
+                }
+            }
+
+            door.Set(new TagsComponent(tags));
+            var thresholdSummary = $"{door.Name}'s restricted threshold opens.";
+            var thresholdDelta = new StateDelta(
+                ReadString(payload, "operation") ?? "openInteriorThreshold",
+                door.Id.Value,
+                thresholdSummary,
+                Details(
+                    consequence,
+                    ("interiorId", entrance.InteriorId),
+                    ("interiorZoneId", entrance.InteriorZoneId),
+                    ("tags", tags),
+                    ("playerVisible", true)));
+            return Applied(consequence, door.Id.Value, MaybeVisibleMessage(consequence, thresholdSummary), thresholdDelta);
+        }
+
         if (door is null || !door.TryGet<DoorComponent>(out var doorComponent))
         {
             return Reject(consequence, "Open/unlock consequence target is not a door.");
@@ -446,10 +484,15 @@ public sealed partial class WorldConsequenceApplier
         }
 
         var actorName = actor is null ? "Something" : actor.Name;
+        var actorIsPlayer = actor?.Id == _state.ControlledEntityId;
         var defaultSummary = nextDoor.IsOpen && !wasOpen
-            ? $"{actorName} opens {door.Name}."
+            ? actorIsPlayer
+                ? $"You open {door.Name}."
+                : $"{actorName} opens {door.Name}."
             : wasLocked && unlock
-                ? $"{actorName} unlocks {door.Name}."
+                ? actorIsPlayer
+                    ? $"You unlock {door.Name}."
+                    : $"{actorName} unlocks {door.Name}."
                 : $"{door.Name} is already open.";
         var summary = FirstNonBlank(ReadString(payload, "message"), ReadString(payload, "summary"), defaultSummary)!;
         var operation = ReadString(payload, "operation") ?? "openOrUnlock";

@@ -159,6 +159,43 @@ public sealed partial class InteractionSystem
             ?? EarliestMention(candidates, normalized, byName: false);
     }
 
+    private Entity? ResolveExplicitActorNameMention(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var candidates = State.Entities.Values
+            .Where(entity => entity.Id != State.ControlledEntityId && entity.Has<ActorComponent>())
+            .ToArray();
+        var firstNames = candidates
+            .Select(entity => new
+            {
+                Entity = entity,
+                Token = NormalizeDialogueMatchText(entity.Name).Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "",
+            })
+            .Where(candidate => candidate.Token.Length >= 3)
+            .GroupBy(candidate => candidate.Token, StringComparer.OrdinalIgnoreCase)
+            // Generic authored titles such as "imperial soldier" are not proper-name selectors;
+            // only a unique first token is safe to treat as an explicit addressee.
+            .Where(group => group.Count() == 1)
+            .Select(group => group.Single())
+            .ToArray();
+        var normalized = $" {NormalizeDialogueMatchText(text)} ";
+        return firstNames
+            .Select(candidate => new
+            {
+                candidate.Entity,
+                Index = normalized.IndexOf($" {candidate.Token} ", StringComparison.OrdinalIgnoreCase),
+            })
+            .Where(candidate => candidate.Index >= 0)
+            .OrderBy(candidate => candidate.Index)
+            .ThenBy(candidate => candidate.Entity.Id.Value, StringComparer.OrdinalIgnoreCase)
+            .Select(candidate => candidate.Entity)
+            .FirstOrDefault();
+    }
+
     private static Entity? EarliestMention(IReadOnlyList<Entity> candidates, string normalizedText, bool byName)
     {
         Entity? best = null;
@@ -369,9 +406,9 @@ public sealed partial class InteractionSystem
         return State.Entities.Values
             .Where(entity => entity.Has<ServiceComponent>() || HasServicePromise(entity, trigger, serviceText))
             .Where(entity => entity.TryGet<PositionComponent>(out var position)
-                && GameEngine.Distance(origin, position.Position) <= 2)
+                && InteractionDistance(origin, position.Position) <= 2)
             .OrderBy(entity => entity.TryGet<PositionComponent>(out var position)
-                ? GameEngine.Distance(origin, position.Position)
+                ? InteractionDistance(origin, position.Position)
                 : int.MaxValue)
             .ThenBy(entity => entity.Id.Value)
             .ToArray();

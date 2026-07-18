@@ -187,6 +187,44 @@
             "districtWeights": {
               "harpoon_quay": 6
             }
+          },
+          {
+            "id": "snowshoe_rack",
+            "name": "communal snowshoe rack",
+            "glyph": "H",
+            "fixtureType": "travel_fixture",
+            "description": "Pairs are marked by household, pass, and the last person who returned wearing them.",
+            "tags": ["snow", "travel", "mountain", "equipment"],
+            "blocksMovement": false,
+            "districtWeights": { "tale_hall": 4, "scrimshaw_yards": 2 }
+          },
+          {
+            "id": "whale_oil_stove",
+            "name": "blue whale-oil stove",
+            "glyph": "O",
+            "fixtureType": "hearth",
+            "description": "A smokeless blue flame makes a hard circle of hospitality in the mountain cold.",
+            "tags": ["fire", "warmth", "whale_oil", "hospitality"],
+            "districtWeights": { "tale_hall": 5, "scrimshaw_yards": 2 }
+          },
+          {
+            "id": "mountain_sledge",
+            "name": "bone-runner mountain sledge",
+            "glyph": "=",
+            "fixtureType": "transport",
+            "description": "The runners are carved with safe-pass names; one has been recently and deliberately crossed out.",
+            "tags": ["sledge", "mountain", "route", "bone"],
+            "districtWeights": { "harpoon_quay": 3, "scrimshaw_yards": 4 }
+          },
+          {
+            "id": "witness_cup_rack",
+            "name": "witness-cup rack",
+            "glyph": "U",
+            "fixtureType": "hall_fixture",
+            "description": "Each horn cup bears the name of somebody entitled to interrupt a story told badly.",
+            "tags": ["ale", "witness", "story_circle", "hall"],
+            "blocksMovement": false,
+            "districtWeights": { "tale_hall": 6 }
           }
         ],
         "materials": [
@@ -320,7 +358,8 @@
               "travel",
               "warning",
               "pass",
-              "route_hint"
+              "route_hint",
+              "teaches_charter:furrow_edict_1"
             ],
             "claimTags": [
               "travel",
@@ -422,6 +461,33 @@
                 "x": 1,
                 "y": 0
               }
+            ]
+          },
+          {
+            "id": "pass_shelter",
+            "weight": 2,
+            "members": [
+              { "base": "whale_oil_stove", "material": "ship_brass", "condition": "frost_rimed", "x": 0, "y": 0 },
+              { "base": "snowshoe_rack", "material": "tarred_oak", "condition": "storm_singing", "x": 1, "y": 0 },
+              { "base": "pass_cairn", "material": "whalebone", "condition": "charter_tagged", "x": 0, "y": 1 }
+            ]
+          },
+          {
+            "id": "ale_one_up_table",
+            "weight": 2,
+            "members": [
+              { "base": "witness_cup_rack", "material": "whalebone", "condition": "ale_stained", "x": 0, "y": 0 },
+              { "base": "tale_bench", "material": "tarred_oak", "condition": "hero_carved", "x": 1, "y": 0 },
+              { "base": "tale_hearth", "material": "ship_brass", "condition": "storm_singing", "x": 0, "y": 1 }
+            ]
+          },
+          {
+            "id": "occupation_bone_audit",
+            "weight": 1,
+            "members": [
+              { "base": "bone_workbench", "material": "whalebone", "condition": "charter_tagged", "x": 0, "y": 0 },
+              { "base": "mountain_sledge", "material": "ship_brass", "condition": "frost_rimed", "x": 1, "y": 0 },
+              { "base": "scrimshaw_post", "material": "tarred_oak", "condition": "hero_carved", "x": 0, "y": 1 }
             ]
           }
         ]

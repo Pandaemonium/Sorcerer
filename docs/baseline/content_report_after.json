@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-07-18T03:32:28.2337349+00:00",
+  "generatedAt": "2026-07-18T06:05:00.8020275+00:00",
   "startSeed": 1,
   "seedCount": 20,
   "summary": {
-    "distinctItems": 81,
+    "distinctItems": 90,
     "distinctCommodityItems": 3,
-    "distinctProps": 212,
-    "distinctDocuments": 66,
-    "distinctResidents": 138,
-    "distinctCreatures": 9,
+    "distinctProps": 249,
+    "distinctDocuments": 71,
+    "distinctResidents": 140,
+    "distinctCreatures": 10,
     "distinctEncounterCasts": 0,
-    "distinctServices": 6,
-    "meanDistinctiveItemsPerSeed": 16,
-    "meanPairwiseItemOverlap": 0.5034070344097018,
-    "maxPairwiseItemOverlap": 0.8947368421052632,
+    "distinctServices": 8,
+    "meanDistinctiveItemsPerSeed": 17.35,
+    "meanPairwiseItemOverlap": 0.28422869339229023,
+    "maxPairwiseItemOverlap": 0.6521739130434783,
     "totalZones": 100,
     "emptyZones": 54,
     "denseZones": 40,
@@ -21,64 +21,64 @@
     "unresolvedReferences": 0,
     "mostRepeatedItems": [
       {
+        "name": "hardtack and dried fish",
+        "count": 18
+      },
+      {
+        "name": "eelglass bead",
+        "count": 16
+      },
+      {
         "name": "bone luck-token",
-        "count": 20
-      },
-      {
-        "name": "bundle of reed pith",
-        "count": 20
-      },
-      {
-        "name": "flask of eel oil",
-        "count": 20
-      },
-      {
-        "name": "flask of whale oil",
-        "count": 20
-      },
-      {
-        "name": "healer\u0027s poultice",
-        "count": 20
-      },
-      {
-        "name": "marsh febrifuge",
-        "count": 20
-      },
-      {
-        "name": "powdered scrimshaw",
-        "count": 20
+        "count": 15
       },
       {
         "name": "skin of storm-ale",
-        "count": 20
+        "count": 15
+      },
+      {
+        "name": "bundle of reed pith",
+        "count": 14
+      },
+      {
+        "name": "marsh febrifuge",
+        "count": 14
+      },
+      {
+        "name": "carved bone pet-whistle",
+        "count": 13
+      },
+      {
+        "name": "flask of whale oil",
+        "count": 13
       },
       {
         "name": "string of smoked eel",
-        "count": 20
+        "count": 13
       },
       {
-        "name": "bone-tipped harpoon",
-        "count": 14
+        "name": "handful of memory silt",
+        "count": 12
       },
       {
-        "name": "coil of tarred rope",
-        "count": 14
+        "name": "shard of brine-ice",
+        "count": 12
       },
       {
-        "name": "tarred rope harness",
-        "count": 14
+        "name": "whalebone corslet",
+        "count": 12
       },
       {
-        "name": "warm mud whistle",
-        "count": 3
+        "name": "flask of eel oil",
+        "count": 11
       },
       {
-        "name": "bead of amber resin",
-        "count": 2
+        "name": "healer\u0027s poultice",
+        "count": 11
       },
       {
-        "name": "brass-bright memory sigil-stone",
-        "count": 2
+        "name": "tide-warning slate",
+        "count": 11
       }
     ],
     "mostRepeatedProps": [
@@ -99,48 +99,48 @@
         "count": 20
       },
       {
-        "name": "red-thread-patched willow-bound reed drying-rack",
-        "count": 10
-      },
-      {
-        "name": "silt-furred river-reed reed drying-rack",
+        "name": "broken-open willow-bound creature crate",
         "count": 9
       },
       {
-        "name": "votive-ribboned willow-bound household shelter sign",
+        "name": "red-thread-patched willow-bound menagerie clinic sling",
         "count": 9
-      },
-      {
-        "name": "red-thread-patched willow-bound creature crate",
-        "count": 8
       },
       {
         "name": "votive-ribboned eelglass remedy bench",
-        "count": 8
+        "count": 9
+      },
+      {
+        "name": "broken-open river-reed many-diet feed cabinet",
+        "count": 7
+      },
+      {
+        "name": "red-thread-patched willow-bound household shelter sign",
+        "count": 7
+      },
+      {
+        "name": "imperial-tagged river-reed many-diet feed cabinet",
+        "count": 6
+      },
+      {
+        "name": "imperial-tagged river-reed reed-rope aviary",
+        "count": 6
+      },
+      {
+        "name": "red-thread-patched bog-iron occupation inspection post",
+        "count": 6
+      },
+      {
+        "name": "red-thread-patched willow-bound creature crate",
+        "count": 6
+      },
+      {
+        "name": "silt-furred river-reed reed drying-rack",
+        "count": 6
       },
       {
         "name": "ale-stained whalebone tale-bench",
-        "count": 7
-      },
-      {
-        "name": "rain-singing river-reed memory loom",
-        "count": 7
-      },
-      {
-        "name": "silt-furred eelglass eel trap-basket",
-        "count": 7
-      },
-      {
-        "name": "silt-furred river-reed eel trap-basket",
-        "count": 7
-      },
-      {
-        "name": "storm-singing tarred-oak tale-hall hearth",
-        "count": 7
-      },
-      {
-        "name": "broken-open river-reed ferry oath-post",
-        "count": 6
+        "count": 5
       }
     ]
   },
@@ -192,38 +192,41 @@
           "contextEntities": 12,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "flask of eel oil",
+            "handful of memory silt",
             "healer\u0027s poultice",
-            "marsh febrifuge",
             "reed-wrapped water bell",
             "salt-bitten water spoon",
             "string of smoked eel"
           ],
           "commodityItems": [],
           "props": [
+            "broken-open river-reed many-diet feed cabinet",
+            "broken-open willow-bound creature crate",
             "many-notched ferry bell",
-            "rain-singing river-reed memory loom",
-            "red-thread-patched eelglass ferry oath-post",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred bog-iron household water-shrine",
-            "silt-furred eelglass eel trap-basket",
-            "silt-furred eelglass remedy bench",
-            "silt-furred willow-bound ferry oath-post"
+            "red-thread-patched eelglass occupation inspection post",
+            "red-thread-patched willow-bound household shelter sign",
+            "silt-furred bog-iron creature crate",
+            "silt-furred eelglass reed drying-rack",
+            "silt-furred willow-bound occupation inspection post"
           ],
           "documents": [
-            "votive-ribboned bog-iron occupation inspection post"
+            "votive-ribboned bog-iron creature crate"
           ],
           "residents": [
-            "Edda Nine Knots, eel-cutter",
-            "Rowen Red Thread, Free Folk lookout",
+            "Orra Nine Knots, Free Folk shelterwright",
+            "Tovin Eelwise, reconciled householder",
             "Wynn Two Oars, reed apothecary"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a watcher\u0027s word",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Wynn Two Oars, reed apothecary"
@@ -246,12 +249,12 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed occupation inspection post",
-            "imperial-tagged bog-iron ferry oath-post",
-            "imperial-tagged river-reed reed drying-rack",
-            "silt-furred bog-iron creature crate",
-            "silt-furred river-reed eel trap-basket",
-            "votive-ribboned eelglass household water-shrine"
+            "broken-open river-reed reed-rope aviary",
+            "broken-open willow-bound creature crate",
+            "imperial-tagged river-reed many-diet feed cabinet",
+            "imperial-tagged river-reed reed-rope aviary",
+            "red-thread-patched bog-iron occupation inspection post",
+            "silt-furred bog-iron memory loom"
           ],
           "documents": [],
           "residents": [],
@@ -278,14 +281,14 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open eelglass eel trap-basket",
-            "broken-open river-reed ferry oath-post",
-            "imperial-tagged river-reed eel trap-basket",
-            "rain-singing bog-iron eel trap-basket",
-            "silt-furred willow-bound household water-shrine"
+            "broken-open eelglass household shelter sign",
+            "broken-open river-reed occupation inspection post",
+            "imperial-tagged river-reed name-whispering perch",
+            "rain-singing bog-iron warm shell-bathing trough",
+            "silt-furred willow-bound remedy bench"
           ],
           "documents": [
-            "votive-ribboned bog-iron occupation inspection post"
+            "votive-ribboned bog-iron creature crate"
           ],
           "residents": [],
           "creatures": [],
@@ -308,43 +311,43 @@
           "contextEntities": 11,
           "items": [
             "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
             "flask of whale oil",
+            "hardtack and dried fish",
             "powdered scrimshaw",
-            "skin of storm-ale",
-            "tarred rope harness"
+            "skin of storm-ale"
           ],
           "commodityItems": [
             "gold"
           ],
           "props": [
-            "ale-stained ship-brass tale-hall hearth",
+            "ale-stained ship-brass ale-cooling rack",
+            "ale-stained whalebone mountain-pass cairn",
             "ale-stained whalebone tale-hall hearth",
-            "frost-rimed whalebone tale-bench",
             "hero-carved tarred-oak tale-hall hearth",
             "many-witness tale chair",
-            "storm-singing ship-brass mountain-pass cairn"
+            "storm-singing ship-brass ale-cooling rack"
           ],
           "documents": [
-            "charter-tagged whalebone tale-hall hearth",
-            "frost-rimed ship-brass tale-hall hearth"
+            "charter-tagged whalebone blue whale-oil stove",
+            "frost-rimed ship-brass bone-runner mountain sledge"
           ],
           "residents": [
+            "Aven Oath-Drunk, tale-house host",
             "Kelda Salt-Lung, hall tale-witness",
-            "Tor Tide-Widow, harpoon mender",
             "Ulfa Nine Fathoms, whalebone carver"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
-            "Tor Tide-Widow, harpoon mender",
+            "Aven Oath-Drunk, tale-house host",
             "Ulfa Nine Fathoms, whalebone carver"
           ],
           "charterOpportunities": [
-            "charter-tagged whalebone tale-hall hearth"
+            "charter-tagged whalebone blue whale-oil stove"
           ],
           "wants": 3,
           "claimSources": 3,
@@ -399,7 +402,10 @@
           "contextEntities": 12,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "flask of eel oil",
+            "handful of memory silt",
             "healer\u0027s poultice",
             "ink-stained memory token",
             "marsh febrifuge",
@@ -407,29 +413,29 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open eelglass occupation inspection post",
-            "broken-open river-reed ferry oath-post",
-            "imperial-tagged willow-bound eel trap-basket",
+            "broken-open eelglass warm shell-bathing trough",
+            "broken-open river-reed household water-shrine",
+            "imperial-tagged willow-bound reed-rope aviary",
             "many-notched ferry bell",
-            "red-thread-patched river-reed ferry oath-post",
-            "silt-furred eelglass ferry oath-post",
-            "votive-ribboned bog-iron creature crate"
+            "red-thread-patched river-reed warm shell-bathing trough",
+            "silt-furred eelglass occupation inspection post",
+            "votive-ribboned bog-iron warm shell-bathing trough"
           ],
           "documents": [],
           "residents": [
+            "Dellan Eelwise, Free Folk shelterwright",
             "Halsa Reed-Debt, reed apothecary",
-            "Pella Ferry-Sworn, Free Folk runner",
-            "Sten Rushlight, Free Folk lookout"
+            "Wynn Eelwise, reconciled householder"
           ],
           "creatures": [
-            "mudlark ape",
-            "paper-moth swarm"
+            "mudlark ape"
           ],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a watcher\u0027s word",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Halsa Reed-Debt, reed apothecary"
@@ -454,16 +460,16 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open willow-bound ferry oath-post",
-            "rain-singing bog-iron household shelter sign",
-            "rain-singing river-reed household water-shrine",
-            "rain-singing willow-bound creature crate",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred eelglass memory loom"
+            "broken-open willow-bound reed-rope aviary",
+            "rain-singing bog-iron memory loom",
+            "rain-singing river-reed menagerie clinic sling",
+            "rain-singing willow-bound reed-rope aviary",
+            "red-thread-patched willow-bound memory loom",
+            "silt-furred eelglass household water-shrine"
           ],
           "documents": [
-            "imperial-tagged river-reed eel trap-basket",
-            "votive-ribboned river-reed creature crate"
+            "imperial-tagged river-reed menagerie clinic sling",
+            "votive-ribboned river-reed ferry oath-post"
           ],
           "residents": [],
           "creatures": [],
@@ -490,19 +496,19 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open eelglass remedy bench",
-            "imperial-tagged bog-iron occupation inspection post",
-            "rain-singing bog-iron memory loom",
-            "rain-singing eelglass eel trap-basket",
+            "broken-open eelglass name-whispering perch",
+            "broken-open willow-bound creature crate",
+            "imperial-tagged river-reed reed-rope aviary",
+            "rain-singing bog-iron household shelter sign",
             "rain-singing eelglass household water-shrine",
-            "red-thread-patched river-reed memory loom",
-            "votive-ribboned eelglass creature crate",
-            "votive-ribboned willow-bound household shelter sign"
+            "rain-singing eelglass menagerie clinic sling",
+            "red-thread-patched bog-iron occupation inspection post",
+            "votive-ribboned eelglass creature crate"
           ],
           "documents": [
-            "broken-open bog-iron occupation inspection post",
-            "red-thread-patched bog-iron creature crate",
-            "silt-furred willow-bound memory loom"
+            "broken-open bog-iron eel trap-basket",
+            "red-thread-patched bog-iron eel trap-basket",
+            "silt-furred willow-bound creature crate"
           ],
           "residents": [],
           "creatures": [],
@@ -525,12 +531,11 @@
           "contextEntities": 5,
           "items": [
             "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
-            "flask of whale oil",
-            "powdered scrimshaw",
-            "skin of storm-ale",
-            "tarred rope harness"
+            "hardtack and dried fish",
+            "scrimshaw witness-record",
+            "sealskin storm-cloak",
+            "shard of brine-ice",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
@@ -539,17 +544,19 @@
           "documents": [],
           "residents": [
             "Aven Oath-Drunk, hall tale-witness",
-            "Bera Oath-Drunk, hall tale-witness",
-            "Frey Three Harpoons, harpoon mender",
-            "Vitr Oath-Drunk, whalebone carver"
+            "Hakon Cold Wake, bone-debt caller",
+            "Vitr Oath-Drunk, whalebone carver",
+            "Yrsa Gull-Fed, tale-house host"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
-            "Frey Three Harpoons, harpoon mender",
-            "Vitr Oath-Drunk, whalebone carver"
+            "Vitr Oath-Drunk, whalebone carver",
+            "Yrsa Gull-Fed, tale-house host"
           ],
           "charterOpportunities": [],
           "wants": 4,
@@ -606,26 +613,26 @@
           "items": [
             "brass-bright water thimble",
             "bundle of reed pith",
+            "eelglass bead",
             "flask of eel oil",
-            "healer\u0027s poultice",
-            "marsh febrifuge",
+            "handful of memory silt",
             "string of smoked eel"
           ],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed ferry oath-post",
+            "broken-open river-reed many-diet feed cabinet",
             "many-notched ferry bell",
-            "rain-singing bog-iron eel trap-basket",
-            "rain-singing eelglass household shelter sign",
-            "silt-furred eelglass occupation inspection post",
-            "votive-ribboned river-reed remedy bench"
+            "rain-singing bog-iron many-diet feed cabinet",
+            "rain-singing eelglass warm shell-bathing trough",
+            "silt-furred eelglass remedy bench",
+            "votive-ribboned river-reed ferry oath-post"
           ],
           "documents": [
             "broken-open willow-bound ferry oath-post",
-            "rain-singing willow-bound reed drying-rack"
+            "rain-singing willow-bound many-diet feed cabinet"
           ],
           "residents": [
-            "Cressa Bog-Iron, Free Folk lookout",
+            "Kesk Low Water, reconciled householder",
             "Pella Reed-Debt, reed apothecary",
             "Willa Under-Willow, Free Folk shelterwright"
           ],
@@ -634,7 +641,6 @@
           "encounterCasts": [],
           "services": [
             "a cache drop",
-            "a watcher\u0027s word",
             "reed remedy",
             "shelter and rest"
           ],
@@ -660,19 +666,19 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open eelglass remedy bench",
-            "imperial-tagged bog-iron occupation inspection post",
-            "rain-singing bog-iron memory loom",
-            "rain-singing eelglass eel trap-basket",
+            "broken-open eelglass name-whispering perch",
+            "broken-open willow-bound creature crate",
+            "imperial-tagged river-reed reed-rope aviary",
+            "rain-singing bog-iron household shelter sign",
             "rain-singing eelglass household water-shrine",
-            "red-thread-patched river-reed memory loom",
-            "votive-ribboned eelglass creature crate",
-            "votive-ribboned willow-bound household shelter sign"
+            "rain-singing eelglass menagerie clinic sling",
+            "red-thread-patched bog-iron occupation inspection post",
+            "votive-ribboned eelglass creature crate"
           ],
           "documents": [
-            "broken-open bog-iron occupation inspection post",
-            "red-thread-patched bog-iron creature crate",
-            "silt-furred willow-bound memory loom"
+            "broken-open bog-iron eel trap-basket",
+            "red-thread-patched bog-iron eel trap-basket",
+            "silt-furred willow-bound creature crate"
           ],
           "residents": [],
           "creatures": [],
@@ -700,16 +706,16 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open willow-bound ferry oath-post",
-            "rain-singing bog-iron household shelter sign",
-            "rain-singing river-reed household water-shrine",
-            "rain-singing willow-bound creature crate",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred eelglass memory loom"
+            "broken-open willow-bound reed-rope aviary",
+            "rain-singing bog-iron memory loom",
+            "rain-singing river-reed menagerie clinic sling",
+            "rain-singing willow-bound reed-rope aviary",
+            "red-thread-patched willow-bound memory loom",
+            "silt-furred eelglass household water-shrine"
           ],
           "documents": [
-            "imperial-tagged river-reed eel trap-basket",
-            "votive-ribboned river-reed creature crate"
+            "imperial-tagged river-reed menagerie clinic sling",
+            "votive-ribboned river-reed ferry oath-post"
           ],
           "residents": [],
           "creatures": [],
@@ -732,40 +738,44 @@
           "contextEntities": 11,
           "items": [
             "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
-            "flask of whale oil",
-            "powdered scrimshaw",
+            "hardtack and dried fish",
+            "scrimshaw witness-record",
+            "shard of brine-ice",
             "skin of storm-ale",
-            "tarred rope harness"
+            "tide-warning slate",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
             "ale-stained whalebone tale-bench",
             "frost-rimed ship-brass ale-cooling rack",
-            "frost-rimed whalebone tale-hall hearth",
-            "hero-carved tarred-oak ale-cooling rack",
+            "frost-rimed whalebone tale-bench",
+            "hero-carved tarred-oak witness-cup rack",
             "many-witness tale chair",
             "storm-singing tarred-oak tale-hall hearth"
           ],
           "documents": [
-            "hero-carved tarred-oak harbor capstan"
+            "hero-carved tarred-oak blue whale-oil stove"
           ],
           "residents": [
-            "Brand Salt-Lung, harpoon mender",
-            "Brand Tarhand, hall tale-witness",
+            "Brand Tide-Widow, bone-debt caller",
             "Jori Whale-Debt, whalebone carver",
-            "Ulfa Tarhand, hall tale-witness"
+            "Ulfa Tarhand, hall tale-witness",
+            "Yrsa Bone-Tale, tale-house host"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
-          "merchants": [
-            "Brand Salt-Lung, harpoon mender",
-            "Jori Whale-Debt, whalebone carver"
+          "services": [
+            "witness-backed introduction"
           ],
-          "charterOpportunities": [],
+          "merchants": [
+            "Jori Whale-Debt, whalebone carver",
+            "Yrsa Bone-Tale, tale-house host"
+          ],
+          "charterOpportunities": [
+            "hero-carved tarred-oak blue whale-oil stove"
+          ],
           "wants": 4,
           "claimSources": 2,
           "unresolved": []
@@ -818,44 +828,45 @@
           "density": "dense",
           "contextEntities": 14,
           "items": [
-            "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "ember-warm mud whistle",
             "flask of eel oil",
+            "handful of memory silt",
             "healer\u0027s poultice",
-            "ink-stained mud die",
-            "marsh febrifuge",
-            "string of smoked eel"
+            "ink-stained mud die"
           ],
           "commodityItems": [
             "gold"
           ],
           "props": [
-            "broken-open bog-iron ferry oath-post",
-            "broken-open eelglass household shelter sign",
-            "imperial-tagged bog-iron occupation inspection post",
-            "imperial-tagged willow-bound occupation inspection post",
+            "broken-open bog-iron eel trap-basket",
+            "broken-open eelglass household water-shrine",
+            "imperial-tagged bog-iron eel trap-basket",
+            "imperial-tagged willow-bound eel trap-basket",
             "many-notched ferry bell",
-            "red-thread-patched willow-bound creature crate",
-            "votive-ribboned eelglass memory loom",
-            "votive-ribboned river-reed reed drying-rack"
+            "red-thread-patched willow-bound ferry oath-post",
+            "votive-ribboned eelglass warm shell-bathing trough",
+            "votive-ribboned river-reed many-diet feed cabinet"
           ],
           "documents": [
-            "broken-open river-reed occupation inspection post"
+            "broken-open river-reed eel trap-basket"
           ],
           "residents": [
-            "Orra Heron\u0027s Cousin, eel-cutter",
             "Orra Rushlight, reed apothecary",
-            "Tovin Silt-Hand, ferry oathkeeper"
+            "Sella Drowned-Name, reconciled householder",
+            "Sella Reed-Debt, Free Folk shelterwright"
           ],
           "creatures": [
-            "eelglass toad",
+            "eelhound",
             "singing frog chorus"
           ],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "quiet crossing",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Orra Rushlight, reed apothecary"
@@ -880,11 +891,11 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron memory loom",
-            "broken-open willow-bound household water-shrine",
-            "red-thread-patched willow-bound creature crate",
-            "silt-furred river-reed reed drying-rack",
-            "votive-ribboned eelglass remedy bench"
+            "broken-open bog-iron eel trap-basket",
+            "broken-open willow-bound reed-rope aviary",
+            "rain-singing willow-bound name-whispering perch",
+            "silt-furred bog-iron household water-shrine",
+            "votive-ribboned eelglass warm shell-bathing trough"
           ],
           "documents": [],
           "residents": [],
@@ -912,14 +923,14 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed creature crate",
-            "imperial-tagged bog-iron memory loom",
-            "red-thread-patched eelglass eel trap-basket",
-            "red-thread-patched river-reed reed drying-rack",
-            "red-thread-patched willow-bound memory loom"
+            "broken-open river-reed name-whispering perch",
+            "imperial-tagged bog-iron name-whispering perch",
+            "red-thread-patched eelglass remedy bench",
+            "red-thread-patched river-reed creature crate",
+            "red-thread-patched willow-bound menagerie clinic sling"
           ],
           "documents": [
-            "broken-open eelglass creature crate"
+            "broken-open eelglass occupation inspection post"
           ],
           "residents": [],
           "creatures": [],
@@ -942,42 +953,43 @@
           "contextEntities": 12,
           "items": [
             "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
-            "flask of whale oil",
+            "hardtack and dried fish",
             "powdered scrimshaw",
+            "shard of brine-ice",
             "skin of storm-ale",
-            "tarred rope harness"
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained ship-brass harpoon winch",
-            "ale-stained ship-brass tale-hall hearth",
+            "ale-stained ship-brass tale-bench",
+            "ale-stained ship-brass witness-cup rack",
             "ale-stained tarred-oak tale-hall hearth",
-            "charter-tagged tarred-oak harbor capstan",
             "charter-tagged tarred-oak tale-hall hearth",
+            "charter-tagged tarred-oak witness-cup rack",
             "frost-rimed whalebone ale-cooling rack",
-            "frost-rimed whalebone mountain-pass cairn",
-            "hero-carved tarred-oak scrimshaw tally-post",
+            "frost-rimed whalebone tale-hall hearth",
+            "hero-carved tarred-oak tale-bench",
             "many-witness tale chair"
           ],
           "documents": [],
           "residents": [
             "Eldr Whale-Debt, whalebone carver",
-            "Halla Three Harpoons, hall tale-witness",
-            "Yrsa Nine Fathoms, harpoon mender"
+            "Gunnar Ale-Oath, tale-house host",
+            "Halla Three Harpoons, hall tale-witness"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
             "Eldr Whale-Debt, whalebone carver",
-            "Yrsa Nine Fathoms, harpoon mender"
+            "Gunnar Ale-Oath, tale-house host"
           ],
           "charterOpportunities": [
-            "charter-tagged tarred-oak harbor capstan",
-            "charter-tagged tarred-oak tale-hall hearth"
+            "charter-tagged tarred-oak tale-hall hearth",
+            "charter-tagged tarred-oak witness-cup rack"
           ],
           "wants": 3,
           "claimSources": 1,
@@ -1032,8 +1044,9 @@
           "contextEntities": 13,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "ember-warm memory die",
-            "flask of eel oil",
             "healer\u0027s poultice",
             "marsh febrifuge",
             "moth-pale reeds reliquary",
@@ -1041,30 +1054,31 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed occupation inspection post",
+            "broken-open river-reed eel trap-basket",
+            "imperial-tagged bog-iron ferry oath-post",
             "many-notched ferry bell",
-            "rain-singing eelglass household water-shrine",
-            "rain-singing willow-bound ferry oath-post",
-            "red-thread-patched river-reed memory loom",
-            "silt-furred eelglass remedy bench",
-            "votive-ribboned river-reed occupation inspection post",
-            "votive-ribboned willow-bound household shelter sign"
+            "rain-singing willow-bound household shelter sign",
+            "silt-furred eelglass many-diet feed cabinet",
+            "silt-furred river-reed eel trap-basket",
+            "votive-ribboned eelglass household water-shrine",
+            "votive-ribboned river-reed ferry oath-post"
           ],
           "documents": [],
           "residents": [
-            "Fenna Drowned-Name, shelter-aunt",
             "Jory Marsh-Kept, reed apothecary",
-            "Maren Nine Knots, ferry oathkeeper"
+            "Rusk Marsh-Kept, reconciled householder",
+            "Willa Nine Knots, Free Folk shelterwright"
           ],
           "creatures": [
+            "eelglass toad",
             "ferry cat"
           ],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a hidden bed",
-            "quiet crossing",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Jory Marsh-Kept, reed apothecary"
@@ -1088,14 +1102,14 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed creature crate",
-            "imperial-tagged bog-iron memory loom",
-            "red-thread-patched eelglass eel trap-basket",
-            "red-thread-patched river-reed reed drying-rack",
-            "red-thread-patched willow-bound memory loom"
+            "broken-open river-reed name-whispering perch",
+            "imperial-tagged bog-iron name-whispering perch",
+            "red-thread-patched eelglass remedy bench",
+            "red-thread-patched river-reed creature crate",
+            "red-thread-patched willow-bound menagerie clinic sling"
           ],
           "documents": [
-            "broken-open eelglass creature crate"
+            "broken-open eelglass occupation inspection post"
           ],
           "residents": [],
           "creatures": [],
@@ -1123,11 +1137,11 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron memory loom",
-            "broken-open willow-bound household water-shrine",
-            "red-thread-patched willow-bound creature crate",
-            "silt-furred river-reed reed drying-rack",
-            "votive-ribboned eelglass remedy bench"
+            "broken-open bog-iron eel trap-basket",
+            "broken-open willow-bound reed-rope aviary",
+            "rain-singing willow-bound name-whispering perch",
+            "silt-furred bog-iron household water-shrine",
+            "votive-ribboned eelglass warm shell-bathing trough"
           ],
           "documents": [],
           "residents": [],
@@ -1153,48 +1167,55 @@
             "bone luck-token",
             "bone-tipped harpoon",
             "coil of tarred rope",
-            "flask of whale oil",
+            "hardtack and dried fish",
             "powdered scrimshaw",
             "quartz-veined scrimshaw idol",
-            "skin of storm-ale",
-            "tarred rope harness"
+            "scrimshaw witness-record",
+            "shard of brine-ice",
+            "tarred rope harness",
+            "tide-warning slate",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained whalebone ale-cooling rack",
+            "ale-stained whalebone charter bone-work bench",
             "charter-tagged tarred-oak ale-cooling rack",
             "charter-tagged tarred-oak tale-bench",
-            "frost-rimed ship-brass harpoon winch",
-            "hero-carved ship-brass charter bone-work bench",
-            "hero-carved ship-brass tale-hall hearth",
-            "hero-carved whalebone harpoon winch",
+            "frost-rimed ship-brass witness-cup rack",
+            "hero-carved ship-brass tale-bench",
             "hero-carved whalebone tale-bench",
+            "hero-carved whalebone tale-hall hearth",
             "many-witness tale chair"
           ],
           "documents": [
+            "ale-stained whalebone witness-cup rack",
             "hero-carved tarred-oak tale-hall hearth"
           ],
           "residents": [
             "Aven Cold Wake, whalebone carver",
+            "Aven Gull-Fed, tale-house host",
             "Aven Whale-Debt, harpoon mender",
-            "Kelda Whale-Debt, hall tale-witness",
-            "Osk Whale-Debt, hall tale-witness"
+            "Kelda Whale-Debt, hall tale-witness"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
             "Aven Cold Wake, whalebone carver",
+            "Aven Gull-Fed, tale-house host",
             "Aven Whale-Debt, harpoon mender"
           ],
           "charterOpportunities": [
+            "ale-stained whalebone charter bone-work bench",
+            "ale-stained whalebone witness-cup rack",
             "charter-tagged tarred-oak ale-cooling rack",
-            "charter-tagged tarred-oak tale-bench",
-            "hero-carved ship-brass charter bone-work bench"
+            "charter-tagged tarred-oak tale-bench"
           ],
           "wants": 4,
-          "claimSources": 2,
+          "claimSources": 3,
           "unresolved": []
         }
       ]
@@ -1245,39 +1266,38 @@
           "density": "dense",
           "contextEntities": 14,
           "items": [
-            "bundle of reed pith",
-            "flask of eel oil",
-            "healer\u0027s poultice",
+            "eelglass bead",
             "marsh febrifuge",
             "string of smoked eel"
           ],
           "commodityItems": [],
           "props": [
             "many-notched ferry bell",
-            "rain-singing willow-bound ferry oath-post",
-            "red-thread-patched eelglass eel trap-basket",
-            "silt-furred eelglass ferry oath-post",
-            "silt-furred river-reed household water-shrine",
-            "votive-ribboned bog-iron household water-shrine"
+            "rain-singing willow-bound occupation inspection post",
+            "red-thread-patched eelglass ferry oath-post",
+            "silt-furred eelglass reed drying-rack",
+            "silt-furred river-reed ferry oath-post",
+            "votive-ribboned bog-iron eel trap-basket"
           ],
           "documents": [
-            "broken-open river-reed eel trap-basket",
-            "imperial-tagged bog-iron occupation inspection post"
+            "broken-open river-reed ferry oath-post",
+            "imperial-tagged bog-iron ferry oath-post"
           ],
           "residents": [
+            "Dellan Nine Knots, Free Folk shelterwright",
             "Edda Reed-Memory, reconciled householder",
-            "Fenna Bog-Iron, reed apothecary",
-            "Rowen Drowned-Name, eel-cutter"
+            "Fenna Bog-Iron, reed apothecary"
           ],
           "creatures": [
             "milked bog serpent",
-            "singing frog chorus",
             "tame marsh heron"
           ],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Fenna Bog-Iron, reed apothecary"
@@ -1302,8 +1322,8 @@
             "gold"
           ],
           "props": [
-            "imperial-tagged river-reed remedy bench",
-            "rain-singing willow-bound creature crate",
+            "imperial-tagged river-reed household water-shrine",
+            "rain-singing willow-bound household water-shrine",
             "red-thread-patched willow-bound creature crate",
             "silt-furred river-reed reed drying-rack",
             "votive-ribboned eelglass remedy bench"
@@ -1331,16 +1351,16 @@
           "items": [],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed creature crate",
-            "broken-open willow-bound reed drying-rack",
-            "imperial-tagged eelglass ferry oath-post",
-            "red-thread-patched bog-iron household water-shrine",
-            "votive-ribboned willow-bound household water-shrine",
-            "votive-ribboned willow-bound reed drying-rack"
+            "broken-open river-reed many-diet feed cabinet",
+            "broken-open willow-bound menagerie clinic sling",
+            "imperial-tagged eelglass menagerie clinic sling",
+            "red-thread-patched bog-iron ferry oath-post",
+            "votive-ribboned willow-bound reed-rope aviary",
+            "votive-ribboned willow-bound remedy bench"
           ],
           "documents": [
-            "red-thread-patched willow-bound household water-shrine",
-            "silt-furred eelglass eel trap-basket"
+            "red-thread-patched willow-bound occupation inspection post",
+            "silt-furred eelglass ferry oath-post"
           ],
           "residents": [],
           "creatures": [],
@@ -1362,46 +1382,48 @@
           "density": "dense",
           "contextEntities": 15,
           "items": [
-            "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
-            "flask of whale oil",
+            "carved scrimshaw focus",
+            "hardtack and dried fish",
             "powdered scrimshaw",
+            "shard of brine-ice",
             "skin of storm-ale",
-            "tarred rope harness"
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained tarred-oak ale-cooling rack",
-            "ale-stained tarred-oak charter bone-work bench",
-            "ale-stained whalebone tale-bench",
-            "frost-rimed ship-brass ale-cooling rack",
+            "ale-stained tarred-oak blue whale-oil stove",
+            "charter-tagged whalebone mountain-pass cairn",
+            "frost-rimed ship-brass blue whale-oil stove",
             "frost-rimed whalebone ale-cooling rack",
             "many-witness tale chair",
-            "storm-singing tarred-oak ale-cooling rack",
-            "storm-singing tarred-oak tale-hall hearth",
-            "storm-singing whalebone mountain-pass cairn"
+            "storm-singing tarred-oak communal snowshoe rack",
+            "storm-singing tarred-oak witness-cup rack",
+            "storm-singing whalebone scrimshaw tally-post",
+            "storm-singing whalebone tale-bench"
           ],
           "documents": [
-            "hero-carved ship-brass scrimshaw tally-post",
-            "hero-carved tarred-oak tale-hall hearth",
-            "storm-singing ship-brass tale-bench"
+            "hero-carved ship-brass ale-cooling rack",
+            "hero-carved tarred-oak ale-cooling rack",
+            "storm-singing ship-brass communal snowshoe rack"
           ],
           "residents": [
-            "Frey Oath-Drunk, hall tale-witness",
+            "Eldr Oath-Drunk, hall tale-witness",
             "Ragna Whale-Debt, whalebone carver",
-            "Yrsa Nine Fathoms, harpoon mender"
+            "Yrsa Whale-Debt, tale-house host"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
             "Ragna Whale-Debt, whalebone carver",
-            "Yrsa Nine Fathoms, harpoon mender"
+            "Yrsa Whale-Debt, tale-house host"
           ],
           "charterOpportunities": [
-            "ale-stained tarred-oak charter bone-work bench"
+            "charter-tagged whalebone mountain-pass cairn",
+            "storm-singing ship-brass communal snowshoe rack"
           ],
           "wants": 3,
           "claimSources": 3,
@@ -1456,6 +1478,8 @@
           "contextEntities": 10,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "flask of eel oil",
             "glossy memory thimble",
             "healer\u0027s poultice",
@@ -1465,26 +1489,27 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron ferry oath-post",
-            "broken-open river-reed ferry oath-post",
-            "imperial-tagged eelglass household water-shrine",
-            "imperial-tagged river-reed occupation inspection post",
+            "broken-open bog-iron memory loom",
+            "broken-open river-reed menagerie clinic sling",
+            "imperial-tagged eelglass warm shell-bathing trough",
+            "imperial-tagged river-reed remedy bench",
             "many-notched ferry bell",
-            "rain-singing bog-iron eel trap-basket",
-            "silt-furred river-reed ferry oath-post"
+            "rain-singing bog-iron occupation inspection post",
+            "silt-furred river-reed reed drying-rack"
           ],
           "documents": [],
           "residents": [
             "Gove Marsh-Kept, reed apothecary",
-            "Rowen Heron\u0027s Cousin, shelter-aunt",
-            "Sten Under-Willow, eel-cutter"
+            "Nim Nine Knots, Free Folk shelterwright",
+            "Willa Silt-Hand, reconciled householder"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a hidden bed",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Gove Marsh-Kept, reed apothecary"
@@ -1505,16 +1530,16 @@
           "items": [],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed creature crate",
-            "broken-open willow-bound reed drying-rack",
-            "imperial-tagged eelglass ferry oath-post",
-            "red-thread-patched bog-iron household water-shrine",
-            "votive-ribboned willow-bound household water-shrine",
-            "votive-ribboned willow-bound reed drying-rack"
+            "broken-open river-reed many-diet feed cabinet",
+            "broken-open willow-bound menagerie clinic sling",
+            "imperial-tagged eelglass menagerie clinic sling",
+            "red-thread-patched bog-iron ferry oath-post",
+            "votive-ribboned willow-bound reed-rope aviary",
+            "votive-ribboned willow-bound remedy bench"
           ],
           "documents": [
-            "red-thread-patched willow-bound household water-shrine",
-            "silt-furred eelglass eel trap-basket"
+            "red-thread-patched willow-bound occupation inspection post",
+            "silt-furred eelglass ferry oath-post"
           ],
           "residents": [],
           "creatures": [],
@@ -1542,8 +1567,8 @@
             "gold"
           ],
           "props": [
-            "imperial-tagged river-reed remedy bench",
-            "rain-singing willow-bound creature crate",
+            "imperial-tagged river-reed household water-shrine",
+            "rain-singing willow-bound household water-shrine",
             "red-thread-patched willow-bound creature crate",
             "silt-furred river-reed reed drying-rack",
             "votive-ribboned eelglass remedy bench"
@@ -1572,42 +1597,46 @@
             "bone luck-token",
             "flask of whale oil",
             "moth-pale whalebone charm",
-            "powdered scrimshaw",
             "quartz-veined scrimshaw button",
-            "skin of storm-ale"
+            "skin of storm-ale",
+            "tide-warning slate",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained ship-brass ale-cooling rack",
-            "ale-stained tarred-oak ale-cooling rack",
-            "charter-tagged whalebone scrimshaw tally-post",
-            "charter-tagged whalebone tale-hall hearth",
-            "frost-rimed tarred-oak ale-cooling rack",
-            "frost-rimed whalebone ale-cooling rack",
-            "frost-rimed whalebone tale-bench",
-            "hero-carved whalebone charter bone-work bench",
-            "hero-carved whalebone tale-hall hearth",
+            "ale-stained tarred-oak witness-cup rack",
+            "charter-tagged ship-brass scrimshaw tally-post",
+            "charter-tagged whalebone charter bone-work bench",
+            "charter-tagged whalebone witness-cup rack",
+            "frost-rimed ship-brass bone-runner mountain sledge",
+            "frost-rimed ship-brass tale-bench",
+            "frost-rimed tarred-oak tale-hall hearth",
+            "hero-carved ship-brass blue whale-oil stove",
             "many-witness tale chair"
           ],
           "documents": [
-            "storm-singing whalebone tale-bench"
+            "ale-stained ship-brass tale-bench",
+            "hero-carved tarred-oak scrimshaw tally-post"
           ],
           "residents": [
             "Dagny Three Harpoons, hall tale-witness",
-            "Eldr Three Harpoons, hall tale-witness",
-            "Gunnar Blubber-Rich, whalebone carver"
+            "Gunnar Blubber-Rich, whalebone carver",
+            "Siv Deep-Laugh, tale-house host"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
-            "Gunnar Blubber-Rich, whalebone carver"
+            "Gunnar Blubber-Rich, whalebone carver",
+            "Siv Deep-Laugh, tale-house host"
           ],
           "charterOpportunities": [
-            "charter-tagged whalebone scrimshaw tally-post",
-            "charter-tagged whalebone tale-hall hearth",
-            "hero-carved whalebone charter bone-work bench"
+            "charter-tagged ship-brass scrimshaw tally-post",
+            "charter-tagged whalebone charter bone-work bench",
+            "charter-tagged whalebone witness-cup rack"
           ],
           "wants": 3,
           "claimSources": 2,
@@ -1662,27 +1691,26 @@
           "contextEntities": 10,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
             "chime-tuned memory token",
-            "flask of eel oil",
             "glossy mud button",
-            "healer\u0027s poultice",
             "marsh febrifuge",
             "quartz-veined reeds comb",
             "string of smoked eel"
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron creature crate",
+            "broken-open bog-iron ferry oath-post",
+            "broken-open willow-bound creature crate",
+            "imperial-tagged river-reed reed-rope aviary",
             "many-notched ferry bell",
-            "red-thread-patched river-reed ferry oath-post",
-            "red-thread-patched willow-bound creature crate",
-            "silt-furred river-reed reed drying-rack",
-            "votive-ribboned eelglass remedy bench"
+            "red-thread-patched bog-iron occupation inspection post",
+            "red-thread-patched river-reed eel trap-basket"
           ],
           "documents": [],
           "residents": [
-            "Cressa Bog-Iron, Free Folk lookout",
-            "Maren Under-Willow, Free Folk shelterwright",
+            "Dellan Low Water, reconciled householder",
+            "Lio Under-Willow, Free Folk shelterwright",
             "Tovin Marsh-Kept, reed apothecary"
           ],
           "creatures": [
@@ -1692,7 +1720,6 @@
           "encounterCasts": [],
           "services": [
             "a cache drop",
-            "a watcher\u0027s word",
             "reed remedy",
             "shelter and rest"
           ],
@@ -1715,13 +1742,13 @@
           "items": [],
           "commodityItems": [],
           "props": [
-            "imperial-tagged bog-iron household shelter sign",
-            "rain-singing bog-iron ferry oath-post",
+            "imperial-tagged bog-iron creature crate",
+            "rain-singing bog-iron remedy bench",
             "rain-singing willow-bound reed drying-rack",
             "red-thread-patched bog-iron reed drying-rack",
-            "red-thread-patched river-reed eel trap-basket",
-            "silt-furred willow-bound occupation inspection post",
-            "votive-ribboned willow-bound creature crate"
+            "red-thread-patched river-reed household water-shrine",
+            "silt-furred willow-bound remedy bench",
+            "votive-ribboned willow-bound eel trap-basket"
           ],
           "documents": [],
           "residents": [],
@@ -1750,12 +1777,12 @@
             "gold"
           ],
           "props": [
-            "broken-open river-reed household shelter sign",
-            "imperial-tagged bog-iron eel trap-basket",
-            "imperial-tagged river-reed household water-shrine",
-            "rain-singing river-reed memory loom",
-            "red-thread-patched willow-bound eel trap-basket",
-            "silt-furred bog-iron creature crate"
+            "broken-open river-reed name-whispering perch",
+            "imperial-tagged bog-iron many-diet feed cabinet",
+            "imperial-tagged river-reed reed drying-rack",
+            "rain-singing river-reed creature crate",
+            "red-thread-patched willow-bound warm shell-bathing trough",
+            "silt-furred bog-iron occupation inspection post"
           ],
           "documents": [],
           "residents": [],
@@ -1779,53 +1806,52 @@
           "contextEntities": 18,
           "items": [
             "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
             "flask of whale oil",
             "powdered scrimshaw",
+            "sealskin storm-cloak",
             "skin of storm-ale",
-            "tarred rope harness"
+            "tarred rope harness",
+            "tide-warning slate"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained ship-brass ale-cooling rack",
+            "ale-stained ship-brass communal snowshoe rack",
             "ale-stained whalebone tale-bench",
-            "charter-tagged ship-brass ale-cooling rack",
-            "charter-tagged ship-brass tale-bench",
-            "frost-rimed ship-brass tale-hall hearth",
-            "frost-rimed whalebone charter bone-work bench",
+            "charter-tagged ship-brass communal snowshoe rack",
+            "frost-rimed ship-brass witness-cup rack",
+            "frost-rimed whalebone tale-bench",
+            "hero-carved ship-brass ale-cooling rack",
             "hero-carved ship-brass scrimshaw tally-post",
-            "hero-carved ship-brass tale-bench",
+            "hero-carved ship-brass witness-cup rack",
             "hero-carved tarred-oak tale-bench",
             "many-witness tale chair",
-            "storm-singing whalebone tale-bench",
-            "storm-singing whalebone tale-hall hearth"
+            "storm-singing whalebone communal snowshoe rack",
+            "storm-singing whalebone witness-cup rack"
           ],
           "documents": [
-            "charter-tagged ship-brass tale-hall hearth",
-            "charter-tagged tarred-oak tale-hall hearth",
+            "charter-tagged ship-brass witness-cup rack",
+            "hero-carved ship-brass tale-bench",
             "storm-singing tarred-oak harpoon winch"
           ],
           "residents": [
+            "Brand Nine Fathoms, hall tale-witness",
             "Dagny Nine Fathoms, whalebone carver",
-            "Ragna Bone-Tale, harpoon mender",
-            "Siv Bone-Tale, harpoon mender"
+            "Frey Ale-Oath, tale-house host"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
             "Dagny Nine Fathoms, whalebone carver",
-            "Ragna Bone-Tale, harpoon mender",
-            "Siv Bone-Tale, harpoon mender"
+            "Frey Ale-Oath, tale-house host"
           ],
           "charterOpportunities": [
-            "charter-tagged ship-brass ale-cooling rack",
-            "charter-tagged ship-brass tale-bench",
-            "charter-tagged ship-brass tale-hall hearth",
-            "charter-tagged tarred-oak tale-hall hearth",
-            "frost-rimed whalebone charter bone-work bench"
+            "charter-tagged ship-brass communal snowshoe rack",
+            "charter-tagged ship-brass witness-cup rack",
+            "hero-carved ship-brass tale-bench"
           ],
           "wants": 3,
           "claimSources": 3,
@@ -1879,11 +1905,9 @@
           "density": "moderate",
           "contextEntities": 9,
           "items": [
-            "bundle of reed pith",
-            "flask of eel oil",
-            "healer\u0027s poultice",
-            "marsh febrifuge",
-            "string of smoked eel"
+            "eelglass bead",
+            "handful of memory silt",
+            "marsh febrifuge"
           ],
           "commodityItems": [
             "gold"
@@ -1891,23 +1915,24 @@
           "props": [
             "broken-open willow-bound ferry oath-post",
             "many-notched ferry bell",
-            "red-thread-patched bog-iron memory loom",
-            "red-thread-patched river-reed remedy bench",
-            "silt-furred bog-iron ferry oath-post",
+            "red-thread-patched bog-iron eel trap-basket",
+            "red-thread-patched river-reed creature crate",
+            "silt-furred bog-iron reed-rope aviary",
             "votive-ribboned bog-iron eel trap-basket"
           ],
           "documents": [],
           "residents": [
             "Lio Heron\u0027s Cousin, reed apothecary",
-            "Rowen Bog-Iron, Free Folk runner",
-            "Willa Marsh-Kept, Free Folk lookout"
+            "Maren Marsh-Kept, reconciled householder",
+            "Nim Wet Hem, Free Folk shelterwright"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a watcher\u0027s word",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Lio Heron\u0027s Cousin, reed apothecary"
@@ -1932,12 +1957,12 @@
             "gold"
           ],
           "props": [
-            "broken-open river-reed household shelter sign",
-            "imperial-tagged bog-iron eel trap-basket",
-            "imperial-tagged river-reed household water-shrine",
-            "rain-singing river-reed memory loom",
-            "red-thread-patched willow-bound eel trap-basket",
-            "silt-furred bog-iron creature crate"
+            "broken-open river-reed name-whispering perch",
+            "imperial-tagged bog-iron many-diet feed cabinet",
+            "imperial-tagged river-reed reed drying-rack",
+            "rain-singing river-reed creature crate",
+            "red-thread-patched willow-bound warm shell-bathing trough",
+            "silt-furred bog-iron occupation inspection post"
           ],
           "documents": [],
           "residents": [],
@@ -1962,13 +1987,13 @@
           "items": [],
           "commodityItems": [],
           "props": [
-            "imperial-tagged bog-iron household shelter sign",
-            "rain-singing bog-iron ferry oath-post",
+            "imperial-tagged bog-iron creature crate",
+            "rain-singing bog-iron remedy bench",
             "rain-singing willow-bound reed drying-rack",
             "red-thread-patched bog-iron reed drying-rack",
-            "red-thread-patched river-reed eel trap-basket",
-            "silt-furred willow-bound occupation inspection post",
-            "votive-ribboned willow-bound creature crate"
+            "red-thread-patched river-reed household water-shrine",
+            "silt-furred willow-bound remedy bench",
+            "votive-ribboned willow-bound eel trap-basket"
           ],
           "documents": [],
           "residents": [],
@@ -1991,44 +2016,45 @@
           "density": "dense",
           "contextEntities": 11,
           "items": [
-            "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
             "flask of whale oil",
+            "hardtack and dried fish",
             "hummed-thin harbor token",
             "powdered scrimshaw",
             "rain-dark whalebone vial",
-            "skin of storm-ale",
-            "tarred rope harness"
+            "scrimshaw witness-record",
+            "sealskin storm-cloak",
+            "skin of storm-ale"
           ],
           "commodityItems": [],
           "props": [
             "ale-stained tarred-oak tale-hall hearth",
-            "charter-tagged ship-brass tale-hall hearth",
-            "frost-rimed tarred-oak tale-bench",
-            "frost-rimed whalebone tale-hall hearth",
+            "charter-tagged ship-brass ale-cooling rack",
+            "frost-rimed tarred-oak harbor capstan",
+            "frost-rimed whalebone tale-bench",
             "many-witness tale chair",
-            "storm-singing whalebone tale-bench"
+            "storm-singing whalebone bone-runner mountain sledge"
           ],
           "documents": [
-            "ale-stained ship-brass ale-cooling rack",
-            "frost-rimed ship-brass scrimshaw tally-post"
+            "ale-stained ship-brass witness-cup rack",
+            "frost-rimed ship-brass tale-hall hearth"
           ],
           "residents": [
-            "Dagny Gull-Fed, harpoon mender",
-            "Halla Three Harpoons, hall tale-witness",
+            "Frey Iron Keel, tale-house host",
+            "Gunnar Three Harpoons, hall tale-witness",
             "Vitr Cold Wake, whalebone carver"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
-            "Dagny Gull-Fed, harpoon mender",
+            "Frey Iron Keel, tale-house host",
             "Vitr Cold Wake, whalebone carver"
           ],
           "charterOpportunities": [
-            "charter-tagged ship-brass tale-hall hearth"
+            "charter-tagged ship-brass ale-cooling rack"
           ],
           "wants": 3,
           "claimSources": 3,
@@ -2083,29 +2109,30 @@
           "contextEntities": 13,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "flask of eel oil",
-            "healer\u0027s poultice",
+            "handful of memory silt",
             "marsh febrifuge",
-            "salt-bitten water die",
-            "string of smoked eel"
+            "salt-bitten water die"
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged eelglass occupation inspection post",
+            "imperial-tagged eelglass name-whispering perch",
             "many-notched ferry bell",
-            "rain-singing bog-iron creature crate",
-            "rain-singing eelglass ferry oath-post",
-            "red-thread-patched eelglass occupation inspection post",
-            "silt-furred river-reed creature crate",
+            "rain-singing bog-iron eel trap-basket",
+            "rain-singing eelglass warm shell-bathing trough",
+            "red-thread-patched eelglass ferry oath-post",
+            "silt-furred river-reed eel trap-basket",
             "votive-ribboned willow-bound occupation inspection post"
           ],
           "documents": [
-            "imperial-tagged eelglass ferry oath-post",
-            "votive-ribboned bog-iron ferry oath-post"
+            "imperial-tagged eelglass occupation inspection post",
+            "votive-ribboned bog-iron occupation inspection post"
           ],
           "residents": [
-            "Bael Red Thread, Free Folk runner",
             "Jory Marsh-Kept, reconciled householder",
+            "Jory Red Thread, Free Folk shelterwright",
             "Lio Under-Willow, ferry oathkeeper",
             "Maren Marsh-Kept, reed apothecary"
           ],
@@ -2113,8 +2140,10 @@
           "archetypes": [],
           "encounterCasts": [],
           "services": [
+            "a cache drop",
             "quiet crossing",
-            "reed remedy"
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Maren Marsh-Kept, reed apothecary"
@@ -2135,16 +2164,16 @@
           "items": [],
           "commodityItems": [],
           "props": [
-            "broken-open willow-bound reed drying-rack",
-            "imperial-tagged bog-iron remedy bench",
-            "rain-singing eelglass creature crate",
-            "rain-singing river-reed household shelter sign",
-            "red-thread-patched river-reed eel trap-basket"
+            "broken-open willow-bound menagerie clinic sling",
+            "imperial-tagged bog-iron name-whispering perch",
+            "rain-singing eelglass warm shell-bathing trough",
+            "rain-singing river-reed eel trap-basket",
+            "red-thread-patched river-reed warm shell-bathing trough"
           ],
           "documents": [
-            "red-thread-patched river-reed ferry oath-post",
+            "red-thread-patched river-reed eel trap-basket",
             "silt-furred eelglass eel trap-basket",
-            "votive-ribboned willow-bound ferry oath-post"
+            "votive-ribboned willow-bound menagerie clinic sling"
           ],
           "residents": [],
           "creatures": [],
@@ -2171,21 +2200,21 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron ferry oath-post",
-            "broken-open bog-iron household shelter sign",
-            "broken-open eelglass ferry oath-post",
-            "rain-singing eelglass creature crate",
-            "red-thread-patched eelglass eel trap-basket",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred bog-iron household shelter sign",
-            "silt-furred eelglass eel trap-basket",
-            "silt-furred willow-bound creature crate",
-            "votive-ribboned eelglass occupation inspection post"
+            "broken-open bog-iron memory loom",
+            "broken-open bog-iron warm shell-bathing trough",
+            "broken-open eelglass memory loom",
+            "broken-open eelglass reed-rope aviary",
+            "imperial-tagged river-reed many-diet feed cabinet",
+            "red-thread-patched eelglass reed drying-rack",
+            "red-thread-patched willow-bound menagerie clinic sling",
+            "silt-furred bog-iron remedy bench",
+            "silt-furred willow-bound reed drying-rack",
+            "votive-ribboned eelglass household water-shrine"
           ],
           "documents": [
-            "rain-singing river-reed memory loom",
-            "silt-furred river-reed household shelter sign",
-            "votive-ribboned bog-iron ferry oath-post"
+            "silt-furred river-reed memory loom",
+            "votive-ribboned bog-iron warm shell-bathing trough",
+            "votive-ribboned eelglass remedy bench"
           ],
           "residents": [],
           "creatures": [],
@@ -2207,57 +2236,59 @@
           "density": "dense",
           "contextEntities": 18,
           "items": [
-            "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
-            "flask of whale oil",
+            "carved scrimshaw focus",
+            "hardtack and dried fish",
             "powdered scrimshaw",
+            "sealskin storm-cloak",
             "skin of storm-ale",
-            "tarred rope harness"
+            "tide-warning slate",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained tarred-oak scrimshaw tally-post",
-            "charter-tagged tarred-oak ale-cooling rack",
-            "charter-tagged tarred-oak charter bone-work bench",
-            "charter-tagged tarred-oak tale-hall hearth",
-            "charter-tagged whalebone ale-cooling rack",
+            "ale-stained tarred-oak witness-cup rack",
+            "ale-stained whalebone blue whale-oil stove",
+            "ale-stained whalebone witness-cup rack",
+            "charter-tagged tarred-oak blue whale-oil stove",
+            "charter-tagged tarred-oak bone-runner mountain sledge",
+            "charter-tagged tarred-oak tale-bench",
             "charter-tagged whalebone tale-bench",
-            "frost-rimed ship-brass ale-cooling rack",
-            "hero-carved whalebone charter bone-work bench",
+            "hero-carved whalebone blue whale-oil stove",
+            "hero-carved whalebone tale-bench",
             "hero-carved whalebone tale-hall hearth",
             "many-witness tale chair",
-            "storm-singing tarred-oak tale-hall hearth"
+            "storm-singing ship-brass tale-hall hearth"
           ],
           "documents": [
-            "ale-stained ship-brass ale-cooling rack",
-            "ale-stained tarred-oak ale-cooling rack",
-            "ale-stained tarred-oak mountain-pass cairn",
-            "ale-stained whalebone tale-bench"
+            "ale-stained ship-brass charter bone-work bench",
+            "ale-stained tarred-oak tale-hall hearth",
+            "hero-carved tarred-oak tale-bench"
           ],
           "residents": [
-            "Gunnar Ale-Oath, hall tale-witness",
+            "Frey Ale-Oath, hall tale-witness",
             "Gunnar Whale-Debt, whalebone carver",
-            "Nio Iron Keel, harpoon mender"
+            "Ingr Storm-Sworn, tale-house host"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
             "Gunnar Whale-Debt, whalebone carver",
-            "Nio Iron Keel, harpoon mender"
+            "Ingr Storm-Sworn, tale-house host"
           ],
           "charterOpportunities": [
-            "charter-tagged tarred-oak ale-cooling rack",
-            "charter-tagged tarred-oak charter bone-work bench",
-            "charter-tagged tarred-oak tale-hall hearth",
-            "charter-tagged whalebone ale-cooling rack",
+            "ale-stained ship-brass charter bone-work bench",
+            "charter-tagged tarred-oak blue whale-oil stove",
+            "charter-tagged tarred-oak bone-runner mountain sledge",
+            "charter-tagged tarred-oak tale-bench",
             "charter-tagged whalebone tale-bench",
-            "hero-carved whalebone charter bone-work bench"
+            "hero-carved tarred-oak tale-bench"
           ],
           "wants": 3,
-          "claimSources": 3,
+          "claimSources": 2,
           "unresolved": []
         }
       ]
@@ -2309,28 +2340,29 @@
           "contextEntities": 11,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "ember-warm memory comb",
             "flask of eel oil",
-            "healer\u0027s poultice",
+            "handful of memory silt",
             "ink-stained water sigil-stone",
             "marsh febrifuge",
-            "moth-pale water thimble",
-            "string of smoked eel"
+            "moth-pale water thimble"
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron occupation inspection post",
+            "broken-open bog-iron eel trap-basket",
             "broken-open willow-bound occupation inspection post",
-            "imperial-tagged river-reed household water-shrine",
+            "imperial-tagged river-reed menagerie clinic sling",
             "many-notched ferry bell",
-            "rain-singing river-reed eel trap-basket",
-            "silt-furred bog-iron ferry oath-post",
-            "silt-furred eelglass reed drying-rack"
+            "rain-singing river-reed many-diet feed cabinet",
+            "silt-furred bog-iron creature crate",
+            "silt-furred eelglass memory loom"
           ],
           "documents": [],
           "residents": [
-            "Halsa Heron\u0027s Cousin, Free Folk lookout",
-            "Rusk Wet Hem, ferry oathkeeper",
+            "Maren Silt-Hand, reconciled householder",
+            "Orra Wet Hem, Free Folk shelterwright",
             "Sten Eelwise, reed apothecary"
           ],
           "creatures": [
@@ -2339,9 +2371,9 @@
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a watcher\u0027s word",
-            "quiet crossing",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Sten Eelwise, reed apothecary"
@@ -2365,21 +2397,21 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron ferry oath-post",
-            "broken-open bog-iron household shelter sign",
-            "broken-open eelglass ferry oath-post",
-            "rain-singing eelglass creature crate",
-            "red-thread-patched eelglass eel trap-basket",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred bog-iron household shelter sign",
-            "silt-furred eelglass eel trap-basket",
-            "silt-furred willow-bound creature crate",
-            "votive-ribboned eelglass occupation inspection post"
+            "broken-open bog-iron memory loom",
+            "broken-open bog-iron warm shell-bathing trough",
+            "broken-open eelglass memory loom",
+            "broken-open eelglass reed-rope aviary",
+            "imperial-tagged river-reed many-diet feed cabinet",
+            "red-thread-patched eelglass reed drying-rack",
+            "red-thread-patched willow-bound menagerie clinic sling",
+            "silt-furred bog-iron remedy bench",
+            "silt-furred willow-bound reed drying-rack",
+            "votive-ribboned eelglass household water-shrine"
           ],
           "documents": [
-            "rain-singing river-reed memory loom",
-            "silt-furred river-reed household shelter sign",
-            "votive-ribboned bog-iron ferry oath-post"
+            "silt-furred river-reed memory loom",
+            "votive-ribboned bog-iron warm shell-bathing trough",
+            "votive-ribboned eelglass remedy bench"
           ],
           "residents": [],
           "creatures": [],
@@ -2403,16 +2435,16 @@
           "items": [],
           "commodityItems": [],
           "props": [
-            "broken-open willow-bound reed drying-rack",
-            "imperial-tagged bog-iron remedy bench",
-            "rain-singing eelglass creature crate",
-            "rain-singing river-reed household shelter sign",
-            "red-thread-patched river-reed eel trap-basket"
+            "broken-open willow-bound menagerie clinic sling",
+            "imperial-tagged bog-iron name-whispering perch",
+            "rain-singing eelglass warm shell-bathing trough",
+            "rain-singing river-reed eel trap-basket",
+            "red-thread-patched river-reed warm shell-bathing trough"
           ],
           "documents": [
-            "red-thread-patched river-reed ferry oath-post",
+            "red-thread-patched river-reed eel trap-basket",
             "silt-furred eelglass eel trap-basket",
-            "votive-ribboned willow-bound ferry oath-post"
+            "votive-ribboned willow-bound menagerie clinic sling"
           ],
           "residents": [],
           "creatures": [],
@@ -2434,43 +2466,53 @@
           "density": "dense",
           "contextEntities": 16,
           "items": [
-            "bone luck-token",
+            "bone-tipped harpoon",
+            "carved scrimshaw focus",
             "flask of whale oil",
-            "powdered scrimshaw",
-            "skin of storm-ale"
+            "hardtack and dried fish",
+            "scrimshaw witness-record",
+            "shard of brine-ice",
+            "skin of storm-ale",
+            "tide-warning slate",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained ship-brass tale-bench",
+            "ale-stained ship-brass witness-cup rack",
             "charter-tagged whalebone scrimshaw tally-post",
-            "frost-rimed ship-brass tale-bench",
+            "frost-rimed ship-brass ale-cooling rack",
             "many-witness tale chair",
-            "storm-singing tarred-oak harbor capstan",
-            "storm-singing whalebone tale-hall hearth"
+            "storm-singing tarred-oak ale-cooling rack",
+            "storm-singing whalebone witness-cup rack"
           ],
           "documents": [
-            "ale-stained ship-brass tale-hall hearth",
-            "charter-tagged ship-brass ale-cooling rack",
+            "ale-stained ship-brass ale-cooling rack",
+            "charter-tagged ship-brass tale-bench",
             "hero-carved whalebone charter bone-work bench"
           ],
           "residents": [
-            "Aven Tide-Widow, hall tale-witness",
-            "Bera Tide-Widow, hall tale-witness",
+            "Frey Oath-Drunk, imperial winter factor",
             "Ingr Rope-Scarred, hall tale-witness",
             "Jori Ale-Oath, whalebone carver",
-            "Kelda Rope-Scarred, hall tale-witness",
-            "Osk Rope-Scarred, hall tale-witness",
-            "Yrsa Rope-Scarred, hall tale-witness"
+            "Jori Tide-Widow, tale-house host",
+            "Nio Deep-Laugh, snow-pass guide",
+            "Tor Deep-Laugh, snow-pass guide",
+            "Tor Nine Fathoms, bone-debt caller"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "whale-road guidance",
+            "witness-backed introduction"
+          ],
           "merchants": [
-            "Jori Ale-Oath, whalebone carver"
+            "Frey Oath-Drunk, imperial winter factor",
+            "Jori Ale-Oath, whalebone carver",
+            "Jori Tide-Widow, tale-house host"
           ],
           "charterOpportunities": [
-            "charter-tagged ship-brass ale-cooling rack",
+            "charter-tagged ship-brass tale-bench",
             "charter-tagged whalebone scrimshaw tally-post",
             "hero-carved whalebone charter bone-work bench"
           ],
@@ -2527,10 +2569,12 @@
           "contextEntities": 10,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "flask of eel oil",
             "glossy memory charm",
+            "handful of memory silt",
             "healer\u0027s poultice",
-            "marsh febrifuge",
             "notched ferry token",
             "string of smoked eel"
           ],
@@ -2538,28 +2582,31 @@
           "props": [
             "imperial-tagged bog-iron ferry oath-post",
             "many-notched ferry bell",
-            "rain-singing bog-iron creature crate",
+            "rain-singing bog-iron remedy bench",
             "silt-furred river-reed eel trap-basket",
             "votive-ribboned eelglass household water-shrine"
           ],
           "documents": [
-            "silt-furred bog-iron ferry oath-post"
+            "silt-furred bog-iron household water-shrine"
           ],
           "residents": [
             "Edda Reed-Debt, reconciled householder",
-            "Iven Nine Knots, ferry oathkeeper",
-            "Nim Nine Knots, Free Folk lookout",
+            "Iven Silt-Hand, Free Folk shelterwright",
             "Rowen Wet Hem, reed apothecary"
           ],
-          "creatures": [],
+          "creatures": [
+            "Gove Ferry-Sworn, marsh menagerie-healer"
+          ],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a watcher\u0027s word",
-            "quiet crossing",
-            "reed remedy"
+            "a cache drop",
+            "creature calming",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
+            "Gove Ferry-Sworn, marsh menagerie-healer",
             "Rowen Wet Hem, reed apothecary"
           ],
           "charterOpportunities": [],
@@ -2581,20 +2628,20 @@
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged eelglass household shelter sign",
-            "rain-singing bog-iron occupation inspection post",
-            "rain-singing river-reed memory loom",
-            "rain-singing willow-bound ferry oath-post",
-            "rain-singing willow-bound memory loom",
-            "red-thread-patched bog-iron ferry oath-post",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred bog-iron creature crate",
-            "silt-furred eelglass eel trap-basket",
-            "silt-furred eelglass occupation inspection post"
+            "imperial-tagged eelglass reed drying-rack",
+            "imperial-tagged river-reed many-diet feed cabinet",
+            "rain-singing bog-iron reed drying-rack",
+            "rain-singing willow-bound creature crate",
+            "red-thread-patched bog-iron creature crate",
+            "red-thread-patched willow-bound menagerie clinic sling",
+            "silt-furred bog-iron ferry oath-post",
+            "silt-furred eelglass ferry oath-post",
+            "silt-furred eelglass household shelter sign",
+            "votive-ribboned eelglass remedy bench"
           ],
           "documents": [
-            "silt-furred bog-iron ferry oath-post",
-            "votive-ribboned willow-bound reed drying-rack"
+            "silt-furred bog-iron remedy bench",
+            "votive-ribboned willow-bound name-whispering perch"
           ],
           "residents": [],
           "creatures": [],
@@ -2620,19 +2667,19 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed reed drying-rack",
-            "rain-singing river-reed occupation inspection post",
-            "red-thread-patched bog-iron household shelter sign",
-            "red-thread-patched bog-iron remedy bench",
-            "red-thread-patched willow-bound creature crate",
-            "silt-furred river-reed reed drying-rack",
-            "votive-ribboned bog-iron household shelter sign",
-            "votive-ribboned eelglass remedy bench"
+            "broken-open river-reed creature crate",
+            "broken-open river-reed many-diet feed cabinet",
+            "broken-open willow-bound creature crate",
+            "rain-singing river-reed household water-shrine",
+            "red-thread-patched bog-iron ferry oath-post",
+            "red-thread-patched bog-iron many-diet feed cabinet",
+            "red-thread-patched willow-bound household shelter sign",
+            "votive-ribboned bog-iron reed-rope aviary"
           ],
           "documents": [
-            "rain-singing bog-iron household shelter sign",
-            "red-thread-patched willow-bound ferry oath-post",
-            "votive-ribboned bog-iron remedy bench"
+            "rain-singing bog-iron household water-shrine",
+            "red-thread-patched willow-bound remedy bench",
+            "votive-ribboned bog-iron memory loom"
           ],
           "residents": [],
           "creatures": [],
@@ -2654,46 +2701,51 @@
           "density": "dense",
           "contextEntities": 12,
           "items": [
-            "bone luck-token",
             "bone-tipped harpoon",
+            "carved scrimshaw focus",
             "coil of tarred rope",
             "flask of whale oil",
-            "powdered scrimshaw",
+            "hardtack and dried fish",
+            "sealskin storm-cloak",
+            "shard of brine-ice",
             "skin of storm-ale",
-            "tarred rope harness"
+            "tarred rope harness",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained tarred-oak tale-hall hearth",
-            "charter-tagged tarred-oak charter bone-work bench",
-            "charter-tagged whalebone charter bone-work bench",
-            "frost-rimed tarred-oak tale-hall hearth",
-            "frost-rimed whalebone tale-hall hearth",
-            "hero-carved ship-brass harbor capstan",
+            "ale-stained tarred-oak tale-bench",
+            "charter-tagged tarred-oak blue whale-oil stove",
+            "charter-tagged whalebone harpoon winch",
+            "frost-rimed tarred-oak scrimshaw tally-post",
+            "frost-rimed whalebone tale-bench",
+            "hero-carved ship-brass bone-runner mountain sledge",
             "many-witness tale chair"
           ],
           "documents": [
-            "charter-tagged whalebone tale-hall hearth"
+            "charter-tagged whalebone witness-cup rack"
           ],
           "residents": [
-            "Hakon Tide-Widow, harpoon mender",
             "Jori Tide-Widow, harpoon mender",
+            "Kelda Iron Keel, tale-house host",
             "Osk Three Harpoons, hall tale-witness",
             "Yrsa Bone-Tale, whalebone carver"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
-            "Hakon Tide-Widow, harpoon mender",
             "Jori Tide-Widow, harpoon mender",
+            "Kelda Iron Keel, tale-house host",
             "Yrsa Bone-Tale, whalebone carver"
           ],
           "charterOpportunities": [
-            "charter-tagged tarred-oak charter bone-work bench",
-            "charter-tagged whalebone charter bone-work bench",
-            "charter-tagged whalebone tale-hall hearth"
+            "charter-tagged tarred-oak blue whale-oil stove",
+            "charter-tagged whalebone harpoon winch",
+            "charter-tagged whalebone witness-cup rack"
           ],
           "wants": 4,
           "claimSources": 2,
@@ -2747,34 +2799,31 @@
           "density": "moderate",
           "contextEntities": 9,
           "items": [
-            "bundle of reed pith",
-            "flask of eel oil",
-            "healer\u0027s poultice",
-            "marsh febrifuge",
-            "string of smoked eel"
+            "eelglass bead",
+            "handful of memory silt",
+            "healer\u0027s poultice"
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged river-reed occupation inspection post",
-            "imperial-tagged willow-bound occupation inspection post",
+            "imperial-tagged river-reed ferry oath-post",
+            "imperial-tagged willow-bound reed drying-rack",
             "many-notched ferry bell",
-            "rain-singing eelglass household water-shrine",
-            "votive-ribboned willow-bound household shelter sign"
+            "red-thread-patched willow-bound menagerie clinic sling",
+            "votive-ribboned eelglass remedy bench"
           ],
           "documents": [
-            "red-thread-patched river-reed memory loom"
+            "imperial-tagged river-reed many-diet feed cabinet"
           ],
           "residents": [
+            "Fenna Reed-Memory, reconciled householder",
             "Gove Reed-Debt, reed apothecary",
-            "Rusk Eelwise, ferry oathkeeper",
-            "Wynn Silt-Hand, Free Folk shelterwright"
+            "Kesk Silt-Hand, Free Folk shelterwright"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
             "a cache drop",
-            "quiet crossing",
             "reed remedy",
             "shelter and rest"
           ],
@@ -2799,19 +2848,19 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open river-reed reed drying-rack",
-            "rain-singing river-reed occupation inspection post",
-            "red-thread-patched bog-iron household shelter sign",
-            "red-thread-patched bog-iron remedy bench",
-            "red-thread-patched willow-bound creature crate",
-            "silt-furred river-reed reed drying-rack",
-            "votive-ribboned bog-iron household shelter sign",
-            "votive-ribboned eelglass remedy bench"
+            "broken-open river-reed creature crate",
+            "broken-open river-reed many-diet feed cabinet",
+            "broken-open willow-bound creature crate",
+            "rain-singing river-reed household water-shrine",
+            "red-thread-patched bog-iron ferry oath-post",
+            "red-thread-patched bog-iron many-diet feed cabinet",
+            "red-thread-patched willow-bound household shelter sign",
+            "votive-ribboned bog-iron reed-rope aviary"
           ],
           "documents": [
-            "rain-singing bog-iron household shelter sign",
-            "red-thread-patched willow-bound ferry oath-post",
-            "votive-ribboned bog-iron remedy bench"
+            "rain-singing bog-iron household water-shrine",
+            "red-thread-patched willow-bound remedy bench",
+            "votive-ribboned bog-iron memory loom"
           ],
           "residents": [],
           "creatures": [],
@@ -2838,20 +2887,20 @@
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged eelglass household shelter sign",
-            "rain-singing bog-iron occupation inspection post",
-            "rain-singing river-reed memory loom",
-            "rain-singing willow-bound ferry oath-post",
-            "rain-singing willow-bound memory loom",
-            "red-thread-patched bog-iron ferry oath-post",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred bog-iron creature crate",
-            "silt-furred eelglass eel trap-basket",
-            "silt-furred eelglass occupation inspection post"
+            "imperial-tagged eelglass reed drying-rack",
+            "imperial-tagged river-reed many-diet feed cabinet",
+            "rain-singing bog-iron reed drying-rack",
+            "rain-singing willow-bound creature crate",
+            "red-thread-patched bog-iron creature crate",
+            "red-thread-patched willow-bound menagerie clinic sling",
+            "silt-furred bog-iron ferry oath-post",
+            "silt-furred eelglass ferry oath-post",
+            "silt-furred eelglass household shelter sign",
+            "votive-ribboned eelglass remedy bench"
           ],
           "documents": [
-            "silt-furred bog-iron ferry oath-post",
-            "votive-ribboned willow-bound reed drying-rack"
+            "silt-furred bog-iron remedy bench",
+            "votive-ribboned willow-bound name-whispering perch"
           ],
           "residents": [],
           "creatures": [],
@@ -2877,51 +2926,55 @@
             "bone-tipped harpoon",
             "coil of tarred rope",
             "flask of whale oil",
-            "powdered scrimshaw",
+            "hardtack and dried fish",
             "skin of storm-ale",
-            "tarred rope harness"
+            "tarred rope harness",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
+            "ale-stained tarred-oak communal snowshoe rack",
             "ale-stained whalebone tale-bench",
             "frost-rimed ship-brass ale-cooling rack",
-            "frost-rimed ship-brass tale-bench",
-            "frost-rimed tarred-oak tale-hall hearth",
-            "hero-carved ship-brass tale-bench",
-            "hero-carved tarred-oak harpoon winch",
-            "hero-carved whalebone ale-cooling rack",
-            "hero-carved whalebone tale-hall hearth",
+            "frost-rimed ship-brass blue whale-oil stove",
+            "frost-rimed ship-brass witness-cup rack",
+            "frost-rimed tarred-oak communal snowshoe rack",
+            "hero-carved tarred-oak blue whale-oil stove",
+            "hero-carved whalebone blue whale-oil stove",
+            "hero-carved whalebone witness-cup rack",
             "many-witness tale chair",
-            "storm-singing ship-brass tale-hall hearth",
+            "storm-singing ship-brass blue whale-oil stove",
             "storm-singing tarred-oak tale-hall hearth"
           ],
           "documents": [
-            "ale-stained tarred-oak tale-bench",
-            "hero-carved tarred-oak tale-bench",
-            "storm-singing ship-brass charter bone-work bench",
-            "storm-singing ship-brass tale-bench"
+            "ale-stained tarred-oak witness-cup rack",
+            "storm-singing ship-brass scrimshaw tally-post",
+            "storm-singing ship-brass witness-cup rack"
           ],
           "residents": [
-            "Aven Rope-Scarred, hall tale-witness",
             "Osk Gull-Fed, hall tale-witness",
+            "Osk Whale-Debt, bone-debt caller",
+            "Ragna Ale-Oath, harpoon mender",
+            "Ragna Three Harpoons, tale-house host",
             "Siv Ale-Oath, harpoon mender",
-            "Tor Ale-Oath, harpoon mender",
             "Ulfa Ale-Oath, harpoon mender",
-            "Vitr Rope-Scarred, whalebone carver",
-            "Yrsa Gull-Fed, hall tale-witness"
+            "Vitr Rope-Scarred, whalebone carver"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
+            "Ragna Ale-Oath, harpoon mender",
+            "Ragna Three Harpoons, tale-house host",
             "Siv Ale-Oath, harpoon mender",
-            "Tor Ale-Oath, harpoon mender",
             "Ulfa Ale-Oath, harpoon mender",
             "Vitr Rope-Scarred, whalebone carver"
           ],
           "charterOpportunities": [
-            "storm-singing ship-brass charter bone-work bench"
+            "storm-singing ship-brass scrimshaw tally-post"
           ],
           "wants": 7,
           "claimSources": 3,
@@ -2977,37 +3030,39 @@
           "items": [
             "brass-bright mud bell",
             "bundle of reed pith",
-            "flask of eel oil",
+            "carved bone pet-whistle",
+            "eelglass bead",
+            "handful of memory silt",
             "healer\u0027s poultice",
             "marsh febrifuge",
-            "salt-bitten water reliquary",
-            "string of smoked eel"
+            "salt-bitten water reliquary"
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged eelglass ferry oath-post",
-            "imperial-tagged willow-bound occupation inspection post",
+            "imperial-tagged eelglass name-whispering perch",
+            "imperial-tagged willow-bound creature crate",
             "many-notched ferry bell",
-            "red-thread-patched bog-iron occupation inspection post",
-            "red-thread-patched bog-iron reed drying-rack",
-            "red-thread-patched river-reed household water-shrine",
+            "red-thread-patched bog-iron ferry oath-post",
+            "red-thread-patched bog-iron warm shell-bathing trough",
+            "red-thread-patched river-reed menagerie clinic sling",
             "red-thread-patched river-reed occupation inspection post",
-            "red-thread-patched willow-bound eel trap-basket"
+            "red-thread-patched willow-bound household water-shrine"
           ],
           "documents": [
-            "rain-singing bog-iron household water-shrine"
+            "rain-singing bog-iron eel trap-basket"
           ],
           "residents": [
-            "Halsa Drowned-Name, ferry oathkeeper",
-            "Pella Bog-Iron, Free Folk runner",
+            "Bael Wet Hem, Free Folk shelterwright",
+            "Iven Eelwise, reconciled householder",
             "Tovin Reed-Debt, reed apothecary"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "quiet crossing",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Tovin Reed-Debt, reed apothecary"
@@ -3031,11 +3086,11 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron memory loom",
-            "broken-open river-reed occupation inspection post",
+            "broken-open bog-iron menagerie clinic sling",
+            "broken-open river-reed eel trap-basket",
             "rain-singing eelglass remedy bench",
-            "red-thread-patched bog-iron reed drying-rack",
-            "red-thread-patched willow-bound eel trap-basket"
+            "red-thread-patched bog-iron creature crate",
+            "red-thread-patched willow-bound household shelter sign"
           ],
           "documents": [],
           "residents": [],
@@ -3064,11 +3119,11 @@
           ],
           "commodityItems": [],
           "props": [
-            "rain-singing bog-iron memory loom",
-            "rain-singing river-reed eel trap-basket",
-            "silt-furred willow-bound ferry oath-post",
-            "silt-furred willow-bound household water-shrine",
-            "votive-ribboned willow-bound household shelter sign"
+            "rain-singing bog-iron reed-rope aviary",
+            "rain-singing river-reed household water-shrine",
+            "silt-furred willow-bound creature crate",
+            "silt-furred willow-bound reed drying-rack",
+            "votive-ribboned willow-bound reed drying-rack"
           ],
           "documents": [],
           "residents": [],
@@ -3092,54 +3147,60 @@
           "contextEntities": 15,
           "items": [
             "bone luck-token",
-            "bone-tipped harpoon",
-            "coil of tarred rope",
             "flask of whale oil",
+            "hardtack and dried fish",
+            "healer\u0027s poultice",
             "moth-pale ale reliquary",
-            "powdered scrimshaw",
-            "skin of storm-ale",
-            "tarred rope harness"
+            "sealskin storm-cloak",
+            "shard of brine-ice",
+            "tide-warning slate",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained whalebone tale-hall hearth",
-            "charter-tagged ship-brass tale-hall hearth",
-            "charter-tagged tarred-oak ale-cooling rack",
-            "charter-tagged tarred-oak tale-hall hearth",
-            "charter-tagged whalebone tale-bench",
-            "hero-carved tarred-oak tale-hall hearth",
+            "ale-stained whalebone ale-cooling rack",
+            "ale-stained whalebone harbor capstan",
+            "charter-tagged ship-brass communal snowshoe rack",
+            "charter-tagged tarred-oak communal snowshoe rack",
+            "charter-tagged tarred-oak witness-cup rack",
+            "charter-tagged whalebone scrimshaw tally-post",
+            "hero-carved tarred-oak witness-cup rack",
             "many-witness tale chair",
             "storm-singing tarred-oak tale-hall hearth"
           ],
           "documents": [
-            "ale-stained whalebone harbor capstan",
-            "charter-tagged tarred-oak charter bone-work bench"
+            "ale-stained whalebone tale-bench"
           ],
           "residents": [
+            "Aven Cold Wake, hall tale-witness",
             "Bera Bone-Tale, whalebone carver",
-            "Bera Cold Wake, hall tale-witness",
-            "Bera Storm-Sworn, harpoon mender",
-            "Jori Cold Wake, hall tale-witness",
-            "Yrsa Ale-Oath, harpoon mender"
+            "Halla Gull-Fed, imperial winter factor",
+            "Halla Storm-Sworn, tale-house host",
+            "Nio Cold Wake, cold-salve keeper"
           ],
           "creatures": [],
-          "archetypes": [],
+          "archetypes": [
+            "cold_salve_keeper"
+          ],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "cold-salve treatment",
+            "witness-backed introduction"
+          ],
           "merchants": [
             "Bera Bone-Tale, whalebone carver",
-            "Bera Storm-Sworn, harpoon mender",
-            "Yrsa Ale-Oath, harpoon mender"
+            "Halla Gull-Fed, imperial winter factor",
+            "Halla Storm-Sworn, tale-house host",
+            "Nio Cold Wake, cold-salve keeper"
           ],
           "charterOpportunities": [
-            "charter-tagged ship-brass tale-hall hearth",
-            "charter-tagged tarred-oak ale-cooling rack",
-            "charter-tagged tarred-oak charter bone-work bench",
-            "charter-tagged tarred-oak tale-hall hearth",
-            "charter-tagged whalebone tale-bench"
+            "charter-tagged ship-brass communal snowshoe rack",
+            "charter-tagged tarred-oak communal snowshoe rack",
+            "charter-tagged tarred-oak witness-cup rack",
+            "charter-tagged whalebone scrimshaw tally-post"
           ],
           "wants": 5,
-          "claimSources": 2,
+          "claimSources": 1,
           "unresolved": []
         }
       ]
@@ -3190,41 +3251,41 @@
           "density": "dense",
           "contextEntities": 17,
           "items": [
-            "bundle of reed pith",
-            "flask of eel oil",
+            "eelglass bead",
+            "handful of memory silt",
             "healer\u0027s poultice",
-            "marsh febrifuge",
-            "string of smoked eel"
+            "marsh febrifuge"
           ],
           "commodityItems": [],
           "props": [
-            "broken-open eelglass eel trap-basket",
-            "broken-open river-reed occupation inspection post",
-            "imperial-tagged bog-iron ferry oath-post",
+            "broken-open eelglass occupation inspection post",
+            "broken-open river-reed reed drying-rack",
+            "broken-open willow-bound creature crate",
+            "imperial-tagged river-reed reed-rope aviary",
             "many-notched ferry bell",
             "rain-singing river-reed occupation inspection post",
-            "red-thread-patched river-reed reed drying-rack",
+            "red-thread-patched bog-iron occupation inspection post",
+            "red-thread-patched river-reed ferry oath-post",
             "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred eelglass occupation inspection post",
-            "silt-furred river-reed eel trap-basket",
-            "votive-ribboned eelglass ferry oath-post",
-            "votive-ribboned eelglass household water-shrine"
+            "silt-furred eelglass household shelter sign",
+            "votive-ribboned eelglass warm shell-bathing trough"
           ],
           "documents": [],
           "residents": [
-            "Halsa Rushlight, ferry oathkeeper",
             "Jory Low Water, reed apothecary",
-            "Jory Rushlight, ferry oathkeeper"
+            "Kesk Reed-Debt, reconciled householder",
+            "Kesk Reed-Memory, Free Folk shelterwright"
           ],
           "creatures": [
-            "eelhound",
+            "mudlark ape",
             "reed otter"
           ],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "quiet crossing",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Jory Low Water, reed apothecary"
@@ -3249,11 +3310,11 @@
           ],
           "commodityItems": [],
           "props": [
-            "rain-singing bog-iron memory loom",
-            "rain-singing river-reed eel trap-basket",
-            "silt-furred willow-bound ferry oath-post",
-            "silt-furred willow-bound household water-shrine",
-            "votive-ribboned willow-bound household shelter sign"
+            "rain-singing bog-iron reed-rope aviary",
+            "rain-singing river-reed household water-shrine",
+            "silt-furred willow-bound creature crate",
+            "silt-furred willow-bound reed drying-rack",
+            "votive-ribboned willow-bound reed drying-rack"
           ],
           "documents": [],
           "residents": [],
@@ -3281,11 +3342,11 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron memory loom",
-            "broken-open river-reed occupation inspection post",
+            "broken-open bog-iron menagerie clinic sling",
+            "broken-open river-reed eel trap-basket",
             "rain-singing eelglass remedy bench",
-            "red-thread-patched bog-iron reed drying-rack",
-            "red-thread-patched willow-bound eel trap-basket"
+            "red-thread-patched bog-iron creature crate",
+            "red-thread-patched willow-bound household shelter sign"
           ],
           "documents": [],
           "residents": [],
@@ -3309,40 +3370,44 @@
           "contextEntities": 13,
           "items": [
             "bone luck-token",
+            "carved scrimshaw focus",
             "flask of whale oil",
-            "powdered scrimshaw",
-            "skin of storm-ale"
+            "hardtack and dried fish",
+            "tide-warning slate"
           ],
           "commodityItems": [
             "gold"
           ],
           "props": [
-            "ale-stained ship-brass ale-cooling rack",
-            "ale-stained whalebone tale-bench",
-            "charter-tagged tarred-oak tale-bench",
-            "frost-rimed ship-brass ale-cooling rack",
-            "frost-rimed tarred-oak scrimshaw tally-post",
-            "hero-carved tarred-oak harpoon winch",
+            "ale-stained ship-brass tale-hall hearth",
+            "ale-stained whalebone communal snowshoe rack",
+            "ale-stained whalebone witness-cup rack",
+            "charter-tagged tarred-oak communal snowshoe rack",
+            "frost-rimed tarred-oak tale-hall hearth",
+            "hero-carved tarred-oak communal snowshoe rack",
+            "hero-carved tarred-oak scrimshaw tally-post",
             "hero-carved tarred-oak tale-bench",
             "many-witness tale chair",
-            "storm-singing tarred-oak tale-hall hearth",
-            "storm-singing whalebone scrimshaw tally-post"
+            "storm-singing ship-brass tale-hall hearth"
           ],
           "documents": [],
           "residents": [
+            "Brand Storm-Sworn, tale-house host",
             "Hakon Iron Keel, whalebone carver",
-            "Tor Rope-Scarred, hall tale-witness",
-            "Ulfa Rope-Scarred, hall tale-witness"
+            "Tor Rope-Scarred, hall tale-witness"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
+            "Brand Storm-Sworn, tale-house host",
             "Hakon Iron Keel, whalebone carver"
           ],
           "charterOpportunities": [
-            "charter-tagged tarred-oak tale-bench"
+            "charter-tagged tarred-oak communal snowshoe rack"
           ],
           "wants": 3,
           "claimSources": 1,
@@ -3396,10 +3461,10 @@
           "density": "dense",
           "contextEntities": 10,
           "items": [
-            "bundle of reed pith",
+            "carved bone pet-whistle",
             "chime-tuned mud die",
             "flask of eel oil",
-            "healer\u0027s poultice",
+            "handful of memory silt",
             "marsh febrifuge",
             "moth-pale memory sigil-stone",
             "string of smoked eel"
@@ -3407,24 +3472,26 @@
           "commodityItems": [],
           "props": [
             "imperial-tagged willow-bound ferry oath-post",
+            "imperial-tagged willow-bound reed drying-rack",
             "many-notched ferry bell",
-            "rain-singing bog-iron creature crate",
-            "rain-singing river-reed ferry oath-post",
-            "rain-singing willow-bound occupation inspection post",
-            "silt-furred eelglass household water-shrine",
-            "silt-furred river-reed reed drying-rack"
+            "rain-singing river-reed eel trap-basket",
+            "rain-singing willow-bound eel trap-basket",
+            "silt-furred eelglass creature crate",
+            "silt-furred river-reed occupation inspection post"
           ],
           "documents": [],
           "residents": [
-            "Bael Reed-Memory, eel-cutter",
             "Fenna Rushlight, reed apothecary",
-            "Halsa Red Thread, reconciled householder"
+            "Jory Red Thread, reconciled householder",
+            "Wynn Silt-Hand, Free Folk shelterwright"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Fenna Rushlight, reed apothecary"
@@ -3449,11 +3516,11 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron household shelter sign",
-            "rain-singing river-reed memory loom",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred eelglass eel trap-basket",
-            "votive-ribboned willow-bound ferry oath-post"
+            "broken-open bog-iron memory loom",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned eelglass remedy bench",
+            "votive-ribboned willow-bound name-whispering perch"
           ],
           "documents": [],
           "residents": [],
@@ -3482,16 +3549,16 @@
             "gold"
           ],
           "props": [
-            "broken-open bog-iron remedy bench",
-            "broken-open river-reed ferry oath-post",
-            "broken-open river-reed household water-shrine",
-            "imperial-tagged willow-bound household water-shrine",
-            "red-thread-patched eelglass household water-shrine",
+            "broken-open bog-iron creature crate",
+            "broken-open river-reed menagerie clinic sling",
+            "broken-open river-reed remedy bench",
+            "imperial-tagged willow-bound eel trap-basket",
+            "red-thread-patched eelglass creature crate",
             "silt-furred river-reed eel trap-basket",
-            "silt-furred river-reed remedy bench"
+            "silt-furred river-reed ferry oath-post"
           ],
           "documents": [
-            "silt-furred willow-bound memory loom"
+            "silt-furred willow-bound household water-shrine"
           ],
           "residents": [],
           "creatures": [
@@ -3516,38 +3583,44 @@
           "contextEntities": 10,
           "items": [
             "bone luck-token",
-            "flask of whale oil",
+            "hardtack and dried fish",
             "powdered scrimshaw",
+            "scrimshaw witness-record",
+            "sealskin storm-cloak",
+            "shard of brine-ice",
             "skin of storm-ale"
           ],
           "commodityItems": [
             "gold"
           ],
           "props": [
-            "ale-stained whalebone tale-hall hearth",
-            "frost-rimed ship-brass scrimshaw tally-post",
+            "ale-stained whalebone witness-cup rack",
+            "frost-rimed ship-brass communal snowshoe rack",
             "many-witness tale chair",
-            "storm-singing ship-brass tale-hall hearth",
-            "storm-singing tarred-oak tale-bench"
+            "storm-singing ship-brass ale-cooling rack",
+            "storm-singing tarred-oak witness-cup rack"
           ],
           "documents": [
-            "charter-tagged tarred-oak harbor capstan",
-            "hero-carved tarred-oak tale-hall hearth"
+            "charter-tagged tarred-oak ale-cooling rack",
+            "hero-carved tarred-oak ale-cooling rack"
           ],
           "residents": [
             "Gunnar Blubber-Rich, hall tale-witness",
-            "Halla Blubber-Rich, hall tale-witness",
+            "Ragna Iron Keel, tale-house host",
             "Yrsa Rope-Scarred, whalebone carver"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
+            "Ragna Iron Keel, tale-house host",
             "Yrsa Rope-Scarred, whalebone carver"
           ],
           "charterOpportunities": [
-            "charter-tagged tarred-oak harbor capstan"
+            "charter-tagged tarred-oak ale-cooling rack"
           ],
           "wants": 3,
           "claimSources": 2,
@@ -3603,31 +3676,30 @@
           "items": [
             "brass-bright reeds button",
             "bundle of reed pith",
-            "flask of eel oil",
-            "healer\u0027s poultice",
+            "eelglass bead",
             "marsh febrifuge",
             "string of smoked eel"
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged bog-iron ferry oath-post",
-            "imperial-tagged eelglass occupation inspection post",
-            "imperial-tagged willow-bound ferry oath-post",
+            "imperial-tagged eelglass creature crate",
+            "imperial-tagged willow-bound creature crate",
             "many-notched ferry bell",
-            "rain-singing river-reed reed drying-rack",
+            "rain-singing river-reed reed-rope aviary",
+            "rain-singing willow-bound name-whispering perch",
             "red-thread-patched willow-bound household shelter sign",
-            "red-thread-patched willow-bound occupation inspection post",
-            "silt-furred river-reed eel trap-basket",
-            "votive-ribboned eelglass household water-shrine"
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred bog-iron household water-shrine",
+            "votive-ribboned eelglass warm shell-bathing trough"
           ],
           "documents": [
-            "rain-singing river-reed ferry oath-post",
-            "silt-furred bog-iron creature crate"
+            "rain-singing river-reed many-diet feed cabinet",
+            "silt-furred bog-iron household shelter sign"
           ],
           "residents": [
-            "Iven Eelwise, Free Folk lookout",
             "Lio Drowned-Name, reed apothecary",
-            "Nim Eelwise, Free Folk lookout"
+            "Nim Nine Knots, reconciled householder",
+            "Rowen Bog-Iron, Free Folk shelterwright"
           ],
           "creatures": [
             "mudlark ape"
@@ -3635,8 +3707,9 @@
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a watcher\u0027s word",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Lio Drowned-Name, reed apothecary"
@@ -3661,16 +3734,16 @@
             "gold"
           ],
           "props": [
-            "broken-open bog-iron remedy bench",
-            "broken-open river-reed ferry oath-post",
-            "broken-open river-reed household water-shrine",
-            "imperial-tagged willow-bound household water-shrine",
-            "red-thread-patched eelglass household water-shrine",
+            "broken-open bog-iron creature crate",
+            "broken-open river-reed menagerie clinic sling",
+            "broken-open river-reed remedy bench",
+            "imperial-tagged willow-bound eel trap-basket",
+            "red-thread-patched eelglass creature crate",
             "silt-furred river-reed eel trap-basket",
-            "silt-furred river-reed remedy bench"
+            "silt-furred river-reed ferry oath-post"
           ],
           "documents": [
-            "silt-furred willow-bound memory loom"
+            "silt-furred willow-bound household water-shrine"
           ],
           "residents": [],
           "creatures": [
@@ -3700,11 +3773,11 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron household shelter sign",
-            "rain-singing river-reed memory loom",
-            "red-thread-patched willow-bound reed drying-rack",
-            "silt-furred eelglass eel trap-basket",
-            "votive-ribboned willow-bound ferry oath-post"
+            "broken-open bog-iron memory loom",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned eelglass remedy bench",
+            "votive-ribboned willow-bound name-whispering perch"
           ],
           "documents": [],
           "residents": [],
@@ -3731,37 +3804,43 @@
             "carved scrimshaw focus",
             "crooked harbor reliquary",
             "flask of whale oil",
+            "hardtack and dried fish",
             "powdered scrimshaw",
-            "skin of storm-ale"
+            "shard of brine-ice",
+            "skin of storm-ale",
+            "tide-warning slate"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained tarred-oak tale-bench",
+            "ale-stained tarred-oak tale-hall hearth",
             "ale-stained whalebone tale-bench",
-            "charter-tagged ship-brass mountain-pass cairn",
+            "charter-tagged ship-brass scrimshaw tally-post",
             "hero-carved ship-brass scrimshaw tally-post",
-            "hero-carved tarred-oak tale-bench",
-            "hero-carved whalebone harpoon winch",
-            "hero-carved whalebone mountain-pass cairn",
+            "hero-carved tarred-oak bone-runner mountain sledge",
+            "hero-carved whalebone tale-bench",
+            "hero-carved whalebone witness-cup rack",
             "many-witness tale chair",
-            "storm-singing tarred-oak ale-cooling rack",
+            "storm-singing tarred-oak communal snowshoe rack",
             "storm-singing tarred-oak harpoon winch"
           ],
           "documents": [],
           "residents": [
+            "Bera Bone-Tale, tale-house host",
             "Gunnar Cold Wake, hall tale-witness",
-            "Halla Cold Wake, hall tale-witness",
             "Kelda Gull-Fed, whalebone carver"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
+            "Bera Bone-Tale, tale-house host",
             "Kelda Gull-Fed, whalebone carver"
           ],
           "charterOpportunities": [
-            "charter-tagged ship-brass mountain-pass cairn"
+            "charter-tagged ship-brass scrimshaw tally-post"
           ],
           "wants": 3,
           "claimSources": 1,
@@ -3816,10 +3895,10 @@
           "contextEntities": 10,
           "items": [
             "bundle of reed pith",
+            "carved bone pet-whistle",
+            "eelglass bead",
             "ember-warm reeds vial",
             "flask of eel oil",
-            "healer\u0027s poultice",
-            "marsh febrifuge",
             "quartz-veined mud charm",
             "string of smoked eel"
           ],
@@ -3827,18 +3906,18 @@
             "gold"
           ],
           "props": [
-            "broken-open bog-iron creature crate",
-            "imperial-tagged eelglass eel trap-basket",
+            "broken-open bog-iron reed drying-rack",
+            "broken-open river-reed many-diet feed cabinet",
+            "broken-open willow-bound creature crate",
+            "imperial-tagged eelglass creature crate",
             "many-notched ferry bell",
-            "rain-singing eelglass household water-shrine",
-            "red-thread-patched river-reed memory loom",
-            "votive-ribboned willow-bound household shelter sign"
+            "red-thread-patched willow-bound household shelter sign"
           ],
           "documents": [],
           "residents": [
-            "Halsa Bog-Iron, reconciled householder",
             "Halsa Red Thread, reed apothecary",
-            "Jory Bog-Iron, reconciled householder"
+            "Jory Bog-Iron, reconciled householder",
+            "Sella Marsh-Kept, Free Folk shelterwright"
           ],
           "creatures": [
             "eelhound"
@@ -3846,7 +3925,9 @@
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Halsa Red Thread, reed apothecary"
@@ -3869,19 +3950,19 @@
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged bog-iron ferry oath-post",
-            "imperial-tagged bog-iron memory loom",
-            "imperial-tagged bog-iron remedy bench",
+            "imperial-tagged bog-iron many-diet feed cabinet",
             "imperial-tagged eelglass reed drying-rack",
-            "silt-furred bog-iron occupation inspection post",
-            "silt-furred river-reed eel trap-basket"
+            "red-thread-patched willow-bound menagerie clinic sling",
+            "silt-furred bog-iron remedy bench",
+            "silt-furred river-reed menagerie clinic sling",
+            "votive-ribboned eelglass remedy bench"
           ],
           "documents": [
-            "broken-open eelglass reed drying-rack",
+            "broken-open eelglass ferry oath-post",
             "imperial-tagged bog-iron creature crate",
-            "rain-singing eelglass ferry oath-post",
-            "votive-ribboned eelglass household water-shrine",
-            "votive-ribboned willow-bound remedy bench"
+            "imperial-tagged river-reed many-diet feed cabinet",
+            "rain-singing eelglass household water-shrine",
+            "votive-ribboned willow-bound eel trap-basket"
           ],
           "residents": [],
           "creatures": [
@@ -3910,15 +3991,15 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open willow-bound household shelter sign",
-            "rain-singing eelglass household shelter sign",
-            "red-thread-patched river-reed memory loom",
-            "votive-ribboned willow-bound household shelter sign"
+            "broken-open willow-bound name-whispering perch",
+            "rain-singing eelglass reed-rope aviary",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack"
           ],
           "documents": [
-            "imperial-tagged river-reed eel trap-basket",
-            "rain-singing eelglass household water-shrine",
-            "silt-furred bog-iron household shelter sign"
+            "imperial-tagged river-reed memory loom",
+            "silt-furred bog-iron household shelter sign",
+            "votive-ribboned eelglass remedy bench"
           ],
           "residents": [],
           "creatures": [],
@@ -3942,44 +4023,49 @@
           "items": [
             "bone luck-token",
             "bone-tipped harpoon",
+            "carved scrimshaw focus",
             "coil of tarred rope",
             "flask of whale oil",
-            "powdered scrimshaw",
+            "hardtack and dried fish",
+            "shard of brine-ice",
             "skin of storm-ale",
-            "tarred rope harness"
+            "tarred rope harness",
+            "tide-warning slate"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained tarred-oak tale-bench",
-            "charter-tagged whalebone scrimshaw tally-post",
-            "hero-carved ship-brass tale-bench",
-            "hero-carved tarred-oak harpoon winch",
-            "hero-carved whalebone charter bone-work bench",
-            "hero-carved whalebone tale-bench",
+            "ale-stained ship-brass ale-cooling rack",
+            "ale-stained whalebone tale-hall hearth",
+            "charter-tagged whalebone charter bone-work bench",
+            "frost-rimed ship-brass bone-runner mountain sledge",
+            "frost-rimed ship-brass tale-hall hearth",
+            "frost-rimed tarred-oak tale-hall hearth",
+            "hero-carved tarred-oak scrimshaw tally-post",
             "many-witness tale chair",
-            "storm-singing ship-brass tale-bench",
-            "storm-singing tarred-oak tale-hall hearth"
+            "storm-singing whalebone blue whale-oil stove"
           ],
           "documents": [],
           "residents": [
+            "Eldr Oath-Drunk, tale-house host",
             "Gunnar Oath-Drunk, whalebone carver",
             "Ragna Ale-Oath, hall tale-witness",
-            "Ragna Tarhand, harpoon mender",
-            "Tor Ale-Oath, hall tale-witness",
-            "Tor Tarhand, harpoon mender"
+            "Siv Nine Fathoms, snow-pass guide",
+            "Siv Tarhand, harpoon mender"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "whale-road guidance",
+            "witness-backed introduction"
+          ],
           "merchants": [
+            "Eldr Oath-Drunk, tale-house host",
             "Gunnar Oath-Drunk, whalebone carver",
-            "Ragna Tarhand, harpoon mender",
-            "Tor Tarhand, harpoon mender"
+            "Siv Tarhand, harpoon mender"
           ],
           "charterOpportunities": [
-            "charter-tagged whalebone scrimshaw tally-post",
-            "hero-carved whalebone charter bone-work bench"
+            "charter-tagged whalebone charter bone-work bench"
           ],
           "wants": 5,
           "claimSources": 1,
@@ -4034,32 +4120,34 @@
           "contextEntities": 10,
           "items": [
             "bundle of reed pith",
-            "flask of eel oil",
+            "carved bone pet-whistle",
             "healer\u0027s poultice",
             "marsh febrifuge",
             "string of smoked eel"
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged bog-iron ferry oath-post",
+            "imperial-tagged bog-iron eel trap-basket",
             "many-notched ferry bell",
-            "rain-singing eelglass ferry oath-post",
+            "rain-singing eelglass household shelter sign",
             "rain-singing willow-bound occupation inspection post",
-            "red-thread-patched willow-bound ferry oath-post",
+            "red-thread-patched willow-bound memory loom",
             "silt-furred bog-iron occupation inspection post",
-            "silt-furred bog-iron reed drying-rack"
+            "silt-furred bog-iron reed-rope aviary"
           ],
           "documents": [],
           "residents": [
-            "Bael Heron\u0027s Cousin, reconciled householder",
             "Bael Under-Willow, reed apothecary",
-            "Rowen Silt-Hand, eel-cutter"
+            "Cressa Heron\u0027s Cousin, reconciled householder",
+            "Kesk Wet Hem, Free Folk shelterwright"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Bael Under-Willow, reed apothecary"
@@ -4083,15 +4171,15 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open willow-bound household shelter sign",
-            "rain-singing eelglass household shelter sign",
-            "red-thread-patched river-reed memory loom",
-            "votive-ribboned willow-bound household shelter sign"
+            "broken-open willow-bound name-whispering perch",
+            "rain-singing eelglass reed-rope aviary",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack"
           ],
           "documents": [
-            "imperial-tagged river-reed eel trap-basket",
-            "rain-singing eelglass household water-shrine",
-            "silt-furred bog-iron household shelter sign"
+            "imperial-tagged river-reed memory loom",
+            "silt-furred bog-iron household shelter sign",
+            "votive-ribboned eelglass remedy bench"
           ],
           "residents": [],
           "creatures": [],
@@ -4117,19 +4205,19 @@
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged bog-iron ferry oath-post",
-            "imperial-tagged bog-iron memory loom",
-            "imperial-tagged bog-iron remedy bench",
+            "imperial-tagged bog-iron many-diet feed cabinet",
             "imperial-tagged eelglass reed drying-rack",
-            "silt-furred bog-iron occupation inspection post",
-            "silt-furred river-reed eel trap-basket"
+            "red-thread-patched willow-bound menagerie clinic sling",
+            "silt-furred bog-iron remedy bench",
+            "silt-furred river-reed menagerie clinic sling",
+            "votive-ribboned eelglass remedy bench"
           ],
           "documents": [
-            "broken-open eelglass reed drying-rack",
+            "broken-open eelglass ferry oath-post",
             "imperial-tagged bog-iron creature crate",
-            "rain-singing eelglass ferry oath-post",
-            "votive-ribboned eelglass household water-shrine",
-            "votive-ribboned willow-bound remedy bench"
+            "imperial-tagged river-reed many-diet feed cabinet",
+            "rain-singing eelglass household water-shrine",
+            "votive-ribboned willow-bound eel trap-basket"
           ],
           "residents": [],
           "creatures": [
@@ -4154,40 +4242,46 @@
           "contextEntities": 12,
           "items": [
             "bone luck-token",
+            "carved scrimshaw focus",
             "flask of whale oil",
+            "hardtack and dried fish",
             "hummed-thin ale sigil-stone",
-            "powdered scrimshaw",
+            "scrimshaw witness-record",
+            "sealskin storm-cloak",
             "skin of storm-ale"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained ship-brass ale-cooling rack",
-            "ale-stained ship-brass tale-hall hearth",
-            "charter-tagged tarred-oak ale-cooling rack",
+            "ale-stained ship-brass communal snowshoe rack",
+            "ale-stained ship-brass harbor capstan",
+            "charter-tagged tarred-oak scrimshaw tally-post",
             "charter-tagged tarred-oak tale-bench",
-            "hero-carved tarred-oak ale-cooling rack",
+            "hero-carved tarred-oak tale-bench",
             "many-witness tale chair",
-            "storm-singing tarred-oak tale-bench",
-            "storm-singing whalebone tale-bench"
+            "storm-singing tarred-oak harpoon winch",
+            "storm-singing whalebone harpoon winch"
           ],
           "documents": [
-            "charter-tagged ship-brass mountain-pass cairn"
+            "charter-tagged ship-brass tale-bench"
           ],
           "residents": [
             "Halla Blubber-Rich, whalebone carver",
             "Ingr Oath-Drunk, hall tale-witness",
-            "Kelda Oath-Drunk, hall tale-witness"
+            "Tor Oath-Drunk, tale-house host"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "witness-backed introduction"
+          ],
           "merchants": [
-            "Halla Blubber-Rich, whalebone carver"
+            "Halla Blubber-Rich, whalebone carver",
+            "Tor Oath-Drunk, tale-house host"
           ],
           "charterOpportunities": [
-            "charter-tagged ship-brass mountain-pass cairn",
-            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged ship-brass tale-bench",
+            "charter-tagged tarred-oak scrimshaw tally-post",
             "charter-tagged tarred-oak tale-bench"
           ],
           "wants": 3,
@@ -4252,27 +4346,28 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open bog-iron household shelter sign",
+            "broken-open bog-iron occupation inspection post",
+            "broken-open willow-bound creature crate",
+            "imperial-tagged river-reed reed-rope aviary",
             "many-notched ferry bell",
-            "rain-singing bog-iron ferry oath-post",
-            "rain-singing eelglass ferry oath-post",
-            "rain-singing eelglass household water-shrine",
-            "red-thread-patched river-reed memory loom",
-            "votive-ribboned eelglass occupation inspection post",
-            "votive-ribboned willow-bound household shelter sign"
+            "rain-singing bog-iron menagerie clinic sling",
+            "rain-singing eelglass occupation inspection post",
+            "red-thread-patched bog-iron occupation inspection post",
+            "votive-ribboned eelglass many-diet feed cabinet"
           ],
           "documents": [],
           "residents": [
             "Edda Nine Knots, reconciled householder",
-            "Fenna Reed-Debt, reed apothecary",
-            "Halsa Marsh-Kept, shelter-aunt"
+            "Edda Under-Willow, Free Folk shelterwright",
+            "Fenna Reed-Debt, reed apothecary"
           ],
           "creatures": [],
           "archetypes": [],
           "encounterCasts": [],
           "services": [
-            "a hidden bed",
-            "reed remedy"
+            "a cache drop",
+            "reed remedy",
+            "shelter and rest"
           ],
           "merchants": [
             "Fenna Reed-Debt, reed apothecary"
@@ -4295,18 +4390,18 @@
           ],
           "commodityItems": [],
           "props": [
-            "imperial-tagged river-reed creature crate",
-            "rain-singing eelglass household water-shrine",
-            "red-thread-patched eelglass creature crate",
+            "imperial-tagged river-reed household water-shrine",
+            "imperial-tagged river-reed many-diet feed cabinet",
+            "rain-singing eelglass many-diet feed cabinet",
             "red-thread-patched eelglass memory loom",
-            "red-thread-patched willow-bound creature crate",
-            "silt-furred bog-iron household shelter sign",
-            "silt-furred river-reed reed drying-rack",
-            "silt-furred willow-bound household water-shrine",
+            "red-thread-patched eelglass reed drying-rack",
+            "red-thread-patched willow-bound menagerie clinic sling",
+            "silt-furred bog-iron eel trap-basket",
+            "silt-furred willow-bound household shelter sign",
             "votive-ribboned eelglass remedy bench"
           ],
           "documents": [
-            "silt-furred eelglass memory loom"
+            "silt-furred eelglass reed drying-rack"
           ],
           "residents": [],
           "creatures": [
@@ -4335,13 +4430,13 @@
           ],
           "commodityItems": [],
           "props": [
-            "broken-open eelglass household shelter sign",
-            "broken-open willow-bound ferry oath-post",
-            "rain-singing river-reed occupation inspection post",
+            "broken-open eelglass memory loom",
+            "broken-open willow-bound household shelter sign",
+            "rain-singing river-reed ferry oath-post",
             "red-thread-patched eelglass occupation inspection post"
           ],
           "documents": [
-            "silt-furred river-reed household shelter sign"
+            "silt-furred river-reed reed-rope aviary"
           ],
           "residents": [],
           "creatures": [
@@ -4369,54 +4464,62 @@
             "bone-tipped harpoon",
             "coil of tarred rope",
             "flask of whale oil",
-            "powdered scrimshaw",
-            "skin of storm-ale",
-            "tarred rope harness"
+            "hardtack and dried fish",
+            "healer\u0027s poultice",
+            "sealskin storm-cloak",
+            "shard of brine-ice",
+            "tarred rope harness",
+            "tide-warning slate",
+            "whalebone corslet"
           ],
           "commodityItems": [],
           "props": [
-            "ale-stained ship-brass harbor capstan",
-            "ale-stained tarred-oak charter bone-work bench",
+            "ale-stained ship-brass tale-hall hearth",
+            "ale-stained tarred-oak ale-cooling rack",
             "ale-stained whalebone tale-bench",
-            "ale-stained whalebone tale-hall hearth",
-            "charter-tagged ship-brass harbor capstan",
+            "ale-stained whalebone witness-cup rack",
+            "charter-tagged ship-brass ale-cooling rack",
             "frost-rimed ship-brass ale-cooling rack",
-            "hero-carved ship-brass harbor capstan",
+            "hero-carved ship-brass blue whale-oil stove",
             "hero-carved ship-brass tale-bench",
-            "hero-carved whalebone charter bone-work bench",
+            "hero-carved whalebone blue whale-oil stove",
             "many-witness tale chair",
-            "storm-singing tarred-oak charter bone-work bench"
+            "storm-singing tarred-oak scrimshaw tally-post",
+            "storm-singing tarred-oak witness-cup rack"
           ],
           "documents": [
-            "charter-tagged ship-brass tale-hall hearth",
-            "hero-carved whalebone tale-bench",
+            "hero-carved whalebone witness-cup rack",
             "storm-singing tarred-oak tale-hall hearth"
           ],
           "residents": [
             "Halla Salt-Lung, hall tale-witness",
-            "Ingr Salt-Lung, hall tale-witness",
-            "Osk Salt-Lung, hall tale-witness",
+            "Nio Bone-Tale, snow-pass guide",
+            "Siv Tarhand, tale-house host",
+            "Ulfa Ale-Oath, cold-salve keeper",
             "Ulfa Storm-Sworn, harpoon mender",
-            "Ulfa Tide-Widow, whalebone carver",
-            "Yrsa Salt-Lung, hall tale-witness"
+            "Ulfa Tide-Widow, whalebone carver"
           ],
           "creatures": [],
-          "archetypes": [],
+          "archetypes": [
+            "cold_salve_keeper"
+          ],
           "encounterCasts": [],
-          "services": [],
+          "services": [
+            "cold-salve treatment",
+            "whale-road guidance",
+            "witness-backed introduction"
+          ],
           "merchants": [
+            "Siv Tarhand, tale-house host",
+            "Ulfa Ale-Oath, cold-salve keeper",
             "Ulfa Storm-Sworn, harpoon mender",
             "Ulfa Tide-Widow, whalebone carver"
           ],
           "charterOpportunities": [
-            "ale-stained tarred-oak charter bone-work bench",
-            "charter-tagged ship-brass harbor capstan",
-            "charter-tagged ship-brass tale-hall hearth",
-            "hero-carved whalebone charter bone-work bench",
-            "storm-singing tarred-oak charter bone-work bench"
+            "charter-tagged ship-brass ale-cooling rack"
           ],
           "wants": 6,
-          "claimSources": 2,
+          "claimSources": 1,
           "unresolved": []
         }
       ]

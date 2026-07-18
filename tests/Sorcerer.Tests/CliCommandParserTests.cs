@@ -44,6 +44,17 @@ public sealed class CliCommandParserTests
         Assert.IsType<TravelCommand>(TextCommandParser.Parse("travel east"));
     }
 
+    [Fact]
+    public void SettleParsesAcrossTextAndJsonCliSurfaces()
+    {
+        var text = Assert.IsType<SettleCommand>(TextCommandParser.Parse("settle water-memoried claimant"));
+        var json = Assert.IsType<SettleCommand>(Program.ParseCommand(
+            """{"type":"settle","target":"water-memoried claimant"}"""));
+
+        Assert.Equal("water-memoried claimant", text.Target);
+        Assert.Equal(text, json);
+    }
+
     [Theory]
     [InlineData("look", typeof(InspectCommand))]
     [InlineData("get", typeof(PickupCommand))]
@@ -65,6 +76,36 @@ public sealed class CliCommandParserTests
         Assert.IsType<LeaveCommand>(TextCommandParser.Parse("leave"));
         Assert.IsType<EnterCommand>(Program.ParseCommand("""{"type":"enter","target":"palace"}"""));
         Assert.IsType<LeaveCommand>(Program.ParseCommand("""{"type":"leave"}"""));
+    }
+
+    [Fact]
+    public void FollowupCommandsHaveTextAndJsonParity()
+    {
+        Assert.Equal(
+            TextCommandParser.Parse("journey Hollowmere Margin"),
+            Program.ParseCommand("""{"type":"journey","destination":"Hollowmere Margin"}"""));
+        Assert.Equal(
+            TextCommandParser.Parse("counter warden with compliance_writ"),
+            Program.ParseCommand("""{"type":"counter","text":"warden with compliance_writ"}"""));
+        Assert.Equal(
+            TextCommandParser.Parse("breach waystation"),
+            Program.ParseCommand("""{"type":"breach","target":"waystation"}"""));
+        Assert.Equal(
+            TextCommandParser.Parse("forge relay permit"),
+            Program.ParseCommand("""{"type":"forge","text":"relay permit"}"""));
+        Assert.IsType<BraceCommand>(TextCommandParser.Parse("brace"));
+        Assert.IsType<BraceCommand>(Program.ParseCommand("""{"type":"brace"}"""));
+    }
+
+    [Theory]
+    [InlineData("inventory", typeof(InventoryCommand))]
+    [InlineData("items", typeof(InventoryCommand))]
+    [InlineData("threats", typeof(ThreatsCommand))]
+    [InlineData("intents", typeof(ThreatsCommand))]
+    public void ReadableCombatAndInventoryAliasesHaveTextAndJsonParity(string alias, Type expected)
+    {
+        Assert.IsType(expected, TextCommandParser.Parse(alias));
+        Assert.IsType(expected, Program.ParseCommand($$"""{"type":"{{alias}}"}"""));
     }
 
     [Theory]

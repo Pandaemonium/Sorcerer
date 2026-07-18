@@ -1,3 +1,5 @@
+using Sorcerer.Core.World;
+
 namespace Sorcerer.Core.Dialogue;
 
 public sealed record PreparedDialogueTurn(
@@ -99,16 +101,26 @@ public sealed record DialogueRequest(
     IReadOnlyList<string>? RecentRumors = null,
     IReadOnlyList<DialogueContextCardPayload>? ContextCards = null,
     IReadOnlyList<string>? SelectedContextCardIds = null,
-    IReadOnlyList<string>? RecentDialogue = null);
+    IReadOnlyList<string>? RecentDialogue = null,
+    IReadOnlyList<DialogueParticipantCard>? Participants = null);
 
 public sealed record DialogueProposalSet(
     IReadOnlyList<DialogueClaimProposal>? Claims = null,
     IReadOnlyList<DialogueMemoryProposal>? Memories = null,
     DialogueBondProposal? Bond = null,
     DialogueWantProposal? Want = null,
-    IReadOnlyList<DialogueActionProposal>? Actions = null);
+    IReadOnlyList<DialogueActionProposal>? Actions = null,
+    BargainOffer? Bargain = null);
 
 public sealed record DialogueResponse(
+    string SpokenText,
+    string? Delivery = null,
+    string? Intent = null,
+    DialogueProposalSet? Proposals = null,
+    IReadOnlyList<DialogueUtteranceResponse>? Utterances = null);
+
+public sealed record DialogueUtteranceResponse(
+    string SpeakerEntityId,
     string SpokenText,
     string? Delivery = null,
     string? Intent = null,

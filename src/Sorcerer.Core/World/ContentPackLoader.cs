@@ -53,17 +53,19 @@ public static class ContentPackLoader
             .Select(Path.GetDirectoryName)
             .Where(dir => !string.IsNullOrEmpty(dir))
             .Cast<string>()
+            .Select(dir => new PackDirectory(
+                Path.GetFullPath(dir),
+                NormalizePath(Path.GetRelativePath(packsRoot, dir))))
+            .OrderByDescending(pack => pack.FullPath.Length)
             .ToArray();
-        var packDirSet = new HashSet<string>(packDirs, StringComparer.OrdinalIgnoreCase);
 
         var raw = new List<RawEntry>();
         foreach (var path in Directory.EnumerateFiles(packsRoot, "*.json", SearchOption.AllDirectories))
         {
             var dir = Path.GetDirectoryName(path) ?? packsRoot;
             var fileName = Path.GetFileName(path);
-            var packId = packDirSet.Contains(dir)
-                ? Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-                : SharedPackId;
+            var packId = packDirs.FirstOrDefault(pack => IsWithin(dir, pack.FullPath))?.SourceKey
+                ?? SharedPackId;
             var captured = path;
             raw.Add(new RawEntry(packId, fileName, () => File.ReadAllText(captured)));
         }
@@ -76,26 +78,28 @@ public static class ContentPackLoader
     /// <see cref="LoadLoose"/> so the embedded build is bit-for-bit the same corpus.</summary>
     public static IReadOnlyList<ContentPackEntry> LoadEmbedded(Assembly assembly, string prefix = EmbeddedPrefix)
     {
+        var resources = assembly.GetManifestResourceNames()
+            .Where(name => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(name => new EmbeddedResource(name, NormalizePath(name[prefix.Length..])))
+            .ToArray();
+        var packDirs = resources
+            .Where(resource => resource.RelativePath.EndsWith('/' + ManifestFile, StringComparison.OrdinalIgnoreCase))
+            .Select(resource => resource.RelativePath[..^(ManifestFile.Length + 1)])
+            .OrderByDescending(path => path.Length)
+            .ToArray();
+
         var raw = new List<RawEntry>();
-        foreach (var resource in assembly.GetManifestResourceNames()
-            .Where(name => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+        foreach (var resource in resources)
         {
-            var relative = resource[prefix.Length..];
-            var segments = relative.Split('\\', '/');
-            string packId;
-            string fileName;
-            if (segments.Length >= 2)
-            {
-                packId = segments[0].StartsWith('_') ? SharedPackId : segments[0];
-                fileName = segments[^1];
-            }
-            else
+            var packId = packDirs.FirstOrDefault(pack => IsWithin(resource.RelativePath, pack))
+                ?? SharedPackId;
+            if (packId.StartsWith('_'))
             {
                 packId = SharedPackId;
-                fileName = segments[^1];
             }
 
-            var captured = resource;
+            var fileName = resource.RelativePath.Split('/')[^1];
+            var captured = resource.ResourceName;
             raw.Add(new RawEntry(packId, fileName, () => ReadEmbedded(assembly, captured)));
         }
 
@@ -117,9 +121,9 @@ public static class ContentPackLoader
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
 
         var manifests = new Dictionary<string, PackManifest>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (packId, entries) in byPack)
+        foreach (var (sourcePackId, entries) in byPack)
         {
-            if (packId == SharedPackId)
+            if (sourcePackId == SharedPackId)
             {
                 continue;
             }
@@ -127,12 +131,12 @@ public static class ContentPackLoader
             var manifestEntry = entries.FirstOrDefault(entry =>
                 entry.FileName.Equals(ManifestFile, StringComparison.OrdinalIgnoreCase));
             var manifest = manifestEntry is null
-                ? new PackManifest(packId, CurrentSchemaVersion, Array.Empty<string>())
-                : ParseManifest(packId, manifestEntry.ReadText());
+                ? new PackManifest(sourcePackId, sourcePackId, CurrentSchemaVersion, Array.Empty<string>())
+                : ParseManifest(sourcePackId, manifestEntry.ReadText());
             if (manifest.SchemaVersion is < 1 or > CurrentSchemaVersion)
             {
                 throw new ContentPackException(
-                    $"Pack '{packId}' declares schemaVersion {manifest.SchemaVersion}; supported range is 1..{CurrentSchemaVersion}.");
+                    $"Pack '{manifest.Id}' declares schemaVersion {manifest.SchemaVersion}; supported range is 1..{CurrentSchemaVersion}.");
             }
 
             if (manifests.ContainsKey(manifest.Id))
@@ -158,16 +162,17 @@ public static class ContentPackLoader
         var ordered = new List<ContentPackEntry>();
         foreach (var entry in byPack.TryGetValue(SharedPackId, out var shared) ? shared : Array.Empty<RawEntry>())
         {
-            ordered.Add(entry.ToEntry());
+            ordered.Add(entry.ToEntry(SharedPackId));
         }
 
         foreach (var packId in TopologicalOrder(manifests))
         {
-            foreach (var entry in byPack[packId]
+            var manifest = manifests[packId];
+            foreach (var entry in byPack[manifest.SourcePackId]
                 .Where(entry => !entry.FileName.Equals(ManifestFile, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(entry => entry.FileName, StringComparer.OrdinalIgnoreCase))
             {
-                ordered.Add(entry.ToEntry());
+                ordered.Add(entry.ToEntry(manifest.Id));
             }
         }
 
@@ -210,13 +215,13 @@ public static class ContentPackLoader
         return result;
     }
 
-    private static PackManifest ParseManifest(string dirPackId, string json)
+    private static PackManifest ParseManifest(string sourcePackId, string json)
     {
         using var document = System.Text.Json.JsonDocument.Parse(json);
         var root = document.RootElement;
         var id = root.TryGetProperty("id", out var idElement) && idElement.ValueKind == System.Text.Json.JsonValueKind.String
-            ? idElement.GetString() ?? dirPackId
-            : dirPackId;
+            ? idElement.GetString() ?? sourcePackId
+            : sourcePackId;
         var schema = root.TryGetProperty("schemaVersion", out var schemaElement) && schemaElement.TryGetInt32(out var parsed)
             ? parsed
             : CurrentSchemaVersion;
@@ -227,13 +232,31 @@ public static class ContentPackLoader
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .ToArray()
             : Array.Empty<string>();
-        return new PackManifest(string.IsNullOrWhiteSpace(id) ? dirPackId : id, schema, dependencies);
+        return new PackManifest(sourcePackId, string.IsNullOrWhiteSpace(id) ? sourcePackId : id, schema, dependencies);
     }
 
     private sealed record RawEntry(string PackId, string FileName, Func<string> ReadText)
     {
-        public ContentPackEntry ToEntry() => new(PackId, FileName, ReadText);
+        public ContentPackEntry ToEntry(string effectivePackId) => new(effectivePackId, FileName, ReadText);
     }
 
-    private sealed record PackManifest(string Id, int SchemaVersion, IReadOnlyList<string> Dependencies);
+    private static bool IsWithin(string candidate, string directory)
+    {
+        var normalizedCandidate = NormalizePath(Path.GetFullPath(candidate)).TrimEnd('/');
+        var normalizedDirectory = NormalizePath(Path.GetFullPath(directory)).TrimEnd('/');
+        return normalizedCandidate.Equals(normalizedDirectory, StringComparison.OrdinalIgnoreCase)
+            || normalizedCandidate.StartsWith(normalizedDirectory + '/', StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizePath(string path) => path.Replace('\\', '/');
+
+    private sealed record PackDirectory(string FullPath, string SourceKey);
+
+    private sealed record EmbeddedResource(string ResourceName, string RelativePath);
+
+    private sealed record PackManifest(
+        string SourcePackId,
+        string Id,
+        int SchemaVersion,
+        IReadOnlyList<string> Dependencies);
 }

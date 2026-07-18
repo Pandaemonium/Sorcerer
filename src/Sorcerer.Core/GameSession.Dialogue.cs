@@ -409,7 +409,18 @@ public sealed partial class GameSession
             ReadStringList(dialogue.Details, "lines") ?? result.Messages.ToArray(),
             RecentMemoriesFor(dialogue.Target),
             Engine.State.Claims.Records.TakeLast(DialogueRecentClaimLimit).ToArray(),
-            Engine.State.ControlledEntityId.Value);
+            Engine.State.ControlledEntityId.Value,
+            SpeakerWant: speaker?.TryGet<WantComponent>(out var want) == true
+                ? $"Want id {want.Id}: {want.Text} [{want.Status}]"
+                : null,
+            ListenerInventory: Engine.State.ControlledEntity.TryGet<InventoryComponent>(out var inventory)
+                ? inventory.Items
+                    .Where(pair => pair.Value > 0)
+                    .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(pair => $"{pair.Key} x{pair.Value}"
+                        + (inventory.TreasuredItems.Contains(pair.Key) ? " [protected]" : ""))
+                    .ToArray()
+                : Array.Empty<string>());
 
         var task = RunDialogueParserFlowAsync(request, CancellationToken.None);
         _pendingClaimExtractions.Add(new PendingClaimExtraction(
@@ -469,6 +480,20 @@ public sealed partial class GameSession
 
         var parserStopwatch = Stopwatch.StartNew();
         var parse = await _dialogueParser.ParseAsync(parserRequest, cancellationToken);
+        if (selection.SelectedCapabilityIds.Contains("bargains", StringComparer.OrdinalIgnoreCase)
+            && parse.Proposals?.Bargain is null
+            && RepairGroundedBargain(parserRequest) is { } repairedBargain)
+        {
+            parse = parse with
+            {
+                Provider = $"{parse.Provider}:grounded-bargain-repair",
+                TechnicalFailure = false,
+                Error = string.IsNullOrWhiteSpace(parse.Error)
+                    ? "The live parser omitted a routed bargain; exact grounded terms were repaired from its speech."
+                    : $"{parse.Error} Exact grounded terms were repaired from its speech.",
+                Proposals = (parse.Proposals ?? new DialogueProposalSet()) with { Bargain = repairedBargain },
+            };
+        }
         parserStopwatch.Stop();
         routeRecord = routeRecord with
         {
@@ -477,6 +502,146 @@ public sealed partial class GameSession
                 : routeRecord.Metrics with { ParserElapsedMs = parserStopwatch.ElapsedMilliseconds },
         };
         return new DialogueParseMaterialization(parserRequest, parse, routeRecord);
+    }
+
+    /// <summary>
+    /// Narrow schema repair for a provider response whose live router already classified the NPC's
+    /// speech as a bargain. It can recover only immediate gold/item terms named verbatim in the
+    /// authoritative listener inventory; services, standings, concessions, and deadlines still
+    /// require a valid typed provider packet. Protected items are never eligible.
+    /// </summary>
+    internal static BargainOffer? RepairGroundedBargain(DialogueClaimRequest request)
+    {
+        if (request.SelectedParserCapabilityIds?.Contains("bargains", StringComparer.OrdinalIgnoreCase) != true)
+        {
+            return null;
+        }
+
+        var speech = string.Join(" ", request.DialogueLines);
+        var speechWords = DialogueWords(speech);
+        if (!speechWords.Any(word => word is "give" or "hand" or "pay" or "cost" or "toss" or "drop")
+            || !speechWords.Any(word => word is "exchange" or "deal" or "stand" or "turn" or "leave" or "let" or "allow" or "unpin" or "unlock"))
+        {
+            return null;
+        }
+
+        var terms = new List<BargainTerm>();
+        foreach (var entry in request.ListenerInventory ?? Array.Empty<string>())
+        {
+            if (entry.Contains("[protected]", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var marker = entry.LastIndexOf(" x", StringComparison.OrdinalIgnoreCase);
+            var resource = (marker > 0 ? entry[..marker] : entry).Trim();
+            var availableText = marker > 0
+                ? entry[(marker + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
+                : null;
+            var available = int.TryParse(availableText, out var parsedAvailable) ? Math.Max(1, parsedAvailable) : 1;
+            var resourceWords = DialogueWords(resource);
+            var mention = FindWordSequence(speechWords, resourceWords);
+            if (mention < 0)
+            {
+                continue;
+            }
+
+            var quantity = MentionedQuantity(speechWords, mention, resourceWords.Length, available);
+            var kind = resource.Equals("gold", StringComparison.OrdinalIgnoreCase)
+                ? BargainTermKinds.Currency
+                : BargainTermKinds.Item;
+            var id = NormalizeToken(resource, kind);
+            terms.Add(new BargainTerm(
+                id,
+                kind,
+                kind == BargainTermKinds.Currency
+                    ? $"Pay {quantity} gold."
+                    : $"Give {quantity} {resource}.",
+                quantity,
+                resource));
+        }
+
+        if (terms.Count == 0)
+        {
+            return null;
+        }
+
+        var label = string.Join(" and ", terms.Select(term => term.Text.TrimEnd('.').ToLowerInvariant()));
+        return new BargainOffer(
+            request.SpeakerId,
+            $"{request.SpeakerName} states grounded terms: {label}.",
+            new[] { new BargainOption("spoken_terms", label, terms) },
+            request.Turn,
+            ExpiresTurn: request.Turn + 12);
+    }
+
+    private static string[] DialogueWords(string text) =>
+        text.ToLowerInvariant()
+            .Split(text.Select(character => char.IsLetterOrDigit(character) ? '\0' : character)
+                .Where(character => character != '\0')
+                .Distinct()
+                .ToArray(), StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static int FindWordSequence(IReadOnlyList<string> words, IReadOnlyList<string> sequence)
+    {
+        if (sequence.Count == 0 || sequence.Count > words.Count)
+        {
+            return -1;
+        }
+
+        for (var start = 0; start <= words.Count - sequence.Count; start++)
+        {
+            if (sequence.Select((word, offset) => words[start + offset].Equals(word, StringComparison.OrdinalIgnoreCase)).All(match => match))
+            {
+                return start;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int MentionedQuantity(IReadOnlyList<string> words, int mention, int wordCount, int available)
+    {
+        var numberWords = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["one"] = 1,
+            ["two"] = 2,
+            ["three"] = 3,
+            ["four"] = 4,
+            ["five"] = 5,
+            ["six"] = 6,
+            ["seven"] = 7,
+            ["eight"] = 8,
+            ["nine"] = 9,
+            ["ten"] = 10,
+            ["eleven"] = 11,
+            ["twelve"] = 12,
+            ["thirteen"] = 13,
+            ["fourteen"] = 14,
+            ["fifteen"] = 15,
+            ["sixteen"] = 16,
+            ["seventeen"] = 17,
+            ["eighteen"] = 18,
+            ["nineteen"] = 19,
+            ["twenty"] = 20,
+        };
+        var nearby = Enumerable.Range(Math.Max(0, mention - 5), Math.Min(words.Count, mention + wordCount + 3) - Math.Max(0, mention - 5))
+            .Select(index => words[index]);
+        foreach (var word in nearby)
+        {
+            var numeric = word.StartsWith('x') ? word[1..] : word;
+            if (int.TryParse(numeric, out var parsed))
+            {
+                return Math.Clamp(parsed, 1, available);
+            }
+
+            if (numberWords.TryGetValue(word, out var named))
+            {
+                return Math.Clamp(named, 1, available);
+            }
+        }
+
+        return 1;
     }
 
     private static DialogueParserRouteRecord CreateDialogueParserRouteRecord(

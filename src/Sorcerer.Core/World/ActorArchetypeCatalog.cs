@@ -97,7 +97,18 @@ public sealed class ActorArchetypeCatalog
 
     public IReadOnlyCollection<ActorArchetypeDefinition> Archetypes => _archetypes.Values;
 
-    public void Add(ActorArchetypeDefinition archetype) => _archetypes[archetype.Id] = archetype;
+    public void Add(ActorArchetypeDefinition archetype)
+    {
+        if (string.IsNullOrWhiteSpace(archetype.Id))
+        {
+            throw new ContentPackException("Actor archetypes require a non-empty id.");
+        }
+
+        if (!_archetypes.TryAdd(archetype.Id, archetype))
+        {
+            throw new ContentPackException($"Actor archetype id '{archetype.Id}' is defined more than once.");
+        }
+    }
 
     public ActorArchetypeDefinition? Find(string id) =>
         _archetypes.TryGetValue(id, out var archetype) ? archetype : null;

@@ -33,7 +33,13 @@ public sealed class CostProfileCatalog
 
     public CostProfile? Find(string id) => _profiles.TryGetValue(id, out var profile) ? profile : null;
 
-    private void Add(CostProfile profile) => _profiles[profile.Id] = profile;
+    private void Add(CostProfile profile)
+    {
+        if (!_profiles.TryAdd(profile.Id, profile))
+        {
+            throw new ContentPackException($"Cost profile id '{profile.Id}' is defined more than once.");
+        }
+    }
 
     private static readonly Lazy<CostProfileCatalog> DefaultCatalog = new(LoadDefault);
 

@@ -21,7 +21,7 @@ play is the primary design target.
 
 ## Default Agent Guidance
 
-When playtesting Sorcerer, agents should usually use the live Ollama resolver. The point of
+When playtesting Sorcerer, agents should usually use a configured live resolver. The point of
 playtesting is to see the real spell pipeline under realistic model behavior: latency,
 schema dialects, boring resolutions, surprising costs, target mistakes, and all. Mock mode
 is valuable, but it does not test the heart of the game.
@@ -34,7 +34,7 @@ Use mock mode when:
 - running the fixed spell eval corpus
 - working while Ollama or the selected live model is unavailable
 
-Use live Ollama when:
+Use a live provider when:
 
 - evaluating whether magic outcomes feel vivid, specific, and consequential
 - testing new operation cards, prompt changes, or schema repairs
@@ -42,8 +42,9 @@ Use live Ollama when:
 - gathering audit logs for resolver improvement
 - doing general exploratory playtests
 
-The CLI currently defaults to `mock` for quick local execution, so agents should pass
-`--provider ollama` explicitly for ordinary playtesting.
+The CLI currently defaults to `mock` for quick local execution, so agents should pass a known
+provider explicitly for ordinary playtesting. Content-sprint acceptance uses
+`--provider gemini --model gemini-3.5-flash --effort medium`; local development may use Ollama.
 
 ## Quick Start: Live Ollama Playtest
 
@@ -150,8 +151,10 @@ leave
 
 A successful crossing consumes one normal turn and carries bond-followers. It does not spend a
 travel world-turn budget. Restricted thresholds reject without consuming a turn and state the
-general access routes; carrying the authored key, receiving permission, or changing the
-threshold's access/open tags through ordinary consequences can admit the player. Debug state may
+general access routes. Credentials are item capabilities rather than one hard-coded name; a body
+with an authorized role, a nearby allied clerk/courier, active concealment, `breach`, or a threshold
+opened by magic can also admit the player. `forge permit` converts an authored blank form plus
+permit ink into a credential through transactional inventory consequences. Debug state may
 inspect both the active interior and its exterior snapshot, but ordinary play can verify
 persistence by changing or moving something, leaving, and returning. `view.world.placeKind` is
 `interior` and `view.world.interiorName` identifies the active site. See
@@ -246,8 +249,8 @@ Agents can also split casting into submit/resolve steps:
 
 While a cast is pending, turn-consuming and state-changing commands are blocked until the agent
 sends `await_cast` or `cancel_cast`. Read-only state and ledger commands remain available:
-`inspect`, `map`, `atlas`, `journal`, `rumors`, `character`, `reagents`, `wares`, `services`, `bonds`,
-`standing`, `followers`, `jobs`, `save`, `load`, `help`, and `quit`. The pending cast appears in
+`inspect`, `map`, `atlas`, `journal`, `rumors`, `character`, `inventory`, `reagents`, `threats`,
+`wares`, `services`, `bonds`, `standing`, `followers`, `jobs`, `save`, `load`, `help`, and `quit`. The pending cast appears in
 `observation.pendingCast` with state (`resolving`, `ready`, `failed`, or legacy `waiting`),
 provider, accepted/technical-failure flags, effect types, and error metadata when materialized.
 `begin_cast` starts the non-mutating provider resolution immediately; `await_cast` applies the
@@ -331,6 +334,7 @@ map
 map 5
 atlas
 travel east
+journey Hollowmere Margin
 move east
 wait
 cast bind the nearest enemy in blue glass
@@ -338,6 +342,13 @@ target 12 8
 pickup
 equip iron wand
 focus weapon
+brace
+counter yard warden with compliance_writ
+bargain relay gate clerk
+bargains
+settle relay gate clerk with pay_gold
+breach waystation
+forge permit
 journal
 give grave salt to Lio
 recruit Lio
@@ -445,6 +456,8 @@ Core shared commands currently route through `GameSession`:
 - `inspect`
 - `map [radius]`
 - `travel <direction>`
+- `journey <mapped place>` (compresses uneventful zone legs; pauses for pursuit, authored payoff,
+  destination, or one of at most two ambient journey scenes)
 - `atlas`
 - `move <direction>`
 - direction aliases: `north`, `south`, `east`, `west`, etc.
@@ -475,13 +488,33 @@ Core shared commands currently route through `GameSession`:
 - `read [target]`
 - `examine [target]`
 - `talk [target-or-message]`
+- `gather [topic]` (invite a nearby authored ensemble into one bounded, multi-participant exchange)
+- `offer <item> to <actor>`
+- `bargain [actor]` / `bargains [actor-or-promise]` (create or inspect typed options derived from
+  actual threat, inventory, wants, and deadlines)
+- `settle <target> with <option>` (atomically accepts currency, item, standing, concession, service,
+  and deadline terms; only fulfilled immediate terms clear at once)
+- `fulfill <promise> <service-term>` (perform a pending service near its claimant)
+- `concede [actor]`, `intimidate [actor]`, and
+  `exchange <your-item> for <their-item> with <actor>`
 - `give <item> to <target>`
 - `recruit [target]`
 - `bonds [target]`
 - `possess [target]`
+- `brace` (requires worn defensive equipment and temporarily doubles only that gear's defense)
+- `counter <actor> with <item>` (interrupts a committed authored intent when the item answers the
+  inspectable counter; commodity components are spent and durable tools remain)
+- `breach [threshold]` and `forge [permit description]`
+- `cleanse [curse-or-altered-item]`
 - `standing`
 - `followers`
 - `jobs`
+
+`bargains` is synchronized with post-dialogue extraction: when it immediately follows `talk` in a
+script, it waits for that non-turn-consuming parser job before listing offers. Live-provider
+schema repair is deliberately narrow and auditable. It can ground an explicit spoken exchange only
+to exact gold or unprotected listener-inventory items; it cannot invent resources, transfer a
+protected item, or bypass the ordinary typed bargain validator.
 - `save [path]`
 - `load [path]`
 - `help`
@@ -493,9 +526,12 @@ the boundary.
 
 Inventory protection and reagent inspection are also implemented:
 
+- `inventory` / `items` / `inv` (all carried items, equipment/protection state, concrete effects,
+  and persistent alterations)
 - `protect <item>`
 - `unprotect <item>`
 - `reagents` (text output includes material, total value, tags, and spell-bias hints)
+- `threats` / `intents` (perceived hostile intent, authored counter, and equipment/action hint)
 - `wares` / `browse`
 - `buy <item> [from <merchant>]`
 - `sell <item> [to <merchant>]`
@@ -573,7 +609,10 @@ cached, and thinking tokens plus latency in the same provider stats and audit lo
 
 `--seed` now affects ordinary CLI runs as well as episode runs. Use it when comparing atlas/world
 roll output: the same seed should produce the same realm status/ruler/effective imperial grip, while
-different seeds should give coherent variation.
+different seeds should give coherent variation. It also controls the opening incident, confiscated
+irregularities, sweep target, waystation direction, and generated journey chain. Human-facing GUI
+new runs choose a fresh seed by default and show it in the status line; set `SORCERER_SEED` to replay
+one exactly.
 
 ## Replay
 

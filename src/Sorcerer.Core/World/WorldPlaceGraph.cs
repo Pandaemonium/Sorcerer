@@ -1,3 +1,5 @@
+using Sorcerer.Core.Primitives;
+
 namespace Sorcerer.Core.World;
 
 public static class WorldPlaceKinds
@@ -87,6 +89,13 @@ public sealed record NearestSettlement(
     WorldSettlement Settlement,
     int Distance,
     string Direction);
+
+public sealed record JourneyDestination(
+    string Id,
+    string Name,
+    string ZoneId,
+    string RegionId,
+    string Kind);
 
 public sealed class WorldPlaceGraph
 {
@@ -200,6 +209,129 @@ public sealed class WorldPlaceGraph
         var dx = nearest.CenterX - x;
         var dy = nearest.CenterY - y;
         return new NearestSettlement(nearest, Math.Abs(dx) + Math.Abs(dy), DirectionText(dx, dy));
+    }
+
+    /// <summary>Resolve a player-facing place name to one deterministic map coordinate.</summary>
+    public JourneyDestination? ResolveDestination(string query, string currentZoneId, string currentRegionId)
+    {
+        var token = NormalizeToken(query);
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return null;
+        }
+
+        if (token is "nearest" or "nearest_settlement" or "settlement")
+        {
+            var nearest = Nearest(currentZoneId);
+            return SettlementDestination(nearest.Settlement);
+        }
+
+        // A region name is a request for the region's useful social anchor, not whichever
+        // landmark happens to be closest. Explicit landmark names still resolve below.
+        var matchingRegions = _regions.Values
+            .Where(region => region.Placement is not null)
+            .Where(region => new[] { NormalizeToken(region.Id), NormalizeToken(region.Name) }
+                .Any(value => value.Equals(token, StringComparison.OrdinalIgnoreCase)
+                    || value.Contains(token, StringComparison.OrdinalIgnoreCase)
+                    || token.Contains(value, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        if (matchingRegions.Length == 1)
+        {
+            return RegionDestination(matchingRegions[0]);
+        }
+
+        var candidates = Settlements
+            .Select(settlement => (
+                Destination: SettlementDestination(settlement),
+                Tokens: new[] { NormalizeToken(settlement.Id), NormalizeToken(settlement.Name), NormalizeToken(settlement.RegionId) }))
+            .Concat(Landmarks.Select(landmark => (
+                Destination: new JourneyDestination(landmark.Id, landmark.Name, landmark.ZoneId, landmark.RegionId, WorldPlaceKinds.Landmark),
+                Tokens: new[] { NormalizeToken(landmark.Id), NormalizeToken(landmark.Name), NormalizeToken(landmark.RegionId) })))
+            .Concat(_regions.Values
+                .Where(region => region.Placement is not null)
+                .Select(region =>
+                {
+                    return (
+                        Destination: RegionDestination(region),
+                        Tokens: new[] { NormalizeToken(region.Id), NormalizeToken(region.Name) });
+                }))
+            .Where(candidate => !candidate.Destination.ZoneId.Equals(currentZoneId, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        return candidates
+            .Select(candidate => new
+            {
+                candidate.Destination,
+                Score = candidate.Tokens.Any(value => value.Equals(token, StringComparison.OrdinalIgnoreCase))
+                    ? 0
+                    : candidate.Tokens.Any(value => value.Contains(token, StringComparison.OrdinalIgnoreCase)
+                        || token.Contains(value, StringComparison.OrdinalIgnoreCase))
+                        ? 1
+                        : 2,
+                Local = candidate.Destination.RegionId.Equals(currentRegionId, StringComparison.OrdinalIgnoreCase) ? 0 : 1,
+                Distance = ZoneDistance(currentZoneId, candidate.Destination.ZoneId),
+            })
+            .Where(candidate => candidate.Score < 2)
+            .OrderBy(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.Local)
+            .ThenBy(candidate => candidate.Distance)
+            .ThenBy(candidate => candidate.Destination.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(candidate => candidate.Destination)
+            .FirstOrDefault();
+    }
+
+    public static Direction DirectionToward(string fromZoneId, string toZoneId)
+    {
+        var from = ParseZoneId(fromZoneId);
+        var to = ParseZoneId(toZoneId);
+        var dx = Math.Sign(to.X - from.X);
+        var dy = Math.Sign(to.Y - from.Y);
+        return (dx, dy) switch
+        {
+            (0, -1) => Direction.North,
+            (0, 1) => Direction.South,
+            (1, 0) => Direction.East,
+            (-1, 0) => Direction.West,
+            (1, -1) => Direction.NorthEast,
+            (-1, -1) => Direction.NorthWest,
+            (1, 1) => Direction.SouthEast,
+            (-1, 1) => Direction.SouthWest,
+            _ => Direction.North,
+        };
+    }
+
+    public static int ZoneDistance(string fromZoneId, string toZoneId)
+    {
+        var from = ParseZoneId(fromZoneId);
+        var to = ParseZoneId(toZoneId);
+        return Math.Max(Math.Abs(to.X - from.X), Math.Abs(to.Y - from.Y));
+    }
+
+    private static JourneyDestination SettlementDestination(WorldSettlement settlement) =>
+        new(
+            settlement.Id,
+            settlement.Name,
+            $"{settlement.CenterX},{settlement.CenterY}",
+            settlement.RegionId,
+            WorldPlaceKinds.Settlement);
+
+    private JourneyDestination RegionDestination(RegionDefinition region)
+    {
+        var primary = Settlements.FirstOrDefault(settlement =>
+            settlement.IsPrimary && settlement.RegionId.Equals(region.Id, StringComparison.OrdinalIgnoreCase));
+        return primary is null
+            ? new JourneyDestination(
+                region.Id,
+                region.Name,
+                $"{AnchorFor(Seed, region).X},{AnchorFor(Seed, region).Y}",
+                region.Id,
+                "region")
+            : new JourneyDestination(
+                region.Id,
+                region.Name,
+                $"{primary.CenterX},{primary.CenterY}",
+                region.Id,
+                WorldPlaceKinds.Settlement);
     }
 
     public static (int X, int Y) AnchorFor(int seed, RegionDefinition region)

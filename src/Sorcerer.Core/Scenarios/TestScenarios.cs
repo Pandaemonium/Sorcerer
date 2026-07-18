@@ -12,6 +12,96 @@ public static class TestScenarios
 {
     public const int TacticalWidth = 40;
     public const int TacticalHeight = 30;
+    private sealed record OpeningIrregularity(
+        string Name,
+        char Glyph,
+        string Material,
+        string Description,
+        string Claim,
+        string Subject,
+        string RealizationKind,
+        string ClaimedPlace,
+        IReadOnlyList<string> Tags);
+
+    private static readonly OpeningIrregularity[] OpeningIrregularities =
+    {
+        new(
+            "jarred thunder census",
+            'o',
+            "storm_glass",
+            "Six thumb-sized thunderheads queue inside a numbered jar and mutter different surnames when the seal turns.",
+            "The jar's intake slip says its loudest storm was confiscated from an orchard whose keeper still leaves copper bowls north of the yard.",
+            "the thunder orchard keeper",
+            "person",
+            "north of the containment yard",
+            new[] { "storm", "glass", "confiscated", "names" }),
+        new(
+            "sleeping lacquer fox-mask",
+            '%',
+            "lacquered_wood",
+            "The fox-mask breathes against the marble. Every ninth breath smells of snow, lamp oil, and somebody else's fear.",
+            "A misfiled tag names the mask's owner as a night clerk who waits west of the yard for a face brave enough to return.",
+            "the fox-mask's night clerk",
+            "person",
+            "west of the containment yard",
+            new[] { "mask", "fox", "dream", "confiscated" }),
+        new(
+            "aquarium of confiscated dusk",
+            '=',
+            "charter_glass",
+            "Purple evening swims inside a shallow glass tank. Paper minnows eat each censor-mark as soon as it is stamped.",
+            "The tank's transfer docket records a marsh household south of the yard that has received noon twice and no evening at all.",
+            "the household missing its dusk",
+            "site",
+            "south of the containment yard",
+            new[] { "dusk", "aquarium", "paper_fish", "confiscated" }),
+        new(
+            "petitioning whalebone hand",
+            'w',
+            "whalebone",
+            "A carved hand taps one patient finger beneath a stack of rejected petitions. The petitions are all signed by the hand.",
+            "The oldest petition asks that a stolen sailor-name be returned at the burned registry east of the yard.",
+            "the stolen sailor-name",
+            "item",
+            "east of the containment yard",
+            new[] { "bone", "petition", "name", "confiscated" }),
+        new(
+            "folded rain cage",
+            '#',
+            "brass",
+            "Rain falls upward through a brass cube, strikes its own little ceiling, and begins again without wetting the floor.",
+            "A maintenance note says the rain remembers a toll-road hidden north-west of the yard whenever nobody is measuring it.",
+            "the unmeasured rain road",
+            "route",
+            "north-west of the containment yard",
+            new[] { "rain", "cage", "route", "confiscated" }),
+        new(
+            "choir of wax-sealed moths",
+            '*',
+            "wax_and_wing",
+            "A dozen moths wear tiny red seals across their wings. They hum the harmony of a message they are forbidden to deliver.",
+            "The evidence card addresses the moths' unfinished message to a bell-keeper south-east of the yard.",
+            "the moths' sealed message",
+            "item",
+            "south-east of the containment yard",
+            new[] { "moths", "message", "wax", "confiscated" }),
+    };
+
+    private static readonly GridPoint[] OpeningIrregularityPositions =
+    {
+        new(2, 2), new(6, 2), new(10, 2), new(3, 9), new(8, 9), new(12, 9),
+    };
+
+    private static readonly string[] OpeningIncidentMessages =
+    {
+        "Imperial soldiers move to contain you.",
+        "The intake bell names you as an unfiled emergency; warders close from both sides.",
+        "A confiscation detail realizes its most dangerous evidence is walking away.",
+        "The evidence alarm rings once for color, once for prophecy, and a third time for you.",
+        "Two warders abandon an argument over forms and draw steel in perfect agreement.",
+        "A brass loudspeaker politely asks you to stop existing outside the marked square.",
+    };
+
     private static readonly Lazy<RegionInteriorDefinition?> OpeningInterior = new(() =>
         RegionCatalog.LoadDefault()
             .Region("imperial_encounter")?
@@ -22,7 +112,8 @@ public static class TestScenarios
     public static GameState ImperialEncounter(
         string? playerOriginId = null,
         IReadOnlyList<RunChronicleRecord>? memorials = null,
-        CharacterBuild? build = null)
+        CharacterBuild? build = null,
+        int seed = 7)
     {
         var origin = CreationRules.EffectiveOrigin(
             OriginCatalog.LoadDefault().Resolve(build?.OriginId ?? playerOriginId),
@@ -32,8 +123,8 @@ public static class TestScenarios
         var state = new GameState(width: TacticalWidth, height: TacticalHeight)
         {
             ControlledEntityId = EntityId.Create("player"),
-            Seed = 7,
-            Rng = new DeterministicRng(7),
+            Seed = Math.Max(1, seed),
+            Rng = new DeterministicRng(Math.Max(1, seed)),
         };
 
         FactionCatalog.LoadDefault().ApplyTo(state.Factions);
@@ -215,10 +306,11 @@ public static class TestScenarios
 
         AddOpeningInteriorThreshold(state);
         AddMemorial(state, memorials);
+        AddOpeningIrregularities(state);
         AddProvincialSweep(state);
         WorldConsequenceGuard.ApplyWithNewApplier(state, WorldConsequence.Message(
             "scenario",
-            "Imperial soldiers move to contain you.",
+            OpeningIncidentMessage(state.Seed),
             targetEntityId: state.ControlledEntityId.Value,
             visibility: WorldConsequenceVisibility.Message,
             sourceEntityId: state.ControlledEntityId.Value,
@@ -230,6 +322,58 @@ public static class TestScenarios
             }));
         return state;
     }
+
+    private static void AddOpeningIrregularities(GameState state)
+    {
+        // Seed 7 remains the characterization fixture used by focused tests and old transcripts.
+        // Ordinary GUI runs roll a fresh seed and receive two optional, inspectable anomalies.
+        if (state.Seed == 7)
+        {
+            return;
+        }
+
+        var start = WorldRoll.StableSeed(state.Seed, "opening_irregularities") % OpeningIrregularities.Length;
+        var positionStart = WorldRoll.StableSeed(state.Seed, "opening_irregularity_positions")
+            % OpeningIrregularityPositions.Length;
+        for (var index = 0; index < 2; index++)
+        {
+            var definition = OpeningIrregularities[(start + (index * 5)) % OpeningIrregularities.Length];
+            var position = OpeningIrregularityPositions[(positionStart + (index * 3)) % OpeningIrregularityPositions.Length];
+            var tags = definition.Tags
+                .Concat(new[] { "fixture", "opening_irregularity", "confiscated", "magic_anchor" })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            Add(state, new Entity(EntityId.Create($"opening_irregularity_{index + 1}"), definition.Name)
+                .Set(new PositionComponent(position))
+                .Set(new RenderableComponent(definition.Glyph, "wild"))
+                .Set(new TagsComponent(tags))
+                .Set(new PhysicalComponent(BlocksMovement: false, Material: definition.Material))
+                .Set(new FixtureComponent("confiscated_anomaly", tags, CanAnchorMagic: true))
+                .Set(new DescriptionComponent(definition.Description))
+                .Set(new InteractableComponent(new[] { "examine" }))
+                .Set(new ClaimSourceComponent(new[]
+                {
+                    new ClaimSeed(
+                        definition.Claim,
+                        "opening_irregularity",
+                        definition.Subject,
+                        Salience: 3,
+                        Confidence: 75,
+                        PlayerVisible: true,
+                        BindAsPromise: true,
+                        PromiseKind: "rumor",
+                        RealizationKind: definition.RealizationKind,
+                        TriggerHint: "travel",
+                        ClaimedPlace: definition.ClaimedPlace,
+                        Tags: tags),
+                })));
+        }
+    }
+
+    private static string OpeningIncidentMessage(int seed) =>
+        seed == 7
+            ? OpeningIncidentMessages[0]
+            : OpeningIncidentMessages[WorldRoll.StableSeed(seed, "opening_incident_message") % OpeningIncidentMessages.Length];
 
     // How long the Provincial Reconciliation Sweep takes to reach its first target. Long
     // enough to act on the warning, short enough to press; pacing notes live in
@@ -395,10 +539,13 @@ public static class TestScenarios
 
     private static Entity Soldier(string id, string name, GridPoint position)
     {
+        var archetype = name.Contains("captain", StringComparison.OrdinalIgnoreCase)
+            ? "intake_sergeant"
+            : "yard_warden";
         var soldier = new Entity(EntityId.Create(id), name)
             .Set(new PositionComponent(position))
             .Set(new RenderableComponent('i', "imperial"))
-            .Set(new TagsComponent(new[] { "imperial", "soldier", "containment" }))
+            .Set(new TagsComponent(new[] { "imperial", "soldier", "containment", archetype }))
             .Set(new PhysicalComponent(BlocksMovement: true, Material: "body"))
             .Set(new BodyStatsComponent(1))
             .Set(new ActorComponent(10, 10, 0, 0, 3, 0, "empire"))

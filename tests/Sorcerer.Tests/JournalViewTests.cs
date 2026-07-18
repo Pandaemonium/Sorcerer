@@ -1,6 +1,7 @@
 using Sorcerer.Core;
 using Sorcerer.Core.Commands;
 using Sorcerer.Core.Primitives;
+using Sorcerer.Core.Views;
 using Sorcerer.Llm;
 using Sorcerer.Magic;
 using Xunit;
@@ -57,5 +58,24 @@ public sealed class JournalViewTests
             Assert.False(string.IsNullOrWhiteSpace(p.Text));
             Assert.StartsWith("empire_", p.Kind, StringComparison.OrdinalIgnoreCase);
         });
+    }
+
+    [Fact]
+    public void RealizingALeadKeepsItAsAnObjectiveRatherThanClaimingPlayerCompletion()
+    {
+        var session = GameSession.CreateImperialEncounter();
+        var promise = session.Engine.State.PromiseLedger.Add(
+            "promise",
+            "A culvert waits beyond the next road.",
+            playerVisible: true,
+            salience: 4,
+            realizationKind: "site");
+        session.Engine.State.PromiseLedger.SetStatus(promise.Id, "realized", "fixture:culvert");
+
+        var lines = JournalViewBuilder.Build(session.Engine.State);
+
+        Assert.Contains(lines, line => line.StartsWith("Objective:", StringComparison.OrdinalIgnoreCase)
+            && line.Contains("realized", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(lines, line => line.StartsWith("Completed objective:", StringComparison.OrdinalIgnoreCase));
     }
 }

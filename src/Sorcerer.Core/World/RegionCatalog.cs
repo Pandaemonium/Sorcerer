@@ -423,7 +423,11 @@ public static class RegionCatalog
                         .Select(ware => new RegionWareDefinition(
                             ReadString(ware, "item", ""),
                             Math.Max(1, ReadInt(ware, "min", 1)),
-                            Math.Max(1, ReadInt(ware, "max", Math.Max(1, ReadInt(ware, "min", 1))))))
+                            Math.Max(1, ReadInt(ware, "max", Math.Max(1, ReadInt(ware, "min", 1)))),
+                            Math.Clamp(
+                                ReadInt(ware, "chancePercent", ReadInt(ware, "chance_percent", 100)),
+                                0,
+                                100)))
                         .Where(ware => !string.IsNullOrWhiteSpace(ware.Item))
                         .ToArray(),
                     ReadArray(item, "services")
@@ -568,6 +572,24 @@ public static class RegionCatalog
                         ReadBool(feature, "blocksMovement", ReadBool(feature, "blocks_movement", false)),
                         ReadNullableString(feature, "readable"),
                         ReadClaimSeeds(feature)))
+                    .ToArray(),
+                ReadArray(item, "actors")
+                    .Select(actor => new RegionInteriorActorDefinition(
+                        ReadString(actor, "id", ""),
+                        ReadString(actor, "name", ReadString(actor, "id", "interior actor")),
+                        ReadChar(actor, "glyph", 'p'),
+                        ReadString(actor, "placement", "interior"),
+                        ReadString(actor, "faction", "neutral"),
+                        Math.Clamp(ReadInt(actor, "hitPoints", ReadInt(actor, "hp", 8)), 1, 999),
+                        Math.Clamp(ReadInt(actor, "attack", 2), 0, 999),
+                        ReadString(actor, "aiPolicyId", ReadString(actor, "ai", "resident")),
+                        ReadStringList(actor, "tags"),
+                        ReadStringList(actor, "roles"),
+                        ReadString(actor, "description", ""),
+                        ReadString(actor, "want", ""),
+                        ReadString(actor, "wantStakes", ReadString(actor, "want_stakes", "")),
+                        ReadStringList(actor, "initialItems", "initial_items")))
+                    .Where(actor => !string.IsNullOrWhiteSpace(actor.Id))
                     .ToArray()))
             .Where(definition => !string.IsNullOrWhiteSpace(definition.Id)
                 && !string.IsNullOrWhiteSpace(definition.Summary)

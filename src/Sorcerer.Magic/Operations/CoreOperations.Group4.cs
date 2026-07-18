@@ -2,6 +2,7 @@ using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.World;
 using Sorcerer.Magic.Resolution;
 using static Sorcerer.Magic.Operations.OperationHelpers;
 
@@ -238,6 +239,113 @@ public sealed class DispelMagicOperation : OperationBase
             "flow" or "flows" or "ground" or "tiles" => "flows",
             _ => "all",
         };
+}
+
+/// <summary>
+/// Ends a durable curse through the same authoritative resolve_cost consequence used by charter
+/// forms and mundane cleansing. A curse is promise-backed engine state; removing its status chip
+/// alone is deliberately insufficient because runtime systems consult the promise.
+/// </summary>
+public sealed class ResolveCurseOperation : OperationBase
+{
+    public ResolveCurseOperation()
+        : base(
+            "resolveCurse",
+            new[] { "resolve_curse", "cleanseCurse", "cleanse_curse", "liftCurse", "lift_curse" },
+            "Resolve one active durable curse on a target.",
+            "Fields: target (default player), profileId (the exact costProfileId shown on the "
+                + "active curse promise; optional only when the target has one active curse), "
+                + "curse/name/status (optional human-readable fallback). This clears both the "
+                + "authoritative curse promise and its linked runtime status through resolve_cost. "
+                + "Use removeStatus only for temporary conditions. Pair wild curse-breaking with "
+                + "a meaningful cost or a concrete counterplay described by the spell.",
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["target"] = "Entity carrying the curse; defaults to player.",
+                ["profileId"] = "Exact active promise costProfileId, such as curse_tide_debt_body.",
+                ["curse"] = "Optional curse name when profileId is omitted.",
+            },
+            isCore: false)
+    {
+    }
+
+    public override ValidationOutcome Validate(EffectContext context, SpellEffect effect)
+    {
+        var resolved = ResolveTargetSet(context, effect, "self");
+        if (IsMalformedTarget(resolved))
+        {
+            return ValidationOutcome.Technical(resolved.Error ?? "Malformed target reference.");
+        }
+
+        return ResolveTargets(context, effect, "self").Any(target => ActiveCurse(context, target, effect) is not null)
+            ? ValidationOutcome.Pass
+            : ValidationOutcome.Reject("No matching active durable curse answers that working.");
+    }
+
+    public override IReadOnlyList<StateDelta> Apply(EffectContext context, SpellEffect effect)
+    {
+        var deltas = new List<StateDelta>();
+        foreach (var target in ResolveTargets(context, effect, "self"))
+        {
+            var curse = ActiveCurse(context, target, effect);
+            if (curse is null)
+            {
+                continue;
+            }
+
+            deltas.AddRange(context.Engine.ApplyConsequence(WorldConsequence.ResolveCost(
+                "wild_magic",
+                target.Id.Value,
+                curse.CostProfileId,
+                category: "curse",
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: context.Caster.Id.Value,
+                evidence: curse.Text,
+                reason: "Validated wild magic resolved a durable curse through its shared authoritative record.",
+                operation: "resolveCurse",
+                details: new Dictionary<string, object?>
+                {
+                    ["promiseId"] = curse.Id,
+                    ["curseName"] = curse.Subject,
+                })).Deltas);
+        }
+
+        return deltas;
+    }
+
+    private static WorldPromise? ActiveCurse(EffectContext context, Entity target, SpellEffect effect)
+    {
+        var reference = Text(
+            effect,
+            "profileId",
+            Text(effect, "profile_id", Text(effect, "curse", Text(effect, "name", Text(effect, "status", "")))));
+        var candidates = context.Engine.State.PromiseLedger.Promises
+            .Where(promise => promise.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase))
+            .Where(promise => promise.Status is not "cleared" and not "fulfilled")
+            .Where(promise => string.IsNullOrWhiteSpace(promise.BoundTargetId)
+                || promise.BoundTargetId.Equals(target.Id.Value, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(reference))
+        {
+            var normalized = NormalizeReference(reference);
+            candidates = candidates.Where(promise =>
+                promise.Id.Equals(reference, StringComparison.OrdinalIgnoreCase)
+                || promise.CostProfileId?.Equals(reference, StringComparison.OrdinalIgnoreCase) == true
+                || NormalizeReference(promise.Subject).Equals(normalized, StringComparison.OrdinalIgnoreCase)
+                || NormalizeReference(promise.Text).Contains(normalized, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return candidates
+            .OrderByDescending(promise => promise.Salience)
+            .ThenBy(promise => promise.Id, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+    }
+
+    private static string NormalizeReference(string value) => string.Join(
+        "_",
+        new string(value.Trim().ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : '_')
+            .ToArray())
+            .Split('_', StringSplitOptions.RemoveEmptyEntries));
 }
 
 public sealed class RevealTruthOperation : OperationBase

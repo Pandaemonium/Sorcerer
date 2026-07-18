@@ -599,6 +599,47 @@ public sealed class PersistenceTests
     }
 
     [Fact]
+    public async Task BargainsWaitsForPendingDialogueParserBeforeListingTerms()
+    {
+        var extraction = new TaskCompletionSource<DialogueClaimExtractionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var session = GameSession.CreateImperialEncounter(
+            new WildMagicController(new MockSpellProvider()),
+            claimExtractor: new DelayedDialogueClaimExtractor(extraction.Task));
+        session.Engine.State.ControlledEntity.Set(new PositionComponent(new GridPoint(13, 5)));
+
+        var talk = await session.ExecuteAsync(new TalkCommand("Lio, state your concrete terms."));
+        Assert.True(talk.Success);
+
+        var bargainsTask = session.ExecuteAsync(new BargainsCommand("Lio"));
+        await Task.Yield();
+        Assert.False(bargainsTask.IsCompleted);
+
+        extraction.SetResult(new DialogueClaimExtractionResult(
+            "delayed-test",
+            "{}",
+            TechnicalFailure: false,
+            Error: null,
+            new[]
+            {
+                new DialogueClaimProposal(
+                    "Lio names the southern drainage route.",
+                    "route",
+                    "southern drainage route",
+                    Salience: 3,
+                    Confidence: 80,
+                    PlayerVisible: true),
+            }));
+
+        var bargains = await bargainsTask;
+
+        Assert.True(bargains.Success);
+        Assert.Single(bargains.DialogueParses);
+        Assert.Contains(bargains.Deltas, delta => delta.Operation == "claimRecorded");
+        Assert.Contains(session.Engine.State.Claims.Records, claim =>
+            claim.Subject == "southern drainage route");
+    }
+
+    [Fact]
     public async Task MaterializedSpellJsonReplaysWithoutOriginalProvider()
     {
         var command = new CastCommand("set the nearest soldier's boots burning with a blue coal");

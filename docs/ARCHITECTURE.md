@@ -355,6 +355,11 @@ contact asks it on first conversation. It combines the seed, current zone, unuse
 physical road/settlement graph, regional population grammar, and handoff template to produce a
 different named contact and nearby reachable settlement across seeds. The journal promise is a
 direct imperative objective, while the NPC says the same fact in natural voice.
+The opening scenario installs the run seed before it asks this factory for the Provincial
+Reconciliation Sweep target or authors the waystation claim. Several Hollowmere fringe hamlets
+therefore form a real, seed-selected set of nearby refuges instead of every run inheriting seed
+7's eastward target. GUI new runs choose a random seed unless `SORCERER_SEED` is supplied; CLI runs
+remain explicitly reproducible with `--seed`.
 `PromiseRealizationSystem` materializes ordinary people, items, threats, and service providers.
 Durable source-claim tags describe a small `PromiseObjectiveContract` (family, giver, item, and
 return requirement), avoiding a parallel quest ledger. `ObjectiveProgressSystem` evaluates
@@ -777,6 +782,17 @@ bond, want, deed, and rescue narration as one transaction after the door opens. 
 rejects or fails preflight, the parent `open_or_unlock` rolls the door state back too; the result
 keeps hidden child diagnostics such as `freeCaptiveSkipped` plus the parent `openOrUnlockSkipped`
 audit.
+
+Nearby realized debt anchors have a general conversation-to-obligation bridge. Provider extraction
+can submit a typed `BargainOffer` containing currency, item, service, standing, concession, and
+deadline terms; the ordinary bargain consequence path preflights and applies those terms
+transactionally. `bargains` waits for an in-flight post-speech extraction before rendering, so a
+fast CLI batch cannot inspect stale state. If a live parser selected the bargain lane but returned a
+malformed envelope, a bounded grounding repair may reconstruct only explicit currency or
+unprotected carried-item terms named in the actual reply and listener inventory. That provenance is
+visible in the journal, and the repaired packet still uses the normal validator and applier.
+Conversation memory alone never clears consideration.
+
 Interaction fallback persistence also routes through typed `message` consequences
 (`dialogueFallbackMessage`, `readFallbackMessage`, `examineFallbackMessage`, or
 `openFallbackMessage`) instead of writing directly to the message log. Normal interaction paths
@@ -1097,6 +1113,43 @@ Important contracts:
 
 See [WILD_MAGIC_CONTRACT.md](WILD_MAGIC_CONTRACT.md).
 
+## Journey, Bargain, Tactical Intent, And Set-Piece Grammar
+
+Long-distance `journey` is a thin orchestration over ordinary zone travel. Each crossed edge still
+advances the shared world turn and carries engaged pursuers. A durable `JourneyPlan` lives on a
+player-visible promise; compression stops for pursuit, an authored promise realization, the named
+destination, or a bounded ambient scene (two per journey). It does not invent a second travel map
+or skip world initiative. An unambiguous region query resolves to that region's primary settlement,
+while an explicit landmark name still resolves to the landmark; broad travel therefore reaches a
+socially useful anchor without erasing interesting landmarks encountered along the route.
+
+Social settlement uses typed `BargainOffer` and `BargainAgreement` records on promises. Currency and
+item terms transfer real inventory, standing terms use faction consequences, concessions become
+canon, service terms remain pending, and deadlines can breach. Speech can propose an offer, but a
+conversation memory alone cannot clear debt. `offer`, `bargain`, `settle`, `fulfill`, `concede`,
+`intimidate`, and `exchange` all call the same consequence-backed relationship and inventory state.
+
+Actor-archetype intent is read from data. When an authored hostile reaches its signature range, AI
+spends one turn applying a visible `tactical_committed` behavior before resolving the attack.
+Threat cards expose the intent and its authored counter. `counter` requires a concrete carried item
+whose definition answers that counter; `brace` derives its bonus from worn equipment. This creates
+deterministic mastery around probabilistic magic without an enemy-id switch.
+
+Significant interiors may author threshold and interior actors. The relay waystation uses this
+grammar for a clerk, courier, records clerk, and warden, while entry remains general state:
+credentials, allied gate staff, concealment, an authorized body, forced-open tags, or
+`open_or_unlock`. Interior guards consult those same durable credentials, offices, and personal
+agreements, so a legitimate entry does not become inexplicably hostile one tile later; forced and
+overt-magical access still counts as trespass. No route-completion flag or waystation command
+handler exists.
+
+Curse and altered-item cost profiles now name runtime state. Curses bind durable promises plus
+status/resistance/cadence effects; altered items persist on their carrier, affect equipment focus
+and merchant valuation, survive transfer/save, and can be cleared through `resolve_cost`/`cleanse`.
+Active curses are prioritized in routed resolver context with their bound target and exact profile
+id. Wild magic clears one through `resolveCurse`, which calls that same `resolve_cost` apply point;
+removing only its visible status does not disable promise-backed runtime behavior.
+
 ## Presentation Views
 
 Presentation views are read-only data packets.
@@ -1108,6 +1161,8 @@ Important views:
   legend, and pressure, shared by CLI `journal` and the Godot Journal scene
 - `MapView`: visible/explored map and entities
 - `InventoryView`
+- CLI `inventory` and `threats` are turn-free renderings of the same inventory and threat-card
+  views; they do not expose a second rule path
 - `EntityCard`
 - `TileCard`
 - `MagicContextView`

@@ -131,7 +131,28 @@ public static class RegionPopulationGenerator
                 .Append("resident")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            var wares = archetype.Wares
+            var selectedWares = archetype.Wares
+                .Where(ware => ware.ChancePercent >= 100 || rng.NextInt(0, 100) < ware.ChancePercent)
+                .ToList();
+            // A named merchant should present a choice, not a single mandatory purchase. Chance
+            // still determines most of the shelf, then deterministic sampling fills only to the
+            // small decision floor. Large corpora therefore vary seed to seed without producing
+            // the playtest failure case of a supposedly lush market containing one repeated item.
+            var minimumAssortment = Math.Min(3, archetype.Wares.Count);
+            while (selectedWares.Count < minimumAssortment)
+            {
+                var missing = archetype.Wares
+                    .Where(candidate => !selectedWares.Contains(candidate))
+                    .ToArray();
+                if (missing.Length == 0)
+                {
+                    break;
+                }
+
+                selectedWares.Add(missing[rng.NextInt(0, missing.Length)]);
+            }
+
+            var wares = selectedWares
                 .Select(ware => new GeneratedResidentWare(
                     ware.Item,
                     rng.NextInt(ware.MinQuantity, Math.Max(ware.MinQuantity, ware.MaxQuantity) + 1)))
@@ -172,18 +193,19 @@ public static class RegionPopulationGenerator
         int index,
         IRng rng)
     {
-        if (index == 0 && habitat == CenterHabitat)
+        if (habitat == CenterHabitat)
         {
             var required = grammar.Archetypes.Where(archetype => archetype.RequiredAtCenter).ToArray();
-            if (required.Length > 0)
+            if (index < required.Length)
             {
-                return WeightedPick(required, archetype => Math.Max(1, archetype.Weight * HabitatWeight(archetype, habitat)), rng);
+                return required[index];
             }
         }
 
-        // A required-at-center archetype is the district's single anchor (the market's apothecary,
-        // the hall's keeper); it is placed once at index 0 and never re-rolled into three of itself,
-        // leaving the rest of the crowd to the varied roles.
+        // Every required-at-center archetype is a distinct authored part of the district's social
+        // composition. Place each once, in declaration order, then leave the rest of the crowd to
+        // the varied roles. Center populations are guaranteed at least three residents above, so a
+        // three-voice ensemble remains intact even on a low Poisson roll.
         var eligible = grammar.Archetypes
             .Where(archetype => HabitatWeight(archetype, habitat) > 0)
             .Where(archetype => !(habitat == CenterHabitat && archetype.RequiredAtCenter))

@@ -259,7 +259,15 @@ public sealed partial class WorldConsequenceApplier
     {
         var actor = target.Get<ActorComponent>();
         var equipmentDefense = target.TryGet<EquipmentEffectComponent>(out var effect) ? effect.Defense : 0;
-        var actual = Math.Max(1, amount - actor.Defense - equipmentDefense);
+        // Bracing is a deliberately equipment-dependent tactical choice: it doubles the defensive
+        // contribution of worn gear for the short stance, but never manufactures armor from thin
+        // air. Behavior expiry remains engine-owned and save-safe like every other compulsion.
+        var braceBonus = target.TryGet<BehaviorTagsComponent>(out var behaviors)
+            && behaviors.Tags.TryGetValue("braced", out var expiry)
+            && (expiry is null || expiry > _state.Turn)
+                ? equipmentDefense
+                : 0;
+        var actual = Math.Max(1, amount - actor.Defense - equipmentDefense - braceBonus);
         var updated = actor with { HitPoints = Math.Max(0, actor.HitPoints - actual) };
         target.Set(updated);
         if (!updated.Alive)
@@ -278,6 +286,8 @@ public sealed partial class WorldConsequenceApplier
             {
                 ["amount"] = actual,
                 ["damageType"] = damageType,
+                ["equipmentDefense"] = equipmentDefense,
+                ["braceBonus"] = braceBonus,
             });
     }
 

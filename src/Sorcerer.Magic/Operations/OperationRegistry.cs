@@ -167,6 +167,7 @@ public sealed class OperationRegistry
             new CreateFlowOperation(),
             new AnimateEntityOperation(),
             new DispelMagicOperation(),
+            new ResolveCurseOperation(),
             new RevealTruthOperation(),
             };
         return Build(operations, OperationCardLoader.LoadDefaultContentCards());

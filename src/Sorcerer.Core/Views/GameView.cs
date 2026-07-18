@@ -29,7 +29,10 @@ public sealed record ThreatCard(
     string Name,
     int Distance,
     bool Imminent,
-    string Telegraph);
+    string Telegraph,
+    string? Intent = null,
+    string? Counter = null,
+    string? EquipmentHint = null);
 
 public sealed record ContextActionCard(
     string Id,
@@ -62,7 +65,9 @@ public sealed record ItemCard(
     string Rarity = "common",
     string Description = "",
     string Effects = "",
-    string SpellBias = "");
+    string SpellBias = "",
+    string? AlterationProfileId = null,
+    string? Alteration = null);
 
 public sealed record ReagentCard(
     string Name,
@@ -185,7 +190,9 @@ public sealed record PromiseCard(
     string? SourceClaimId = null,
     string? SourceSpeakerId = null,
     string? SourceListenerSoulId = null,
-    int? SourceConfidence = null);
+    int? SourceConfidence = null,
+    string? CostProfileId = null,
+    int Stacks = 1);
 
 public sealed record ClaimCard(
     string Id,

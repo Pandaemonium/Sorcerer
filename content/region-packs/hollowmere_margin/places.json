@@ -19,7 +19,7 @@
         "Ferryman's Knot"
       ],
       "primaryRadius": 1,
-      "hamletCount": 2,
+      "hamletCount": 3,
       "roadName": "the willow causeway",
       "roadTerrain": "reed_causeway",
       "districts": [

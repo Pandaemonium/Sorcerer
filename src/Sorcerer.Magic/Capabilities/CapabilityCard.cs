@@ -413,11 +413,16 @@ public sealed class CapabilityRegistry
 
         yield return new CapabilityCard(
             "dispelling",
-            new[] { "dispel", "unravel", "undo the", "break the ward", "break the spell", "break the enchantment", "break the curse", "end the spell", "end the enchantment", "cancel", "counterspell", "counter the", "quiet the magic", "snuff", "strip the", "cleanse", "purge", "lift the curse", "cut the strings", "unbind", "unweave", "silence the ward" },
-            "dispelling - end active magic: statuses, wards, triggers, enchantments, and tile flows",
-            new[] { "dispelMagic", "removeStatus" },
-            new[] { "visible_entities", "nearby_tiles" },
-            "dispelMagic ends active magic instead of narrating it away. Fields: target (the "
+            new[] { "dispel", "unravel", "undo the", "break the ward", "break the spell", "break the enchantment", "break the curse", "end the spell", "end the enchantment", "cancel", "counterspell", "counter the", "quiet the magic", "snuff", "strip the", "cleanse", "cure", "purge", "lift the curse", "remove the curse", "rid me of", "cut the strings", "unbind", "unweave", "silence the ward" },
+            "dispelling - end active magic or resolve a durable curse",
+            new[] { "dispelMagic", "removeStatus", "resolveCurse" },
+            new[] { "visible_entities", "nearby_tiles", "promises" },
+            "A condition that appears both in caster.statuses and as an active curse promise is "
+                + "durable: use resolveCurse, never removeStatus. resolveCurse fields: target "
+                + "(default player), profileId (copy the exact costProfileId from the matching "
+                + "promise; omit only when there is one active curse). It clears the promise and "
+                + "its linked runtime status transactionally, and deserves a meaningful cost. "
+                + "dispelMagic ends ordinary active magic instead. Fields: target (the "
                 + "entity whose magic should be stripped; default the caster) or x/y (a tile "
                 + "whose flows and anchored wards should end), scope (all, statuses, triggers, "
                 + "persistent, flows; default all), radius (0-3). It rejects when there is no "
@@ -425,6 +430,7 @@ public sealed class CapabilityRegistry
             new[]
             {
                 "Example: {\"type\":\"dispelMagic\",\"target\":\"player\",\"scope\":\"triggers\"}",
+                "Example: {\"type\":\"resolveCurse\",\"target\":\"player\",\"profileId\":\"curse_tide_debt_body\"}",
             },
             Array.Empty<string>());
 
@@ -474,7 +480,7 @@ public sealed class CapabilityRegistry
             new[] { "unlock", "open the door", "open the gate", "open the cell", "lock forgets", "forget its shape", "unbar", "unseal", "seal the", "the lock", "lock forget", "unchain", "free the", "release the", "way out", "path out", "escape route", "a way through", "no key", "steal", "snatch", "leaps to my hand", "leap to my hand", "fly to my hand", "yank the", "disarm", "pickpocket" },
             "ways_and_seals - open, unlock, or seal doors; free captives; reveal routes",
             new[] { "consequence" },
-            new[] { "visible_entities", "spell_anchors" },
+            new[] { "visible_entities", "hidden_entities", "spell_anchors", "promises" },
             "Doors and ways go through effectType 'consequence'. consequenceType "
                 + "'open_or_unlock' (fields: target = the door entity, unlock true/false, open "
                 + "true/false) opens or unlocks a reachable door - the engine rejects doors out "

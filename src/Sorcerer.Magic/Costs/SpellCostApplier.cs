@@ -1,6 +1,7 @@
 using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Engine;
 using Sorcerer.Core.Results;
+using Sorcerer.Core.World;
 using Sorcerer.Magic.Resolution;
 
 namespace Sorcerer.Magic.Costs;
@@ -169,22 +170,140 @@ public static class SpellCostApplier
 
     private static IReadOnlyList<StateDelta> AddCurseCost(GameEngine engine, SpellCost cost)
     {
-        var name = SpellValidator.ReadString(cost.Fields, "name", SpellValidator.ReadString(cost.Fields, "id", "Wild Debt"));
-        var text = SpellValidator.ReadString(cost.Fields, "description", name);
+        var profileId = SpellValidator.ReadString(
+            cost.Fields,
+            "profileId",
+            SpellValidator.ReadString(cost.Fields, "profile_id", ""));
+        var profile = string.IsNullOrWhiteSpace(profileId)
+            ? null
+            : CostProfileCatalog.Default.Find(profileId);
+        if (profile?.Kind.Equals("altered_item", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            var item = SpellValidator.ReadString(cost.Fields, "item", "");
+            if (string.IsNullOrWhiteSpace(item))
+            {
+                var actor = engine.State.ControlledEntity;
+                if (actor.TryGet<Sorcerer.Core.Entities.EquipmentComponent>(out var equipment))
+                {
+                    item = equipment.FocusSlots
+                        .Select(slot => equipment.Slots.TryGetValue(slot, out var focused) ? focused : null)
+                        .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)
+                            && actor.TryGet<Sorcerer.Core.Entities.InventoryComponent>(out var focusedInventory)
+                            && focusedInventory.Items.ContainsKey(value)
+                            && !value.Equals("gold", StringComparison.OrdinalIgnoreCase)
+                            && !focusedInventory.TreasuredItems.Contains(value)) ?? "";
+                }
 
-        return ApplyCostConsequence(engine, WorldConsequence.CreatePromise(
+                if (string.IsNullOrWhiteSpace(item)
+                    && actor.TryGet<Sorcerer.Core.Entities.InventoryComponent>(out var inventory))
+                {
+                    item = inventory.Items.Keys.FirstOrDefault(key =>
+                        !key.Equals("gold", StringComparison.OrdinalIgnoreCase)
+                        && !inventory.TreasuredItems.Contains(key)) ?? "";
+                }
+            }
+
+            return ApplyCostConsequence(engine, WorldConsequence.AlterItem(
+                "spell_cost",
+                engine.State.ControlledEntityId.Value,
+                item,
+                profile.Id,
+                sourceEntityId: engine.State.ControlledEntityId.Value,
+                evidence: profile.Cause,
+                reason: "A cost profile altered a concrete carried item while preserving its identity.",
+                operation: "cost:alteredItem"));
+        }
+
+        var name = profile?.Name
+            ?? SpellValidator.ReadString(cost.Fields, "name", SpellValidator.ReadString(cost.Fields, "id", "Wild Debt"));
+        var text = profile is null
+            ? SpellValidator.ReadString(cost.Fields, "description", name)
+            : $"{profile.Name}: {profile.Condition} Counterplay: {string.Join(" ", profile.ClearRoutes)}";
+        var kind = profile?.Kind.Equals("curse", StringComparison.OrdinalIgnoreCase) == true ? "curse" : "debt";
+        var isCurse = kind.Equals("curse", StringComparison.OrdinalIgnoreCase);
+        var realizationKind = profile is null || isCurse
+            ? null
+            : profile.Tags.Contains("claimant", StringComparer.OrdinalIgnoreCase)
+                || profile.Id.Equals("debt_whalehold_bone", StringComparison.OrdinalIgnoreCase)
+                    ? "threat"
+                    : "person";
+        var details = new Dictionary<string, object?>
+        {
+            ["name"] = name,
+        };
+        if (profile is not null)
+        {
+            details["profileId"] = profile.Id;
+            details["cause"] = profile.Cause;
+            details["journalSurface"] = profile.JournalSurface;
+            details["clearRoutes"] = profile.ClearRoutes.ToArray();
+            details["tags"] = profile.Tags.ToArray();
+        }
+
+        var deltas = new List<StateDelta>();
+        deltas.AddRange(ApplyCostConsequence(engine, WorldConsequence.CreatePromise(
             "spell_cost",
-            "debt",
+            kind,
             text,
-            visibility: WorldConsequenceVisibility.Hidden,
+            anchorEntityId: isCurse ? engine.State.ControlledEntityId.Value : null,
+            triggerHint: profile is null || isCurse ? "" : "travel",
+            visibility: WorldConsequenceVisibility.Journal,
             sourceEntityId: engine.State.ControlledEntityId.Value,
+            evidence: profile?.Cause,
+            reason: profile?.Cause ?? "Wild magic imposed a durable story cost.",
             operation: "cost:curse",
             stackExisting: true,
-            useCurrentRegionAsClaimedPlace: false,
-            autoBind: false,
+            salience: profile is null ? 2 : 4,
+            realizationKind: realizationKind,
+            useCurrentRegionAsClaimedPlace: profile is not null && !isCurse,
+            autoBind: profile is not null,
+            subject: name,
             message: $"Cost: {name}.",
             stackMessageTemplate: $"Cost: {name} deepens ({{stacks}} stacks).",
-            details: new Dictionary<string, object?> { ["name"] = name }));
+            costProfileId: profile?.Id,
+            details: details)));
+
+        if (!isCurse || profile is null)
+        {
+            return deltas;
+        }
+
+        var statusId = profile.Id switch
+        {
+            "curse_marked_by_color" => "marked_by_color",
+            "curse_hollow_name" => "hollow_name",
+            "curse_iron_thirst" => "iron_thirst",
+            "curse_tide_debt_body" => "borrowed_tide",
+            _ => "cursed",
+        };
+        deltas.AddRange(ApplyCostConsequence(engine, WorldConsequence.ApplyStatus(
+            "spell_cost",
+            engine.State.ControlledEntityId.Value,
+            statusId,
+            duration: 999,
+            displayName: profile.Name,
+            sourceEntityId: engine.State.ControlledEntityId.Value,
+            evidence: profile.Cause,
+            reason: "The active curse exposes its runtime state to every renderer.",
+            operation: "cost:curseStatus",
+            emitMessage: false)));
+        if (profile.Id.Equals("curse_iron_thirst", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var damageType in new[] { "iron", "metal", "charter" })
+            {
+                deltas.AddRange(ApplyCostConsequence(engine, WorldConsequence.SetWeakness(
+                    "spell_cost",
+                    engine.State.ControlledEntityId.Value,
+                    damageType,
+                    amount: 50,
+                    sourceEntityId: engine.State.ControlledEntityId.Value,
+                    evidence: profile.Cause,
+                    reason: "Iron Thirst has an explicit typed damage weakness.",
+                    operation: "cost:ironThirstWeakness")));
+            }
+        }
+
+        return deltas;
     }
 
     private static IReadOnlyList<StateDelta> ApplyCostConsequence(GameEngine engine, WorldConsequence consequence)

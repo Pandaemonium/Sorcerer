@@ -654,7 +654,9 @@ public sealed class GameSessionTests
             new JournalCommand(),
             new RumorsCommand(),
             new CharacterCommand(),
+            new InventoryCommand(),
             new ReagentsCommand(),
+            new ThreatsCommand(),
             new WaresCommand(),
             new ServicesCommand(),
             new BondsCommand(),
@@ -783,7 +785,7 @@ public sealed class GameSessionTests
 
         var result = await session.ExecuteAsync(new WaitCommand());
 
-        Assert.Contains(result.Deltas, delta => delta.Operation == "attack");
+        Assert.Contains(result.Deltas, delta => delta.Target == "soldier_1" && delta.Operation == "telegraphIntent");
         Assert.Equal(before, soldier.Get<PositionComponent>().Position);
     }
 
@@ -1306,7 +1308,7 @@ public sealed class GameSessionTests
 
         var result = await session.ExecuteAsync(new WaitCommand());
 
-        Assert.Contains(result.Deltas, delta => delta.Operation == "attack" && delta.Target == "player");
+        Assert.Contains(result.Deltas, delta => delta.Target == "soldier_1" && delta.Operation == "telegraphIntent");
     }
 
     [Fact]
@@ -6232,6 +6234,34 @@ public sealed class GameSessionTests
     }
 
     [Fact]
+    public async Task ExplicitRemoteNameDoesNotSilentlyRetargetANearbyResident()
+    {
+        var session = GameSession.CreateImperialEncounter(seed: 6);
+        session.Engine.Travel(Direction.East);
+        var playerPosition = session.Engine.State.ControlledEntity.Get<PositionComponent>().Position;
+        var residents = session.Engine.State.Entities.Values
+            .Where(entity => entity.TryGet<TagsComponent>(out var tags)
+                && tags.Tags.Contains("regional_population", StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        var remote = residents.First(entity => residents.Count(other =>
+            FirstName(other.Name).Equals(FirstName(entity.Name), StringComparison.OrdinalIgnoreCase)) == 1);
+        var nearby = residents.First(entity => entity.Id != remote.Id);
+        remote.Set(new PositionComponent(new GridPoint(20, 20)));
+        nearby.Set(new PositionComponent(playerPosition.Translate(1, 0)));
+        var remoteFirstName = FirstName(remote.Name);
+
+        var result = await session.ExecuteAsync(new TalkCommand($"{remoteFirstName}, what do the animals need?"));
+
+        Assert.False(result.Success);
+        Assert.False(result.ConsumedTurn);
+        Assert.Contains(result.Messages, message => message.Contains(remote.Name, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Messages, message => message.Contains(nearby.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string FirstName(string name) =>
+        name.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+
+    [Fact]
     public async Task IncapacitatedBodyCanBePossessedWithoutMovingInventory()
     {
         var session = GameSession.CreateImperialEncounter();
@@ -6297,6 +6327,8 @@ public sealed class GameSessionTests
         Assert.DoesNotContain(result.Deltas, delta => delta.Operation == "possessionSkipped");
         Assert.DoesNotContain(result.Messages, message => message.Contains("controlled by", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(result.Messages, message => message.Contains("now answers to", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Messages, message => message.Contains("your former body staggers", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Messages, message => message.Contains("You staggers", StringComparison.OrdinalIgnoreCase));
         Assert.True(session.Engine.ValidateState().IsValid);
     }
 

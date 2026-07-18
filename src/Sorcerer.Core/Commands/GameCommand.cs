@@ -32,6 +32,9 @@ public sealed record MapCommand(int Radius = 8) : GameCommand;
 
 public sealed record TravelCommand(Direction Direction) : GameCommand;
 
+/// <summary>Follow a named overland route, compressing empty legs with a bounded scene budget.</summary>
+public sealed record JourneyCommand(string Destination) : GameCommand;
+
 public sealed record AtlasCommand() : GameCommand;
 
 public sealed record PickupCommand(string? Target = null) : GameCommand;
@@ -52,7 +55,13 @@ public sealed record ProtectItemCommand(string Item) : GameCommand;
 
 public sealed record UnprotectItemCommand(string Item) : GameCommand;
 
+/// <summary>Lists every carried item, including equipment, protection, and alterations.</summary>
+public sealed record InventoryCommand() : GameCommand;
+
 public sealed record ReagentsCommand() : GameCommand;
+
+/// <summary>Lists the currently perceived hostile intents and their legible counters.</summary>
+public sealed record ThreatsCommand() : GameCommand;
 
 public sealed record WaresCommand(string? Target = null) : GameCommand;
 
@@ -85,6 +94,37 @@ public sealed record TalkCommand(string Text) : GameCommand;
 /// participants exchange short, state-grounded utterances (a Bralli tale-circle one-up, a Hollowmere
 /// disagreement) through the shared command surface.</summary>
 public sealed record GroupTalkCommand(string Text = "") : GameCommand;
+
+/// <summary>Accept the concrete terms established in conversation with a nearby entity that
+/// anchors a realized debt or obligation.</summary>
+public sealed record SettleCommand(string? Target = null) : GameCommand;
+
+public sealed record BargainsCommand(string? Target = null) : GameCommand;
+
+/// <summary>Perform a pending service term in the claimant's presence.</summary>
+public sealed record FulfillCommand(string Reference = "") : GameCommand;
+
+public sealed record OfferCommand(string Text) : GameCommand;
+
+public sealed record BargainCommand(string? Target = null) : GameCommand;
+
+public sealed record ConcedeCommand(string? Target = null) : GameCommand;
+
+public sealed record IntimidateCommand(string? Target = null) : GameCommand;
+
+public sealed record ExchangeCommand(string Text) : GameCommand;
+
+public sealed record CleanseCommand(string? Reference = null) : GameCommand;
+
+/// <summary>Commit to a defensive stance. Worn protective equipment determines its strength.</summary>
+public sealed record BraceCommand() : GameCommand;
+
+/// <summary>Interrupt a telegraphed enemy action with an inventory or equipped item.</summary>
+public sealed record CounterCommand(string Text) : GameCommand;
+
+public sealed record BreachCommand(string? Target = null) : GameCommand;
+
+public sealed record ForgeCommand(string Text = "permit") : GameCommand;
 
 public sealed record GiveCommand(string Item, string? Target = null) : GameCommand;
 

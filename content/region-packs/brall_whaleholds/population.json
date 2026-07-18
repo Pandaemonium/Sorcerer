@@ -77,22 +77,38 @@
             {
               "item": "powdered scrimshaw",
               "min": 1,
-              "max": 3
+              "max": 3,
+              "chancePercent": 55
             },
             {
               "item": "flask of whale oil",
               "min": 1,
-              "max": 3
+              "max": 3,
+              "chancePercent": 55
             },
             {
               "item": "bone luck-token",
               "min": 1,
-              "max": 4
+              "max": 4,
+              "chancePercent": 55
             },
             {
-              "item": "skin of storm-ale",
+              "item": "carved scrimshaw focus",
               "min": 1,
-              "max": 3
+              "max": 1,
+              "chancePercent": 30
+            },
+            {
+              "item": "scrimshaw witness-record",
+              "min": 1,
+              "max": 2,
+              "chancePercent": 40
+            },
+            {
+              "item": "whalebone corslet",
+              "min": 1,
+              "max": 1,
+              "chancePercent": 20
             }
           ],
           "centerWeight": 5,
@@ -125,6 +141,7 @@
           "centerWeight": 4,
           "nearWeight": 3,
           "wildWeight": 1,
+          "requiredAtCenter": true,
           "knowledgeTier": 3
         },
         {
@@ -156,19 +173,169 @@
             {
               "item": "bone-tipped harpoon",
               "min": 1,
-              "max": 1
+              "max": 1,
+              "chancePercent": 55
             },
             {
               "item": "tarred rope harness",
               "min": 1,
-              "max": 2
+              "max": 2,
+              "chancePercent": 55
             },
             {
               "item": "coil of tarred rope",
               "min": 1,
-              "max": 3
+              "max": 3,
+              "chancePercent": 55
             }
           ]
+        },
+        {
+          "id": "pass_guide",
+          "title": "snow-pass guide",
+          "glyph": "g",
+          "tags": ["mountain", "snow", "guide", "travel", "brall"],
+          "roles": ["resident", "service_provider", "witness"],
+          "descriptions": [
+            "Seal-hide gaiters are chalked with yesterday's avalanche line.",
+            "The guide carries two ropes: one for clients and one for people they actually trust."
+          ],
+          "wants": [
+            "Reopen the whale-road pass without waking what has nested beneath its marker stones.",
+            "Find who moved a warning cairn to make the imperial survey look safer than it is."
+          ],
+          "services": [
+            {
+              "id": "whale_road_guidance",
+              "name": "whale-road guidance",
+              "description": "A cold-pass route marked by bone cairns, tested ropes, and warnings the imperial survey omitted.",
+              "effectKind": "create_route",
+              "goldCost": 2,
+              "targetHint": "a guide-marked Bralli whale-road",
+              "tags": ["route", "mountain", "cold", "brall"]
+            }
+          ],
+          "centerWeight": 2,
+          "nearWeight": 4,
+          "wildWeight": 4,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "ale_house_host",
+          "title": "tale-house host",
+          "glyph": "a",
+          "tags": ["ale", "hall", "teller", "story_circle", "brall"],
+          "roles": ["resident", "merchant", "service_provider"],
+          "descriptions": [
+            "The host measures ale by the cup and stories by how many witnesses interrupt them.",
+            "A whale-oil lamp is turned low whenever an imperial version of events enters the room."
+          ],
+          "wants": [
+            "Get tonight's strangers to tell one true thing before the regulars improve it beyond recognition.",
+            "Keep the hall open without letting the occupation choose which names may be toasted."
+          ],
+          "wares": [
+            { "item": "skin of storm-ale", "min": 2, "max": 5, "chancePercent": 65 },
+            { "item": "hardtack and dried fish", "min": 1, "max": 4, "chancePercent": 60 },
+            { "item": "tide-warning slate", "min": 1, "max": 2, "chancePercent": 45 },
+            { "item": "shard of brine-ice", "min": 1, "max": 3, "chancePercent": 40 },
+            { "item": "sealskin storm-cloak", "min": 1, "max": 1, "chancePercent": 25 },
+            { "item": "bone luck-token", "min": 1, "max": 3, "chancePercent": 35 }
+          ],
+          "services": [
+            {
+              "id": "witness_backed_introduction",
+              "name": "witness-backed introduction",
+              "description": "The hall adopts one version of your deed and sends it ahead with names that open a Bralli door.",
+              "effectKind": "create_route",
+              "goldCost": 0,
+              "targetHint": "a tale carried to the next welcoming Bralli hold",
+              "tags": ["route", "access", "story", "witness", "brall"]
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 1,
+          "wildWeight": 0,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "bone_debt_caller",
+          "title": "bone-debt caller",
+          "glyph": "d",
+          "tags": ["debt", "scrimshaw", "claimant", "public", "brall"],
+          "roles": ["resident", "claimant", "witness"],
+          "descriptions": [
+            "A necklace of blank bone tallies clicks softly, each waiting for somebody's name.",
+            "They recite debts in a voice trained to carry across a crowded hall."
+          ],
+          "wants": [
+            "Settle a whalehouse debt where the same witnesses who heard it made can hear it end.",
+            "Discover whether an erased carving means payment, forgery, or a better story."
+          ],
+          "centerWeight": 3,
+          "nearWeight": 3,
+          "wildWeight": 1,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "occupation_factor",
+          "title": "imperial winter factor",
+          "glyph": "f",
+          "factionId": "empire",
+          "tags": ["empire", "occupation", "supply", "stability", "brall"],
+          "roles": ["functionary", "empire", "merchant"],
+          "descriptions": [
+            "Their marble-white coat is excellent against ceremony and poor against actual weather.",
+            "A supply ledger records lamp oil delivered on time and names quietly omitted from arrest lists."
+          ],
+          "wants": [
+            "Keep the harbor supplied through winter, even if that means ignoring three prohibited songs and one fugitive guide.",
+            "Prove imperial stability can be useful here before the garrison replaces bargaining with seizure."
+          ],
+          "wares": [
+            { "item": "flask of whale oil", "min": 2, "max": 5, "chancePercent": 100 },
+            { "item": "hardtack and dried fish", "min": 2, "max": 6, "chancePercent": 80 },
+            { "item": "tide-warning slate", "min": 1, "max": 2, "chancePercent": 60 }
+          ],
+          "centerWeight": 3,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "cold_salve_keeper",
+          "title": "cold-salve keeper",
+          "glyph": "s",
+          "tags": ["healer", "mountain", "whale_oil", "folk", "brall"],
+          "roles": ["resident", "merchant", "service_provider"],
+          "descriptions": [
+            "Jars of blue salve nest in snow so cold each lid hums when opened.",
+            "The keeper can identify a mountain by the shape of frostbite it leaves."
+          ],
+          "wants": [
+            "Trade for a living ember before the last medicinal stove goes dark.",
+            "Treat a patrol and a smuggler without either learning who was bandaged first."
+          ],
+          "wares": [
+            { "item": "shard of brine-ice", "min": 1, "max": 4, "chancePercent": 80 },
+            { "item": "healer's poultice", "min": 1, "max": 3, "chancePercent": 70 },
+            { "item": "sealskin storm-cloak", "min": 1, "max": 1, "chancePercent": 35 }
+          ],
+          "services": [
+            {
+              "id": "cold_salve_treatment",
+              "name": "cold-salve treatment",
+              "description": "Blue salve, hot stones, and a private bench return feeling to a road-worn body.",
+              "effectKind": "rest",
+              "goldCost": 3,
+              "tags": ["healing", "rest", "cold", "brall"]
+            }
+          ],
+          "centerWeight": 3,
+          "nearWeight": 4,
+          "wildWeight": 2,
+          "knowledgeTier": 2
         }
       ]
     }

@@ -155,6 +155,11 @@ public sealed partial class GameSession
             ApplyDialogueWantProposal(provider, proposals.Want, messages, deltas);
         }
 
+        if (proposals.Bargain is not null)
+        {
+            ApplyDialogueBargainProposal(provider, turn, spokenText, proposals.Bargain, messages, deltas);
+        }
+
         for (var index = 0; index < actions.Count; index++)
         {
             if (preAppliedActionIndexes.Contains(index))
@@ -164,6 +169,72 @@ public sealed partial class GameSession
 
             var action = actions[index];
             ApplyDialogueActionProposal(provider, turn, intent, spokenText, action, messages, deltas);
+        }
+    }
+
+    private void ApplyDialogueBargainProposal(
+        string provider,
+        PreparedDialogueTurn turn,
+        string spokenText,
+        BargainOffer proposal,
+        List<string> messages,
+        List<StateDelta> deltas)
+    {
+        var speaker = Engine.EntityById(turn.SpeakerId);
+        if (speaker is null)
+        {
+            return;
+        }
+
+        var promise = SettleablePromiseFor(speaker, Engine.State.PromiseLedger);
+        if (promise is null)
+        {
+            var created = Engine.ApplyConsequence(WorldConsequence.CreatePromise(
+                $"dialogue:{provider}",
+                "bargain",
+                $"Reach terms with {speaker.Name}: {proposal.Summary}",
+                anchorEntityId: speaker.Id.Value,
+                triggerHint: "settle a typed option",
+                visibility: WorldConsequenceVisibility.Journal,
+                sourceEntityId: speaker.Id.Value,
+                evidence: spokenText,
+                reason: "A concrete social offer creates a visible, engine-verifiable negotiation.",
+                operation: "dialogueBargainPromise",
+                playerVisible: true,
+                salience: 3,
+                subject: SoulIdFor(Engine.State.ControlledEntity),
+                realizationKind: "agreement",
+                useCurrentRegionAsClaimedPlace: true,
+                emitMessage: false));
+            deltas.AddRange(created.Deltas);
+            promise = Engine.State.PromiseLedger.Promises.FirstOrDefault(candidate => candidate.Id == created.TargetId);
+        }
+
+        if (promise is null)
+        {
+            AddDialogueProposalSkipped(provider, "bargain", speaker.Id.Value, "Could not create a promise for the offer.", deltas);
+            return;
+        }
+
+        var offer = proposal with
+        {
+            ClaimantEntityId = speaker.Id.Value,
+            CreatedTurn = Engine.State.Turn,
+        };
+        var applied = Engine.ApplyConsequence(WorldConsequence.OfferBargain(
+            $"dialogue:{provider}",
+            promise.Id,
+            offer,
+            visibility: WorldConsequenceVisibility.Journal,
+            sourceEntityId: speaker.Id.Value,
+            evidence: spokenText,
+            reason: "Generated social terms pass through the typed bargain validator.",
+            operation: "dialogueBargainOffer"));
+        messages.AddRange(applied.Messages);
+        deltas.AddRange(applied.Deltas);
+        if (!applied.Applied)
+        {
+            AddDialogueProposalSkipped(provider, "bargain", speaker.Id.Value, applied.Error ?? "Typed bargain offer was rejected.", deltas);
         }
     }
 

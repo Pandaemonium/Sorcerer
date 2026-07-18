@@ -5,6 +5,29 @@ namespace Sorcerer.Tests;
 
 public sealed class ScenePropTests
 {
+    [Theory]
+    [InlineData("imperial_encounter", 10, 5)]
+    [InlineData("hollowmere_margin", 14, 8)]
+    [InlineData("brall_whaleholds", 12, 6)]
+    public void PriorityRegionPacksMeetTheirPropAndEnsembleFloors(
+        string regionId,
+        int minimumBases,
+        int minimumEnsembles)
+    {
+        var props = RegionCatalog.LoadDefault().Region(regionId)!.Props!;
+
+        Assert.True(props.Bases.Count >= minimumBases, $"{regionId} needs at least {minimumBases} prop bases");
+        Assert.True((props.Ensembles?.Count ?? 0) >= minimumEnsembles,
+            $"{regionId} needs at least {minimumEnsembles} ensembles");
+        Assert.All(props.Ensembles ?? Array.Empty<RegionPropEnsembleDefinition>(), ensemble =>
+            Assert.All(ensemble.Members, member =>
+            {
+                Assert.Contains(props.Bases, item => item.Id.Equals(member.BaseId, StringComparison.OrdinalIgnoreCase));
+                Assert.Contains(props.Materials, item => item.Id.Equals(member.MaterialId, StringComparison.OrdinalIgnoreCase));
+                Assert.Contains(props.Conditions, item => item.Id.Equals(member.ConditionId, StringComparison.OrdinalIgnoreCase));
+            }));
+    }
+
     [Fact]
     public void ClaimHookProducesActionableFoundDocuments()
     {

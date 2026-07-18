@@ -22,7 +22,7 @@
       "licenseTier": 1,
       "cost": { "mana": 2 },
       "effects": [
-        { "type": "consequence", "consequenceType": "remove_status", "target": "self", "category": "negative" }
+        { "type": "consequence", "consequenceType": "resolve_cost", "target": "self", "category": "curse" }
       ]
     },
     {

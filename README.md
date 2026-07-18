@@ -74,6 +74,10 @@ regional contact at the promised settlement, and completes the objective only af
 speaks with that contact. The contact can then produce a fetch, delivery, escort, threat, folk
 service, rumor-verification, or social-leverage handoff. Completion reads ordinary world state,
 returns to the giver for want/memory/standing payoff, and supports multiple threat/social outcomes.
+GUI new runs now roll and display a fresh reproducible seed by default. That seed changes the
+opening alarm, two inspectable confiscated irregularities with actionable hooks, the nearby refuge
+chosen for the sweep warning, and the subsequent journey route; seed 7 remains pinned for focused
+characterization tests.
 The HUD, journal, inspect output, and CLI JSON share one prioritized next-step view. Rumors use
 physical roads between regions, and selected motivated NPCs can spend bounded initiative
 approaching for a visible reason. Lio is the first proving ground, not a scripted quest giver, and

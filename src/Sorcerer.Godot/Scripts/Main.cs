@@ -25,6 +25,7 @@ public partial class Main : Control
 
     private readonly List<Control> _busyControls = new();
     private Button[,] _cells = new Button[0, 0];
+    private bool _mapCellSizingQueued;
 
     private GameSession _session = null!;
     private PanelContainer _mapFrame = null!;
@@ -228,6 +229,13 @@ public partial class Main : Control
             return;
         }
 
+        if (action == BindableAction.OpenJournal && !_busy && !_escMenu.Visible)
+        {
+            GetViewport().SetInputAsHandled();
+            OpenJournalScene();
+            return;
+        }
+
         if (_escMenu.Visible || _busy)
         {
             return;
@@ -272,6 +280,13 @@ public partial class Main : Control
         SessionHost.Session = _session;
         StashProviderOverrides();
         GetTree().ChangeSceneToFile("res://Scenes/Controls.tscn");
+    }
+
+    private void OpenJournalScene()
+    {
+        SessionHost.Session = _session;
+        StashProviderOverrides();
+        GetTree().ChangeSceneToFile("res://Scenes/Journal.tscn");
     }
 
     public override void _Process(double delta)
@@ -439,6 +454,14 @@ public partial class Main : Control
 
         _llmDebug = new LlmDebugPanel { ZIndex = 90 };
         AddChild(FullRect(_llmDebug));
+
+        // Scene returns rebuild Main while the viewport is already at its final size. Queue map
+        // sizing only after the whole vertical layout (including the command panel) has settled;
+        // otherwise an early wide-map measurement can become a sticky minimum height and push
+        // the spell/command panel below the viewport.
+        Resized += QueueMapCellSizing;
+        _mapFrame.Resized += QueueMapCellSizing;
+        QueueMapCellSizing();
     }
 
     private Control BuildContextMenu()
@@ -767,7 +790,6 @@ public partial class Main : Control
             SizeFlagsVertical = SizeFlags.ExpandFill,
         };
         _mapFrame = mapFrame;
-        _mapFrame.Resized += UpdateMapCellSizing;
         stack.AddChild(mapFrame);
 
         var mapCenter = new CenterContainer
@@ -1034,7 +1056,7 @@ public partial class Main : Control
             : null;
         var seed = int.TryParse(System.Environment.GetEnvironmentVariable("SORCERER_SEED"), out var parsedSeed)
             ? Math.Max(1, parsedSeed)
-            : 7;
+            : Random.Shared.Next(1, int.MaxValue);
         _session = GameSession.CreateImperialEncounter(
             new WildMagicController(provider, audit: audit, router: router),
             origin,
@@ -1328,9 +1350,9 @@ public partial class Main : Control
         var observation = _session.Observation();
         var view = observation.View;
         EnsureMapCells(view);
-        UpdateMapCellSizing();
         RenderMap(view);
         RenderSidebars(view, observation.PendingCast);
+        QueueMapCellSizing();
         _lastPendingCastKey = PendingCastKey(observation.PendingCast);
         SetBusy(_busy);
         SessionHost.Session = _session;
@@ -1538,8 +1560,8 @@ public partial class Main : Control
         var pendingSuffix = pendingCast is null ? "" : $" | Cast {pendingCast.State}";
         var autoplayPrefix = _autoplay ? "[AUTOPLAY ▶ press P to stop] " : "";
         _statusLine.Text = view.Character is null
-            ? $"{autoplayPrefix}Turn {view.Turn}{pendingSuffix}"
-            : $"{autoplayPrefix}Turn {view.Turn} — {origin} (VIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure}){pendingSuffix}";
+            ? $"{autoplayPrefix}Turn {view.Turn} · seed {_session.Engine.State.Seed}{pendingSuffix}"
+            : $"{autoplayPrefix}Turn {view.Turn} — {origin} (VIG {view.Character.Vigor} ATT {view.Character.Attunement} COM {view.Character.Composure}) · seed {_session.Engine.State.Seed}{pendingSuffix}";
         _objectiveLine.Text = view.CurrentObjective is null
             ? "No immediate objective — explore, talk, read, or work wild magic."
             : $"Next: {view.CurrentObjective.NextStep}";
@@ -1688,8 +1710,6 @@ public partial class Main : Control
             }
         }
 
-        UpdateMapCellSizing();
-        CallDeferred(nameof(UpdateMapCellSizing));
     }
 
     private void OnMapCellGuiInput(InputEvent @event, GridPoint point)
@@ -1856,6 +1876,36 @@ public partial class Main : Control
                 cell.AddThemeFontSizeOverride("font_size", fontSize);
             }
         }
+    }
+
+    private void QueueMapCellSizing()
+    {
+        if (_cells.Length == 0 || _mapCellSizingQueued || !IsInsideTree())
+        {
+            return;
+        }
+
+        // Release the previous grid's minimum before asking Godot to lay the surrounding VBox
+        // out again. This is what lets a reconstructed or newly-shrunk window reclaim room for
+        // the bottom command panel instead of measuring against the grid's former larger cells.
+        var minimumSize = new Vector2(MinMapCellSize, MinMapCellSize);
+        for (var y = 0; y < _cells.GetLength(0); y++)
+        {
+            for (var x = 0; x < _cells.GetLength(1); x++)
+            {
+                _cells[y, x].CustomMinimumSize = minimumSize;
+                _cells[y, x].AddThemeFontSizeOverride("font_size", MinMapFontSize);
+            }
+        }
+
+        _mapCellSizingQueued = true;
+        CallDeferred(nameof(ApplyQueuedMapCellSizing));
+    }
+
+    private void ApplyQueuedMapCellSizing()
+    {
+        _mapCellSizingQueued = false;
+        UpdateMapCellSizing();
     }
 
     private static Control FullRect(Control control)

@@ -4,6 +4,7 @@ using Sorcerer.Core.Consequences;
 using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 using Sorcerer.Magic;
+using Sorcerer.Magic.Costs;
 using Sorcerer.Magic.Resolution;
 using Xunit;
 
@@ -153,6 +154,53 @@ public class WildMagicGroup4OperationTests
         Assert.True(result.ConsumedTurn);
         Assert.Equal(turnBefore + 1, session.Engine.State.Turn);
         Assert.Contains(result.Messages, message => message.Contains("no active magic"));
+    }
+
+    [Fact]
+    public async Task WildMagicCanResolveBorrowedTideInsteadOfOnlyHidingItsStatus()
+    {
+        var session = Session(new SpellResolution(
+            Accepted: true,
+            Severity: "major",
+            OutcomeText: "The borrowed water remembers its own shore and leaves your blood.",
+            Effects: new[]
+            {
+                new SpellEffect("resolveCurse", new Dictionary<string, object?>
+                {
+                    ["target"] = "player",
+                    ["profileId"] = "curse_tide_debt_body",
+                }),
+            },
+            Costs: new[]
+            {
+                new SpellCost("mana", new Dictionary<string, object?> { ["amount"] = 4 }),
+            },
+            RejectedReason: null));
+        var player = session.Engine.State.ControlledEntity;
+        SpellCostApplier.Apply(session.Engine, new[]
+        {
+            new SpellCost("curse", new Dictionary<string, object?>
+            {
+                ["profileId"] = "curse_tide_debt_body",
+            }),
+        });
+        Assert.Contains(player.Get<StatusContainerComponent>().Statuses, status => status.Id == "borrowed_tide");
+        var curse = Assert.Single(session.Engine.State.PromiseLedger.Promises, promise =>
+            promise.CostProfileId == "curse_tide_debt_body"
+            && promise.Status != "cleared");
+
+        var result = await session.ExecuteAsync(new CastCommand("cure Borrowed Tide by returning its water to the river"));
+
+        Assert.True(result.Success, string.Join(" / ", result.Messages));
+        Assert.Equal("cleared", session.Engine.State.PromiseLedger.Promises.Single(promise => promise.Id == curse.Id).Status);
+        Assert.DoesNotContain(player.Get<StatusContainerComponent>().Statuses, status => status.Id == "borrowed_tide");
+        Assert.Contains(result.Deltas, delta =>
+            delta.Operation == "resolveCurse"
+            && Equals(delta.Details["profileId"], "curse_tide_debt_body"));
+
+        var laterTurns = session.Engine.AdvanceTurn().Concat(session.Engine.AdvanceTurn()).ToArray();
+        Assert.DoesNotContain(laterTurns, delta =>
+            delta.Operation is "borrowedTideWet" or "borrowedTideDry");
     }
 
     [Fact]

@@ -21,6 +21,7 @@ public enum BindableAction
     FocusTalk,
     ToggleAutoplay,
     ToggleLlmDebug,
+    OpenJournal,
     OpenControls,
 }
 
@@ -60,6 +61,7 @@ public static class Keybindings
         new(BindableAction.FocusTalk, "focus_talk", "Start talking (fills 'talk ')", "Interface", Key.T),
         new(BindableAction.ToggleAutoplay, "toggle_autoplay", "Toggle autoplay", "Interface", Key.P),
         new(BindableAction.ToggleLlmDebug, "toggle_llm_debug", "Toggle the LLM debug view", "Interface", Key.F6),
+        new(BindableAction.OpenJournal, "open_journal", "Open journal", "Interface", Key.F2),
         new(BindableAction.OpenControls, "open_controls", "Open this controls screen", "Interface", Key.F1),
     };
 
