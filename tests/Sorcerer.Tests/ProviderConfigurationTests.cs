@@ -122,6 +122,65 @@ public sealed class ProviderConfigurationTests
     }
 
     [Fact]
+    public void GeminiKeySetupFindsDefaultAndConfiguredEnvironmentVariablesWithoutValidation()
+    {
+        const string customKeyName = "SORCERER_TEST_GEMINI_KEY";
+        var variableNames = new[]
+        {
+            GeminiApiKeySetup.VariableNameSetting,
+            GeminiApiKeySetup.DefaultVariableName,
+            "SORCERER_GEMINI_API_KEY",
+            "SORCERER_API_KEY",
+            "GOOGLE_API_KEY",
+            customKeyName,
+        };
+        var previous = variableNames.ToDictionary(
+            name => name,
+            Environment.GetEnvironmentVariable,
+            StringComparer.Ordinal);
+        try
+        {
+            foreach (var name in variableNames)
+            {
+                Environment.SetEnvironmentVariable(name, null);
+            }
+
+            var missing = GeminiApiKeySetup.Check();
+            Assert.False(missing.Available);
+            Assert.Equal("GEMINI_API_KEY", missing.ExpectedVariableName);
+            Assert.Contains(GeminiApiKeySetup.AiStudioUrl, GeminiApiKeySetup.SetupInstructions());
+            Assert.Contains(".env", GeminiApiKeySetup.SetupInstructions());
+
+            Environment.SetEnvironmentVariable(GeminiApiKeySetup.DefaultVariableName, "default-test-key");
+            var foundDefault = GeminiApiKeySetup.Check();
+            Assert.True(foundDefault.Available);
+            Assert.Equal("GEMINI_API_KEY", foundDefault.SourceVariable);
+
+            Environment.SetEnvironmentVariable(GeminiApiKeySetup.DefaultVariableName, null);
+            Environment.SetEnvironmentVariable(GeminiApiKeySetup.VariableNameSetting, customKeyName);
+            Environment.SetEnvironmentVariable(customKeyName, "custom-test-key");
+            var configuration = new LlmConfiguration(new Dictionary<LlmPurpose, LlmPurposeSettings>
+            {
+                [LlmPurpose.Wild] = new("mock", null, null, 30),
+            }).WithPurposeOverride(LlmPurpose.Wild, provider: "gemini");
+
+            var foundCustom = GeminiApiKeySetup.Check(configuration);
+            Assert.True(foundCustom.Available);
+            Assert.Equal(customKeyName, foundCustom.ExpectedVariableName);
+            Assert.Equal(customKeyName, foundCustom.SourceVariable);
+            Assert.Equal("custom-test-key", configuration.SettingsFor(LlmPurpose.Wild).ApiKey);
+            Assert.Contains($"{customKeyName}=paste-your-key-here", GeminiApiKeySetup.SetupInstructions());
+        }
+        finally
+        {
+            foreach (var pair in previous)
+            {
+                Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+            }
+        }
+    }
+
+    [Fact]
     public void BackgroundTextGeneratorWritesAuditRecords()
     {
         var audit = new CapturingBackgroundTextAuditSink();

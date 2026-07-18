@@ -156,6 +156,8 @@ public partial class Main : Control
             return;
         }
 
+        GeminiSetupNotice.ShowIfNeeded(this, _provider.Text);
+
         // Opt-in autoplay-on-launch (does not change normal play): set SORCERER_AUTOPLAY=1.
         if (System.Environment.GetEnvironmentVariable("SORCERER_AUTOPLAY") == "1")
         {

@@ -604,6 +604,9 @@ Per-call token counts and latency are retained in provider stats and the audit l
 Gemini is a known native provider under `gemini` or `google`. The recommended free-tier
 configuration is `--provider gemini --model gemini-3.5-flash --effort medium`; supply the secret
 through `GEMINI_API_KEY` or a purpose-specific `SORCERER_<PURPOSE>_API_KEY` environment variable.
+When Gemini is selected without a key, startup prints acquisition and `.env` instructions to
+stderr; JSON stdout remains parseable. `SORCERER_GEMINI_API_KEY_ENV_VAR=MY_GEMINI_KEY` selects a
+custom key-variable name when both lines are present in `.env`.
 The client uses the stateless Interactions API with JSON output, and retains input, output,
 cached, and thinking tokens plus latency in the same provider stats and audit logs.
 

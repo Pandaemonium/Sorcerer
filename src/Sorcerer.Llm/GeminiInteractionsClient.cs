@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Sorcerer.Core.Telemetry;
+using Sorcerer.Llm.Configuration;
 
 namespace Sorcerer.Llm;
 
@@ -236,14 +237,7 @@ internal sealed class GeminiInteractionsClient : IJsonChatClient
             : "medium";
     }
 
-    private static string? DefaultApiKey() =>
-        new[]
-        {
-            Environment.GetEnvironmentVariable("SORCERER_GEMINI_API_KEY"),
-            Environment.GetEnvironmentVariable("SORCERER_API_KEY"),
-            Environment.GetEnvironmentVariable("GEMINI_API_KEY"),
-            Environment.GetEnvironmentVariable("GOOGLE_API_KEY"),
-        }.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    private static string? DefaultApiKey() => GeminiApiKeySetup.Resolve();
 
     private static HttpClient CreateHttpClient() =>
         new()

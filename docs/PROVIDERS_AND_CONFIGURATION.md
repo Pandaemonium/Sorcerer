@@ -145,6 +145,23 @@ SORCERER_EFFORT=medium
 SORCERER_BACKGROUND_ENABLED=false
 ```
 
+At startup, if any enabled provider purpose uses Gemini, Sorcerer checks only whether a non-empty
+key is available. It does not make a validation request. The Godot game shows a non-blocking setup
+dialog when the key is absent; the CLI prints the same instructions to stderr so `--json` stdout
+remains machine-readable.
+
+`GEMINI_API_KEY` is the default. To keep the credential under a different environment-variable
+name, configure that name in the same `.env` file:
+
+```dotenv
+SORCERER_GEMINI_API_KEY_ENV_VAR=MY_GEMINI_KEY
+MY_GEMINI_KEY=your-key-here
+```
+
+The configured variable participates in the existing fallback chain; purpose-specific
+`SORCERER_<PURPOSE>_API_KEY`, `SORCERER_GEMINI_API_KEY`, `SORCERER_API_KEY`, `GEMINI_API_KEY`, and
+`GOOGLE_API_KEY` values are still accepted.
+
 Then launch Godot normally, or run the CLI explicitly:
 
 ```powershell
@@ -226,7 +243,8 @@ and `OPENAI_API_KEY`. Local OpenAI-compatible endpoints that do not require auth
 The Anthropic adapter reads the same purpose-specific key first, then
 `SORCERER_ANTHROPIC_API_KEY`, `SORCERER_API_KEY`, and `ANTHROPIC_API_KEY`.
 The Gemini adapter reads the purpose-specific key first, then `SORCERER_GEMINI_API_KEY`,
-`SORCERER_API_KEY`, `GEMINI_API_KEY`, and `GOOGLE_API_KEY`.
+`SORCERER_API_KEY`, the variable named by `SORCERER_GEMINI_API_KEY_ENV_VAR` (default
+`GEMINI_API_KEY`), and `GOOGLE_API_KEY`.
 
 ## Audits
 

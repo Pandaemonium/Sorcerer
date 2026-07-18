@@ -2,6 +2,7 @@ using Godot;
 using Sorcerer.Core.Characters;
 using Sorcerer.Core.Magic;
 using Sorcerer.Godot.Portraits;
+using Sorcerer.Llm.Configuration;
 
 namespace Sorcerer.Godot;
 
@@ -56,11 +57,13 @@ public partial class CharacterCreation : Control
 
     public override void _Ready()
     {
+        DotEnv.Load();
         Theme = UiTheme.Build();
         _origins = _catalog.Origins.ToArray();
         _portraits = new PortraitClient(ResolveOllamaHost());
         BuildUi();
         SelectOrigin(Array.FindIndex(_origins, origin => origin.Id == _catalog.Default.Id) is var index && index >= 0 ? index : 0);
+        GeminiSetupNotice.ShowIfNeeded(this, EffectiveProviderName());
     }
 
     public override void _ExitTree()
@@ -712,9 +715,7 @@ public partial class CharacterCreation : Control
     /// the usual env fallback chain (mirrors Main.DefaultProviderHost's ollama branch).</summary>
     private static string ResolveOllamaHost()
     {
-        var provider = SessionHost.ProviderOverride
-            ?? System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER")
-            ?? "ollama";
+        var provider = EffectiveProviderName();
         if (provider.Trim().ToLowerInvariant() == "ollama"
             && !string.IsNullOrWhiteSpace(SessionHost.HostOverride))
         {
@@ -726,6 +727,11 @@ public partial class CharacterCreation : Control
             ?? System.Environment.GetEnvironmentVariable("OLLAMA_HOST")
             ?? "http://127.0.0.1:11434";
     }
+
+    private static string EffectiveProviderName() =>
+        SessionHost.ProviderOverride
+        ?? System.Environment.GetEnvironmentVariable("SORCERER_PROVIDER")
+        ?? "ollama";
 
     private static Control FullRect(Control control)
     {

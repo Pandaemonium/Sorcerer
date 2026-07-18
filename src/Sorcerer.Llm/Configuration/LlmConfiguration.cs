@@ -224,10 +224,7 @@ public sealed record LlmConfiguration(
 
     private static string? DefaultApiKey(string provider) =>
         IsGemini(provider)
-            ? Environment.GetEnvironmentVariable("SORCERER_GEMINI_API_KEY")
-                ?? Environment.GetEnvironmentVariable("SORCERER_API_KEY")
-                ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY")
-                ?? Environment.GetEnvironmentVariable("GOOGLE_API_KEY")
+            ? GeminiApiKeySetup.Resolve()
             : IsAnthropic(provider)
             ? Environment.GetEnvironmentVariable("SORCERER_ANTHROPIC_API_KEY")
                 ?? Environment.GetEnvironmentVariable("SORCERER_API_KEY")

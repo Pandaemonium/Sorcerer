@@ -35,6 +35,27 @@ The short pitch:
 - Build toward long runs where the eventual win condition is killing the emperor.
 - Keep promises and prophecy foundational.
 
+## Quick Gemini Setup
+
+Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey), copy
+`.env.example` to a local `.env`, and set:
+
+```dotenv
+GEMINI_API_KEY=paste-your-key-here
+SORCERER_PROVIDER=gemini
+```
+
+The `.env` file is git-ignored. When Gemini is selected, both the Godot game and CLI check at
+startup that a non-empty key exists; they do not contact Google or print the key. If it is missing,
+Godot shows a setup dialog with a button for Google AI Studio, while the CLI writes the same
+instructions to stderr without corrupting JSON output. To use a differently named environment
+variable, put both lines below in `.env`:
+
+```dotenv
+SORCERER_GEMINI_API_KEY_ENV_VAR=MY_GEMINI_KEY
+MY_GEMINI_KEY=paste-your-key-here
+```
+
 ## Current Status
 
 This repository now contains the first playable Godot/C# slice. The shared backend drives

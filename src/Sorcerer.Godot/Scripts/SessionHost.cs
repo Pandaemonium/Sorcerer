@@ -23,4 +23,7 @@ public static class SessionHost
     public static string? HostOverride;
     public static string? ModelOverride;
     public static string? EffortOverride;
+
+    /// <summary>Prevents the same missing-Gemini-key dialog from appearing after every scene swap.</summary>
+    public static bool GeminiSetupNoticeShown;
 }

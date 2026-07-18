@@ -32,6 +32,7 @@ public static class Program
             Commands = LoadScriptCommands(options.ScriptPath).Concat(options.Commands).ToArray(),
         };
         var configuration = BuildLlmConfiguration(options);
+        WriteGeminiSetupNotice(configuration);
         var provider = SpellProviderFactory.Create(configuration, LlmPurpose.Wild);
         var router = SpellRouterFactory.Create(configuration, LlmPurpose.Router);
         var dialogueProvider = DialogueProviderFactory.Create(configuration, LlmPurpose.Dialogue);
@@ -188,6 +189,20 @@ public static class Program
         }
 
         return 0;
+    }
+
+    private static void WriteGeminiSetupNotice(LlmConfiguration configuration)
+    {
+        if (!GeminiApiKeySetup.UsesGemini(configuration)
+            || GeminiApiKeySetup.Check(configuration).Available)
+        {
+            return;
+        }
+
+        // Keep JSON stdout machine-readable while still making interactive and scripted setup
+        // failures immediately legible. No secret value is ever included in this notice.
+        Console.Error.WriteLine(GeminiApiKeySetup.SetupInstructions());
+        Console.Error.WriteLine();
     }
 
     private static LlmConfiguration BuildLlmConfiguration(CliOptions options)
