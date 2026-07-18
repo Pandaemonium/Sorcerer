@@ -1,0 +1,9 @@
+inspect
+cast I gather the loose light in the cell and coax the lock to remember being open
+travel east
+inspect
+talk Who watches these crossings, and who here would shelter a stranger?
+gather
+read
+journal
+character
