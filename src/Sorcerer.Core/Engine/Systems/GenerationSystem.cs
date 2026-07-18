@@ -890,7 +890,7 @@ public sealed class GenerationSystem
         Direction entryDirection,
         List<StateDelta> deltas)
     {
-        var batch = RegionPropGenerator.Generate(region, realm, _state.Seed, generatedState.CurrentZoneId);
+        var batch = RegionPropGenerator.Generate(region, realm, _state.Seed, generatedState.CurrentZoneId, place.District?.Id);
         if (region.Props is null)
         {
             return SpawnFallbackGeneratedProp(generatedState, region, realm, deltas);
@@ -976,6 +976,19 @@ public sealed class GenerationSystem
             {
                 reserved.Add(point.Value);
                 placedPoints.Add(point.Value);
+
+                // A "claim" hook makes the prop an actionable found document: attach the seeded
+                // claim on the staged entity, exactly as authored interior features do, so reading
+                // or examining it rides the ordinary claim/rumor/promise machinery.
+                if (prop.Claim is { } claim)
+                {
+                    var placed = point.Value;
+                    var document = generatedState.Entities.Values.FirstOrDefault(entity =>
+                        entity.Name.Equals(prop.Name, StringComparison.OrdinalIgnoreCase)
+                        && entity.TryGet<PositionComponent>(out var documentPosition)
+                        && documentPosition.Position == placed);
+                    document?.Set(new ClaimSourceComponent(new[] { claim }));
+                }
             }
         }
 

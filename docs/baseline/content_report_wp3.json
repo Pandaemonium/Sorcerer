@@ -1,0 +1,4391 @@
+{
+  "generatedAt": "2026-07-18T02:33:34.4553664+00:00",
+  "startSeed": 1,
+  "seedCount": 20,
+  "summary": {
+    "distinctItems": 81,
+    "distinctCommodityItems": 3,
+    "distinctProps": 212,
+    "distinctDocuments": 66,
+    "distinctResidents": 137,
+    "distinctCreatures": 0,
+    "distinctEncounterCasts": 0,
+    "distinctServices": 2,
+    "meanDistinctiveItemsPerSeed": 15.15,
+    "meanPairwiseItemOverlap": 0.47549638193710514,
+    "maxPairwiseItemOverlap": 0.8823529411764706,
+    "totalZones": 100,
+    "emptyZones": 60,
+    "denseZones": 35,
+    "meanContextEntitiesPerZone": 9.420000000000002,
+    "unresolvedReferences": 0,
+    "mostRepeatedItems": [
+      {
+        "name": "bone luck-token",
+        "count": 20
+      },
+      {
+        "name": "bundle of reed pith",
+        "count": 20
+      },
+      {
+        "name": "flask of eel oil",
+        "count": 20
+      },
+      {
+        "name": "flask of whale oil",
+        "count": 20
+      },
+      {
+        "name": "healer\u0027s poultice",
+        "count": 20
+      },
+      {
+        "name": "marsh febrifuge",
+        "count": 20
+      },
+      {
+        "name": "powdered scrimshaw",
+        "count": 20
+      },
+      {
+        "name": "skin of storm-ale",
+        "count": 20
+      },
+      {
+        "name": "string of smoked eel",
+        "count": 20
+      },
+      {
+        "name": "tarred rope harness",
+        "count": 9
+      },
+      {
+        "name": "bone-tipped harpoon",
+        "count": 8
+      },
+      {
+        "name": "coil of tarred rope",
+        "count": 8
+      },
+      {
+        "name": "warm mud whistle",
+        "count": 3
+      },
+      {
+        "name": "bead of amber resin",
+        "count": 2
+      },
+      {
+        "name": "brass-bright memory sigil-stone",
+        "count": 2
+      }
+    ],
+    "mostRepeatedProps": [
+      {
+        "name": "locked imperial cell door",
+        "count": 20
+      },
+      {
+        "name": "many-notched ferry bell",
+        "count": 20
+      },
+      {
+        "name": "many-witness tale chair",
+        "count": 20
+      },
+      {
+        "name": "sealed evidence registry door",
+        "count": 20
+      },
+      {
+        "name": "red-thread-patched willow-bound reed drying-rack",
+        "count": 10
+      },
+      {
+        "name": "silt-furred river-reed reed drying-rack",
+        "count": 9
+      },
+      {
+        "name": "votive-ribboned willow-bound household shelter sign",
+        "count": 9
+      },
+      {
+        "name": "red-thread-patched willow-bound creature crate",
+        "count": 8
+      },
+      {
+        "name": "votive-ribboned eelglass remedy bench",
+        "count": 8
+      },
+      {
+        "name": "ale-stained whalebone tale-bench",
+        "count": 7
+      },
+      {
+        "name": "rain-singing river-reed memory loom",
+        "count": 7
+      },
+      {
+        "name": "silt-furred eelglass eel trap-basket",
+        "count": 7
+      },
+      {
+        "name": "silt-furred river-reed eel trap-basket",
+        "count": 7
+      },
+      {
+        "name": "storm-singing tarred-oak tale-hall hearth",
+        "count": 7
+      },
+      {
+        "name": "broken-open river-reed ferry oath-post",
+        "count": 6
+      }
+    ]
+  },
+  "seeds": [
+    {
+      "seed": 1,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "East Intake",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Under-Willow",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 12,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "reed-wrapped water bell",
+            "salt-bitten water spoon",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "many-notched ferry bell",
+            "rain-singing river-reed memory loom",
+            "red-thread-patched eelglass ferry oath-post",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred bog-iron household water-shrine",
+            "silt-furred eelglass eel trap-basket",
+            "silt-furred eelglass remedy bench",
+            "silt-furred willow-bound ferry oath-post"
+          ],
+          "documents": [
+            "votive-ribboned bog-iron occupation inspection post"
+          ],
+          "residents": [
+            "Rowen Two Oars, reed apothecary",
+            "Rusk Nine Knots, eel-cutter",
+            "Wynn Two Oars, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Rowen Two Oars, reed apothecary",
+            "Wynn Two Oars, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 6,
+          "items": [
+            "glossy reeds token"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed occupation inspection post",
+            "imperial-tagged bog-iron ferry oath-post",
+            "imperial-tagged river-reed reed drying-rack",
+            "silt-furred bog-iron creature crate",
+            "silt-furred river-reed eel trap-basket",
+            "votive-ribboned eelglass household water-shrine"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 6,
+          "items": [
+            "brass-bright reeds vial"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open eelglass eel trap-basket",
+            "broken-open river-reed ferry oath-post",
+            "imperial-tagged river-reed eel trap-basket",
+            "rain-singing bog-iron eel trap-basket",
+            "silt-furred willow-bound household water-shrine"
+          ],
+          "documents": [
+            "votive-ribboned bog-iron occupation inspection post"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Ragna\u0027s Whalehouse",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 11,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "ale-stained ship-brass tale-hall hearth",
+            "ale-stained whalebone tale-hall hearth",
+            "frost-rimed whalebone tale-bench",
+            "hero-carved tarred-oak tale-hall hearth",
+            "many-witness tale chair",
+            "storm-singing ship-brass mountain-pass cairn"
+          ],
+          "documents": [
+            "charter-tagged whalebone tale-hall hearth",
+            "frost-rimed ship-brass tale-hall hearth"
+          ],
+          "residents": [
+            "Kelda Salt-Lung, hall tale-witness",
+            "Osk Salt-Lung, hall tale-witness",
+            "Ulfa Nine Fathoms, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Ulfa Nine Fathoms, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged whalebone tale-hall hearth"
+          ],
+          "wants": 3,
+          "claimSources": 3,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Compliance Yard",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Red Thread Houses",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 10,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "ink-stained memory token",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open eelglass occupation inspection post",
+            "broken-open river-reed ferry oath-post",
+            "imperial-tagged willow-bound eel trap-basket",
+            "many-notched ferry bell",
+            "red-thread-patched river-reed ferry oath-post",
+            "silt-furred eelglass ferry oath-post",
+            "votive-ribboned bog-iron creature crate"
+          ],
+          "documents": [],
+          "residents": [
+            "Halsa Reed-Debt, reed apothecary",
+            "Jory Reed-Debt, reed apothecary",
+            "Kesk Reed-Debt, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Halsa Reed-Debt, reed apothecary",
+            "Jory Reed-Debt, reed apothecary",
+            "Kesk Reed-Debt, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 8,
+          "items": [
+            "moth-pale mud idol",
+            "reed-wrapped mud vial",
+            "warm mud whistle"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open willow-bound ferry oath-post",
+            "rain-singing bog-iron household shelter sign",
+            "rain-singing river-reed household water-shrine",
+            "rain-singing willow-bound creature crate",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred eelglass memory loom"
+          ],
+          "documents": [
+            "imperial-tagged river-reed eel trap-basket",
+            "votive-ribboned river-reed creature crate"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 11,
+          "items": [
+            "warm reeds comb",
+            "warm reeds vial"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open eelglass remedy bench",
+            "imperial-tagged bog-iron occupation inspection post",
+            "rain-singing bog-iron memory loom",
+            "rain-singing eelglass eel trap-basket",
+            "rain-singing eelglass household water-shrine",
+            "red-thread-patched river-reed memory loom",
+            "votive-ribboned eelglass creature crate",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [
+            "broken-open bog-iron occupation inspection post",
+            "red-thread-patched bog-iron creature crate",
+            "silt-furred willow-bound memory loom"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Cold Wake",
+          "districtName": "Tale-Hall Ward",
+          "density": "moderate",
+          "contextEntities": 5,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [],
+          "props": [
+            "many-witness tale chair"
+          ],
+          "documents": [],
+          "residents": [
+            "Aven Oath-Drunk, hall tale-witness",
+            "Bera Oath-Drunk, hall tale-witness",
+            "Hakon Oath-Drunk, hall tale-witness",
+            "Vitr Oath-Drunk, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Vitr Oath-Drunk, whalebone carver"
+          ],
+          "charterOpportunities": [],
+          "wants": 4,
+          "claimSources": 1,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 3,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Containment Annex Nine",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Wet Hem",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 11,
+          "items": [
+            "brass-bright water thimble",
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed ferry oath-post",
+            "many-notched ferry bell",
+            "rain-singing bog-iron eel trap-basket",
+            "rain-singing eelglass household shelter sign",
+            "silt-furred eelglass occupation inspection post",
+            "votive-ribboned river-reed remedy bench"
+          ],
+          "documents": [
+            "broken-open willow-bound ferry oath-post",
+            "rain-singing willow-bound reed drying-rack"
+          ],
+          "residents": [
+            "Bael Reed-Debt, reed apothecary",
+            "Orra Reed-Debt, reed apothecary",
+            "Pella Reed-Debt, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Bael Reed-Debt, reed apothecary",
+            "Orra Reed-Debt, reed apothecary",
+            "Pella Reed-Debt, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 3,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 11,
+          "items": [
+            "warm reeds comb",
+            "warm reeds vial"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open eelglass remedy bench",
+            "imperial-tagged bog-iron occupation inspection post",
+            "rain-singing bog-iron memory loom",
+            "rain-singing eelglass eel trap-basket",
+            "rain-singing eelglass household water-shrine",
+            "red-thread-patched river-reed memory loom",
+            "votive-ribboned eelglass creature crate",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [
+            "broken-open bog-iron occupation inspection post",
+            "red-thread-patched bog-iron creature crate",
+            "silt-furred willow-bound memory loom"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 8,
+          "items": [
+            "moth-pale mud idol",
+            "reed-wrapped mud vial",
+            "warm mud whistle"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open willow-bound ferry oath-post",
+            "rain-singing bog-iron household shelter sign",
+            "rain-singing river-reed household water-shrine",
+            "rain-singing willow-bound creature crate",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred eelglass memory loom"
+          ],
+          "documents": [
+            "imperial-tagged river-reed eel trap-basket",
+            "votive-ribboned river-reed creature crate"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-13,-1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Bone-Tale Landing",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 11,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained whalebone tale-bench",
+            "frost-rimed ship-brass ale-cooling rack",
+            "frost-rimed whalebone tale-hall hearth",
+            "hero-carved tarred-oak ale-cooling rack",
+            "many-witness tale chair",
+            "storm-singing tarred-oak tale-hall hearth"
+          ],
+          "documents": [
+            "hero-carved tarred-oak harbor capstan"
+          ],
+          "residents": [
+            "Jori Whale-Debt, whalebone carver",
+            "Ragna Whale-Debt, whalebone carver",
+            "Siv Whale-Debt, whalebone carver",
+            "Ulfa Tarhand, hall tale-witness"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Jori Whale-Debt, whalebone carver",
+            "Ragna Whale-Debt, whalebone carver",
+            "Siv Whale-Debt, whalebone carver"
+          ],
+          "charterOpportunities": [],
+          "wants": 4,
+          "claimSources": 2,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 4,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Compliance Yard",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Red Thread Houses",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 12,
+          "items": [
+            "bundle of reed pith",
+            "ember-warm mud whistle",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "ink-stained mud die",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "broken-open bog-iron ferry oath-post",
+            "broken-open eelglass household shelter sign",
+            "imperial-tagged bog-iron occupation inspection post",
+            "imperial-tagged willow-bound occupation inspection post",
+            "many-notched ferry bell",
+            "red-thread-patched willow-bound creature crate",
+            "votive-ribboned eelglass memory loom",
+            "votive-ribboned river-reed reed drying-rack"
+          ],
+          "documents": [
+            "broken-open river-reed occupation inspection post"
+          ],
+          "residents": [
+            "Cressa Rushlight, reed apothecary",
+            "Orra Rushlight, reed apothecary",
+            "Sella Silt-Hand, ferry oathkeeper"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Cressa Rushlight, reed apothecary",
+            "Orra Rushlight, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "packet of iron filings",
+            "reed-wrapped memory charm",
+            "reed-wrapped memory idol"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron memory loom",
+            "broken-open willow-bound household water-shrine",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned eelglass remedy bench"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 6,
+          "items": [
+            "chime-tuned reeds lens",
+            "chime-tuned reeds ribbon spool"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed creature crate",
+            "imperial-tagged bog-iron memory loom",
+            "red-thread-patched eelglass eel trap-basket",
+            "red-thread-patched river-reed reed drying-rack",
+            "red-thread-patched willow-bound memory loom"
+          ],
+          "documents": [
+            "broken-open eelglass creature crate"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-11,1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Cold Wake",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 12,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained ship-brass harpoon winch",
+            "ale-stained ship-brass tale-hall hearth",
+            "ale-stained tarred-oak tale-hall hearth",
+            "charter-tagged tarred-oak harbor capstan",
+            "charter-tagged tarred-oak tale-hall hearth",
+            "frost-rimed whalebone ale-cooling rack",
+            "frost-rimed whalebone mountain-pass cairn",
+            "hero-carved tarred-oak scrimshaw tally-post",
+            "many-witness tale chair"
+          ],
+          "documents": [],
+          "residents": [
+            "Eldr Whale-Debt, whalebone carver",
+            "Frey Whale-Debt, whalebone carver",
+            "Ingr Three Harpoons, hall tale-witness"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Eldr Whale-Debt, whalebone carver",
+            "Frey Whale-Debt, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged tarred-oak harbor capstan",
+            "charter-tagged tarred-oak tale-hall hearth"
+          ],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 5,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Containment Annex Nine",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Under-Willow",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 11,
+          "items": [
+            "bundle of reed pith",
+            "ember-warm memory die",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "moth-pale reeds reliquary",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed occupation inspection post",
+            "many-notched ferry bell",
+            "rain-singing eelglass household water-shrine",
+            "rain-singing willow-bound ferry oath-post",
+            "red-thread-patched river-reed memory loom",
+            "silt-furred eelglass remedy bench",
+            "votive-ribboned river-reed occupation inspection post",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [],
+          "residents": [
+            "Jory Marsh-Kept, reed apothecary",
+            "Kesk Marsh-Kept, reed apothecary",
+            "Sella Nine Knots, ferry oathkeeper"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Jory Marsh-Kept, reed apothecary",
+            "Kesk Marsh-Kept, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 6,
+          "items": [
+            "chime-tuned reeds lens",
+            "chime-tuned reeds ribbon spool"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed creature crate",
+            "imperial-tagged bog-iron memory loom",
+            "red-thread-patched eelglass eel trap-basket",
+            "red-thread-patched river-reed reed drying-rack",
+            "red-thread-patched willow-bound memory loom"
+          ],
+          "documents": [
+            "broken-open eelglass creature crate"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "packet of iron filings",
+            "reed-wrapped memory charm",
+            "reed-wrapped memory idol"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron memory loom",
+            "broken-open willow-bound household water-shrine",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned eelglass remedy bench"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Bone-Tale Landing",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 14,
+          "items": [
+            "bone luck-token",
+            "bone-tipped harpoon",
+            "coil of tarred rope",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "quartz-veined scrimshaw idol",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained whalebone ale-cooling rack",
+            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged tarred-oak tale-bench",
+            "frost-rimed ship-brass harpoon winch",
+            "hero-carved ship-brass charter bone-work bench",
+            "hero-carved ship-brass tale-hall hearth",
+            "hero-carved whalebone harpoon winch",
+            "hero-carved whalebone tale-bench",
+            "many-witness tale chair"
+          ],
+          "documents": [
+            "hero-carved tarred-oak tale-hall hearth"
+          ],
+          "residents": [
+            "Aven Cold Wake, whalebone carver",
+            "Aven Whale-Debt, harpoon mender",
+            "Bera Cold Wake, whalebone carver",
+            "Hakon Cold Wake, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Aven Cold Wake, whalebone carver",
+            "Aven Whale-Debt, harpoon mender",
+            "Bera Cold Wake, whalebone carver",
+            "Hakon Cold Wake, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged tarred-oak tale-bench",
+            "hero-carved ship-brass charter bone-work bench"
+          ],
+          "wants": 4,
+          "claimSources": 2,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 6,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Compliance Yard",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Eelwise",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 11,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "many-notched ferry bell",
+            "rain-singing willow-bound ferry oath-post",
+            "red-thread-patched eelglass eel trap-basket",
+            "silt-furred eelglass ferry oath-post",
+            "silt-furred river-reed household water-shrine",
+            "votive-ribboned bog-iron household water-shrine"
+          ],
+          "documents": [
+            "broken-open river-reed eel trap-basket",
+            "imperial-tagged bog-iron occupation inspection post"
+          ],
+          "residents": [
+            "Bael Reed-Memory, ferry oathkeeper",
+            "Fenna Bog-Iron, reed apothecary",
+            "Halsa Bog-Iron, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Fenna Bog-Iron, reed apothecary",
+            "Halsa Bog-Iron, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "glossy mud whistle"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "imperial-tagged river-reed remedy bench",
+            "rain-singing willow-bound creature crate",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned eelglass remedy bench"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 8,
+          "items": [],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed creature crate",
+            "broken-open willow-bound reed drying-rack",
+            "imperial-tagged eelglass ferry oath-post",
+            "red-thread-patched bog-iron household water-shrine",
+            "votive-ribboned willow-bound household water-shrine",
+            "votive-ribboned willow-bound reed drying-rack"
+          ],
+          "documents": [
+            "red-thread-patched willow-bound household water-shrine",
+            "silt-furred eelglass eel trap-basket"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Storm-Sworn Hold",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 15,
+          "items": [
+            "bone luck-token",
+            "bone-tipped harpoon",
+            "coil of tarred rope",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained tarred-oak ale-cooling rack",
+            "ale-stained tarred-oak charter bone-work bench",
+            "ale-stained whalebone tale-bench",
+            "frost-rimed ship-brass ale-cooling rack",
+            "frost-rimed whalebone ale-cooling rack",
+            "many-witness tale chair",
+            "storm-singing tarred-oak ale-cooling rack",
+            "storm-singing tarred-oak tale-hall hearth",
+            "storm-singing whalebone mountain-pass cairn"
+          ],
+          "documents": [
+            "hero-carved ship-brass scrimshaw tally-post",
+            "hero-carved tarred-oak tale-hall hearth",
+            "storm-singing ship-brass tale-bench"
+          ],
+          "residents": [
+            "Frey Oath-Drunk, hall tale-witness",
+            "Ragna Whale-Debt, whalebone carver",
+            "Yrsa Nine Fathoms, harpoon mender"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Ragna Whale-Debt, whalebone carver",
+            "Yrsa Nine Fathoms, harpoon mender"
+          ],
+          "charterOpportunities": [
+            "ale-stained tarred-oak charter bone-work bench"
+          ],
+          "wants": 3,
+          "claimSources": 3,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 7,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Marble Holding Ward",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Ferryman\u0027s Knot",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 10,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "glossy memory thimble",
+            "healer\u0027s poultice",
+            "hummed-thin memory thimble",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron ferry oath-post",
+            "broken-open river-reed ferry oath-post",
+            "imperial-tagged eelglass household water-shrine",
+            "imperial-tagged river-reed occupation inspection post",
+            "many-notched ferry bell",
+            "rain-singing bog-iron eel trap-basket",
+            "silt-furred river-reed ferry oath-post"
+          ],
+          "documents": [],
+          "residents": [
+            "Gove Marsh-Kept, reed apothecary",
+            "Jory Low Water, ferry oathkeeper",
+            "Wynn Heron\u0027s Cousin, shelter-aunt"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Gove Marsh-Kept, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 8,
+          "items": [],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed creature crate",
+            "broken-open willow-bound reed drying-rack",
+            "imperial-tagged eelglass ferry oath-post",
+            "red-thread-patched bog-iron household water-shrine",
+            "votive-ribboned willow-bound household water-shrine",
+            "votive-ribboned willow-bound reed drying-rack"
+          ],
+          "documents": [
+            "red-thread-patched willow-bound household water-shrine",
+            "silt-furred eelglass eel trap-basket"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "glossy mud whistle"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "imperial-tagged river-reed remedy bench",
+            "rain-singing willow-bound creature crate",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned eelglass remedy bench"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Deep-Tale Hold",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 14,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "moth-pale whalebone charm",
+            "powdered scrimshaw",
+            "quartz-veined scrimshaw button",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained ship-brass ale-cooling rack",
+            "ale-stained tarred-oak ale-cooling rack",
+            "charter-tagged whalebone scrimshaw tally-post",
+            "charter-tagged whalebone tale-hall hearth",
+            "frost-rimed tarred-oak ale-cooling rack",
+            "frost-rimed whalebone ale-cooling rack",
+            "frost-rimed whalebone tale-bench",
+            "hero-carved whalebone charter bone-work bench",
+            "hero-carved whalebone tale-hall hearth",
+            "many-witness tale chair"
+          ],
+          "documents": [
+            "storm-singing whalebone tale-bench"
+          ],
+          "residents": [
+            "Dagny Three Harpoons, hall tale-witness",
+            "Gunnar Blubber-Rich, whalebone carver",
+            "Ingr Blubber-Rich, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Gunnar Blubber-Rich, whalebone carver",
+            "Ingr Blubber-Rich, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged whalebone scrimshaw tally-post",
+            "charter-tagged whalebone tale-hall hearth",
+            "hero-carved whalebone charter bone-work bench"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 8,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "The Ledger Gate",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Bog-Iron Row",
+          "districtName": "Ferryward",
+          "density": "moderate",
+          "contextEntities": 9,
+          "items": [
+            "bundle of reed pith",
+            "chime-tuned memory token",
+            "flask of eel oil",
+            "glossy mud button",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "quartz-veined reeds comb",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron creature crate",
+            "many-notched ferry bell",
+            "red-thread-patched river-reed ferry oath-post",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned eelglass remedy bench"
+          ],
+          "documents": [],
+          "residents": [
+            "Edda Marsh-Kept, reed apothecary",
+            "Rusk Marsh-Kept, reed apothecary",
+            "Tovin Marsh-Kept, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Edda Marsh-Kept, reed apothecary",
+            "Rusk Marsh-Kept, reed apothecary",
+            "Tovin Marsh-Kept, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged bog-iron household shelter sign",
+            "rain-singing bog-iron ferry oath-post",
+            "rain-singing willow-bound reed drying-rack",
+            "red-thread-patched bog-iron reed drying-rack",
+            "red-thread-patched river-reed eel trap-basket",
+            "silt-furred willow-bound occupation inspection post",
+            "votive-ribboned willow-bound creature crate"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 6,
+          "items": [
+            "reed-wrapped memory die"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "broken-open river-reed household shelter sign",
+            "imperial-tagged bog-iron eel trap-basket",
+            "imperial-tagged river-reed household water-shrine",
+            "rain-singing river-reed memory loom",
+            "red-thread-patched willow-bound eel trap-basket",
+            "silt-furred bog-iron creature crate"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Storm-Sworn Hold",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 18,
+          "items": [
+            "bone luck-token",
+            "bone-tipped harpoon",
+            "coil of tarred rope",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained ship-brass ale-cooling rack",
+            "ale-stained whalebone tale-bench",
+            "charter-tagged ship-brass ale-cooling rack",
+            "charter-tagged ship-brass tale-bench",
+            "frost-rimed ship-brass tale-hall hearth",
+            "frost-rimed whalebone charter bone-work bench",
+            "hero-carved ship-brass scrimshaw tally-post",
+            "hero-carved ship-brass tale-bench",
+            "hero-carved tarred-oak tale-bench",
+            "many-witness tale chair",
+            "storm-singing whalebone tale-bench",
+            "storm-singing whalebone tale-hall hearth"
+          ],
+          "documents": [
+            "charter-tagged ship-brass tale-hall hearth",
+            "charter-tagged tarred-oak tale-hall hearth",
+            "storm-singing tarred-oak harpoon winch"
+          ],
+          "residents": [
+            "Dagny Nine Fathoms, whalebone carver",
+            "Frey Nine Fathoms, whalebone carver",
+            "Ragna Bone-Tale, harpoon mender"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Dagny Nine Fathoms, whalebone carver",
+            "Frey Nine Fathoms, whalebone carver",
+            "Ragna Bone-Tale, harpoon mender"
+          ],
+          "charterOpportunities": [
+            "charter-tagged ship-brass ale-cooling rack",
+            "charter-tagged ship-brass tale-bench",
+            "charter-tagged ship-brass tale-hall hearth",
+            "charter-tagged tarred-oak tale-hall hearth",
+            "frost-rimed whalebone charter bone-work bench"
+          ],
+          "wants": 3,
+          "claimSources": 3,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 9,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "East Intake",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Wet Hem",
+          "districtName": "Ferryward",
+          "density": "moderate",
+          "contextEntities": 9,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "broken-open willow-bound ferry oath-post",
+            "many-notched ferry bell",
+            "red-thread-patched bog-iron memory loom",
+            "red-thread-patched river-reed remedy bench",
+            "silt-furred bog-iron ferry oath-post",
+            "votive-ribboned bog-iron eel trap-basket"
+          ],
+          "documents": [],
+          "residents": [
+            "Halsa Reed-Memory, ferry oathkeeper",
+            "Lio Heron\u0027s Cousin, reed apothecary",
+            "Orra Ferry-Sworn, shelter-aunt"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Lio Heron\u0027s Cousin, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 6,
+          "items": [
+            "reed-wrapped memory die"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "broken-open river-reed household shelter sign",
+            "imperial-tagged bog-iron eel trap-basket",
+            "imperial-tagged river-reed household water-shrine",
+            "rain-singing river-reed memory loom",
+            "red-thread-patched willow-bound eel trap-basket",
+            "silt-furred bog-iron creature crate"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged bog-iron household shelter sign",
+            "rain-singing bog-iron ferry oath-post",
+            "rain-singing willow-bound reed drying-rack",
+            "red-thread-patched bog-iron reed drying-rack",
+            "red-thread-patched river-reed eel trap-basket",
+            "silt-furred willow-bound occupation inspection post",
+            "votive-ribboned willow-bound creature crate"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-13,-1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Bone-Tale Landing",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 11,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "hummed-thin harbor token",
+            "powdered scrimshaw",
+            "rain-dark whalebone vial",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained tarred-oak tale-hall hearth",
+            "charter-tagged ship-brass tale-hall hearth",
+            "frost-rimed tarred-oak tale-bench",
+            "frost-rimed whalebone tale-hall hearth",
+            "many-witness tale chair",
+            "storm-singing whalebone tale-bench"
+          ],
+          "documents": [
+            "ale-stained ship-brass ale-cooling rack",
+            "frost-rimed ship-brass scrimshaw tally-post"
+          ],
+          "residents": [
+            "Brand Cold Wake, whalebone carver",
+            "Halla Three Harpoons, hall tale-witness",
+            "Vitr Cold Wake, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Brand Cold Wake, whalebone carver",
+            "Vitr Cold Wake, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged ship-brass tale-hall hearth"
+          ],
+          "wants": 3,
+          "claimSources": 3,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 10,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "The West Intake",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Red Thread Houses",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 13,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "salt-bitten water die",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged eelglass occupation inspection post",
+            "many-notched ferry bell",
+            "rain-singing bog-iron creature crate",
+            "rain-singing eelglass ferry oath-post",
+            "red-thread-patched eelglass occupation inspection post",
+            "silt-furred river-reed creature crate",
+            "votive-ribboned willow-bound occupation inspection post"
+          ],
+          "documents": [
+            "imperial-tagged eelglass ferry oath-post",
+            "votive-ribboned bog-iron ferry oath-post"
+          ],
+          "residents": [
+            "Lio Under-Willow, ferry oathkeeper",
+            "Maren Marsh-Kept, reed apothecary",
+            "Sten Nine Knots, ferry oathkeeper",
+            "Tovin Marsh-Kept, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Maren Marsh-Kept, reed apothecary",
+            "Tovin Marsh-Kept, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 4,
+          "claimSources": 3,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 8,
+          "items": [],
+          "commodityItems": [],
+          "props": [
+            "broken-open willow-bound reed drying-rack",
+            "imperial-tagged bog-iron remedy bench",
+            "rain-singing eelglass creature crate",
+            "rain-singing river-reed household shelter sign",
+            "red-thread-patched river-reed eel trap-basket"
+          ],
+          "documents": [
+            "red-thread-patched river-reed ferry oath-post",
+            "silt-furred eelglass eel trap-basket",
+            "votive-ribboned willow-bound ferry oath-post"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 13,
+          "items": [
+            "bundle of reed pith",
+            "chime-tuned mud effigy"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron ferry oath-post",
+            "broken-open bog-iron household shelter sign",
+            "broken-open eelglass ferry oath-post",
+            "rain-singing eelglass creature crate",
+            "red-thread-patched eelglass eel trap-basket",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred bog-iron household shelter sign",
+            "silt-furred eelglass eel trap-basket",
+            "silt-furred willow-bound creature crate",
+            "votive-ribboned eelglass occupation inspection post"
+          ],
+          "documents": [
+            "rain-singing river-reed memory loom",
+            "silt-furred river-reed household shelter sign",
+            "votive-ribboned bog-iron ferry oath-post"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-13,-1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Harpoon Hall",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 18,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained tarred-oak scrimshaw tally-post",
+            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged tarred-oak charter bone-work bench",
+            "charter-tagged tarred-oak tale-hall hearth",
+            "charter-tagged whalebone ale-cooling rack",
+            "charter-tagged whalebone tale-bench",
+            "frost-rimed ship-brass ale-cooling rack",
+            "hero-carved whalebone charter bone-work bench",
+            "hero-carved whalebone tale-hall hearth",
+            "many-witness tale chair",
+            "storm-singing tarred-oak tale-hall hearth"
+          ],
+          "documents": [
+            "ale-stained ship-brass ale-cooling rack",
+            "ale-stained tarred-oak ale-cooling rack",
+            "ale-stained tarred-oak mountain-pass cairn",
+            "ale-stained whalebone tale-bench"
+          ],
+          "residents": [
+            "Gunnar Whale-Debt, whalebone carver",
+            "Halla Whale-Debt, whalebone carver",
+            "Ingr Whale-Debt, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Gunnar Whale-Debt, whalebone carver",
+            "Halla Whale-Debt, whalebone carver",
+            "Ingr Whale-Debt, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged tarred-oak charter bone-work bench",
+            "charter-tagged tarred-oak tale-hall hearth",
+            "charter-tagged whalebone ale-cooling rack",
+            "charter-tagged whalebone tale-bench",
+            "hero-carved whalebone charter bone-work bench"
+          ],
+          "wants": 3,
+          "claimSources": 3,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 11,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Marble Holding Ward",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Ferryman\u0027s Knot",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 10,
+          "items": [
+            "bundle of reed pith",
+            "ember-warm memory comb",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "ink-stained water sigil-stone",
+            "marsh febrifuge",
+            "moth-pale water thimble",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron occupation inspection post",
+            "broken-open willow-bound occupation inspection post",
+            "imperial-tagged river-reed household water-shrine",
+            "many-notched ferry bell",
+            "rain-singing river-reed eel trap-basket",
+            "silt-furred bog-iron ferry oath-post",
+            "silt-furred eelglass reed drying-rack"
+          ],
+          "documents": [],
+          "residents": [
+            "Lio Wet Hem, reed apothecary",
+            "Pella Marsh-Kept, eel-cutter",
+            "Sten Eelwise, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Lio Wet Hem, reed apothecary",
+            "Sten Eelwise, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 13,
+          "items": [
+            "bundle of reed pith",
+            "chime-tuned mud effigy"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron ferry oath-post",
+            "broken-open bog-iron household shelter sign",
+            "broken-open eelglass ferry oath-post",
+            "rain-singing eelglass creature crate",
+            "red-thread-patched eelglass eel trap-basket",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred bog-iron household shelter sign",
+            "silt-furred eelglass eel trap-basket",
+            "silt-furred willow-bound creature crate",
+            "votive-ribboned eelglass occupation inspection post"
+          ],
+          "documents": [
+            "rain-singing river-reed memory loom",
+            "silt-furred river-reed household shelter sign",
+            "votive-ribboned bog-iron ferry oath-post"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 8,
+          "items": [],
+          "commodityItems": [],
+          "props": [
+            "broken-open willow-bound reed drying-rack",
+            "imperial-tagged bog-iron remedy bench",
+            "rain-singing eelglass creature crate",
+            "rain-singing river-reed household shelter sign",
+            "red-thread-patched river-reed eel trap-basket"
+          ],
+          "documents": [
+            "red-thread-patched river-reed ferry oath-post",
+            "silt-furred eelglass eel trap-basket",
+            "votive-ribboned willow-bound ferry oath-post"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-13,-1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Bone-Tale Landing",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 16,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained ship-brass tale-bench",
+            "charter-tagged whalebone scrimshaw tally-post",
+            "frost-rimed ship-brass tale-bench",
+            "many-witness tale chair",
+            "storm-singing tarred-oak harbor capstan",
+            "storm-singing whalebone tale-hall hearth"
+          ],
+          "documents": [
+            "ale-stained ship-brass tale-hall hearth",
+            "charter-tagged ship-brass ale-cooling rack",
+            "hero-carved whalebone charter bone-work bench"
+          ],
+          "residents": [
+            "Aven Tide-Widow, hall tale-witness",
+            "Bera Tide-Widow, hall tale-witness",
+            "Ingr Rope-Scarred, hall tale-witness",
+            "Jori Ale-Oath, whalebone carver",
+            "Kelda Rope-Scarred, hall tale-witness",
+            "Osk Rope-Scarred, hall tale-witness",
+            "Tor Ale-Oath, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Jori Ale-Oath, whalebone carver",
+            "Tor Ale-Oath, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged ship-brass ale-cooling rack",
+            "charter-tagged whalebone scrimshaw tally-post",
+            "hero-carved whalebone charter bone-work bench"
+          ],
+          "wants": 7,
+          "claimSources": 4,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 12,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "The Ledger Gate",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Red Thread Houses",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 10,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "glossy memory charm",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "notched ferry token",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged bog-iron ferry oath-post",
+            "many-notched ferry bell",
+            "rain-singing bog-iron creature crate",
+            "silt-furred river-reed eel trap-basket",
+            "votive-ribboned eelglass household water-shrine"
+          ],
+          "documents": [
+            "silt-furred bog-iron ferry oath-post"
+          ],
+          "residents": [
+            "Nim Nine Knots, ferry oathkeeper",
+            "Rowen Heron\u0027s Cousin, eel-cutter",
+            "Rowen Wet Hem, reed apothecary",
+            "Sten Wet Hem, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Rowen Wet Hem, reed apothecary",
+            "Sten Wet Hem, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 4,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 12,
+          "items": [
+            "brass-bright memory sigil-stone",
+            "crooked reeds button"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged eelglass household shelter sign",
+            "rain-singing bog-iron occupation inspection post",
+            "rain-singing river-reed memory loom",
+            "rain-singing willow-bound ferry oath-post",
+            "rain-singing willow-bound memory loom",
+            "red-thread-patched bog-iron ferry oath-post",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred bog-iron creature crate",
+            "silt-furred eelglass eel trap-basket",
+            "silt-furred eelglass occupation inspection post"
+          ],
+          "documents": [
+            "silt-furred bog-iron ferry oath-post",
+            "votive-ribboned willow-bound reed drying-rack"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 11,
+          "items": [
+            "brass-bright water vial"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed reed drying-rack",
+            "rain-singing river-reed occupation inspection post",
+            "red-thread-patched bog-iron household shelter sign",
+            "red-thread-patched bog-iron remedy bench",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned bog-iron household shelter sign",
+            "votive-ribboned eelglass remedy bench"
+          ],
+          "documents": [
+            "rain-singing bog-iron household shelter sign",
+            "red-thread-patched willow-bound ferry oath-post",
+            "votive-ribboned bog-iron remedy bench"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 3,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Storm-Sworn Hold",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 12,
+          "items": [
+            "bone luck-token",
+            "bone-tipped harpoon",
+            "coil of tarred rope",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained tarred-oak tale-hall hearth",
+            "charter-tagged tarred-oak charter bone-work bench",
+            "charter-tagged whalebone charter bone-work bench",
+            "frost-rimed tarred-oak tale-hall hearth",
+            "frost-rimed whalebone tale-hall hearth",
+            "hero-carved ship-brass harbor capstan",
+            "many-witness tale chair"
+          ],
+          "documents": [
+            "charter-tagged whalebone tale-hall hearth"
+          ],
+          "residents": [
+            "Bera Tarhand, whalebone carver",
+            "Bera Tide-Widow, harpoon mender",
+            "Hakon Tarhand, whalebone carver",
+            "Yrsa Bone-Tale, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Bera Tarhand, whalebone carver",
+            "Bera Tide-Widow, harpoon mender",
+            "Hakon Tarhand, whalebone carver",
+            "Yrsa Bone-Tale, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged tarred-oak charter bone-work bench",
+            "charter-tagged whalebone charter bone-work bench",
+            "charter-tagged whalebone tale-hall hearth"
+          ],
+          "wants": 4,
+          "claimSources": 2,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 13,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Marble Holding Ward",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Wet Hem",
+          "districtName": "Ferryward",
+          "density": "moderate",
+          "contextEntities": 9,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged river-reed occupation inspection post",
+            "imperial-tagged willow-bound occupation inspection post",
+            "many-notched ferry bell",
+            "rain-singing eelglass household water-shrine",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [
+            "red-thread-patched river-reed memory loom"
+          ],
+          "residents": [
+            "Edda Low Water, eel-cutter",
+            "Gove Reed-Debt, reed apothecary",
+            "Tovin Low Water, shelter-aunt"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Gove Reed-Debt, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 11,
+          "items": [
+            "brass-bright water vial"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open river-reed reed drying-rack",
+            "rain-singing river-reed occupation inspection post",
+            "red-thread-patched bog-iron household shelter sign",
+            "red-thread-patched bog-iron remedy bench",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred river-reed reed drying-rack",
+            "votive-ribboned bog-iron household shelter sign",
+            "votive-ribboned eelglass remedy bench"
+          ],
+          "documents": [
+            "rain-singing bog-iron household shelter sign",
+            "red-thread-patched willow-bound ferry oath-post",
+            "votive-ribboned bog-iron remedy bench"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 3,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 12,
+          "items": [
+            "brass-bright memory sigil-stone",
+            "crooked reeds button"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged eelglass household shelter sign",
+            "rain-singing bog-iron occupation inspection post",
+            "rain-singing river-reed memory loom",
+            "rain-singing willow-bound ferry oath-post",
+            "rain-singing willow-bound memory loom",
+            "red-thread-patched bog-iron ferry oath-post",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred bog-iron creature crate",
+            "silt-furred eelglass eel trap-basket",
+            "silt-furred eelglass occupation inspection post"
+          ],
+          "documents": [
+            "silt-furred bog-iron ferry oath-post",
+            "votive-ribboned willow-bound reed drying-rack"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-11,1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Deep-Tale Hold",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 22,
+          "items": [
+            "bone luck-token",
+            "bone-tipped harpoon",
+            "coil of tarred rope",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained whalebone tale-bench",
+            "frost-rimed ship-brass ale-cooling rack",
+            "frost-rimed ship-brass tale-bench",
+            "frost-rimed tarred-oak tale-hall hearth",
+            "hero-carved ship-brass tale-bench",
+            "hero-carved tarred-oak harpoon winch",
+            "hero-carved whalebone ale-cooling rack",
+            "hero-carved whalebone tale-hall hearth",
+            "many-witness tale chair",
+            "storm-singing ship-brass tale-hall hearth",
+            "storm-singing tarred-oak tale-hall hearth"
+          ],
+          "documents": [
+            "ale-stained tarred-oak tale-bench",
+            "hero-carved tarred-oak tale-bench",
+            "storm-singing ship-brass charter bone-work bench",
+            "storm-singing ship-brass tale-bench"
+          ],
+          "residents": [
+            "Aven Rope-Scarred, hall tale-witness",
+            "Brand Rope-Scarred, whalebone carver",
+            "Dagny Rope-Scarred, whalebone carver",
+            "Frey Rope-Scarred, whalebone carver",
+            "Halla Rope-Scarred, whalebone carver",
+            "Tor Ale-Oath, harpoon mender",
+            "Vitr Rope-Scarred, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Brand Rope-Scarred, whalebone carver",
+            "Dagny Rope-Scarred, whalebone carver",
+            "Frey Rope-Scarred, whalebone carver",
+            "Halla Rope-Scarred, whalebone carver",
+            "Tor Ale-Oath, harpoon mender",
+            "Vitr Rope-Scarred, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "storm-singing ship-brass charter bone-work bench"
+          ],
+          "wants": 7,
+          "claimSources": 3,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 14,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "The Ledger Gate",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Red Thread Houses",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 12,
+          "items": [
+            "brass-bright mud bell",
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "salt-bitten water reliquary",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged eelglass ferry oath-post",
+            "imperial-tagged willow-bound occupation inspection post",
+            "many-notched ferry bell",
+            "red-thread-patched bog-iron occupation inspection post",
+            "red-thread-patched bog-iron reed drying-rack",
+            "red-thread-patched river-reed household water-shrine",
+            "red-thread-patched river-reed occupation inspection post",
+            "red-thread-patched willow-bound eel trap-basket"
+          ],
+          "documents": [
+            "rain-singing bog-iron household water-shrine"
+          ],
+          "residents": [
+            "Edda Reed-Debt, reed apothecary",
+            "Halsa Drowned-Name, ferry oathkeeper",
+            "Tovin Reed-Debt, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Edda Reed-Debt, reed apothecary",
+            "Tovin Reed-Debt, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "glossy reeds bell",
+            "quartz-veined mud bell"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron memory loom",
+            "broken-open river-reed occupation inspection post",
+            "rain-singing eelglass remedy bench",
+            "red-thread-patched bog-iron reed drying-rack",
+            "red-thread-patched willow-bound eel trap-basket"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "chime-tuned reeds reliquary",
+            "rain-dark reeds sigil-stone",
+            "warm memory bell"
+          ],
+          "commodityItems": [],
+          "props": [
+            "rain-singing bog-iron memory loom",
+            "rain-singing river-reed eel trap-basket",
+            "silt-furred willow-bound ferry oath-post",
+            "silt-furred willow-bound household water-shrine",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Harpoon Hall",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 15,
+          "items": [
+            "bone luck-token",
+            "bone-tipped harpoon",
+            "coil of tarred rope",
+            "flask of whale oil",
+            "moth-pale ale reliquary",
+            "powdered scrimshaw",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained whalebone tale-hall hearth",
+            "charter-tagged ship-brass tale-hall hearth",
+            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged tarred-oak tale-hall hearth",
+            "charter-tagged whalebone tale-bench",
+            "hero-carved tarred-oak tale-hall hearth",
+            "many-witness tale chair",
+            "storm-singing tarred-oak tale-hall hearth"
+          ],
+          "documents": [
+            "ale-stained whalebone harbor capstan",
+            "charter-tagged tarred-oak charter bone-work bench"
+          ],
+          "residents": [
+            "Aven Storm-Sworn, harpoon mender",
+            "Bera Bone-Tale, whalebone carver",
+            "Hakon Bone-Tale, whalebone carver",
+            "Nio Bone-Tale, whalebone carver",
+            "Ragna Bone-Tale, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Aven Storm-Sworn, harpoon mender",
+            "Bera Bone-Tale, whalebone carver",
+            "Hakon Bone-Tale, whalebone carver",
+            "Nio Bone-Tale, whalebone carver",
+            "Ragna Bone-Tale, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged ship-brass tale-hall hearth",
+            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged tarred-oak charter bone-work bench",
+            "charter-tagged tarred-oak tale-hall hearth",
+            "charter-tagged whalebone tale-bench"
+          ],
+          "wants": 5,
+          "claimSources": 2,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 15,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Containment Annex Nine",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Under-Willow",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 14,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open eelglass eel trap-basket",
+            "broken-open river-reed occupation inspection post",
+            "imperial-tagged bog-iron ferry oath-post",
+            "many-notched ferry bell",
+            "rain-singing river-reed occupation inspection post",
+            "red-thread-patched river-reed reed drying-rack",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred eelglass occupation inspection post",
+            "silt-furred river-reed eel trap-basket",
+            "votive-ribboned eelglass ferry oath-post",
+            "votive-ribboned eelglass household water-shrine"
+          ],
+          "documents": [],
+          "residents": [
+            "Bael Reed-Debt, eel-cutter",
+            "Halsa Bog-Iron, shelter-aunt",
+            "Jory Low Water, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Jory Low Water, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "chime-tuned reeds reliquary",
+            "rain-dark reeds sigil-stone",
+            "warm memory bell"
+          ],
+          "commodityItems": [],
+          "props": [
+            "rain-singing bog-iron memory loom",
+            "rain-singing river-reed eel trap-basket",
+            "silt-furred willow-bound ferry oath-post",
+            "silt-furred willow-bound household water-shrine",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "glossy reeds bell",
+            "quartz-veined mud bell"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron memory loom",
+            "broken-open river-reed occupation inspection post",
+            "rain-singing eelglass remedy bench",
+            "red-thread-patched bog-iron reed drying-rack",
+            "red-thread-patched willow-bound eel trap-basket"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Bone-Tale Landing",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 13,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "ale-stained ship-brass ale-cooling rack",
+            "ale-stained whalebone tale-bench",
+            "charter-tagged tarred-oak tale-bench",
+            "frost-rimed ship-brass ale-cooling rack",
+            "frost-rimed tarred-oak scrimshaw tally-post",
+            "hero-carved tarred-oak harpoon winch",
+            "hero-carved tarred-oak tale-bench",
+            "many-witness tale chair",
+            "storm-singing tarred-oak tale-hall hearth",
+            "storm-singing whalebone scrimshaw tally-post"
+          ],
+          "documents": [],
+          "residents": [
+            "Hakon Iron Keel, whalebone carver",
+            "Jori Iron Keel, whalebone carver",
+            "Nio Iron Keel, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Hakon Iron Keel, whalebone carver",
+            "Jori Iron Keel, whalebone carver",
+            "Nio Iron Keel, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged tarred-oak tale-bench"
+          ],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 16,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Compliance Yard",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Eelwise",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 10,
+          "items": [
+            "bundle of reed pith",
+            "chime-tuned mud die",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "moth-pale memory sigil-stone",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged willow-bound ferry oath-post",
+            "many-notched ferry bell",
+            "rain-singing bog-iron creature crate",
+            "rain-singing river-reed ferry oath-post",
+            "rain-singing willow-bound occupation inspection post",
+            "silt-furred eelglass household water-shrine",
+            "silt-furred river-reed reed drying-rack"
+          ],
+          "documents": [],
+          "residents": [
+            "Fenna Rushlight, reed apothecary",
+            "Halsa Rushlight, reed apothecary",
+            "Orra Reed-Memory, eel-cutter"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Fenna Rushlight, reed apothecary",
+            "Halsa Rushlight, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "bead of amber resin",
+            "brass-bright mud charm",
+            "salt-bitten reeds sigil-stone"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron household shelter sign",
+            "rain-singing river-reed memory loom",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred eelglass eel trap-basket",
+            "votive-ribboned willow-bound ferry oath-post"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 8,
+          "items": [
+            "crooked water die"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "broken-open bog-iron remedy bench",
+            "broken-open river-reed ferry oath-post",
+            "broken-open river-reed household water-shrine",
+            "imperial-tagged willow-bound household water-shrine",
+            "red-thread-patched eelglass household water-shrine",
+            "silt-furred river-reed eel trap-basket",
+            "silt-furred river-reed remedy bench"
+          ],
+          "documents": [
+            "silt-furred willow-bound memory loom"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-12,0",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Storm-Sworn Hold",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 10,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "ale-stained whalebone tale-hall hearth",
+            "frost-rimed ship-brass scrimshaw tally-post",
+            "many-witness tale chair",
+            "storm-singing ship-brass tale-hall hearth",
+            "storm-singing tarred-oak tale-bench"
+          ],
+          "documents": [
+            "charter-tagged tarred-oak harbor capstan",
+            "hero-carved tarred-oak tale-hall hearth"
+          ],
+          "residents": [
+            "Aven Tide-Widow, whalebone carver",
+            "Halla Blubber-Rich, hall tale-witness",
+            "Yrsa Rope-Scarred, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Aven Tide-Widow, whalebone carver",
+            "Yrsa Rope-Scarred, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged tarred-oak harbor capstan"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 17,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Marble Holding Ward",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Wet Hem",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 14,
+          "items": [
+            "brass-bright reeds button",
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged bog-iron ferry oath-post",
+            "imperial-tagged eelglass occupation inspection post",
+            "imperial-tagged willow-bound ferry oath-post",
+            "many-notched ferry bell",
+            "rain-singing river-reed reed drying-rack",
+            "red-thread-patched willow-bound household shelter sign",
+            "red-thread-patched willow-bound occupation inspection post",
+            "silt-furred river-reed eel trap-basket",
+            "votive-ribboned eelglass household water-shrine"
+          ],
+          "documents": [
+            "rain-singing river-reed ferry oath-post",
+            "silt-furred bog-iron creature crate"
+          ],
+          "residents": [
+            "Lio Drowned-Name, reed apothecary",
+            "Maren Drowned-Name, reed apothecary",
+            "Wynn Eelwise, ferry oathkeeper"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "quiet crossing",
+            "reed remedy"
+          ],
+          "merchants": [
+            "Lio Drowned-Name, reed apothecary",
+            "Maren Drowned-Name, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 8,
+          "items": [
+            "crooked water die"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "broken-open bog-iron remedy bench",
+            "broken-open river-reed ferry oath-post",
+            "broken-open river-reed household water-shrine",
+            "imperial-tagged willow-bound household water-shrine",
+            "red-thread-patched eelglass household water-shrine",
+            "silt-furred river-reed eel trap-basket",
+            "silt-furred river-reed remedy bench"
+          ],
+          "documents": [
+            "silt-furred willow-bound memory loom"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "bead of amber resin",
+            "brass-bright mud charm",
+            "salt-bitten reeds sigil-stone"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron household shelter sign",
+            "rain-singing river-reed memory loom",
+            "red-thread-patched willow-bound reed drying-rack",
+            "silt-furred eelglass eel trap-basket",
+            "votive-ribboned willow-bound ferry oath-post"
+          ],
+          "documents": [],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 0,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-11,1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Bone-Tale Landing",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 13,
+          "items": [
+            "bone luck-token",
+            "carved scrimshaw focus",
+            "crooked harbor reliquary",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained tarred-oak tale-bench",
+            "ale-stained whalebone tale-bench",
+            "charter-tagged ship-brass mountain-pass cairn",
+            "hero-carved ship-brass scrimshaw tally-post",
+            "hero-carved tarred-oak tale-bench",
+            "hero-carved whalebone harpoon winch",
+            "hero-carved whalebone mountain-pass cairn",
+            "many-witness tale chair",
+            "storm-singing tarred-oak ale-cooling rack",
+            "storm-singing tarred-oak harpoon winch"
+          ],
+          "documents": [],
+          "residents": [
+            "Gunnar Cold Wake, hall tale-witness",
+            "Kelda Gull-Fed, whalebone carver",
+            "Yrsa Gull-Fed, whalebone carver"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Kelda Gull-Fed, whalebone carver",
+            "Yrsa Gull-Fed, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "charter-tagged ship-brass mountain-pass cairn"
+          ],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 18,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "Compliance Yard",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Red Thread Houses",
+          "districtName": "Ferryward",
+          "density": "moderate",
+          "contextEntities": 9,
+          "items": [
+            "bundle of reed pith",
+            "ember-warm reeds vial",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "quartz-veined mud charm",
+            "string of smoked eel"
+          ],
+          "commodityItems": [
+            "gold"
+          ],
+          "props": [
+            "broken-open bog-iron creature crate",
+            "imperial-tagged eelglass eel trap-basket",
+            "many-notched ferry bell",
+            "rain-singing eelglass household water-shrine",
+            "red-thread-patched river-reed memory loom",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [],
+          "residents": [
+            "Halsa Red Thread, reed apothecary",
+            "Jory Red Thread, reed apothecary",
+            "Kesk Red Thread, reed apothecary"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Halsa Red Thread, reed apothecary",
+            "Jory Red Thread, reed apothecary",
+            "Kesk Red Thread, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 11,
+          "items": [
+            "hummed-thin mud idol"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged bog-iron ferry oath-post",
+            "imperial-tagged bog-iron memory loom",
+            "imperial-tagged bog-iron remedy bench",
+            "imperial-tagged eelglass reed drying-rack",
+            "silt-furred bog-iron occupation inspection post",
+            "silt-furred river-reed eel trap-basket"
+          ],
+          "documents": [
+            "broken-open eelglass reed drying-rack",
+            "imperial-tagged bog-iron creature crate",
+            "rain-singing eelglass ferry oath-post",
+            "votive-ribboned eelglass household water-shrine",
+            "votive-ribboned willow-bound remedy bench"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 3,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "wilderness",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [
+            "crooked water token",
+            "reed-wrapped memory spoon"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open willow-bound household shelter sign",
+            "rain-singing eelglass household shelter sign",
+            "red-thread-patched river-reed memory loom",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [
+            "imperial-tagged river-reed eel trap-basket",
+            "rain-singing eelglass household water-shrine",
+            "silt-furred bog-iron household shelter sign"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-13,-1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Storm-Sworn Hold",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 14,
+          "items": [
+            "bone luck-token",
+            "bone-tipped harpoon",
+            "coil of tarred rope",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained tarred-oak tale-bench",
+            "charter-tagged whalebone scrimshaw tally-post",
+            "hero-carved ship-brass tale-bench",
+            "hero-carved tarred-oak harpoon winch",
+            "hero-carved whalebone charter bone-work bench",
+            "hero-carved whalebone tale-bench",
+            "many-witness tale chair",
+            "storm-singing ship-brass tale-bench",
+            "storm-singing tarred-oak tale-hall hearth"
+          ],
+          "documents": [],
+          "residents": [
+            "Gunnar Oath-Drunk, whalebone carver",
+            "Ingr Oath-Drunk, whalebone carver",
+            "Nio Tarhand, harpoon mender",
+            "Siv Tarhand, harpoon mender",
+            "Ulfa Ale-Oath, hall tale-witness"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Gunnar Oath-Drunk, whalebone carver",
+            "Ingr Oath-Drunk, whalebone carver",
+            "Nio Tarhand, harpoon mender",
+            "Siv Tarhand, harpoon mender"
+          ],
+          "charterOpportunities": [
+            "charter-tagged whalebone scrimshaw tally-post",
+            "hero-carved whalebone charter bone-work bench"
+          ],
+          "wants": 5,
+          "claimSources": 1,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 19,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "East Intake",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Ferryman\u0027s Knot",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 10,
+          "items": [
+            "bundle of reed pith",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged bog-iron ferry oath-post",
+            "many-notched ferry bell",
+            "rain-singing eelglass ferry oath-post",
+            "rain-singing willow-bound occupation inspection post",
+            "red-thread-patched willow-bound ferry oath-post",
+            "silt-furred bog-iron occupation inspection post",
+            "silt-furred bog-iron reed drying-rack"
+          ],
+          "documents": [],
+          "residents": [
+            "Bael Under-Willow, reed apothecary",
+            "Dellan Under-Willow, reed apothecary",
+            "Gove Ferry-Sworn, shelter-aunt"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Bael Under-Willow, reed apothecary",
+            "Dellan Under-Willow, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [
+            "crooked water token",
+            "reed-wrapped memory spoon"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open willow-bound household shelter sign",
+            "rain-singing eelglass household shelter sign",
+            "red-thread-patched river-reed memory loom",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [
+            "imperial-tagged river-reed eel trap-basket",
+            "rain-singing eelglass household water-shrine",
+            "silt-furred bog-iron household shelter sign"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 11,
+          "items": [
+            "hummed-thin mud idol"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged bog-iron ferry oath-post",
+            "imperial-tagged bog-iron memory loom",
+            "imperial-tagged bog-iron remedy bench",
+            "imperial-tagged eelglass reed drying-rack",
+            "silt-furred bog-iron occupation inspection post",
+            "silt-furred river-reed eel trap-basket"
+          ],
+          "documents": [
+            "broken-open eelglass reed drying-rack",
+            "imperial-tagged bog-iron creature crate",
+            "rain-singing eelglass ferry oath-post",
+            "votive-ribboned eelglass household water-shrine",
+            "votive-ribboned willow-bound remedy bench"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 3,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-11,1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Ragna\u0027s Whalehouse",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 12,
+          "items": [
+            "bone luck-token",
+            "bone-tipped harpoon",
+            "coil of tarred rope",
+            "flask of whale oil",
+            "hummed-thin ale sigil-stone",
+            "powdered scrimshaw",
+            "skin of storm-ale",
+            "tarred rope harness"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained ship-brass ale-cooling rack",
+            "ale-stained ship-brass tale-hall hearth",
+            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged tarred-oak tale-bench",
+            "hero-carved tarred-oak ale-cooling rack",
+            "many-witness tale chair",
+            "storm-singing tarred-oak tale-bench",
+            "storm-singing whalebone tale-bench"
+          ],
+          "documents": [
+            "charter-tagged ship-brass mountain-pass cairn"
+          ],
+          "residents": [
+            "Halla Blubber-Rich, whalebone carver",
+            "Kelda Blubber-Rich, whalebone carver",
+            "Ragna Iron Keel, harpoon mender"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Halla Blubber-Rich, whalebone carver",
+            "Kelda Blubber-Rich, whalebone carver",
+            "Ragna Iron Keel, harpoon mender"
+          ],
+          "charterOpportunities": [
+            "charter-tagged ship-brass mountain-pass cairn",
+            "charter-tagged tarred-oak ale-cooling rack",
+            "charter-tagged tarred-oak tale-bench"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        }
+      ]
+    },
+    {
+      "seed": 20,
+      "zones": [
+        {
+          "zoneId": "0,0",
+          "regionId": "imperial_encounter",
+          "placeKind": "settlement",
+          "settlementName": "The Ledger Gate",
+          "districtName": "Evidence Yard",
+          "density": "empty",
+          "contextEntities": 7,
+          "items": [],
+          "commodityItems": [
+            "imperial cell key",
+            "red tincture"
+          ],
+          "props": [
+            "locked imperial cell door",
+            "sealed evidence registry door"
+          ],
+          "documents": [
+            "brass containment brazier",
+            "posted containment notice"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [
+            "posted containment notice"
+          ],
+          "wants": 3,
+          "claimSources": 2,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,0",
+          "regionId": "hollowmere_margin",
+          "placeKind": "settlement",
+          "settlementName": "Eelwise",
+          "districtName": "Ferryward",
+          "density": "dense",
+          "contextEntities": 11,
+          "items": [
+            "bundle of reed pith",
+            "crooked reeds lens",
+            "flask of eel oil",
+            "healer\u0027s poultice",
+            "ink-stained memory idol",
+            "marsh febrifuge",
+            "string of smoked eel"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open bog-iron household shelter sign",
+            "many-notched ferry bell",
+            "rain-singing bog-iron ferry oath-post",
+            "rain-singing eelglass ferry oath-post",
+            "rain-singing eelglass household water-shrine",
+            "red-thread-patched river-reed memory loom",
+            "votive-ribboned eelglass occupation inspection post",
+            "votive-ribboned willow-bound household shelter sign"
+          ],
+          "documents": [],
+          "residents": [
+            "Fenna Reed-Debt, reed apothecary",
+            "Halsa Marsh-Kept, shelter-aunt",
+            "Jory Marsh-Kept, shelter-aunt"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [
+            "reed remedy"
+          ],
+          "merchants": [
+            "Fenna Reed-Debt, reed apothecary"
+          ],
+          "charterOpportunities": [],
+          "wants": 3,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "1,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 10,
+          "items": [
+            "warm memory whistle"
+          ],
+          "commodityItems": [],
+          "props": [
+            "imperial-tagged river-reed creature crate",
+            "rain-singing eelglass household water-shrine",
+            "red-thread-patched eelglass creature crate",
+            "red-thread-patched eelglass memory loom",
+            "red-thread-patched willow-bound creature crate",
+            "silt-furred bog-iron household shelter sign",
+            "silt-furred river-reed reed drying-rack",
+            "silt-furred willow-bound household water-shrine",
+            "votive-ribboned eelglass remedy bench"
+          ],
+          "documents": [
+            "silt-furred eelglass memory loom"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "0,1",
+          "regionId": "hollowmere_margin",
+          "placeKind": "road",
+          "settlementName": null,
+          "districtName": null,
+          "density": "empty",
+          "contextEntities": 5,
+          "items": [
+            "quartz-veined mud token",
+            "warm mud whistle"
+          ],
+          "commodityItems": [],
+          "props": [
+            "broken-open eelglass household shelter sign",
+            "broken-open willow-bound ferry oath-post",
+            "rain-singing river-reed occupation inspection post",
+            "red-thread-patched eelglass occupation inspection post"
+          ],
+          "documents": [
+            "silt-furred river-reed household shelter sign"
+          ],
+          "residents": [],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [],
+          "charterOpportunities": [],
+          "wants": 0,
+          "claimSources": 1,
+          "unresolved": []
+        },
+        {
+          "zoneId": "-11,1",
+          "regionId": "brall_whaleholds",
+          "placeKind": "settlement",
+          "settlementName": "Storm-Sworn Hold",
+          "districtName": "Tale-Hall Ward",
+          "density": "dense",
+          "contextEntities": 20,
+          "items": [
+            "bone luck-token",
+            "flask of whale oil",
+            "powdered scrimshaw",
+            "skin of storm-ale"
+          ],
+          "commodityItems": [],
+          "props": [
+            "ale-stained ship-brass harbor capstan",
+            "ale-stained tarred-oak charter bone-work bench",
+            "ale-stained whalebone tale-bench",
+            "ale-stained whalebone tale-hall hearth",
+            "charter-tagged ship-brass harbor capstan",
+            "frost-rimed ship-brass ale-cooling rack",
+            "hero-carved ship-brass harbor capstan",
+            "hero-carved ship-brass tale-bench",
+            "hero-carved whalebone charter bone-work bench",
+            "many-witness tale chair",
+            "storm-singing tarred-oak charter bone-work bench"
+          ],
+          "documents": [
+            "charter-tagged ship-brass tale-hall hearth",
+            "hero-carved whalebone tale-bench",
+            "storm-singing tarred-oak tale-hall hearth"
+          ],
+          "residents": [
+            "Halla Salt-Lung, hall tale-witness",
+            "Ingr Salt-Lung, hall tale-witness",
+            "Kelda Salt-Lung, hall tale-witness",
+            "Osk Salt-Lung, hall tale-witness",
+            "Ulfa Tide-Widow, whalebone carver",
+            "Yrsa Salt-Lung, hall tale-witness"
+          ],
+          "creatures": [],
+          "archetypes": [],
+          "encounterCasts": [],
+          "services": [],
+          "merchants": [
+            "Ulfa Tide-Widow, whalebone carver"
+          ],
+          "charterOpportunities": [
+            "ale-stained tarred-oak charter bone-work bench",
+            "charter-tagged ship-brass harbor capstan",
+            "charter-tagged ship-brass tale-hall hearth",
+            "hero-carved whalebone charter bone-work bench",
+            "storm-singing tarred-oak charter bone-work bench"
+          ],
+          "wants": 6,
+          "claimSources": 2,
+          "unresolved": []
+        }
+      ]
+    }
+  ]
+}

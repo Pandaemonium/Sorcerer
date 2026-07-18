@@ -71,7 +71,12 @@
             "tags": [
               "loom",
               "memory"
-            ]
+            ],
+            "districtWeights": {
+              "water_shrines": 5,
+              "reed_market": 2,
+              "ferryward": 1
+            }
           },
           {
             "id": "trap_basket",
@@ -83,7 +88,11 @@
               "eel",
               "trap"
             ],
-            "blocksMovement": false
+            "blocksMovement": false,
+            "districtWeights": {
+              "reed_market": 5,
+              "ferryward": 3
+            }
           },
           {
             "id": "ferry_post",
@@ -94,7 +103,11 @@
             "tags": [
               "ferry",
               "route"
-            ]
+            ],
+            "districtWeights": {
+              "ferryward": 6,
+              "reed_market": 1
+            }
           },
           {
             "id": "water_shrine",
@@ -105,7 +118,11 @@
             "tags": [
               "shrine",
               "household"
-            ]
+            ],
+            "districtWeights": {
+              "water_shrines": 6,
+              "reed_market": 1
+            }
           },
           {
             "id": "drying_rack",
@@ -116,7 +133,78 @@
             "tags": [
               "reeds",
               "work"
-            ]
+            ],
+            "districtWeights": {
+              "reed_market": 4,
+              "ferryward": 2
+            }
+          },
+          {
+            "id": "pet_crate",
+            "name": "creature crate",
+            "glyph": "n",
+            "fixtureType": "container",
+            "description": "A slatted crate that shifts and chirrups with something imported and unhappy.",
+            "tags": [
+              "pet",
+              "crate",
+              "market",
+              "creature"
+            ],
+            "blocksMovement": false,
+            "districtWeights": {
+              "reed_market": 6,
+              "ferryward": 2
+            }
+          },
+          {
+            "id": "medicine_bench",
+            "name": "remedy bench",
+            "glyph": "=",
+            "fixtureType": "folk_craft",
+            "description": "A bench of bitter jars and bruised herbs under a patched awning.",
+            "tags": [
+              "medicine",
+              "craft",
+              "market"
+            ],
+            "districtWeights": {
+              "reed_market": 5,
+              "water_shrines": 3
+            }
+          },
+          {
+            "id": "shelter_sign",
+            "name": "household shelter sign",
+            "glyph": "\"",
+            "fixtureType": "marker",
+            "description": "A willow board hung to say, quietly, whether this house is taking strangers tonight.",
+            "tags": [
+              "shelter",
+              "sign",
+              "refuge"
+            ],
+            "blocksMovement": false,
+            "districtWeights": {
+              "water_shrines": 6,
+              "reed_market": 1
+            }
+          },
+          {
+            "id": "inspection_post",
+            "name": "occupation inspection post",
+            "glyph": "A",
+            "fixtureType": "barrier",
+            "description": "An imperial post where reeds and papers are counted with equal suspicion.",
+            "tags": [
+              "inspection",
+              "imperial",
+              "barrier"
+            ],
+            "districtWeights": {
+              "ferryward": 5,
+              "reed_market": 2
+            }
           }
         ],
         "materials": [
@@ -206,6 +294,15 @@
               "patched",
               "vint"
             ]
+          },
+          {
+            "id": "escaped",
+            "text": "broken-open",
+            "description": "Whatever it held has slipped its latch and gone into the reeds.",
+            "tags": [
+              "escape",
+              "disorder"
+            ]
           }
         ],
         "hooks": [
@@ -225,6 +322,66 @@
             "tags": [
               "water_memory_anchor",
               "folk_magic"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Creature care slate",
+            "text": "A care slate names a specific imported animal, what it eats, what frightens it, and the household that answers for it.",
+            "claimCategory": "care_note",
+            "claimSubject": "an imported creature and its keeper",
+            "claimSalience": 3,
+            "promiseKind": "rumor",
+            "tags": [
+              "pet",
+              "care",
+              "husbandry"
+            ],
+            "claimTags": [
+              "pet",
+              "care",
+              "hollowmere"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Household shelter ledger",
+            "text": "A basin-side ledger records which households sheltered strangers, and which turned them out before the last inspection.",
+            "claimCategory": "ledger",
+            "claimSubject": "households that shelter strangers",
+            "claimSalience": 3,
+            "promiseKind": "rumor",
+            "tags": [
+              "shelter",
+              "memory",
+              "free_folk"
+            ],
+            "claimTags": [
+              "shelter",
+              "refuge",
+              "hollowmere"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Ferry dispute notice",
+            "text": "A notched notice records a crossing paid for and never given, and names both the oathkeeper and the traveler left on the wrong bank.",
+            "claimCategory": "dispute",
+            "claimSubject": "a disputed ferry crossing",
+            "claimSalience": 2,
+            "promiseKind": "rumor",
+            "tags": [
+              "ferry",
+              "dispute",
+              "debt"
+            ],
+            "claimTags": [
+              "ferry",
+              "dispute",
+              "hollowmere"
             ]
           }
         ],
@@ -278,6 +435,60 @@
                 "base": "trap_basket",
                 "material": "eelglass",
                 "condition": "silted",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "pet_market_stall",
+            "weight": 2,
+            "members": [
+              {
+                "base": "pet_crate",
+                "material": "willow",
+                "condition": "patched",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "medicine_bench",
+                "material": "eelglass",
+                "condition": "votive",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "drying_rack",
+                "material": "river_reed",
+                "condition": "silted",
+                "x": -1,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "shelter_debate_corner",
+            "weight": 2,
+            "members": [
+              {
+                "base": "shelter_sign",
+                "material": "willow",
+                "condition": "votive",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "water_shrine",
+                "material": "eelglass",
+                "condition": "singing",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "memory_loom",
+                "material": "river_reed",
+                "condition": "patched",
                 "x": 0,
                 "y": 1
               }

@@ -70,7 +70,11 @@
             "tags": [
               "harpoon",
               "harbor"
-            ]
+            ],
+            "districtWeights": {
+              "harpoon_quay": 6,
+              "scrimshaw_yards": 1
+            }
           },
           {
             "id": "tale_bench",
@@ -81,7 +85,11 @@
             "tags": [
               "story",
               "hall"
-            ]
+            ],
+            "districtWeights": {
+              "tale_hall": 6,
+              "harpoon_quay": 1
+            }
           },
           {
             "id": "scrimshaw_post",
@@ -92,7 +100,11 @@
             "tags": [
               "scrimshaw",
               "debt"
-            ]
+            ],
+            "districtWeights": {
+              "scrimshaw_yards": 6,
+              "tale_hall": 2
+            }
           },
           {
             "id": "ale_cooler",
@@ -103,7 +115,78 @@
             "tags": [
               "ale",
               "work"
-            ]
+            ],
+            "districtWeights": {
+              "tale_hall": 4,
+              "harpoon_quay": 2
+            }
+          },
+          {
+            "id": "pass_cairn",
+            "name": "mountain-pass cairn",
+            "glyph": "^",
+            "fixtureType": "marker",
+            "description": "A snow-dusted cairn marking a pass that closes without warning.",
+            "tags": [
+              "cairn",
+              "pass",
+              "cold",
+              "marker"
+            ],
+            "blocksMovement": false,
+            "districtWeights": {
+              "harpoon_quay": 2,
+              "scrimshaw_yards": 2,
+              "tale_hall": 1
+            }
+          },
+          {
+            "id": "bone_workbench",
+            "name": "charter bone-work bench",
+            "glyph": "#",
+            "fixtureType": "folk_craft",
+            "description": "A bench where debts are carved into bone under a licensed geometer's eye.",
+            "tags": [
+              "scrimshaw",
+              "charter",
+              "craft",
+              "bone"
+            ],
+            "districtWeights": {
+              "scrimshaw_yards": 6,
+              "tale_hall": 1
+            }
+          },
+          {
+            "id": "tale_hearth",
+            "name": "tale-hall hearth",
+            "glyph": "O",
+            "fixtureType": "hearth",
+            "description": "A driftwood fire around which several incompatible histories keep warm.",
+            "tags": [
+              "hearth",
+              "story",
+              "fire",
+              "ale"
+            ],
+            "districtWeights": {
+              "tale_hall": 6
+            }
+          },
+          {
+            "id": "harbor_capstan",
+            "name": "harbor capstan",
+            "glyph": "&",
+            "fixtureType": "machinery",
+            "description": "A great capstan the winch-crews walk in circles against the cold.",
+            "tags": [
+              "capstan",
+              "labor",
+              "harbor"
+            ],
+            "districtWeights": {
+              "harpoon_quay": 6
+            }
           }
         ],
         "materials": [
@@ -174,6 +257,16 @@
               "storm",
               "song"
             ]
+          },
+          {
+            "id": "frost_rimed",
+            "text": "frost-rimed",
+            "description": "A skin of salt-ice makes it glitter and bite bare hands.",
+            "tags": [
+              "cold",
+              "ice",
+              "frost"
+            ]
           }
         ],
         "hooks": [
@@ -192,6 +285,67 @@
             "weight": 1,
             "tags": [
               "bone_song_anchor"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Scrimshaw witness-record",
+            "text": "A carved plaque records who witnessed a disputed rescue, and whose version the hall has been arguing into stone.",
+            "claimCategory": "witness_record",
+            "claimSubject": "a disputed Bralli deed",
+            "claimSalience": 3,
+            "promiseKind": "rumor",
+            "tags": [
+              "scrimshaw",
+              "witness",
+              "story"
+            ],
+            "claimTags": [
+              "scrimshaw",
+              "witness",
+              "brall"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Tide and pass warning",
+            "text": "A chalked slate warns which routes drown at the tide's turn and which mountain pass has already closed for the season.",
+            "claimCategory": "warning",
+            "claimSubject": "the cold routes north",
+            "claimSalience": 3,
+            "promiseKind": "warning",
+            "tags": [
+              "travel",
+              "warning",
+              "pass",
+              "route_hint"
+            ],
+            "claimTags": [
+              "travel",
+              "warning",
+              "brall"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Whalehold debt carving",
+            "text": "A bone tally records a debt of oil and labor owed to a whalehouse, and the name expected to answer for it.",
+            "claimCategory": "debt",
+            "claimSubject": "a whalehold debt",
+            "claimSalience": 2,
+            "promiseKind": "rumor",
+            "tags": [
+              "debt",
+              "bone",
+              "obligation"
+            ],
+            "claimTags": [
+              "debt",
+              "brall",
+              "whalehold"
             ]
           }
         ],
@@ -220,6 +374,53 @@
                 "condition": "hero_carved",
                 "x": 0,
                 "y": 1
+              }
+            ]
+          },
+          {
+            "id": "snowbound_tale_circle",
+            "weight": 2,
+            "members": [
+              {
+                "base": "tale_hearth",
+                "material": "tarred_oak",
+                "condition": "storm_singing",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "tale_bench",
+                "material": "whalebone",
+                "condition": "ale_stained",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "ale_cooler",
+                "material": "ship_brass",
+                "condition": "frost_rimed",
+                "x": -1,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "scrimshaw_argument",
+            "weight": 2,
+            "members": [
+              {
+                "base": "bone_workbench",
+                "material": "whalebone",
+                "condition": "hero_carved",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "scrimshaw_post",
+                "material": "whalebone",
+                "condition": "charter_tagged",
+                "x": 1,
+                "y": 0
               }
             ]
           }

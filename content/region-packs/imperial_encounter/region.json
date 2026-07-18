@@ -61,7 +61,12 @@
             "tags": [
               "survey",
               "law"
-            ]
+            ],
+            "districtWeights": {
+              "intake_gate": 6,
+              "evidence_yard": 2,
+              "clerks_row": 1
+            }
           },
           {
             "id": "evidence_table",
@@ -73,7 +78,12 @@
               "evidence",
               "containment"
             ],
-            "blocksMovement": true
+            "blocksMovement": true,
+            "districtWeights": {
+              "evidence_yard": 6,
+              "clerks_row": 2,
+              "intake_gate": 1
+            }
           },
           {
             "id": "permit_box",
@@ -84,7 +94,12 @@
             "tags": [
               "permit",
               "paper"
-            ]
+            ],
+            "districtWeights": {
+              "clerks_row": 6,
+              "intake_gate": 2,
+              "evidence_yard": 1
+            }
           },
           {
             "id": "inspection_lamp",
@@ -96,7 +111,78 @@
               "light",
               "inspection"
             ],
-            "blocksMovement": false
+            "blocksMovement": false,
+            "districtWeights": {
+              "intake_gate": 3,
+              "evidence_yard": 3,
+              "clerks_row": 3
+            }
+          },
+          {
+            "id": "audit_desk",
+            "name": "audit desk",
+            "glyph": "=",
+            "fixtureType": "office_furniture",
+            "description": "A standing desk stacked with dockets that disagree with one another.",
+            "tags": [
+              "desk",
+              "records",
+              "office"
+            ],
+            "districtWeights": {
+              "clerks_row": 6,
+              "intake_gate": 1
+            }
+          },
+          {
+            "id": "queue_rail",
+            "name": "queue rail",
+            "glyph": "|",
+            "fixtureType": "barrier",
+            "description": "A brass rail herding frightened people past numbered arches.",
+            "tags": [
+              "queue",
+              "barrier",
+              "traffic"
+            ],
+            "blocksMovement": false,
+            "districtWeights": {
+              "intake_gate": 6,
+              "evidence_yard": 1
+            }
+          },
+          {
+            "id": "confiscation_crate",
+            "name": "confiscation crate",
+            "glyph": "#",
+            "fixtureType": "container",
+            "description": "A sealed crate of seized wonders, its lid straining against the ledger's optimism.",
+            "tags": [
+              "crate",
+              "confiscated",
+              "container"
+            ],
+            "districtWeights": {
+              "evidence_yard": 6,
+              "intake_gate": 2
+            }
+          },
+          {
+            "id": "courier_slot",
+            "name": "courier exchange slot",
+            "glyph": "=",
+            "fixtureType": "office_furniture",
+            "description": "A brass slot where satchels change hands faster than they change owners.",
+            "tags": [
+              "courier",
+              "exchange",
+              "records"
+            ],
+            "blocksMovement": false,
+            "districtWeights": {
+              "clerks_row": 4,
+              "intake_gate": 3
+            }
           }
         ],
         "materials": [
@@ -163,6 +249,24 @@
             "tags": [
               "bureaucratic_error"
             ]
+          },
+          {
+            "id": "overturned",
+            "text": "overturned",
+            "description": "Its contents have spilled across the marble in a careless hurry.",
+            "tags": [
+              "spill",
+              "disorder"
+            ]
+          },
+          {
+            "id": "sealed",
+            "text": "wax-sealed",
+            "description": "A red censor's seal fixes it shut against the merely curious.",
+            "tags": [
+              "sealed",
+              "official"
+            ]
           }
         ],
         "hooks": [
@@ -181,6 +285,68 @@
             "weight": 1,
             "tags": [
               "containment_anchor"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Reaping schedule (partial)",
+            "text": "A copied schedule lists the Provincial Reconciliation Sweep's next stops; a marsh hamlet is circled for the coming days.",
+            "claimCategory": "schedule",
+            "claimSubject": "the coming imperial sweep",
+            "claimSalience": 4,
+            "promiseKind": "warning",
+            "tags": [
+              "schedule",
+              "sweep",
+              "free_folk",
+              "route_hint"
+            ],
+            "claimTags": [
+              "sweep",
+              "warning",
+              "imperial",
+              "reaping"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Confiscation warrant",
+            "text": "A warrant names a seized wonder and the household it was taken from, with a docket number that no longer matches any shelf.",
+            "claimCategory": "warrant",
+            "claimSubject": "a confiscated wonder",
+            "claimSalience": 3,
+            "promiseKind": "rumor",
+            "tags": [
+              "warrant",
+              "evidence",
+              "provenance"
+            ],
+            "claimTags": [
+              "warrant",
+              "confiscation",
+              "evidence"
+            ]
+          },
+          {
+            "kind": "claim",
+            "weight": 2,
+            "title": "Courier manifest",
+            "text": "A manifest lists a satchel of sealed orders due to leave the yard by a named courier before the day is out.",
+            "claimCategory": "manifest",
+            "claimSubject": "an outbound courier satchel",
+            "claimSalience": 3,
+            "promiseKind": "rumor",
+            "tags": [
+              "courier",
+              "manifest",
+              "interception"
+            ],
+            "claimTags": [
+              "courier",
+              "manifest",
+              "schedule"
             ]
           }
         ],
@@ -207,6 +373,60 @@
                 "base": "inspection_lamp",
                 "material": "charter_glass",
                 "condition": "numbered",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "confiscation_spill",
+            "weight": 2,
+            "members": [
+              {
+                "base": "confiscation_crate",
+                "material": "brass",
+                "condition": "overturned",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "evidence_table",
+                "material": "charter_glass",
+                "condition": "misfiled",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "survey_marker",
+                "material": "marble",
+                "condition": "numbered",
+                "x": -1,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "audit_desk_row",
+            "weight": 2,
+            "members": [
+              {
+                "base": "audit_desk",
+                "material": "brass",
+                "condition": "misfiled",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "permit_box",
+                "material": "brass",
+                "condition": "sealed",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "courier_slot",
+                "material": "brass",
+                "condition": "scrubbed",
                 "x": 0,
                 "y": 1
               }

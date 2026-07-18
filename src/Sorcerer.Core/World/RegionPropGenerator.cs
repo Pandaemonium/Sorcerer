@@ -1,3 +1,4 @@
+using Sorcerer.Core.Entities;
 using Sorcerer.Core.Primitives;
 
 namespace Sorcerer.Core.World;
@@ -16,7 +17,8 @@ public sealed record GeneratedRegionProp(
     string? ReadableText = null,
     string? EnsembleId = null,
     int OffsetX = 0,
-    int OffsetY = 0);
+    int OffsetY = 0,
+    ClaimSeed? Claim = null);
 
 public sealed record RegionPropBatch(
     IReadOnlyList<GeneratedRegionProp> Props,
@@ -29,7 +31,8 @@ public static class RegionPropGenerator
         RegionDefinition region,
         RealmProfile realm,
         int worldSeed,
-        string zoneId)
+        string zoneId,
+        string? districtId = null)
     {
         if (region.Props is null)
         {
@@ -78,7 +81,7 @@ public static class RegionPropGenerator
             var prop = Compose(
                 region,
                 realm,
-                PickWeighted(grammar.Bases, item => item.Weight, rng),
+                PickWeighted(grammar.Bases, item => item.WeightFor(districtId), rng),
                 PickWeighted(grammar.Materials, item => item.Weight, rng),
                 PickWeighted(grammar.Conditions, item => item.Weight, rng),
                 grammar,
@@ -144,6 +147,7 @@ public static class RegionPropGenerator
         var canAnchorMagic = false;
         string? readableTitle = null;
         string? readableText = null;
+        ClaimSeed? claim = null;
         var hooks = grammar.Hooks ?? Array.Empty<RegionPropHookDefinition>();
         if (hooks.Count > 0 && RollPercent(rng, grammar.HookChancePercent))
         {
@@ -165,6 +169,34 @@ public static class RegionPropGenerator
                     realm);
                 tags.Add("readable");
             }
+            else if (hook.Kind.Equals("claim", StringComparison.OrdinalIgnoreCase))
+            {
+                // An actionable found document: readable AND carrying a claim seed that rides the
+                // ordinary claim/rumor/promise machinery when a player reads or examines it.
+                readableTitle = RenderTemplate(hook.Title ?? name, name, region, realm);
+                var claimText = RenderTemplate(
+                    hook.Text ?? $"{readableTitle}: a record someone meant to act on.",
+                    name,
+                    region,
+                    realm);
+                readableText = claimText;
+                tags.Add("readable");
+                tags.Add("found_document");
+                claim = new ClaimSeed(
+                    claimText,
+                    hook.ClaimCategory ?? "record",
+                    RenderTemplate(hook.ClaimSubject ?? name, name, region, realm),
+                    Salience: Math.Clamp(hook.ClaimSalience, 1, 5),
+                    Confidence: 70,
+                    PlayerVisible: true,
+                    BindAsPromise: hook.BindAsPromise,
+                    PromiseKind: hook.PromiseKind ?? "rumor",
+                    RealizationKind: hook.RealizationKind,
+                    Tags: (hook.ClaimTags ?? Array.Empty<string>())
+                        .Concat(new[] { "found_document", "prop_claim", region.Id })
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray());
+            }
         }
 
         return new GeneratedRegionProp(
@@ -178,7 +210,8 @@ public static class RegionPropGenerator
             canAnchorMagic,
             description,
             readableTitle,
-            readableText);
+            readableText,
+            Claim: claim);
     }
 
     private static string RenderTemplate(

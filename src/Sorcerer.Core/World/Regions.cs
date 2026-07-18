@@ -21,7 +21,26 @@ public sealed record RegionPropBaseDefinition(
     IReadOnlyList<string> Tags,
     bool BlocksMovement = true,
     bool BlocksSight = false,
-    int Weight = 1);
+    int Weight = 1,
+    // WP3: per-district selection weight, so the Evidence Yard and Clerks' Row read differently.
+    // Absent → the flat Weight everywhere; present → the district weight where named, else 0.
+    IReadOnlyDictionary<string, int>? DistrictWeights = null)
+{
+    public int WeightFor(string? districtId)
+    {
+        if (DistrictWeights is null || DistrictWeights.Count == 0)
+        {
+            return Math.Max(1, Weight);
+        }
+
+        if (!string.IsNullOrWhiteSpace(districtId) && DistrictWeights.TryGetValue(districtId, out var districtWeight))
+        {
+            return Math.Max(0, districtWeight);
+        }
+
+        return 0;
+    }
+}
 
 public sealed record RegionPropPartDefinition(
     string Id,
@@ -36,7 +55,17 @@ public sealed record RegionPropHookDefinition(
     int Weight = 1,
     string? Title = null,
     string? Text = null,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    // WP3 "claim" hook: turns a prop into an actionable found document. The hook seeds a claim
+    // through the ordinary claim/rumor/promise machinery — a schedule, a warrant, a care note —
+    // rather than being inert readable scenery.
+    string? ClaimCategory = null,
+    string? ClaimSubject = null,
+    int ClaimSalience = 3,
+    string? PromiseKind = null,
+    bool BindAsPromise = false,
+    string? RealizationKind = null,
+    IReadOnlyList<string>? ClaimTags = null);
 
 public sealed record RegionPropEnsembleMemberDefinition(
     string BaseId,

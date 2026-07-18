@@ -1,0 +1,8 @@
+# WP3 playtest: reach Hollowmere, read the new dense scenes and found documents.
+inspect
+travel east
+inspect
+read
+examine
+rumors
+journal

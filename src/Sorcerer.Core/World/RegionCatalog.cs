@@ -323,7 +323,8 @@ public static class RegionCatalog
                 ReadStringList(item, "tags"),
                 ReadBool(item, "blocksMovement", ReadBool(item, "blocks_movement", true)),
                 ReadBool(item, "blocksSight", ReadBool(item, "blocks_sight", false)),
-                Math.Max(1, ReadInt(item, "weight", 1))))
+                Math.Max(1, ReadInt(item, "weight", 1)),
+                ReadIntMap(item, "districtWeights", "district_weights")))
             .Where(item => !string.IsNullOrWhiteSpace(item.Id))
             .ToArray();
         var materials = ReadArray(value, "materials")
@@ -345,7 +346,14 @@ public static class RegionCatalog
                 Math.Max(1, ReadInt(item, "weight", 1)),
                 ReadNullableString(item, "title"),
                 ReadNullableString(item, "text"),
-                ReadStringList(item, "tags")))
+                ReadStringList(item, "tags"),
+                ReadNullableString(item, "claimCategory") ?? ReadNullableString(item, "claim_category"),
+                ReadNullableString(item, "claimSubject") ?? ReadNullableString(item, "claim_subject"),
+                Math.Clamp(ReadInt(item, "claimSalience", ReadInt(item, "claim_salience", 3)), 1, 5),
+                ReadNullableString(item, "promiseKind") ?? ReadNullableString(item, "promise_kind"),
+                ReadBool(item, "bindAsPromise", ReadBool(item, "bind_as_promise", false)),
+                ReadNullableString(item, "realizationKind") ?? ReadNullableString(item, "realization_kind"),
+                ReadStringList(item, "claimTags", "claim_tags")))
             .Where(item => !string.IsNullOrWhiteSpace(item.Kind))
             .ToArray();
         var ensembles = ReadArray(value, "ensembles")
@@ -656,6 +664,30 @@ public static class RegionCatalog
         root.TryGetProperty(property, out var value) && value.TryGetInt32(out var parsed)
             ? parsed
             : fallback;
+
+    private static IReadOnlyDictionary<string, int>? ReadIntMap(JsonElement root, string camel, string snake)
+    {
+        var value = root.TryGetProperty(camel, out var camelValue)
+            ? camelValue
+            : root.TryGetProperty(snake, out var snakeValue)
+                ? snakeValue
+                : default;
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in value.EnumerateObject())
+        {
+            if (property.Value.TryGetInt32(out var parsed))
+            {
+                map[property.Name] = parsed;
+            }
+        }
+
+        return map.Count > 0 ? map : null;
+    }
 
     private static double ReadDouble(JsonElement root, string property, double fallback) =>
         root.TryGetProperty(property, out var value) && value.TryGetDouble(out var parsed)
