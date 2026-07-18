@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "spells": [
+    {
+      "id": "ward_step_1",
+      "name": "Ward-Step Directive I",
+      "summary": "A licensed short reposition onto a marked tile.",
+      "line": "You file yourself out of one lawful position and into another.",
+      "targeting": "tile",
+      "licenseTier": 1,
+      "cost": { "mana": 2 },
+      "effects": [
+        { "type": "teleport", "target": "self" }
+      ]
+    },
+    {
+      "id": "cleansing_writ_1",
+      "name": "Cleansing Writ I",
+      "summary": "Strikes an unlicensed condition from the record, and from you.",
+      "line": "The charter reads the affliction, declares it improper, and files it away.",
+      "targeting": "self",
+      "licenseTier": 1,
+      "cost": { "mana": 2 },
+      "effects": [
+        { "type": "consequence", "consequenceType": "remove_status", "target": "self", "category": "negative" }
+      ]
+    },
+    {
+      "id": "surveyor_edict_1",
+      "name": "Surveyor's Edict I",
+      "summary": "Measures a target down to its exploitable flaw.",
+      "line": "Charter light walks the target and notes, precisely, where it fails.",
+      "targeting": "entity",
+      "licenseTier": 1,
+      "cost": { "mana": 1 },
+      "effects": [
+        { "type": "revealTruth", "aspect": "nature", "target": "nearest_enemy" }
+      ]
+    },
+    {
+      "id": "bulwark_edict_1",
+      "name": "Bulwark Edict I",
+      "summary": "Raises a lawful barrier of white geometry around you.",
+      "line": "Exact white lines close over you like a clause you cannot be argued out of.",
+      "targeting": "self",
+      "licenseTier": 1,
+      "cost": { "mana": 3 },
+      "effects": [
+        { "type": "addStatus", "target": "player", "status": "shielded", "displayName": "charter-warded", "duration": 4 },
+        { "type": "addResistance", "target": "player", "damageType": "physical", "amount": 20, "duration": 4 }
+      ]
+    },
+    {
+      "id": "furrow_edict_1",
+      "name": "Furrow Edict I",
+      "summary": "Rules a strip of ground into difficult, warded terrain.",
+      "line": "The charter scores the ground into a lawful furrow that resists the unlicensed.",
+      "targeting": "tile",
+      "licenseTier": 2,
+      "cost": { "mana": 3 },
+      "effects": [
+        { "type": "terrain", "target": "selected_target", "terrain": "rubble", "duration": 8 }
+      ]
+    }
+  ]
+}

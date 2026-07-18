@@ -13,6 +13,9 @@
     <EmbeddedResource Include="..\..\content\actors\*.json">
       <LogicalName>Sorcerer.Core.Content.Actors.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="..\..\content\costs\*.json">
+      <LogicalName>Sorcerer.Core.Content.Costs.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="..\..\content\quests\*.json">
       <LogicalName>Sorcerer.Core.Content.Quests.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>

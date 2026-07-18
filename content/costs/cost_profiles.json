@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "curse_marked_by_color", "kind": "curse", "name": "Marked by Color",
+      "condition": "A visible stain of wild color clings to the sorcerer; witnesses recognise them on sight and imperial heat rises faster.",
+      "cause": "Overspending a wild working, or a cast that named the self as the price.",
+      "journalSurface": "Listed under active curses with its clearing routes.",
+      "clearRoutes": ["A cleansing charter form or folk remedy strikes it from you.", "Transfer the mark onto a willing or tricked bearer.", "Exploit it: wear the mark openly to be believed by the Free Folk.", "Bargain with a censor to have the record 'lost'.", "Endure it for the reputation it buys among the wild-touched."],
+      "tags": ["curse", "heat", "visible", "wild"]
+    },
+    {
+      "id": "curse_hollow_name", "kind": "curse", "name": "Hollow Name",
+      "condition": "The sorcerer's name will not hold; NPCs forget it between meetings and bonds decay a step each day.",
+      "cause": "A working that spent identity, or a broken oath sworn near reed-memory.",
+      "journalSurface": "Listed under active curses; affected bonds are flagged as fading.",
+      "clearRoutes": ["Have a memory-keeper re-inscribe the name at a water-shrine.", "Transfer the forgetting onto a rival.", "Exploit the anonymity to pass a checkpoint unrecognised.", "Bargain a Bralli teller into carving the name into permanent record.", "Endure it and travel as no one in particular."],
+      "tags": ["curse", "identity", "bonds", "memory"]
+    },
+    {
+      "id": "curse_iron_thirst", "kind": "curse", "name": "Iron Thirst",
+      "condition": "Charter and iron bite harder: the sorcerer takes extra damage from charter and metal until fed a cost.",
+      "cause": "Cutting a charter figure with wild power, or spending blood near cold iron.",
+      "journalSurface": "Listed under active curses with a mechanical weakness note.",
+      "clearRoutes": ["A cleansing form or grave-salt ward lifts it.", "Transfer it into a struck enemy through sympathetic magic.", "Exploit it to bait a charter-user into overcommitting.", "Bargain with a Bralli bone-worker to carve the thirst into a bone instead.", "Endure it for a working that feeds on the extra pain."],
+      "tags": ["curse", "weakness", "charter", "iron"]
+    },
+    {
+      "id": "curse_tide_debt_body", "kind": "curse", "name": "Borrowed Tide",
+      "condition": "The sorcerer's body answers to water: on wet ground it heals, on dry ground its wounds reopen slowly.",
+      "cause": "A working that borrowed from Hollowmere's water-memory without paying it back.",
+      "journalSurface": "Listed under active curses with a terrain note.",
+      "clearRoutes": ["Return a remembered name to the drowned mill.", "Transfer the tide onto a ferry oath-post.", "Exploit it by fighting only near water.", "Bargain with the reeds through a shrine offering.", "Endure it and stay near the marsh."],
+      "tags": ["curse", "terrain", "water", "hollowmere"]
+    },
+    {
+      "id": "debt_imperial_ledger", "kind": "debt", "name": "An Imperial Ledger Entry",
+      "condition": "The Empire believes the sorcerer owes a fee or a seized wonder; a claimant will arrive to collect on a schedule.",
+      "cause": "Accepting an imperial service, forging a permit that was checked, or a settled bribe that was recorded.",
+      "journalSurface": "Listed under approaching pressure with the expected claimant and turn window.",
+      "clearRoutes": ["Pay the fee or surrender the item.", "Forge the ledger closed.", "Expose the corrupt clerk who filed it.", "Let a claimant come and deal with them.", "Flee the region until it is written off."],
+      "tags": ["debt", "imperial", "scheduled", "claimant"]
+    },
+    {
+      "id": "debt_freefolk_favor", "kind": "debt", "name": "A Free Folk Favor",
+      "condition": "The cell sheltered or armed the sorcerer and will, in time, ask for a dangerous errand in return.",
+      "cause": "Accepting shelter, a cache, or a watcher's word from the Free Folk.",
+      "journalSurface": "Listed under active promises as an owed favor with the naming contact.",
+      "clearRoutes": ["Run the errand they ask.", "Repay in supplies, secrets, or a rescued name.", "Refuse and lose the safe-haven.", "Trade the favor to the Kindled for their own agenda.", "Endure the reminders until a bigger crisis erases it."],
+      "tags": ["debt", "free_folk", "favor", "obligation"]
+    },
+    {
+      "id": "debt_whalehold_bone", "kind": "debt", "name": "A Whalehold Bone-Debt",
+      "condition": "A Bralli whalehouse has carved the sorcerer's debt into bone; a debt-caller will collect it publicly in a hall.",
+      "cause": "Taking oil, passage, or a boat's labor in Brall without settling.",
+      "journalSurface": "Listed under approaching pressure with the carving's provenance.",
+      "clearRoutes": ["Pay in oil, labor, or coin.", "Out-tell the debt before the same witnesses.", "Transfer the carving to another name.", "Let the debt-caller come and settle it by deed.", "Endure it and stay out of the tale-halls."],
+      "tags": ["debt", "brall", "public", "witnessed"]
+    },
+    {
+      "id": "altered_charter_touched", "kind": "altered_item", "name": "Charter-Touched",
+      "condition": "An item keeps its identity and provenance but now reads as lawful to censors and biases charter magic; its value rises in imperial markets and falls among the Free Folk.",
+      "cause": "Left in a charter working or sealed with censor's wax.",
+      "journalSurface": "The item's inspect text notes the alteration and its new bias.",
+      "clearRoutes": ["Scrub the seal with quicklime.", "Sell it high to an imperial buyer.", "Use its lawful reading to pass an inspection.", "Keep it as a charter focus.", "Let a Free Folk contact 'un-license' it, lowering its imperial value."],
+      "tags": ["altered_item", "charter", "provenance", "value"]
+    },
+    {
+      "id": "altered_wild_stained", "kind": "altered_item", "name": "Wild-Stained",
+      "condition": "An item keeps its identity but now carries a wild bias and a faint color-leak; it sharpens wild casts and trips censor lenses.",
+      "cause": "Caught in a wild working, or used as a sacrifice that was only half-spent.",
+      "journalSurface": "The item's inspect text notes the stain and its spell bias.",
+      "clearRoutes": ["Ward it with grave salt to quiet the leak.", "Use it as a potent wild-cast component.", "Gift it to the wild-touched who value the stain.", "Hide it from inspections.", "Endure the risk for the bonus it gives."],
+      "tags": ["altered_item", "wild", "component", "risk"]
+    },
+    {
+      "id": "altered_bone_bound", "kind": "altered_item", "name": "Bone-Bound",
+      "condition": "An item keeps its identity but has been scrimshawed with a deed or debt; it now carries provenance a Bralli court will read as evidence.",
+      "cause": "Carved in a Brall bone-work bench, or used to settle a witnessed claim.",
+      "journalSurface": "The item's inspect text notes the carved record it now bears.",
+      "clearRoutes": ["Present it as evidence in a hall dispute.", "Sand the carving away to erase the record.", "Trade it to whoever the debt names.", "Keep it as proof of your own deed.", "Endure the attention its story draws."],
+      "tags": ["altered_item", "brall", "evidence", "provenance"]
+    }
+  ]
+}
