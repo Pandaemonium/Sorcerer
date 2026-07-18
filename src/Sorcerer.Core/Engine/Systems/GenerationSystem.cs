@@ -17,6 +17,7 @@ public sealed class GenerationSystem
 {
     private readonly ItemCatalog _itemCatalog;
     private readonly LoreCatalog _loreCatalog;
+    private readonly ActorArchetypeCatalog _actors = ActorArchetypeCatalog.Default;
     private readonly QuestTemplateCatalog _quests;
     private readonly PromiseRealizationSystem _promiseRealizationSystem;
     private readonly WorldTurnSystem _worldTurnSystem = new();
@@ -570,6 +571,7 @@ public sealed class GenerationSystem
         SpawnGeneratedItems(generatedState, region, realm, propPoints, deltas);
         SpawnAmbientEncounter(generatedState, region, place, deltas);
         PopulateZone(generatedState, region, realm, place, entryDirection, deltas);
+        SpawnGeneratedCreatures(generatedState, region, place, deltas);
         if (region.Id.Equals("vigovian_capital", StringComparison.OrdinalIgnoreCase)
             && place.District?.Id.Equals("inner_court", StringComparison.OrdinalIgnoreCase) == true
             && place.Settlement is { } capital
@@ -1179,6 +1181,123 @@ public sealed class GenerationSystem
                 deltas,
                 "ambient keeper treasure");
         }
+    }
+
+    /// <summary>
+    /// WP4 (docs/CONTENT_SPRINT_PLAN.md): stages a region's exotic pets as ordinary actors from the
+    /// shared archetype catalog — Hollowmere's identity made visible. Pets are entities with a
+    /// temperament, a want, and ordinary interaction verbs (examine/recruit/give plus spell and
+    /// bump targeting); adoption, calming, and following ride the existing follower/want/AI lanes,
+    /// never a pet meter. Density varies: markets can teem while the open reeds stay quiet.
+    /// </summary>
+    private void SpawnGeneratedCreatures(
+        GameState generatedState,
+        RegionDefinition region,
+        WorldPlaceProfile place,
+        List<StateDelta> deltas)
+    {
+        var pets = _actors.PetsFor(region.Id);
+        if (pets.Count == 0)
+        {
+            return;
+        }
+
+        var zoneId = generatedState.CurrentZoneId;
+        var rng = new DeterministicRng(WorldRoll.StableSeed(_state.Seed, zoneId, region.Id, "creatures"));
+        var inSettlement = place.Settlement is not null;
+        var habitat = inSettlement ? "center" : "wild";
+        var chance = inSettlement ? 55 : 18;
+        if (zoneId.Equals("0,0", StringComparison.OrdinalIgnoreCase) || rng.NextInt(0, 100) >= chance)
+        {
+            return;
+        }
+
+        var count = 1;
+        if (inSettlement && rng.NextInt(0, 100) < 45)
+        {
+            count += rng.NextInt(1, 3);
+        }
+
+        for (var index = 0; index < count; index++)
+        {
+            var pet = WeightedPick(
+                pets,
+                candidate => Math.Max(1, candidate.HabitatWeight(habitat) * Math.Max(1, candidate.RegionWeight(region.Id))),
+                rng);
+            var position = FindGeneratedOpenPoint(generatedState, RandomInteriorPoint(generatedState, rng));
+            var hp = rng.NextInt(pet.MinHitPoints, Math.Max(pet.MinHitPoints, pet.MaxHitPoints) + 1);
+            var attack = rng.NextInt(pet.MinAttack, Math.Max(pet.MinAttack, pet.MaxAttack) + 1);
+            var verbs = pet.Verbs.Count > 0 ? pet.Verbs : new[] { "examine", "recruit" };
+            TryApplyGeneratedZoneConsequence(
+                generatedState,
+                WorldConsequence.SpawnEntity(
+                    "generation",
+                    pet.Name,
+                    position.X,
+                    position.Y,
+                    prefix: $"creature_{NormalizeToken(pet.Id)}",
+                    glyph: pet.Glyph,
+                    faction: pet.Faction,
+                    hp: hp,
+                    attack: attack,
+                    tags: pet.Tags
+                        .Concat(pet.BehaviorTags)
+                        .Concat(new[] { "creature", "generated", region.Id })
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray(),
+                    material: pet.Material,
+                    roles: new[] { "creature", "pet" },
+                    controllerKind: "ai",
+                    aiPolicyId: string.IsNullOrWhiteSpace(pet.AiPolicyId) ? "idle" : pet.AiPolicyId,
+                    summoned: false,
+                    description: string.IsNullOrWhiteSpace(pet.Temperament)
+                        ? pet.Name
+                        : $"{pet.Name}: {pet.Temperament}.",
+                    interactableVerbs: verbs.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    bodyVigor: 2,
+                    includeMemory: false,
+                    visibility: WorldConsequenceVisibility.Hidden,
+                    evidence: pet.Temperament,
+                    reason: "Regional creature generation staged an exotic pet through the shared spawn lifecycle.",
+                    operation: "generateCreature",
+                    emitMessage: false,
+                    wantText: pet.WantText,
+                    wantId: $"want_creature_{NormalizeToken(zoneId)}_{NormalizeToken(pet.Id)}_{index}",
+                    wantStakes: pet.WantStakes,
+                    wantSalience: 2,
+                    wantTags: new[] { "want", "creature", "pet", region.Id },
+                    details: new Dictionary<string, object?>
+                    {
+                        ["zoneId"] = zoneId,
+                        ["regionId"] = region.Id,
+                        ["creatureArchetype"] = pet.Id,
+                        ["temperament"] = pet.Temperament,
+                        ["imported"] = pet.Tags.Contains("imported", StringComparer.OrdinalIgnoreCase),
+                    }),
+                deltas,
+                "regional creature");
+        }
+    }
+
+    private static T WeightedPick<T>(IReadOnlyList<T> values, Func<T, int> weight, IRng rng)
+    {
+        var total = values.Sum(value => Math.Max(0, weight(value)));
+        if (total <= 0)
+        {
+            return values[0];
+        }
+
+        var roll = rng.NextInt(0, total);
+        foreach (var value in values)
+        {
+            roll -= Math.Max(0, weight(value));
+            if (roll < 0)
+            {
+                return value;
+            }
+        }
+
+        return values[^1];
     }
 
     private void SpawnGeneratedItems(

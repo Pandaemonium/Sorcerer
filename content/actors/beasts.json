@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "actors": [
+    { "id": "road_cur_pack", "category": "hostile", "name": "road cur", "glyph": "d", "faction": "wild", "material": "flesh",
+      "minHitPoints": 5, "maxHitPoints": 8, "minAttack": 2, "maxAttack": 4, "defense": 0, "aiPolicyId": "guard",
+      "behaviorTags": ["beast", "pack", "skittish"], "terrainPreference": ["road", "wild"],
+      "intent": "harries in a snapping half-circle, bold only in numbers", "weakness": "cowardly once the boldest one falls",
+      "counter": "fire, a thrown ration to scatter them, or breaking the pack's nerve",
+      "want": "food and a warm place out of the wind",
+      "verbs": ["examine"], "tags": ["enemy", "beast", "pack"],
+      "regionWeights": { "wild_border": 6, "hollowmere_margin": 2, "imperial_encounter": 1 } },
+    { "id": "carrion_thing", "category": "hostile", "name": "carrion thing", "glyph": "x", "faction": "wild", "material": "flesh",
+      "minHitPoints": 9, "maxHitPoints": 13, "minAttack": 3, "maxAttack": 5, "defense": 1, "aiPolicyId": "guard",
+      "behaviorTags": ["beast", "scavenger", "wild"], "terrainPreference": ["wild", "ruin"],
+      "intent": "feeds on the fallen and grows bolder near the dead", "weakness": "hates bright light and open flame",
+      "counter": "keeping clear of corpses, burning it, or drawing it into daylight",
+      "want": "to be left alone with what it has claimed",
+      "verbs": ["examine"], "tags": ["enemy", "beast", "scavenger"],
+      "regionWeights": { "wild_border": 6, "hollowmere_margin": 1 } }
+  ]
+}

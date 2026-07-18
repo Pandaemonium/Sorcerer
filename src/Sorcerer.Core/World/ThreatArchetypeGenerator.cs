@@ -51,14 +51,74 @@ public static class ThreatArchetypeGenerator
         var attack = 2 + salience + rng.NextInt(0, 2);
         var faction = IsImperialThreat(promise) ? "empire" : "independent";
         var name = ResolveName(promise, region, rng);
+        var glyph = 'D';
+        var material = "flesh";
         var tags = new[] { "promise", "threat", NormalizeToken(promise.Kind), NormalizeToken(promise.RealizationKind ?? "threat") }
             .Concat(region.TerrainTags.Take(2))
             .Concat(region.VoiceTags.Take(2))
             .Where(tag => !string.IsNullOrWhiteSpace(tag))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var flavorText = FlavorTextFor(region, realm);
-        return new ThreatArchetype(name, faction, 'D', "flesh", hp, attack, tags, flavorText);
+
+        // WP4 legibility overlay: a generic grudge (one whose text names neither the Empire nor a
+        // "collector") adopts a culturally specific catalog archetype's identity, intent, weakness,
+        // and non-damage counter — so the threat is learnable — while keeping the salience-scaled
+        // stats and the faction rule that heat/warrant pressure depends on. Text-cued threats keep
+        // their specific vocab names.
+        var lower = $"{promise.Subject} {promise.Text}".ToLowerInvariant();
+        if (!IsImperialThreat(promise) && !lower.Contains("collector"))
+        {
+            var archetype = PickGenericHostile(region, rng);
+            if (archetype is not null)
+            {
+                name = archetype.Name;
+                glyph = archetype.Glyph;
+                material = archetype.Material;
+                flavorText = string.IsNullOrWhiteSpace(archetype.InspectLine())
+                    ? $"{archetype.Name} steps into your path:"
+                    : $"{archetype.Name}. {archetype.InspectLine()}";
+                tags = tags.Concat(archetype.Tags).Concat(archetype.BehaviorTags)
+                    .Concat(new[] { "actor_archetype", archetype.Id })
+                    .ToArray();
+            }
+        }
+
+        return new ThreatArchetype(
+            name,
+            faction,
+            glyph,
+            material,
+            hp,
+            attack,
+            tags.Where(tag => !string.IsNullOrWhiteSpace(tag)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            flavorText);
+    }
+
+    private static ActorArchetypeDefinition? PickGenericHostile(RegionDefinition region, IRng rng)
+    {
+        // Non-imperial grudges draw from the region's non-Empire hostiles (beasts, reavers, wild
+        // things) so their faction stays independent-flavoured.
+        var hostiles = ActorArchetypeCatalog.Default.HostilesFor(region.Id)
+            .Where(archetype => !archetype.Faction.Equals("empire", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(archetype => archetype.Id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (hostiles.Length == 0)
+        {
+            return null;
+        }
+
+        var total = hostiles.Sum(archetype => Math.Max(1, archetype.RegionWeight(region.Id)));
+        var roll = rng.NextInt(0, total);
+        foreach (var archetype in hostiles)
+        {
+            roll -= Math.Max(1, archetype.RegionWeight(region.Id));
+            if (roll < 0)
+            {
+                return archetype;
+            }
+        }
+
+        return hostiles[^1];
     }
 
     private static string ResolveName(WorldPromise promise, RegionDefinition region, IRng rng)

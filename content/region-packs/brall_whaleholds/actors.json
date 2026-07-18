@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "actors": [
+    { "id": "shore_reaver", "category": "hostile", "name": "shore reaver", "glyph": "R", "faction": "independent", "material": "flesh",
+      "minHitPoints": 13, "maxHitPoints": 17, "minAttack": 4, "maxAttack": 6, "defense": 2, "aiPolicyId": "guard",
+      "behaviorTags": ["bruiser", "brall", "raider"], "terrainPreference": ["quay", "cold"],
+      "intent": "charges in a straight line behind a levelled harpoon",
+      "weakness": "all that momentum is easy to sidestep on ice or bone-cobbles",
+      "counter": "stepping aside on slick terrain, or owing them a bigger debt than the one they came to collect",
+      "want": "oil, plunder, and a story worth telling in the hall",
+      "verbs": ["talk", "examine"], "tags": ["enemy", "brall", "bruiser"] },
+    { "id": "debt_caller", "category": "pressure", "name": "whalehold debt-caller", "glyph": "D", "faction": "independent", "material": "flesh",
+      "minHitPoints": 10, "maxHitPoints": 13, "minAttack": 2, "maxAttack": 4, "defense": 1, "aiPolicyId": "guard",
+      "behaviorTags": ["leader", "brall", "collector"], "terrainPreference": ["hall", "quay"],
+      "intent": "calls a crew of witnesses to collect a carved debt in public",
+      "weakness": "needs the hall's witnesses to make the claim stick",
+      "counter": "settling or transferring the debt, or out-telling them in front of the same witnesses",
+      "want": "the debt paid, publicly, so the carving can be closed",
+      "verbs": ["talk", "examine"], "tags": ["enemy", "brall", "leader", "debt"] },
+    { "id": "pack_ice_bear", "category": "hostile", "name": "pack-ice bear", "glyph": "B", "faction": "wild", "material": "flesh",
+      "minHitPoints": 16, "maxHitPoints": 22, "minAttack": 5, "maxAttack": 8, "defense": 2, "aiPolicyId": "guard",
+      "behaviorTags": ["beast", "brall", "cold", "apex"], "terrainPreference": ["ice", "cold", "harbor"],
+      "intent": "lumbers in to maul anything between it and the fish-racks",
+      "weakness": "overheats fast; will not follow far from the ice",
+      "counter": "leading it away from the cold, fire, or simply giving it the fish it came for",
+      "want": "the seal-fat and fish drying on the quay",
+      "verbs": ["examine"], "tags": ["enemy", "beast", "brall", "cold"] }
+  ]
+}

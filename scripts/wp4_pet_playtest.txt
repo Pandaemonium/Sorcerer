@@ -1,0 +1,7 @@
+inspect
+map
+travel east
+travel south
+inspect
+map
+examine
