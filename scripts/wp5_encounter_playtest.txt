@@ -1,0 +1,7 @@
+travel east
+travel north
+inspect
+travel north
+inspect
+travel east
+inspect

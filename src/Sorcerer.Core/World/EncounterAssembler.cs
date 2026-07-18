@@ -93,6 +93,7 @@ public static class EncounterAssembler
             .Where(archetype => tier >= archetype.MinTier && tier <= archetype.MaxTier)
             .Where(archetype => !archetype.RequiresInterior || request.InteriorAvailable)
             .Where(archetype => request.Purpose != "ambient" || archetype.AmbientEligible)
+            .Where(archetype => request.Purpose != "promise" || archetype.PromiseEligible)
             .Where(archetype => !excluded.Contains(archetype.Kind, StringComparer.OrdinalIgnoreCase))
             .OrderBy(archetype => archetype.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -174,23 +175,48 @@ public static class EncounterAssembler
     {
         var title = Expand(slot.TitlePattern, request, cast.FactionId, null);
         var name = ComposeName(request.Region, title, rng, usedNames);
-        var hitPoints = RollRange(slot.MinHitPoints, slot.MaxHitPoints, rng) + (tier - 1) * 2;
-        var attack = RollRange(slot.MinAttack, slot.MaxAttack, rng) + (tier - 1);
+        var actor = string.IsNullOrWhiteSpace(slot.ArchetypeId)
+            ? null
+            : ActorArchetypeCatalog.Default.Find(slot.ArchetypeId!);
+        var minHp = actor?.MinHitPoints ?? slot.MinHitPoints;
+        var maxHp = actor?.MaxHitPoints ?? slot.MaxHitPoints;
+        var minAtk = actor?.MinAttack ?? slot.MinAttack;
+        var maxAtk = actor?.MaxAttack ?? slot.MaxAttack;
+        var hitPoints = RollRange(minHp, maxHp, rng) + (tier - 1) * 2;
+        var attack = RollRange(minAtk, maxAtk, rng) + (tier - 1);
+        var glyph = actor?.Glyph ?? slot.Glyph;
+        var verbs = slot.InteractableVerbs
+            ?? (actor is { Verbs.Count: > 0 } ? actor.Verbs : new[] { "talk", "examine" });
         var holdsObjective = slot.Role.Equals("keeper", StringComparison.OrdinalIgnoreCase);
+        // Fold the archetype's tactical read (intent/weakness/counter) into the want-stakes surface
+        // so dialogue and inspect teach the non-damage way past this enemy, not just its stat block.
+        var wantStakes = Expand(slot.WantStakes, request, cast.FactionId, null);
+        if (actor is not null && !string.IsNullOrWhiteSpace(actor.InspectLine()))
+        {
+            wantStakes = string.IsNullOrWhiteSpace(wantStakes)
+                ? actor.InspectLine()
+                : $"{wantStakes} {actor.InspectLine()}";
+        }
+
+        var tags = actor is null
+            ? slot.Tags
+            : slot.Tags.Concat(actor.Tags).Concat(new[] { "actor_archetype", actor.Id })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         return new EncounterCastSpec(
             name,
             title,
-            slot.Glyph,
+            glyph,
             cast.FactionId,
             hitPoints,
             attack,
             slot.AiPolicyId,
             FormationOffset(archetype.Formation, offsetIndex),
-            slot.Tags,
+            tags,
             slot.Roles,
             Expand(slot.WantPattern, request, cast.FactionId, null),
-            Expand(slot.WantStakes, request, cast.FactionId, null),
-            slot.InteractableVerbs ?? new[] { "talk", "examine" },
+            wantStakes,
+            verbs,
             holdsObjective);
     }
 

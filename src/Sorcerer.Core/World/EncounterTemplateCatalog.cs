@@ -155,7 +155,8 @@ public sealed class EncounterTemplateCatalog
                 ReadString(item, "canonPattern", "{item} waits at {place}."),
                 Math.Max(1, ReadInt(item, "weight", 1)),
                 ReadStrings(item, "tags"),
-                ReadCasts(item));
+                ReadCasts(item),
+                ReadBool(item, "promiseEligible", true));
             if (!string.IsNullOrWhiteSpace(archetype.Id)
                 && !string.IsNullOrWhiteSpace(archetype.Kind)
                 && archetype.Casts.Count > 0)
@@ -209,7 +210,10 @@ public sealed class EncounterTemplateCatalog
                     minAttack,
                     Math.Max(minAttack, ReadInt(item, "maxAttack", 2)),
                     item.TryGetProperty("interactableVerbs", out _) ? ReadStrings(item, "interactableVerbs") : null,
-                    ReadInts(item, "countByTier"));
+                    ReadInts(item, "countByTier"),
+                    item.TryGetProperty("archetypeId", out var archetypeId) && archetypeId.ValueKind == JsonValueKind.String
+                        ? archetypeId.GetString()
+                        : null);
             })
             .Where(slot => !string.IsNullOrWhiteSpace(slot.Id) && !string.IsNullOrWhiteSpace(slot.WantPattern))
             .ToArray();

@@ -1,0 +1,467 @@
+{
+  "schemaVersion": 1,
+  "archetypes": [
+    {
+      "id": "imperial_patrol_crossing",
+      "kind": "guarded_cache",
+      "minTier": 1,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": true,
+      "formation": "ring",
+      "weight": 3,
+      "canonPattern": "An imperial patrol has stopped over {item} at {place}, and the civilians who were here are backing away.",
+      "tags": [
+        "encounter",
+        "patrol",
+        "witnesses",
+        "imperial"
+      ],
+      "casts": [
+        {
+          "factionId": "empire",
+          "weight": 3,
+          "minImperialPresence": 20,
+          "slots": [
+            {
+              "id": "patrol_warden",
+              "role": "guard",
+              "titlePattern": "yard warden",
+              "aiPolicyId": "guard",
+              "archetypeId": "yard_warden",
+              "tags": [
+                "encounter_cast",
+                "objective_guard",
+                "witnessed"
+              ],
+              "roles": [
+                "guard"
+              ],
+              "wantPattern": "Keep the unpermitted away from {item} and note who reaches for it.",
+              "wantStakes": "Would wave you past for a valid writ, a quiet bribe, or a name on the approved list.",
+              "interactableVerbs": [
+                "talk",
+                "examine"
+              ],
+              "countByTier": [
+                1,
+                1,
+                2
+              ]
+            },
+            {
+              "id": "patrol_sentry",
+              "role": "support",
+              "titlePattern": "crossbow sentry",
+              "aiPolicyId": "guard",
+              "archetypeId": "crossbow_sentry",
+              "tags": [
+                "encounter_cast",
+                "ranged"
+              ],
+              "roles": [
+                "support"
+              ],
+              "wantPattern": "Cover the warden and the road from a safe angle.",
+              "wantStakes": "Loses the advantage the moment the line of sight closes or breaks.",
+              "countByTier": [
+                0,
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ],
+      "promiseEligible": false
+    },
+    {
+      "id": "contested_prize",
+      "kind": "rival_claimant",
+      "minTier": 1,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": true,
+      "formation": "adjacent",
+      "weight": 2,
+      "canonPattern": "Two parties both mean to walk away with {item} at {place}, and neither will say so first.",
+      "tags": [
+        "encounter",
+        "contested",
+        "two_wants"
+      ],
+      "casts": [
+        {
+          "factionId": "independent",
+          "weight": 2,
+          "minImperialPresence": 0,
+          "slots": [
+            {
+              "id": "claimant_keeper",
+              "role": "keeper",
+              "titlePattern": "stubborn claimant",
+              "glyph": "p",
+              "aiPolicyId": "resident",
+              "tags": [
+                "encounter_cast",
+                "claimant"
+              ],
+              "roles": [
+                "keeper"
+              ],
+              "wantPattern": "Hold {item} until my older claim is admitted out loud.",
+              "wantStakes": "Would yield to proof of a better claim, a fair split, or a witness they trust.",
+              "interactableVerbs": [
+                "talk",
+                "give",
+                "recruit",
+                "examine"
+              ],
+              "countByTier": [
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "id": "claimant_rival",
+              "role": "rival",
+              "titlePattern": "rival for {item}",
+              "glyph": "p",
+              "aiPolicyId": "guard",
+              "tags": [
+                "encounter_cast",
+                "rival"
+              ],
+              "roles": [
+                "rival"
+              ],
+              "wantPattern": "Take {item} before the other one can, by argument or by force.",
+              "wantStakes": "Backs down if outbid, out-argued before witnesses, or shown the fight is not worth it.",
+              "interactableVerbs": [
+                "talk",
+                "examine"
+              ],
+              "countByTier": [
+                1,
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ],
+      "promiseEligible": false
+    },
+    {
+      "id": "courier_interception",
+      "kind": "keeper",
+      "minTier": 1,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": true,
+      "formation": "adjacent",
+      "weight": 2,
+      "canonPattern": "A courier is carrying {item} past {place} on a schedule, with an escort a few steps behind.",
+      "tags": [
+        "encounter",
+        "courier",
+        "interception",
+        "timed"
+      ],
+      "casts": [
+        {
+          "factionId": "empire",
+          "weight": 3,
+          "minImperialPresence": 20,
+          "slots": [
+            {
+              "id": "courier_keeper",
+              "role": "keeper",
+              "titlePattern": "imperial courier",
+              "glyph": "p",
+              "aiPolicyId": "resident",
+              "tags": [
+                "encounter_cast",
+                "courier",
+                "objective_keeper"
+              ],
+              "roles": [
+                "keeper",
+                "courier"
+              ],
+              "wantPattern": "Deliver {item} intact and on time, and remember no faces.",
+              "wantStakes": "Would hand it over for a convincing seal, a substitution they will not notice, or a fright that beats their fear of arriving late.",
+              "interactableVerbs": [
+                "talk",
+                "give",
+                "examine"
+              ],
+              "countByTier": [
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "id": "courier_escort",
+              "role": "support",
+              "titlePattern": "escort warden",
+              "aiPolicyId": "guard",
+              "archetypeId": "yard_warden",
+              "tags": [
+                "encounter_cast",
+                "escort"
+              ],
+              "roles": [
+                "support"
+              ],
+              "wantPattern": "Walk two steps behind the courier and watch the road.",
+              "wantStakes": "Can be delayed, drawn off, or separated from the courier by a good enough distraction.",
+              "countByTier": [
+                0,
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ],
+      "promiseEligible": false
+    },
+    {
+      "id": "endangered_marsh_creature",
+      "kind": "keeper",
+      "minTier": 1,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": true,
+      "formation": "ring",
+      "weight": 2,
+      "canonPattern": "Something in the reeds at {place} has a frightened owner and a hungry problem circling {item}.",
+      "tags": [
+        "encounter",
+        "creature",
+        "rescue",
+        "social"
+      ],
+      "casts": [
+        {
+          "factionId": "hollowmere",
+          "weight": 3,
+          "minImperialPresence": 0,
+          "slots": [
+            {
+              "id": "worried_owner",
+              "role": "keeper",
+              "titlePattern": "frantic keeper",
+              "glyph": "p",
+              "aiPolicyId": "resident",
+              "tags": [
+                "encounter_cast",
+                "owner",
+                "objective_keeper"
+              ],
+              "roles": [
+                "keeper"
+              ],
+              "wantPattern": "Get {item} — my creature — back before the water thing does.",
+              "wantStakes": "Grateful past reason to anyone who calms, rescues, or buys back the animal without bloodshed.",
+              "interactableVerbs": [
+                "talk",
+                "give",
+                "recruit",
+                "examine"
+              ],
+              "countByTier": [
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "id": "lurking_danger",
+              "role": "guard",
+              "titlePattern": "mire lurker",
+              "aiPolicyId": "guard",
+              "archetypeId": "mire_lurker",
+              "tags": [
+                "encounter_cast",
+                "beast",
+                "danger"
+              ],
+              "roles": [
+                "guard"
+              ],
+              "wantPattern": "Drag the frightened creature into the deep water.",
+              "wantStakes": "Helpless on dry land; hates fire and light; leaves once fed or lured off.",
+              "countByTier": [
+                1,
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ],
+      "promiseEligible": false
+    },
+    {
+      "id": "elite_hunter_and_support",
+      "kind": "guarded_cache",
+      "minTier": 2,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": false,
+      "formation": "ring",
+      "weight": 1,
+      "canonPattern": "A witchhunter has made {item} the bait in a patient trap at {place}.",
+      "tags": [
+        "encounter",
+        "elite",
+        "hunter",
+        "interlocking"
+      ],
+      "casts": [
+        {
+          "factionId": "empire",
+          "weight": 2,
+          "minImperialPresence": 30,
+          "slots": [
+            {
+              "id": "hunter_elite",
+              "role": "guard",
+              "titlePattern": "imperial witchhunter",
+              "aiPolicyId": "guard",
+              "archetypeId": "witchhunter",
+              "tags": [
+                "encounter_cast",
+                "elite",
+                "hunter"
+              ],
+              "roles": [
+                "guard"
+              ],
+              "wantPattern": "Take the fugitive sorcerer alive if possible, closed either way.",
+              "wantStakes": "Overcommits to the kill; a decoy, a false identity, or a sprung ambush turns the trap around.",
+              "interactableVerbs": [
+                "talk",
+                "examine"
+              ],
+              "countByTier": [
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "id": "hunter_support",
+              "role": "support",
+              "titlePattern": "intake sergeant",
+              "aiPolicyId": "guard",
+              "archetypeId": "intake_sergeant",
+              "tags": [
+                "encounter_cast",
+                "support",
+                "leader"
+              ],
+              "roles": [
+                "support"
+              ],
+              "wantPattern": "Hold the flank and keep the wardens steady for the hunter.",
+              "wantStakes": "Useless without an audience; folds if the hunter is beaten or the soldiers are removed.",
+              "countByTier": [
+                0,
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ],
+      "promiseEligible": false
+    },
+    {
+      "id": "public_gathering_watch",
+      "kind": "keeper",
+      "minTier": 1,
+      "maxTier": 3,
+      "requiresInterior": false,
+      "ambientEligible": true,
+      "formation": "ring",
+      "weight": 2,
+      "canonPattern": "A small crowd has gathered around {item} at {place}, and everything done here will be seen.",
+      "tags": [
+        "encounter",
+        "gathering",
+        "witnesses"
+      ],
+      "casts": [
+        {
+          "factionId": "hollowmere",
+          "weight": 2,
+          "minImperialPresence": 0,
+          "slots": [
+            {
+              "id": "gathering_holder",
+              "role": "keeper",
+              "titlePattern": "keeper of {item}",
+              "glyph": "p",
+              "aiPolicyId": "resident",
+              "tags": [
+                "encounter_cast",
+                "objective_keeper",
+                "witnessed"
+              ],
+              "roles": [
+                "keeper"
+              ],
+              "wantPattern": "Settle what happens to {item} in front of everyone, fairly.",
+              "wantStakes": "Sways to a public, honest case; violence here is remembered by every witness and costs you standing.",
+              "interactableVerbs": [
+                "talk",
+                "give",
+                "recruit",
+                "examine"
+              ],
+              "countByTier": [
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "id": "gathering_witness",
+              "role": "support",
+              "titlePattern": "onlooker",
+              "glyph": "p",
+              "aiPolicyId": "idle",
+              "tags": [
+                "encounter_cast",
+                "witness",
+                "civilian"
+              ],
+              "roles": [
+                "witness"
+              ],
+              "wantPattern": "See how the stranger handles {item}, and tell everyone after.",
+              "wantStakes": "Harmless, but their memory turns a quiet deed loud and a violent one infamous.",
+              "minHitPoints": 4,
+              "maxHitPoints": 6,
+              "interactableVerbs": [
+                "talk",
+                "examine"
+              ],
+              "countByTier": [
+                2,
+                3,
+                4
+              ]
+            }
+          ]
+        }
+      ],
+      "promiseEligible": false
+    }
+  ]
+}

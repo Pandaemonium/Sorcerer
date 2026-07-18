@@ -20,7 +20,11 @@ public sealed record EncounterCastSlotDefinition(
     int MinAttack = 0,
     int MaxAttack = 2,
     IReadOnlyList<string>? InteractableVerbs = null,
-    IReadOnlyList<int>? CountByTier = null);
+    IReadOnlyList<int>? CountByTier = null,
+    // WP5: when set, the slot draws its stats, glyph, verbs, and its intent/weakness/counter from
+    // the shared ActorArchetypeCatalog instead of the inline stat block, so encounter enemies are
+    // the same learnable, non-violently-counterable archetypes threats and pressures use.
+    string? ArchetypeId = null);
 
 public sealed record EncounterFactionCastDefinition(
     string FactionId,
@@ -45,4 +49,8 @@ public sealed record EncounterArchetypeDefinition(
     string CanonPattern,
     int Weight,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<EncounterFactionCastDefinition> Casts);
+    IReadOnlyList<EncounterFactionCastDefinition> Casts,
+    // WP5: world-situation ingredients (patrols, courier windows, gatherings) enrich ambient
+    // encounters but should not hijack the placement of a specifically fetched quest objective.
+    // Default true keeps the original cache/keeper/rival/site ingredients guarding promise items.
+    bool PromiseEligible = true);
