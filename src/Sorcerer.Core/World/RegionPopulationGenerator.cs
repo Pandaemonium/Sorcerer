@@ -181,8 +181,12 @@ public static class RegionPopulationGenerator
             }
         }
 
+        // A required-at-center archetype is the district's single anchor (the market's apothecary,
+        // the hall's keeper); it is placed once at index 0 and never re-rolled into three of itself,
+        // leaving the rest of the crowd to the varied roles.
         var eligible = grammar.Archetypes
             .Where(archetype => HabitatWeight(archetype, habitat) > 0)
+            .Where(archetype => !(habitat == CenterHabitat && archetype.RequiredAtCenter))
             .ToArray();
         return eligible.Length == 0
             ? grammar.Archetypes.FirstOrDefault()

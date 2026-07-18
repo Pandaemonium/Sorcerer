@@ -210,7 +210,8 @@
           ],
           "roles": [
             "resident",
-            "witness"
+            "witness",
+            "service_provider"
           ],
           "descriptions": [
             "The aunt carries three door keys and denies that any fit a door.",
@@ -223,7 +224,210 @@
           "centerWeight": 2,
           "nearWeight": 3,
           "wildWeight": 3,
+          "knowledgeTier": 3,
+          "services": [
+            {
+              "id": "hidden_bed",
+              "name": "a hidden bed",
+              "effectKind": "rest",
+              "description": "The aunt risks one of three hidden beds so you can close your eyes and heal.",
+              "goldCost": 0,
+              "targetHint": "a red-thread household",
+              "tags": [
+                "refuge",
+                "rest",
+                "free_folk"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "freefolk_lookout",
+          "title": "Free Folk lookout",
+          "glyph": "l",
+          "factionId": "free_folk",
+          "tags": [
+            "free_folk",
+            "watcher",
+            "hollowmere",
+            "cautious"
+          ],
+          "roles": [
+            "resident",
+            "witness",
+            "free_folk"
+          ],
+          "descriptions": [
+            "They watch the causeway from a punt that never quite finishes its errand.",
+            "A reed whistle and a memorised list of names they will not write down."
+          ],
+          "wants": [
+            "Judge whether this bright-handed fugitive is a weapon the cell can trust or a fire that will take the whole marsh.",
+            "Learn the reaping schedule before the sweep reaches Ferryman's Knot."
+          ],
+          "services": [
+            {
+              "id": "watcher_word",
+              "name": "a watcher's word",
+              "effectKind": "reveal_route",
+              "description": "The lookout marks which lanes the inspection punts are watching tonight.",
+              "goldCost": 0,
+              "targetHint": "a lane the Empire is not watching",
+              "tags": [
+                "route",
+                "free_folk",
+                "intel"
+              ]
+            }
+          ],
+          "centerWeight": 2,
+          "nearWeight": 4,
+          "wildWeight": 3,
+          "knowledgeTier": 4
+        },
+        {
+          "id": "freefolk_runner",
+          "title": "Free Folk runner",
+          "glyph": "r",
+          "factionId": "free_folk",
+          "tags": [
+            "free_folk",
+            "runner",
+            "hollowmere",
+            "bold"
+          ],
+          "roles": [
+            "resident",
+            "free_folk"
+          ],
+          "descriptions": [
+            "Young, fast, and certain the cell is too careful by half.",
+            "Mud to the knees from carrying warnings the long way round the checkpoints."
+          ],
+          "wants": [
+            "Use the sorcerer NOW to break the reaping open, whatever the older heads say.",
+            "Get a warning to the next household before the inspection punt arrives."
+          ],
+          "centerWeight": 2,
+          "nearWeight": 3,
+          "wildWeight": 2,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "freefolk_shelterwright",
+          "title": "Free Folk shelterwright",
+          "glyph": "s",
+          "factionId": "free_folk",
+          "tags": [
+            "free_folk",
+            "refuge",
+            "hollowmere",
+            "provider",
+            "safe_haven"
+          ],
+          "roles": [
+            "resident",
+            "service_provider",
+            "free_folk"
+          ],
+          "descriptions": [
+            "They know which drowned houses still have a dry floor and a hidden hearth.",
+            "A ring of odd keys and a memory for who owes the cell what."
+          ],
+          "wants": [
+            "Turn a warned village into a place the cell can rest, cache, and come back to.",
+            "Keep the safe-house secret from the one runner who cannot hold their tongue."
+          ],
+          "services": [
+            {
+              "id": "safe_rest",
+              "name": "shelter and rest",
+              "effectKind": "rest",
+              "description": "A dry hidden floor where the sorcerer can recover out of the Empire's sight.",
+              "goldCost": 0,
+              "targetHint": "a Free Folk safe-house",
+              "tags": [
+                "refuge",
+                "rest",
+                "free_folk"
+              ]
+            },
+            {
+              "id": "cache_drop",
+              "name": "a cache drop",
+              "effectKind": "record_memory",
+              "description": "The shelterwright remembers a hidden cache for you, and where the cell left supplies.",
+              "goldCost": 0,
+              "targetHint": "a hidden Free Folk cache",
+              "tags": [
+                "storage",
+                "free_folk",
+                "supply"
+              ]
+            }
+          ],
+          "centerWeight": 2,
+          "nearWeight": 3,
+          "wildWeight": 3,
           "knowledgeTier": 3
+        },
+        {
+          "id": "freefolk_kindled",
+          "title": "Kindled sympathizer",
+          "glyph": "k",
+          "factionId": "free_folk",
+          "tags": [
+            "free_folk",
+            "kindled",
+            "radical",
+            "hollowmere",
+            "disputatious"
+          ],
+          "roles": [
+            "resident",
+            "free_folk"
+          ],
+          "descriptions": [
+            "They speak of answering the Shadow Purge with a purge of the Empire's own.",
+            "The older Free Folk sit a little apart from them, and do not quite disagree out loud."
+          ],
+          "wants": [
+            "Convince the cell that terror and the old possession-craft are the only language the Empire hears.",
+            "Recruit the sorcerer to the Kindled way before the cautious heads talk them out of it."
+          ],
+          "centerWeight": 1,
+          "nearWeight": 2,
+          "wildWeight": 2,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "hollowmere_loyalist",
+          "title": "reconciled householder",
+          "glyph": "c",
+          "factionId": "empire",
+          "tags": [
+            "empire",
+            "client",
+            "hollowmere",
+            "stability",
+            "resident"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "They pay the tally on time and sleep, and want their neighbours to do the same.",
+            "A census token worn openly, and a door that stays shut after moonset."
+          ],
+          "wants": [
+            "Keep the roads open and the family off the reaping list by giving the Empire no reason to look here.",
+            "Refuse the fugitive politely, because the last house that helped is two names shorter."
+          ],
+          "centerWeight": 3,
+          "nearWeight": 3,
+          "wildWeight": 1,
+          "knowledgeTier": 2
         }
       ]
     }

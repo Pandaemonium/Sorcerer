@@ -17,7 +17,9 @@ public sealed class RegionalPopulationGenerationTests
         var catalog = RegionCatalog.LoadDefault();
 
         Assert.Equal(14, catalog.Regions.Count);
-        Assert.Equal(44, catalog.Regions.Sum(region => region.Population?.Archetypes.Count ?? 0));
+        // WP7 added the Hollowmere Free Folk watching cell, safe-haven provider, Kindled radical,
+        // and a pro-Empire refuser (docs/CONTENT_SPRINT_PLAN.md).
+        Assert.Equal(49, catalog.Regions.Sum(region => region.Population?.Archetypes.Count ?? 0));
         foreach (var region in catalog.Regions)
         {
             var population = Assert.IsType<RegionPopulationGrammarDefinition>(region.Population);

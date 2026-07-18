@@ -1204,6 +1204,32 @@ public sealed partial class WorldConsequenceApplier
                 }));
         }
 
+        // WP7: a safe-haven's resting/recovery service is a real heal, so warning or saving a
+        // settlement earns somewhere the sorcerer can actually recover between pushes.
+        if (effect is "rest" or "recover" or "shelter_rest" or "safe_rest")
+        {
+            if (!requester.TryGet<ActorComponent>(out var actor))
+            {
+                return WorldConsequenceApplyResult.Empty("There is no one here to rest.");
+            }
+
+            var healed = Math.Max(4, actor.MaxHitPoints / 2);
+            return Apply(WorldConsequence.Heal(
+                "service",
+                requester.Id.Value,
+                healed,
+                visibility: WorldConsequenceVisibility.Message,
+                sourceEntityId: provider.Id.Value,
+                evidence: service.Description,
+                operation: "serviceRest",
+                details: new Dictionary<string, object?>
+                {
+                    ["serviceId"] = service.Id,
+                    ["serviceName"] = service.Name,
+                    ["beneficiaryId"] = requester.Id.Value,
+                }));
+        }
+
         if (effect is "create_route" or "escape_route" or "reveal_route")
         {
             return Apply(WorldConsequence.CreateRoute(

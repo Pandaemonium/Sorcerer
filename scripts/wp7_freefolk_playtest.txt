@@ -1,0 +1,4 @@
+travel east
+inspect
+talk Who watches these crossings, and who here would shelter a stranger?
+rumors
