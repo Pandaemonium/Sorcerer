@@ -1,0 +1,248 @@
+{
+  "regions": [
+    {
+      "id": "rentacosta_harbor",
+      "groundLoot": {
+        "min": 1,
+        "max": 2,
+        "emptyChance": 20,
+        "usefulChance": 30,
+        "goldMax": 14
+      },
+      "name": "Rentacosta Harbor",
+      "realmId": "rentacosta",
+      "traditionId": "tide_trade",
+      "imperialPresence": 20,
+      "terrainTags": [
+        "harbor",
+        "salt",
+        "rope",
+        "market"
+      ],
+      "voiceTags": [
+        "easygoing",
+        "multilingual",
+        "salt_worn",
+        "worldly"
+      ],
+      "wildnessBase": 2,
+      "floorTerrain": "harbor_cobble",
+      "affordances": [
+        {
+          "id": "neutral_harbor",
+          "text": "Almost everyone needs Rentacosta's ships, making the harbor useful neutral ground and violence unusually costly.",
+          "tags": [
+            "neutrality",
+            "trade",
+            "diplomacy"
+          ]
+        },
+        {
+          "id": "merfolk_exchange",
+          "text": "Cold bargains with merfolk bring rare goods, difficult etiquette, and routes no land map can show.",
+          "tags": [
+            "merfolk",
+            "trade",
+            "sea",
+            "route"
+          ]
+        }
+      ],
+      "voiceSummary": "Rentacosta is easygoing and salt-worn without being soft: multilingual docks, long absences, dangerous voyages, and a practical welcome for anyone who can keep a bargain.",
+      "ambientLines": [
+        "A dockside argument changes languages twice and ends in shared laughter.",
+        "Merfolk silver lies under wet canvas while three brokers pretend not to watch it.",
+        "A child chalks return dates beside ships already late by a season."
+      ],
+      "props": {
+        "min": 6,
+        "max": 10,
+        "emptyChance": 0,
+        "denseChance": 35,
+        "denseBonus": 5,
+        "ensembleChance": 62,
+        "hookChance": 18,
+        "bases": [
+          {
+            "id": "tide_crane",
+            "name": "tide cargo-crane",
+            "glyph": "&",
+            "fixtureType": "harbor_tool",
+            "description": "Counterweights are marked for cargo from three seas and one depth nobody names aloud.",
+            "tags": [
+              "cargo",
+              "tide"
+            ]
+          },
+          {
+            "id": "language_board",
+            "name": "harbor language-board",
+            "glyph": "#",
+            "fixtureType": "public_notice",
+            "description": "Arrival notices share space in six scripts and several expressive drawings.",
+            "tags": [
+              "languages",
+              "notice"
+            ]
+          },
+          {
+            "id": "merfolk_scale",
+            "name": "merfolk bargain-scale",
+            "glyph": "%",
+            "fixtureType": "trade_fixture",
+            "description": "One pan is always wet and the other refuses iron coin.",
+            "tags": [
+              "merfolk",
+              "trade"
+            ]
+          },
+          {
+            "id": "voyage_rack",
+            "name": "voyage rope-rack",
+            "glyph": "=",
+            "fixtureType": "dock_fixture",
+            "description": "Knots sort lines by storm, cargo, depth, and whether the ship is expected home.",
+            "tags": [
+              "rope",
+              "voyage"
+            ]
+          },
+          {
+            "id": "return_post",
+            "name": "return-date post",
+            "glyph": "|",
+            "fixtureType": "memorial_marker",
+            "description": "Chalk dates accumulate beside names without anyone erasing the impossible ones.",
+            "tags": [
+              "return",
+              "families"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "saltwood",
+            "text": "saltwood",
+            "material": "wood",
+            "description": "Gray wood has swallowed enough brine to outlast its nails.",
+            "tags": [
+              "wood",
+              "salt"
+            ]
+          },
+          {
+            "id": "merfolk_silver",
+            "text": "merfolk-silver",
+            "material": "silver",
+            "description": "Cold silver beads seawater into tiny lenses.",
+            "tags": [
+              "silver",
+              "merfolk"
+            ]
+          },
+          {
+            "id": "ship_rope",
+            "text": "rope-bound",
+            "material": "rope",
+            "description": "Tarred fibers carry the smells of distant ports in separate layers.",
+            "tags": [
+              "rope",
+              "ports"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "code_switched",
+            "text": "code-switched",
+            "description": "Instructions begin in one language, joke in another, and become serious in a third.",
+            "tags": [
+              "languages",
+              "worldly"
+            ]
+          },
+          {
+            "id": "tide_stained",
+            "text": "tide-stained",
+            "description": "The highest salt line comes from a storm locals still use as a date.",
+            "tags": [
+              "tide",
+              "storm"
+            ]
+          },
+          {
+            "id": "season_waiting",
+            "text": "season-waiting",
+            "description": "Fresh chalk waits beside an old return date nobody calls overdue.",
+            "tags": [
+              "waiting",
+              "voyage"
+            ]
+          },
+          {
+            "id": "neutral_marked",
+            "text": "neutral-marked",
+            "description": "Several hostile flags have each added the same protected harbor sign.",
+            "tags": [
+              "neutrality",
+              "diplomacy"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 2,
+            "title": "Harbor notices on {name}",
+            "text": "Notices list a northbound ferry, a merfolk exchange at low tide, and a ship three months late from Brall.",
+            "tags": [
+              "route_notice",
+              "harbor_news"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 1,
+            "tags": [
+              "tidecraft_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "low_tide_exchange",
+            "weight": 1,
+            "members": [
+              {
+                "base": "merfolk_scale",
+                "material": "merfolk_silver",
+                "condition": "tide_stained",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "language_board",
+                "material": "saltwood",
+                "condition": "code_switched",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "voyage_rack",
+                "material": "ship_rope",
+                "condition": "neutral_marked",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 14,
+        "anchorY": 0,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

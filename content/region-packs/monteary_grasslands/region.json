@@ -1,0 +1,229 @@
+{
+  "regions": [
+    {
+      "id": "monteary_grasslands",
+      "name": "Monteary Grasslands",
+      "realmId": "monteary",
+      "traditionId": "horse_song",
+      "imperialPresence": 28,
+      "terrainTags": [
+        "grass",
+        "paddock",
+        "horse",
+        "wind"
+      ],
+      "voiceTags": [
+        "plainspoken",
+        "guarded",
+        "proud",
+        "practical"
+      ],
+      "wildnessBase": 2,
+      "floorTerrain": "short_grass",
+      "affordances": [
+        {
+          "id": "horse_singing",
+          "text": "A trusted singer may speak with a horse, but never safely within an imperial witness's hearing.",
+          "tags": [
+            "horse",
+            "speech",
+            "secret_magic"
+          ]
+        },
+        {
+          "id": "guarded_bloodlines",
+          "text": "The realm's stallions and breeding records are protected more fiercely than most treasuries.",
+          "tags": [
+            "horses",
+            "trade",
+            "leverage"
+          ]
+        }
+      ],
+      "voiceSummary": "Monteary is grass, wind, guarded bloodlines, and plain people who notice how a stranger treats a horse before caring what title they claim.",
+      "ambientLines": [
+        "A gelding turns one ear toward a song too low for you to hear.",
+        "The grass lies down in a broad road where no cart has passed.",
+        "A breeder closes the stallion ledger when imperial brass flashes on the road."
+      ],
+      "props": {
+        "min": 3,
+        "max": 7,
+        "emptyChance": 18,
+        "denseChance": 18,
+        "denseBonus": 4,
+        "ensembleChance": 48,
+        "hookChance": 15,
+        "bases": [
+          {
+            "id": "singing_post",
+            "name": "horse-singing post",
+            "glyph": "|",
+            "fixtureType": "paddock_fixture",
+            "description": "Teeth marks ring the height where quiet songs are usually offered.",
+            "tags": [
+              "horse",
+              "song"
+            ]
+          },
+          {
+            "id": "breeding_gate",
+            "name": "bloodline gate",
+            "glyph": "+",
+            "fixtureType": "gate",
+            "description": "A hidden latch separates public pasture from jealously guarded ancestry.",
+            "tags": [
+              "bloodline",
+              "paddock"
+            ]
+          },
+          {
+            "id": "saddle_rack",
+            "name": "journey saddle-rack",
+            "glyph": "#",
+            "fixtureType": "stable_fixture",
+            "description": "Each peg bears the distance of the road its saddle is meant to survive.",
+            "tags": [
+              "saddle",
+              "road"
+            ]
+          },
+          {
+            "id": "water_trough",
+            "name": "wind-water trough",
+            "glyph": "U",
+            "fixtureType": "water_fixture",
+            "description": "Grass seeds circle the surface without crossing its center.",
+            "tags": [
+              "water",
+              "wind"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "horsehide",
+            "text": "horsehide-bound",
+            "material": "leather",
+            "description": "Soft hide has been rubbed dark by muzzles and reins.",
+            "tags": [
+              "leather",
+              "horse"
+            ]
+          },
+          {
+            "id": "grasswood",
+            "text": "grasswood",
+            "material": "wood",
+            "description": "Pale local wood smells of crushed hay when warmed.",
+            "tags": [
+              "wood",
+              "grass"
+            ]
+          },
+          {
+            "id": "breeder_iron",
+            "text": "breeder-iron",
+            "material": "iron",
+            "description": "A private maker's mark resembles no official registry.",
+            "tags": [
+              "iron",
+              "secret"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "mane_caught",
+            "text": "mane-caught",
+            "description": "Long black hairs remain braided around one corner.",
+            "tags": [
+              "mane",
+              "kinship"
+            ]
+          },
+          {
+            "id": "imperial_hidden",
+            "text": "imperial-hidden",
+            "description": "A permit plate has been turned carefully toward the wall.",
+            "tags": [
+              "secret_magic",
+              "law"
+            ]
+          },
+          {
+            "id": "road_dusted",
+            "text": "road-dusted",
+            "description": "Dust from several soils names a journey more honestly than the owner does.",
+            "tags": [
+              "road",
+              "travel"
+            ]
+          },
+          {
+            "id": "hoof_polished",
+            "text": "hoof-polished",
+            "description": "The lower edge shines from animals choosing the same comfortable turn.",
+            "tags": [
+              "hoof",
+              "worn"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 1,
+            "title": "Breeder's mark on {name}",
+            "text": "The private mark records a mare sold north and a stallion that officially never left {region}.",
+            "tags": [
+              "bloodline_record",
+              "secret"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 1,
+            "tags": [
+              "horse_song_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "quiet_paddock",
+            "weight": 1,
+            "members": [
+              {
+                "base": "singing_post",
+                "material": "grasswood",
+                "condition": "mane_caught",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "breeding_gate",
+                "material": "breeder_iron",
+                "condition": "imperial_hidden",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "water_trough",
+                "material": "horsehide",
+                "condition": "hoof_polished",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": -4,
+        "anchorY": 11,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

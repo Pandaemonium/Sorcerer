@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "brall_whaleholds",
+      "bindings": [
+        {
+          "districtId": "tale_hall",
+          "interiorId": "many_witness_hall"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "many_witness_hall",
+          "name": "Hall of Many Correct Witnesses",
+          "kind": "great_hall",
+          "summary": "Whalebone rafters preserve every improved version of Brall's favorite disasters.",
+          "floorTerrain": "bone_hall_floor",
+          "wallMaterial": "whalebone",
+          "accessPolicy": "public",
+          "tags": [
+            "story",
+            "hall",
+            "bone"
+          ],
+          "features": [
+            {
+              "name": "contradictory hero frieze",
+              "description": "Each carved rescuer points discreetly at a different drowning person.",
+              "glyph": "W",
+              "material": "bone",
+              "tags": [
+                "hero",
+                "story"
+              ]
+            },
+            {
+              "name": "storm-story cask",
+              "description": "Ale inside tastes stronger whenever thunder supplies punctuation.",
+              "glyph": "O",
+              "material": "wood",
+              "tags": [
+                "ale",
+                "storm"
+              ]
+            },
+            {
+              "name": "witness improving bench",
+              "description": "Seat-worn bone encourages the body toward confident exaggeration.",
+              "glyph": "=",
+              "material": "bone",
+              "tags": [
+                "witness",
+                "bench"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

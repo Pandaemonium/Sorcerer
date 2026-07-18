@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "ontrian_clanlands",
+      "bindings": [
+        {
+          "districtId": "many_hearths",
+          "interiorId": "ancestor_guesthouse"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "ancestor_guesthouse",
+          "name": "Guesthouse of the Present Dead",
+          "kind": "clan_sanctum",
+          "summary": "One large hearth seats living guests among ancestors with strong procedural opinions.",
+          "floorTerrain": "ash_warm_stone",
+          "wallMaterial": "old_wood",
+          "accessPolicy": "public",
+          "tags": [
+            "ancestor",
+            "hearth",
+            "guest"
+          ],
+          "features": [
+            {
+              "name": "absent-cousin chair",
+              "description": "The empty chair interrupts whenever kinship is described too simply.",
+              "glyph": "h",
+              "material": "wood",
+              "tags": [
+                "kinship",
+                "ancestor"
+              ]
+            },
+            {
+              "name": "many-coal hearth",
+              "description": "Each ember belongs to a clan; sparks favor families currently outside.",
+              "glyph": "O",
+              "material": "stone",
+              "tags": [
+                "hearth",
+                "clan"
+              ]
+            },
+            {
+              "name": "genealogy guest rope",
+              "description": "New knots appear when hospitality changes a family more than blood did.",
+              "glyph": "~",
+              "material": "fiber",
+              "tags": [
+                "guest",
+                "genealogy"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

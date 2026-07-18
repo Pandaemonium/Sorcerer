@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "parn_sunroads",
+      "bindings": [
+        {
+          "districtId": "well_court",
+          "interiorId": "house_of_third_water"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "house_of_third_water",
+          "name": "House of the Third Water",
+          "kind": "well_house",
+          "summary": "A cool sandstone chamber listens to three wells, only two of which contain water.",
+          "floorTerrain": "cool_sandstone",
+          "wallMaterial": "sandstone",
+          "accessPolicy": "public",
+          "tags": [
+            "well",
+            "song",
+            "shade"
+          ],
+          "features": [
+            {
+              "name": "unborn-name cistern",
+              "description": "Its echo answers with a traveler's name several years too early.",
+              "glyph": "O",
+              "material": "stone",
+              "tags": [
+                "well",
+                "prophecy"
+              ]
+            },
+            {
+              "name": "folded noon awning",
+              "description": "A square of late afternoon waits beneath blue cloth.",
+              "glyph": "#",
+              "material": "cloth",
+              "tags": [
+                "shade",
+                "time"
+              ]
+            },
+            {
+              "name": "caravan thirst ledger",
+              "description": "Water debts are recorded beside the roads that caused them.",
+              "glyph": "=",
+              "material": "copper",
+              "tags": [
+                "caravan",
+                "water"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

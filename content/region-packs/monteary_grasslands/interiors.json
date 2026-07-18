@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "monteary_grasslands",
+      "bindings": [
+        {
+          "districtId": "grass_hearth",
+          "interiorId": "mare_dreamhouse"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "mare_dreamhouse",
+          "name": "Mare-Dream House",
+          "kind": "healing_stable",
+          "summary": "An open-roofed stable where people wait quietly for horses to explain the roads they dreamed.",
+          "floorTerrain": "sweetgrass_floor",
+          "wallMaterial": "white_wood",
+          "accessPolicy": "public",
+          "tags": [
+            "horse",
+            "dream",
+            "healing"
+          ],
+          "features": [
+            {
+              "name": "unridden dream saddle",
+              "description": "Tooling maps a road no waking rider has found.",
+              "glyph": "=",
+              "material": "leather",
+              "tags": [
+                "saddle",
+                "dream"
+              ]
+            },
+            {
+              "name": "east-wind manger",
+              "description": "Empty wood smells of the pasture currently speaking through it.",
+              "glyph": "#",
+              "material": "wood",
+              "tags": [
+                "wind",
+                "horse"
+              ]
+            },
+            {
+              "name": "foal-forgiveness rail",
+              "description": "Braided grass loosens when a frightened animal chooses trust.",
+              "glyph": "-",
+              "material": "wood",
+              "tags": [
+                "foal",
+                "bond"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

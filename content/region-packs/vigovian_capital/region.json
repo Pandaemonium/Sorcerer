@@ -1,0 +1,290 @@
+{
+  "regions": [
+    {
+      "id": "vigovian_capital",
+      "groundLoot": {
+        "min": 0,
+        "max": 1,
+        "emptyChance": 50,
+        "usefulChance": 15
+      },
+      "name": "Vigovian Capital",
+      "realmId": "empire",
+      "traditionId": "charter_geometry",
+      "imperialPresence": 100,
+      "terrainTags": [
+        "marble",
+        "capital",
+        "throne",
+        "law"
+      ],
+      "voiceTags": [
+        "cold",
+        "ceremonial",
+        "reasonable",
+        "afraid"
+      ],
+      "wildnessBase": 0,
+      "floorTerrain": "polished_marble",
+      "affordances": [
+        {
+          "id": "imperial_defenses",
+          "text": "Capital defenses turn patrols, warrants, and court procedure into layers that can be spent down or worked around.",
+          "tags": [
+            "empire",
+            "defenses",
+            "capital"
+          ]
+        },
+        {
+          "id": "emperor_present",
+          "text": "Emperor Odran is a living actor inside the same world rules as everyone else.",
+          "tags": [
+            "emperor",
+            "win_condition"
+          ]
+        }
+      ],
+      "voiceSummary": "The Vigovian capital: ceremonial marble, reasonable and afraid, where even the throne obeys the law it wrote. Keep outcomes formal, watched, and precise.",
+      "ambientLines": [
+        "Somewhere a censor's bell marks the hour, exactly.",
+        "A petition cart rattles over marble worn smooth by orderly disappointment.",
+        "A horn sounds three precise notes, then falls silent."
+      ],
+      "props": {
+        "min": 7,
+        "max": 11,
+        "emptyChance": 0,
+        "denseChance": 35,
+        "denseBonus": 5,
+        "ensembleChance": 55,
+        "hookChance": 18,
+        "bases": [
+          {
+            "id": "petition_desk",
+            "name": "petition desk",
+            "glyph": "=",
+            "fixtureType": "civic_furniture",
+            "description": "Its writing slope has been polished by generations of reasonable desperation.",
+            "tags": [
+              "petition",
+              "office"
+            ]
+          },
+          {
+            "id": "queue_rail",
+            "name": "queue rail",
+            "glyph": "-",
+            "fixtureType": "civic_barrier",
+            "description": "It arranges waiting bodies into the shape preferred by the state.",
+            "tags": [
+              "queue",
+              "control"
+            ],
+            "blocksMovement": false
+          },
+          {
+            "id": "tariff_scale",
+            "name": "tariff scale",
+            "glyph": "%",
+            "fixtureType": "trade_fixture",
+            "description": "Twin pans weigh goods against obligations that are not quite coin.",
+            "tags": [
+              "tariff",
+              "trade"
+            ]
+          },
+          {
+            "id": "archive_trolley",
+            "name": "archive trolley",
+            "glyph": "#",
+            "fixtureType": "records",
+            "description": "Drawers of ribboned files wait to be returned to rooms that have moved.",
+            "tags": [
+              "archive",
+              "records"
+            ]
+          },
+          {
+            "id": "civic_fountain",
+            "name": "civic fountain",
+            "glyph": "~",
+            "fixtureType": "fountain",
+            "description": "The water rises in licensed parabolas and never splashes the posted code.",
+            "tags": [
+              "water",
+              "charter_geometry"
+            ],
+            "blocksMovement": true
+          }
+        ],
+        "materials": [
+          {
+            "id": "white_marble",
+            "text": "white-marble",
+            "material": "marble",
+            "description": "The marble carries a faint gray grain like handwriting under paint.",
+            "tags": [
+              "marble"
+            ]
+          },
+          {
+            "id": "numbered_brass",
+            "text": "numbered-brass",
+            "material": "brass",
+            "description": "Stamped serials make every replaceable part individually accountable.",
+            "tags": [
+              "brass",
+              "serial"
+            ]
+          },
+          {
+            "id": "office_vellum",
+            "text": "vellum-clad",
+            "material": "vellum",
+            "description": "Thin official skins have been pasted over older repairs.",
+            "tags": [
+              "paper",
+              "office"
+            ]
+          },
+          {
+            "id": "charter_glass",
+            "text": "geometric-glass",
+            "material": "glass",
+            "description": "Perfect lines of sleeping charter-light cross beneath the surface.",
+            "tags": [
+              "glass",
+              "charter"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "docketed",
+            "text": "docketed",
+            "description": "A current docket explains its purpose in language that avoids every active verb.",
+            "tags": [
+              "docket"
+            ]
+          },
+          {
+            "id": "hairline_cracked",
+            "text": "hairline-cracked",
+            "description": "A nearly invisible fracture has acquired three inspection signatures.",
+            "tags": [
+              "cracked",
+              "inspected"
+            ]
+          },
+          {
+            "id": "confiscated",
+            "text": "confiscation-sealed",
+            "description": "Red wax declares an unknown former owner no longer relevant.",
+            "tags": [
+              "confiscated"
+            ]
+          },
+          {
+            "id": "petition_worn",
+            "text": "petition-worn",
+            "description": "Fingers have left a dark crescent where citizens steady themselves before asking.",
+            "tags": [
+              "petitioners",
+              "worn"
+            ]
+          },
+          {
+            "id": "overpolished",
+            "text": "ceremonially polished",
+            "description": "The shine is so complete that touching it feels like entering a record.",
+            "tags": [
+              "ceremony",
+              "clean"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 3,
+            "title": "Filed text on {name}",
+            "text": "By order of {ruler}, {name} is assigned to {region} for orderly public use until superseded.",
+            "tags": [
+              "official_text",
+              "capital"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 1,
+            "tags": [
+              "charter_anchor",
+              "civic_magic"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "petition_overflow",
+            "weight": 2,
+            "members": [
+              {
+                "base": "petition_desk",
+                "material": "white_marble",
+                "condition": "petition_worn",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "queue_rail",
+                "material": "numbered_brass",
+                "condition": "docketed",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "archive_trolley",
+                "material": "office_vellum",
+                "condition": "confiscated",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "licensed_square",
+            "weight": 1,
+            "members": [
+              {
+                "base": "civic_fountain",
+                "material": "charter_glass",
+                "condition": "overpolished",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "tariff_scale",
+                "material": "numbered_brass",
+                "condition": "hairline_cracked",
+                "x": 2,
+                "y": 0
+              },
+              {
+                "base": "queue_rail",
+                "material": "white_marble",
+                "condition": "docketed",
+                "x": 1,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 3,
+        "anchorY": 0
+      }
+    }
+  ]
+}

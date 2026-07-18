@@ -1,0 +1,91 @@
+{
+  "settlements": [
+    {
+      "regionId": "hollowmere_margin",
+      "settlementNames": [
+        "Hushwater",
+        "Nine-Reed Ferry",
+        "Maren's Low Village",
+        "Silt Crossing",
+        "Heron's Rest",
+        "Two-Oar Landing"
+      ],
+      "hamletNames": [
+        "Eelwise",
+        "Under-Willow",
+        "Red Thread Houses",
+        "Wet Hem",
+        "Bog-Iron Row",
+        "Ferryman's Knot"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 2,
+      "roadName": "the willow causeway",
+      "roadTerrain": "reed_causeway",
+      "districts": [
+        {
+          "id": "ferryward",
+          "name": "Ferryward",
+          "summary": "Punts knock against oath-posts while travelers negotiate which bank they promised to reach.",
+          "terrain": "wet_planks",
+          "featureName": "many-notched ferry bell",
+          "featureDescription": "Each notch records a crossing; one fresh notch records a boat that has not arrived.",
+          "featureGlyph": "b",
+          "featureMaterial": "bog_iron",
+          "tags": [
+            "ferry",
+            "gate",
+            "water"
+          ],
+          "populationPercent": 110
+        },
+        {
+          "id": "reed_market",
+          "name": "Reed Market",
+          "summary": "Green bundles, smoked eels, remedies, and quiet warnings change hands beneath patched awnings.",
+          "terrain": "market_mud",
+          "featureName": "eelglass market lantern",
+          "featureDescription": "Cloudy light makes every offered object briefly reveal who needs it most.",
+          "featureGlyph": "i",
+          "featureMaterial": "eelglass",
+          "tags": [
+            "market",
+            "reeds",
+            "trade"
+          ],
+          "populationPercent": 155
+        },
+        {
+          "id": "water_shrines",
+          "name": "Water-Shrine Quarter",
+          "summary": "Household bowls and willow screens make a neighborhood of small, stubborn sanctuaries.",
+          "terrain": "shrine_silt",
+          "featureName": "communal memory basin",
+          "featureDescription": "Rain in the basin repeats the names of households that sheltered strangers.",
+          "featureGlyph": "O",
+          "featureMaterial": "willow",
+          "tags": [
+            "shrine",
+            "memory",
+            "refuge"
+          ],
+          "populationPercent": 85
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "drowned_mill",
+          "name": "the drowned memory mill",
+          "description": "A millwheel turns below still water, grinding forgotten names into silver silt.",
+          "glyph": "M",
+          "material": "waterlogged_wood",
+          "tags": [
+            "mill",
+            "drowned",
+            "memory"
+          ]
+        }
+      ]
+    }
+  ]
+}

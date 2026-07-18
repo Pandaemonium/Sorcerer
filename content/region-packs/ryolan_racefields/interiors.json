@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "ryolan_racefields",
+      "bindings": [
+        {
+          "districtId": "witness_square",
+          "interiorId": "oath_court"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "oath_court",
+          "name": "Court of the Unfinished Finish",
+          "kind": "oath_court",
+          "summary": "Copper rings and preserved wheel marks arbitrate races whose endings remain mobile.",
+          "floorTerrain": "red_clay_court",
+          "wallMaterial": "red_stone",
+          "accessPolicy": "public",
+          "tags": [
+            "oath",
+            "race",
+            "witness"
+          ],
+          "features": [
+            {
+              "name": "yesterday wheel impression",
+              "description": "The clay holds a winning wheel that will not arrive until tomorrow.",
+              "glyph": "O",
+              "material": "clay",
+              "tags": [
+                "wheel",
+                "time"
+              ]
+            },
+            {
+              "name": "public oath rail",
+              "description": "Copper rings tighten around any promise stated merely for applause.",
+              "glyph": "-",
+              "material": "copper",
+              "tags": [
+                "oath",
+                "public"
+              ]
+            },
+            {
+              "name": "disputed finish tapestry",
+              "description": "Dust-colored thread rearranges the leaders whenever nobody argues.",
+              "glyph": "#",
+              "material": "cloth",
+              "tags": [
+                "race",
+                "dispute"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

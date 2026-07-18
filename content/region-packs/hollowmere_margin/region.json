@@ -1,0 +1,325 @@
+{
+  "regions": [
+    {
+      "id": "hollowmere_margin",
+      "groundLoot": {
+        "min": 1,
+        "max": 3,
+        "emptyChance": 15,
+        "usefulChance": 25
+      },
+      "encounters": {
+        "ambientChance": 6
+      },
+      "name": "Hollowmere Margin",
+      "realmId": "hollowmere",
+      "traditionId": "reed_memory",
+      "imperialPresence": 45,
+      "terrainTags": [
+        "reeds",
+        "water",
+        "mud",
+        "memory"
+      ],
+      "voiceTags": [
+        "wet",
+        "folk",
+        "watchful"
+      ],
+      "wildnessBase": 2,
+      "floorTerrain": "reed_floor",
+      "affordances": [
+        {
+          "id": "reed_cover",
+          "text": "Reed beds give fugitives soft cover and water-flavored spell hooks.",
+          "tags": [
+            "cover",
+            "water"
+          ]
+        },
+        {
+          "id": "hollowmere_sympathy",
+          "text": "Hollowmere folk may hear anti-imperial stories, but shelter is a household risk rather than a slogan.",
+          "tags": [
+            "recruitment",
+            "hollowmere",
+            "refuge"
+          ]
+        }
+      ],
+      "voiceSummary": "Frontier country under imperial eyes: reeds, market roads, old shrines, and buried strata of older magic. Keep outcomes earthy and vivid, wonder with mud on its boots.",
+      "ambientLines": [
+        "Something unseen brushes the rushes, curious.",
+        "A reed door knocks twice in still air; someone inside waits before answering.",
+        "Far off, water finds a new way down."
+      ],
+      "props": {
+        "min": 5,
+        "max": 8,
+        "emptyChance": 0,
+        "denseChance": 30,
+        "denseBonus": 5,
+        "ensembleChance": 60,
+        "hookChance": 22,
+        "bases": [
+          {
+            "id": "memory_loom",
+            "name": "memory loom",
+            "glyph": "#",
+            "fixtureType": "folk_craft",
+            "description": "Wet warp-threads hold household names until somebody sings them loose.",
+            "tags": [
+              "loom",
+              "memory"
+            ]
+          },
+          {
+            "id": "trap_basket",
+            "name": "eel trap-basket",
+            "glyph": "&",
+            "fixtureType": "river_tool",
+            "description": "The funnel mouth is clever enough to look innocent from inside.",
+            "tags": [
+              "eel",
+              "trap"
+            ],
+            "blocksMovement": false
+          },
+          {
+            "id": "ferry_post",
+            "name": "ferry oath-post",
+            "glyph": "|",
+            "fixtureType": "waymark",
+            "description": "Notches record crossings, favors, and the names of those the ferryman refused.",
+            "tags": [
+              "ferry",
+              "route"
+            ]
+          },
+          {
+            "id": "water_shrine",
+            "name": "household water-shrine",
+            "glyph": "+",
+            "fixtureType": "shrine",
+            "description": "A shallow bowl offers the house's cleanest memory to whatever comes thirsty.",
+            "tags": [
+              "shrine",
+              "household"
+            ]
+          },
+          {
+            "id": "drying_rack",
+            "name": "reed drying-rack",
+            "glyph": "=",
+            "fixtureType": "work_fixture",
+            "description": "Bundles hang in an order that distinguishes roofing, medicine, and hiding places.",
+            "tags": [
+              "reeds",
+              "work"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "river_reed",
+            "text": "river-reed",
+            "material": "reed",
+            "description": "Fresh-cut reeds give off a green pepper smell when bent.",
+            "tags": [
+              "reed",
+              "green"
+            ]
+          },
+          {
+            "id": "eelglass",
+            "text": "eelglass",
+            "material": "glass",
+            "description": "Cloudy river-glass flashes silver wherever a hand last touched it.",
+            "tags": [
+              "eelglass",
+              "water"
+            ]
+          },
+          {
+            "id": "bog_iron",
+            "text": "bog-iron",
+            "material": "iron",
+            "description": "Rust blooms in maps that local children use for directions.",
+            "tags": [
+              "iron",
+              "rust"
+            ]
+          },
+          {
+            "id": "willow",
+            "text": "willow-bound",
+            "material": "willow",
+            "description": "Pale withies flex instead of breaking and remember the shape afterward.",
+            "tags": [
+              "willow",
+              "woven"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "silted",
+            "text": "silt-furred",
+            "description": "Last flood's fine gray fur remains in every sheltered seam.",
+            "tags": [
+              "silt",
+              "flood"
+            ]
+          },
+          {
+            "id": "votive",
+            "text": "votive-ribboned",
+            "description": "Small knotted favors ask for dry sleep, safe kin, and soldiers looking elsewhere.",
+            "tags": [
+              "votive",
+              "refuge"
+            ]
+          },
+          {
+            "id": "imperial_tagged",
+            "text": "imperial-tagged",
+            "description": "A lead occupation tag hangs awkwardly from the folk workmanship.",
+            "tags": [
+              "occupation",
+              "tagged"
+            ]
+          },
+          {
+            "id": "singing",
+            "text": "rain-singing",
+            "description": "Water in one hollow keeps tapping the first four notes of a work song.",
+            "tags": [
+              "song",
+              "rain"
+            ]
+          },
+          {
+            "id": "patched",
+            "text": "red-thread-patched",
+            "description": "A careful repair uses conspicuously Vintan thread and nobody admits why.",
+            "tags": [
+              "patched",
+              "vint"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 2,
+            "title": "Names kept by {name}",
+            "text": "The marks on {name} remember a dry crossing east and a household that still owes shelter.",
+            "tags": [
+              "local_record",
+              "route_hint"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 2,
+            "tags": [
+              "water_memory_anchor",
+              "folk_magic"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "flooded_ferry_stop",
+            "weight": 2,
+            "members": [
+              {
+                "base": "ferry_post",
+                "material": "bog_iron",
+                "condition": "imperial_tagged",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "trap_basket",
+                "material": "river_reed",
+                "condition": "silted",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "water_shrine",
+                "material": "eelglass",
+                "condition": "votive",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "reed_workers_yard",
+            "weight": 1,
+            "members": [
+              {
+                "base": "drying_rack",
+                "material": "willow",
+                "condition": "patched",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "memory_loom",
+                "material": "river_reed",
+                "condition": "singing",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "trap_basket",
+                "material": "eelglass",
+                "condition": "silted",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 0,
+        "anchorY": 4,
+        "seedJitter": 1
+      },
+      "vocabulary": {
+        "fixtureAdjectives": [
+          "reed-bound",
+          "mire-silvered",
+          "water-named",
+          "eelglass"
+        ],
+        "fixtureNouns": [
+          "memory shrine",
+          "reed ledger",
+          "mudwise post",
+          "listening basket"
+        ],
+        "textureSubject": "hollowmere",
+        "textureDescription": "{name} keeps local water-memory in public view, under the careful occupation of {ruler}.",
+        "threatAdjectives": [
+          "reed-drowned",
+          "mire-throated",
+          "water-memoried",
+          "eelglass-eyed"
+        ],
+        "threatNouns": [
+          "grudge-walker",
+          "debtor",
+          "mire warden",
+          "silt hunter"
+        ],
+        "threatEntryProse": "The reeds part, and something with a long memory steps through under {ruler}'s quiet watch:",
+        "promisedSiteName": "folded-road checkpoint"
+      }
+    }
+  ]
+}

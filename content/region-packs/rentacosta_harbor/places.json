@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "rentacosta_harbor",
+      "settlementNames": [
+        "Bell-Shell Harbor",
+        "Lowtide Exchange",
+        "Black Ink Quay",
+        "Deep Draft",
+        "Ninth Pier",
+        "Salt Ledger"
+      ],
+      "hamletNames": [
+        "Pearl Ear",
+        "Second Voice",
+        "Gull Market",
+        "Quay-Born Row",
+        "Brine Rest"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the bell-shell coastway",
+      "roadTerrain": "shell_cobbles",
+      "districts": [
+        {
+          "id": "tide_gate",
+          "name": "Tide Gate",
+          "summary": "Pilots sing arrivals through shell arches while customs clerks race the returning water.",
+          "terrain": "tide_wet_stone",
+          "featureName": "channel bell arch",
+          "featureDescription": "Different shells ring according to which hidden channel is currently honest.",
+          "featureGlyph": "A",
+          "featureMaterial": "shell",
+          "tags": [
+            "gate",
+            "tide",
+            "pilot"
+          ],
+          "populationPercent": 125
+        },
+        {
+          "id": "lowtide_exchange",
+          "name": "Low-Tide Exchange",
+          "summary": "Cargo, pearls, favors, and sung contracts trade hands on ground available for one hour.",
+          "terrain": "exchange_sand",
+          "featureName": "tide bargain scale",
+          "featureDescription": "One pan holds goods; the other fills slowly with seawater and urgency.",
+          "featureGlyph": "%",
+          "featureMaterial": "brass",
+          "tags": [
+            "market",
+            "trade",
+            "tide"
+          ],
+          "populationPercent": 165
+        },
+        {
+          "id": "notation_quay",
+          "name": "Notation Quay",
+          "summary": "Sound-ink pilots paint routes on black boards between workshops full of tuned hulls.",
+          "terrain": "inked_quay",
+          "featureName": "public harbor score",
+          "featureDescription": "Wave notes rewrite themselves as ships choose channels offshore.",
+          "featureGlyph": "#",
+          "featureMaterial": "wood",
+          "tags": [
+            "craft",
+            "sound_ink",
+            "harbor"
+          ],
+          "populationPercent": 135
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "drowned_bell",
+          "name": "the drowned argument bell",
+          "description": "A bronze bell below the tide rings whenever two ships disagree about right of way.",
+          "glyph": "B",
+          "material": "bronze",
+          "tags": [
+            "bell",
+            "drowned",
+            "argument"
+          ]
+        }
+      ]
+    }
+  ]
+}

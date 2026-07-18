@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "wild_border",
+      "bindings": [
+        {
+          "districtId": "festival_after",
+          "interiorId": "tent_after_festival"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "tent_after_festival",
+          "name": "The Tent After the Festival",
+          "kind": "impossible_interior",
+          "summary": "A jewel-bright pavilion is larger than the district outside and remembers guests who have not arrived.",
+          "floorTerrain": "remembered_confetti",
+          "wallMaterial": "living_cloth",
+          "accessPolicy": "public",
+          "tags": [
+            "festival",
+            "impossible",
+            "memory"
+          ],
+          "features": [
+            {
+              "name": "dance of absent feet",
+              "description": "Footprints circle the floor and make room for the player.",
+              "glyph": "~",
+              "material": "light",
+              "tags": [
+                "dance",
+                "absence"
+              ]
+            },
+            {
+              "name": "tomorrow mask rack",
+              "description": "Each mask resembles whoever will wear it next, badly frightened.",
+              "glyph": "#",
+              "material": "bone",
+              "tags": [
+                "mask",
+                "future"
+              ]
+            },
+            {
+              "name": "inside-out flower chandelier",
+              "description": "Roots drink ceiling rain while blossoms illuminate the soil below.",
+              "glyph": "*",
+              "material": "plant",
+              "tags": [
+                "flower",
+                "impossible"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

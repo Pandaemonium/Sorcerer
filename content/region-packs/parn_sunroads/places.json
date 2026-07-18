@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "parn_sunroads",
+      "settlementNames": [
+        "Third Well",
+        "Noonshade",
+        "Copper Sun",
+        "Ninth Oasis",
+        "Road-Born",
+        "Far Well"
+      ],
+      "hamletNames": [
+        "White Scarf",
+        "Long Horizon",
+        "Bright Ash",
+        "Dune Rest",
+        "Star-Guided Camp"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the caravan sun-road",
+      "roadTerrain": "sun_baked_road",
+      "districts": [
+        {
+          "id": "caravan_gate",
+          "name": "Caravan Gate",
+          "summary": "Shade contracts, water tallies, and arriving animals pass beneath mirrored sun-cloths.",
+          "terrain": "gate_sandstone",
+          "featureName": "sun-debt mirror",
+          "featureDescription": "The copper face shows how much noon each traveler still owes the road.",
+          "featureGlyph": "O",
+          "featureMaterial": "copper",
+          "tags": [
+            "gate",
+            "caravan",
+            "sun"
+          ],
+          "populationPercent": 115
+        },
+        {
+          "id": "shade_market",
+          "name": "Shade Market",
+          "summary": "Awnings sell distinct temperatures while well-singers test every jar of water.",
+          "terrain": "awning_shadow",
+          "featureName": "public folded afternoon",
+          "featureDescription": "A blue awning holds a square of late day even at noon.",
+          "featureGlyph": "#",
+          "featureMaterial": "cloth",
+          "tags": [
+            "market",
+            "shade",
+            "water"
+          ],
+          "populationPercent": 145
+        },
+        {
+          "id": "well_court",
+          "name": "Well Court",
+          "summary": "Caravan news and royal water law circulate around a deep, opinionated well.",
+          "terrain": "well_stone",
+          "featureName": "third singing well",
+          "featureDescription": "Its echo returns a traveler name instead of the sound offered.",
+          "featureGlyph": "O",
+          "featureMaterial": "stone",
+          "tags": [
+            "court",
+            "well",
+            "song"
+          ],
+          "populationPercent": 120
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "departed_camp",
+          "name": "the camp that departed yesterday",
+          "description": "Warm coals and taut tent shadows remain after every person, animal, and tent has gone.",
+          "glyph": "C",
+          "material": "canvas",
+          "tags": [
+            "caravan",
+            "absence",
+            "time"
+          ]
+        }
+      ]
+    }
+  ]
+}

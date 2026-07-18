@@ -1,0 +1,62 @@
+{
+  "interiors": [
+    {
+      "regionId": "gontark_crags",
+      "bindings": [
+        {
+          "districtId": "rope_square",
+          "interiorId": "curse_map_vault"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "curse_map_vault",
+          "name": "Vault of Geographically Responsible Curses",
+          "kind": "curse_vault",
+          "summary": "Black ropes connect grudges, cliffs, and households so each curse can be returned accurately.",
+          "floorTerrain": "black_shale_floor",
+          "wallMaterial": "shale",
+          "accessPolicy": "restricted",
+          "requiredItem": "grave salt",
+          "tags": [
+            "curse",
+            "vault",
+            "map"
+          ],
+          "features": [
+            {
+              "name": "grievance map",
+              "description": "Black cords measure injury rather than distance and cross walls freely.",
+              "glyph": "#",
+              "material": "fiber",
+              "tags": [
+                "map",
+                "grievance"
+              ]
+            },
+            {
+              "name": "misaddressed curse jar",
+              "description": "Something inside keeps apologizing to the wrong family.",
+              "glyph": "o",
+              "material": "clay",
+              "tags": [
+                "curse",
+                "error"
+              ]
+            },
+            {
+              "name": "seventh-warning shelf",
+              "description": "The empty shelf casts the shadow of a warning nobody admits removing.",
+              "glyph": "=",
+              "material": "shale",
+              "tags": [
+                "warning",
+                "missing"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

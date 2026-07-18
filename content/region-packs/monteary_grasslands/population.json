@@ -1,0 +1,157 @@
+{
+  "populations": [
+    {
+      "regionId": "monteary_grasslands",
+      "centerMean": 3.8,
+      "nearMean": 1.4,
+      "wildMean": 0.24,
+      "centerRadius": 0,
+      "nearRadius": 3,
+      "maxResidents": 6,
+      "hermitChance": 6,
+      "names": {
+        "given": [
+          "Aila",
+          "Bran",
+          "Cero",
+          "Dari",
+          "Elo",
+          "Maia",
+          "Naro",
+          "Suna",
+          "Tesk",
+          "Vell",
+          "Aro",
+          "Denn",
+          "Fira",
+          "Halo",
+          "Ivar",
+          "Lonn",
+          "Mesa",
+          "Prai",
+          "Sela",
+          "Turi"
+        ],
+        "bynames": [
+          "Long Grass",
+          "White Rein",
+          "Quiet Hoof",
+          "Herb-Song",
+          "West Wind",
+          "Foal-Kin",
+          "Open Sky",
+          "Tall Barley",
+          "Grazing-Right",
+          "Wind-Sworn",
+          "Green Mile",
+          "Two Wells",
+          "Saddle-Kind",
+          "Far Fence",
+          "Dry Season",
+          "Seed-Keeper"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "horse_listener",
+          "title": "horse listener",
+          "glyph": "h",
+          "tags": [
+            "horse",
+            "healer",
+            "service_provider"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "The listener waits through human speech but answers the horses immediately.",
+            "Braided grass at one wrist names every mare that has forgiven them."
+          ],
+          "wants": [
+            "Learn what frightened the whole western herd without leaving tracks.",
+            "Keep an imperial remount officer from buying the foal that dreams routes."
+          ],
+          "services": [
+            {
+              "id": "herd_path",
+              "name": "herd path",
+              "description": "A quiet grass route chosen by horses before roads were negotiated.",
+              "effectKind": "create_route",
+              "targetHint": "a Monteary herd path",
+              "tags": [
+                "route",
+                "horse"
+              ]
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 4,
+          "wildWeight": 3,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "grass_vintner",
+          "title": "grass vintner",
+          "glyph": "v",
+          "tags": [
+            "herbs",
+            "merchant",
+            "fermentation"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "Clay tasting cups hang from a sash stained every green the plain can make.",
+            "The vintner smells of crushed sweetgrass and a thunderstorm bottled too early."
+          ],
+          "wants": [
+            "Bottle this year's east wind before it turns bitter with marching dust.",
+            "Find why one pasture's herb-wine makes drinkers remember the same stranger."
+          ],
+          "wares": [
+            {
+              "item": "red tincture",
+              "min": 1,
+              "max": 2
+            }
+          ],
+          "centerWeight": 4,
+          "nearWeight": 2,
+          "wildWeight": 1,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "foal_guard",
+          "title": "foal guard",
+          "glyph": "g",
+          "tags": [
+            "horse",
+            "pasture",
+            "scout"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "A short grass spear is useful mostly for pointing out weather and bad ideas.",
+            "The guard's cloak imitates the plain well enough that butterflies land on it."
+          ],
+          "wants": [
+            "Bring a wandering foal home without teaching it that people can be caught.",
+            "Warn the next pasture about riders whose shadows wear imperial tack."
+          ],
+          "centerWeight": 2,
+          "nearWeight": 4,
+          "wildWeight": 6,
+          "knowledgeTier": 2
+        }
+      ]
+    }
+  ]
+}

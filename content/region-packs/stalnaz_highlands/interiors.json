@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "stalnaz_highlands",
+      "bindings": [
+        {
+          "districtId": "light_cisterns",
+          "interiorId": "afterlight_conservatory"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "afterlight_conservatory",
+          "name": "Afterlight Conservatory",
+          "kind": "music_hall",
+          "summary": "Blue crystal chambers store finished songs beside daylight not yet spent.",
+          "floorTerrain": "resonant_crystal",
+          "wallMaterial": "white_stone",
+          "accessPolicy": "public",
+          "tags": [
+            "music",
+            "light",
+            "crystal"
+          ],
+          "features": [
+            {
+              "name": "evening light organ",
+              "description": "Crystal pipes play colors the sun forgot to use.",
+              "glyph": "H",
+              "material": "crystal",
+              "tags": [
+                "instrument",
+                "light"
+              ]
+            },
+            {
+              "name": "patient fracture plinth",
+              "description": "A cracked royal crystal is being allowed to finish becoming something else.",
+              "glyph": "|",
+              "material": "crystal",
+              "tags": [
+                "fracture",
+                "royal"
+              ]
+            },
+            {
+              "name": "snow-listening gallery",
+              "description": "Open facets translate avalanche pressure into a low choral warning.",
+              "glyph": "=",
+              "material": "stone",
+              "tags": [
+                "snow",
+                "warning"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

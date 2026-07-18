@@ -1,0 +1,247 @@
+{
+  "regions": [
+    {
+      "id": "vint_weaveways",
+      "groundLoot": {
+        "min": 1,
+        "max": 2,
+        "emptyChance": 20,
+        "usefulChance": 30
+      },
+      "name": "Vintan Weaveways",
+      "realmId": "vint",
+      "traditionId": "woven_thread",
+      "imperialPresence": 55,
+      "terrainTags": [
+        "bazaar",
+        "cloth",
+        "brass",
+        "tariff"
+      ],
+      "voiceTags": [
+        "quick",
+        "sly",
+        "rumor_threaded",
+        "civic"
+      ],
+      "wildnessBase": 3,
+      "floorTerrain": "patterned_tile",
+      "affordances": [
+        {
+          "id": "woven_charms",
+          "text": "Scarves, awnings, ledgers, and swaddles may carry dormant protections or listening knots.",
+          "tags": [
+            "cloth",
+            "trait",
+            "charm"
+          ]
+        },
+        {
+          "id": "open_separatists",
+          "text": "Vint's separatists argue in public, turning rumor and policy into usable social terrain.",
+          "tags": [
+            "politics",
+            "rumor",
+            "resistance"
+          ]
+        }
+      ],
+      "voiceSummary": "Vint is quick, sly, and civic: gossip caught in awning-knots, policy weighed on brass scales, and every ordinary object implicated in somebody's argument.",
+      "ambientLines": [
+        "A red-thread debt ledger gains a new knot while its owner looks away.",
+        "Three vendors repeat the same rumor with three incompatible improvements.",
+        "An anti-eavesdropping awning shivers whenever anyone says the treasurer's name."
+      ],
+      "props": {
+        "min": 7,
+        "max": 11,
+        "emptyChance": 0,
+        "denseChance": 38,
+        "denseBonus": 5,
+        "ensembleChance": 60,
+        "hookChance": 20,
+        "bases": [
+          {
+            "id": "gossip_awning",
+            "name": "gossip awning",
+            "glyph": "^",
+            "fixtureType": "market_fixture",
+            "description": "Charm-knots along the hem tighten whenever a familiar scandal passes underneath.",
+            "tags": [
+              "gossip",
+              "market"
+            ],
+            "blocksMovement": false
+          },
+          {
+            "id": "debt_ledger",
+            "name": "debt-ledger stand",
+            "glyph": "=",
+            "fixtureType": "civic_record",
+            "description": "Threads cross the open pages between names that insist they are unrelated.",
+            "tags": [
+              "debt",
+              "ledger"
+            ]
+          },
+          {
+            "id": "tariff_post",
+            "name": "tariff post",
+            "glyph": "|",
+            "fixtureType": "trade_fixture",
+            "description": "Imperial tags and republican corrections compete for the last bare inch.",
+            "tags": [
+              "tariff",
+              "politics"
+            ]
+          },
+          {
+            "id": "charm_rack",
+            "name": "woven-charm rack",
+            "glyph": "#",
+            "fixtureType": "market_display",
+            "description": "Scarves promise warmth, privacy, fertility, revenge, and very limited refunds.",
+            "tags": [
+              "charms",
+              "cloth"
+            ]
+          },
+          {
+            "id": "rumor_scale",
+            "name": "rumor-scale",
+            "glyph": "%",
+            "fixtureType": "market_tool",
+            "description": "One pan holds coin; the other holds sealed slips whose weight changes by listener.",
+            "tags": [
+              "rumor",
+              "trade"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "red_thread",
+            "text": "red-thread",
+            "material": "cloth",
+            "description": "Civic red thread has been knotted into arguments, repairs, and quiet accusations.",
+            "tags": [
+              "thread",
+              "civic"
+            ]
+          },
+          {
+            "id": "market_brass",
+            "text": "market-brass",
+            "material": "brass",
+            "description": "The brass is bright where generations checked the measure for cheating.",
+            "tags": [
+              "brass",
+              "trade"
+            ]
+          },
+          {
+            "id": "charm_cloth",
+            "text": "charm-cloth",
+            "material": "cloth",
+            "description": "Different weaves make nearby speech feel private or dangerously public.",
+            "tags": [
+              "woven",
+              "charm"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "separatist_marked",
+            "text": "separatist-marked",
+            "description": "A legal party sigil has been stitched where occupation clerks must pretend not to mind it.",
+            "tags": [
+              "separatist",
+              "politics"
+            ]
+          },
+          {
+            "id": "gossip_knotted",
+            "text": "gossip-knotted",
+            "description": "Each new knot claims to correct the rumor represented by the last.",
+            "tags": [
+              "gossip",
+              "knots"
+            ]
+          },
+          {
+            "id": "tariff_tagged",
+            "text": "tariff-tagged",
+            "description": "Layered fees tell the recent history of three governments and one unchanged policy.",
+            "tags": [
+              "tariff",
+              "policy"
+            ]
+          },
+          {
+            "id": "rain_sagged",
+            "text": "rain-sagged",
+            "description": "Collected rain makes the woven charms mutter indiscreetly.",
+            "tags": [
+              "rain",
+              "charm"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 3,
+            "title": "Threaded note on {name}",
+            "text": "Someone stitched that the current minister promised reform in {region}; a second hand added that the minister never specified which direction.",
+            "tags": [
+              "gossip_record",
+              "politics"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 1,
+            "tags": [
+              "woven_magic_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "argumentative_market_stall",
+            "weight": 1,
+            "members": [
+              {
+                "base": "gossip_awning",
+                "material": "charm_cloth",
+                "condition": "rain_sagged",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "rumor_scale",
+                "material": "market_brass",
+                "condition": "gossip_knotted",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "debt_ledger",
+                "material": "red_thread",
+                "condition": "separatist_marked",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 10,
+        "anchorY": 7,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,240 @@
+{
+  "regions": [
+    {
+      "id": "parn_sunroads",
+      "groundLoot": {
+        "min": 1,
+        "max": 3,
+        "emptyChance": 15,
+        "usefulChance": 30
+      },
+      "encounters": {
+        "ambientChance": 8
+      },
+      "name": "Parn Sunroads",
+      "realmId": "parn",
+      "traditionId": "sound_ink",
+      "imperialPresence": 18,
+      "terrainTags": [
+        "desert",
+        "caravan",
+        "ink",
+        "salt"
+      ],
+      "voiceTags": [
+        "sung",
+        "rhythmic",
+        "road_worn",
+        "bright"
+      ],
+      "wildnessBase": 4,
+      "floorTerrain": "ochre_sand",
+      "affordances": [
+        {
+          "id": "inked_music",
+          "text": "Tattoo lines can carry rhythm, memory, identity, or magic without revealing which until used.",
+          "tags": [
+            "tattoo",
+            "sound",
+            "trait"
+          ]
+        },
+        {
+          "id": "moving_caravans",
+          "text": "People, services, stock, and rumors travel in bands rather than waiting in fixed settlements.",
+          "tags": [
+            "caravan",
+            "trade",
+            "rumor",
+            "route"
+          ]
+        }
+      ],
+      "voiceSummary": "The Parn sunroads are rhythmic and road-worn: ochre distances, music kept against thirst, and tattooed stories moving wherever the next camp can be made.",
+      "ambientLines": [
+        "A caravan song arrives before the dust that carries it.",
+        "Blue tattoo ink darkens when the singer finds the road's old key.",
+        "Tent bells answer one another across a distance the map calls empty."
+      ],
+      "props": {
+        "min": 1,
+        "max": 6,
+        "emptyChance": 28,
+        "denseChance": 18,
+        "denseBonus": 5,
+        "ensembleChance": 62,
+        "hookChance": 16,
+        "bases": [
+          {
+            "id": "song_post",
+            "name": "caravan song-post",
+            "glyph": "|",
+            "fixtureType": "route_marker",
+            "description": "Small tuned holes let the desert wind announce which road meets here.",
+            "tags": [
+              "song",
+              "route"
+            ]
+          },
+          {
+            "id": "ink_screen",
+            "name": "tattoo-ink screen",
+            "glyph": "#",
+            "fixtureType": "craft_fixture",
+            "description": "Dyed hide panels keep sun, grit, and uninvited meanings out of fresh ink.",
+            "tags": [
+              "tattoo",
+              "ink"
+            ]
+          },
+          {
+            "id": "tent_bell",
+            "name": "road tent-bell",
+            "glyph": "!",
+            "fixtureType": "sound_fixture",
+            "description": "Its note identifies a caravan band before faces become visible.",
+            "tags": [
+              "bell",
+              "caravan"
+            ],
+            "blocksMovement": false
+          },
+          {
+            "id": "water_tally",
+            "name": "water-share tally",
+            "glyph": "=",
+            "fixtureType": "resource_marker",
+            "description": "Sliding beads divide a skin of water among travelers, animals, and obligations.",
+            "tags": [
+              "water",
+              "tally"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "sun_brass",
+            "text": "sun-brass",
+            "material": "brass",
+            "description": "Hot brass gives off a clear note without being struck.",
+            "tags": [
+              "brass",
+              "sun"
+            ]
+          },
+          {
+            "id": "blue_ink",
+            "text": "blue-inked",
+            "material": "ink",
+            "description": "Layered blue lines look almost black until rhythm passes nearby.",
+            "tags": [
+              "ink",
+              "sound"
+            ]
+          },
+          {
+            "id": "camel_hide",
+            "text": "hide-bound",
+            "material": "hide",
+            "description": "Road-soft hide carries repairs from more camps than the maker knew.",
+            "tags": [
+              "hide",
+              "road"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "verse_tuned",
+            "text": "verse-tuned",
+            "description": "One repeated phrase makes the whole object answer in harmony.",
+            "tags": [
+              "verse",
+              "music"
+            ]
+          },
+          {
+            "id": "sand_buried",
+            "text": "half-sand-buried",
+            "description": "The dune has begun claiming it without yet interrupting its use.",
+            "tags": [
+              "sand",
+              "buried"
+            ]
+          },
+          {
+            "id": "caravan_marked",
+            "text": "caravan-marked",
+            "description": "Overlapping band signs show hospitality, warning, and an old marriage route.",
+            "tags": [
+              "caravan",
+              "marks"
+            ]
+          },
+          {
+            "id": "charter_blessed",
+            "text": "charter-blessed",
+            "description": "An official blessing sits beside older ink and neither admits dependence.",
+            "tags": [
+              "charter",
+              "tattoo"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 1,
+            "title": "Road verse on {name}",
+            "text": "The verse names a well two nights west, then changes key where the safe road turns south.",
+            "tags": [
+              "route_song",
+              "travel_hint"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 2,
+            "tags": [
+              "sound_ink_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "departed_caravan_camp",
+            "weight": 1,
+            "members": [
+              {
+                "base": "tent_bell",
+                "material": "sun_brass",
+                "condition": "verse_tuned",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "water_tally",
+                "material": "camel_hide",
+                "condition": "caravan_marked",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "ink_screen",
+                "material": "blue_ink",
+                "condition": "sand_buried",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 1,
+        "anchorY": -15,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

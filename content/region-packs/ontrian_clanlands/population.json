@@ -1,0 +1,149 @@
+{
+  "populations": [
+    {
+      "regionId": "ontrian_clanlands",
+      "centerMean": 4.3,
+      "nearMean": 1.7,
+      "wildMean": 0.2,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 7,
+      "hermitChance": 5,
+      "names": {
+        "given": [
+          "Asha",
+          "Boru",
+          "Cenna",
+          "Dorn",
+          "Eira",
+          "Kelan",
+          "Mora",
+          "Tavi",
+          "Ulf",
+          "Vesh",
+          "Arn",
+          "Della",
+          "Fael",
+          "Gorm",
+          "Hessa",
+          "Ib",
+          "Lorca",
+          "Nen",
+          "Ruda",
+          "Sorl"
+        ],
+        "bynames": [
+          "Hearth-Third",
+          "Ash Cousin",
+          "Stone Bowl",
+          "Old Branch",
+          "Ember Name",
+          "Guest-Rope",
+          "Elder-Kept",
+          "Ninth Fire",
+          "Long Memory",
+          "Bone Cousin",
+          "Threshold-Sworn",
+          "Grey Lineage",
+          "Fifth Hearth",
+          "Ancestor-Fed",
+          "Root-True",
+          "Smoke-Named"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "hearth_cousin",
+          "title": "hearth cousin",
+          "glyph": "c",
+          "tags": [
+            "clan",
+            "hearth",
+            "host"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "Three clan cords cross the cousin's shoulder, none tied in quite the expected place.",
+            "The cousin tends guest-fire with one hand and counts possible relatives with the other."
+          ],
+          "wants": [
+            "Place this dangerous stranger correctly among guest, cousin, debtor, and omen.",
+            "Settle a branch-family grievance before the ancestors begin taking sides audibly."
+          ],
+          "centerWeight": 6,
+          "nearWeight": 3,
+          "wildWeight": 1,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "ancestor_keeper",
+          "title": "ancestor keeper",
+          "glyph": "k",
+          "tags": [
+            "ancestor",
+            "shrine",
+            "service_provider"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "Small ash bowls at the keeper's belt hold advice from relatives with incompatible opinions.",
+            "The keeper speaks softly because several ancestors are always trying to finish the sentence."
+          ],
+          "wants": [
+            "Learn which departed aunt has begun appearing in the wrong clan's dreams.",
+            "Protect one embarrassing ancestor from an imperial genealogy survey."
+          ],
+          "services": [
+            {
+              "id": "ancestor_counsel",
+              "name": "ancestor counsel",
+              "description": "The keeper asks the household dead what they remember of the road ahead.",
+              "effectKind": "record_memory",
+              "goldCost": 1,
+              "tags": [
+                "ancestor",
+                "counsel"
+              ]
+            }
+          ],
+          "centerWeight": 4,
+          "nearWeight": 2,
+          "wildWeight": 2,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "boundary_nephew",
+          "title": "boundary nephew",
+          "glyph": "n",
+          "tags": [
+            "boundary",
+            "scout",
+            "clan"
+          ],
+          "roles": [
+            "resident"
+          ],
+          "descriptions": [
+            "Fresh chalk marks on the nephew's boots record boundaries moved since breakfast.",
+            "A hooked walking staff carries apologies to three neighboring clans."
+          ],
+          "wants": [
+            "Find where the east boundary stone went and why it took the offerings with it.",
+            "Cross disputed ground without accidentally accepting a marriage, feud, or goat."
+          ],
+          "centerWeight": 1,
+          "nearWeight": 4,
+          "wildWeight": 6,
+          "knowledgeTier": 2
+        }
+      ]
+    }
+  ]
+}

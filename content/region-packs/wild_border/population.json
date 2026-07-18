@@ -1,0 +1,162 @@
+{
+  "populations": [
+    {
+      "regionId": "wild_border",
+      "centerMean": 3.0,
+      "nearMean": 1.0,
+      "wildMean": 0.12,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 6,
+      "hermitChance": 10,
+      "names": {
+        "given": [
+          "After",
+          "Blue",
+          "Clover",
+          "Dusk",
+          "Else",
+          "Moth",
+          "Rain",
+          "Tomorrow",
+          "Ember",
+          "Hush",
+          "Ink",
+          "Lantern",
+          "Never",
+          "Opal",
+          "Petal",
+          "Quill",
+          "Seldom",
+          "Thistle",
+          "Violet",
+          "Wisp"
+        ],
+        "bynames": [
+          "Late Shadow",
+          "Bone Orchard",
+          "Wrong Season",
+          "Festival-Left",
+          "Glass Root",
+          "No Fixed Door",
+          "Half-Remembered",
+          "Second Moon",
+          "Backward Path",
+          "Unlit Window",
+          "Sugar Ghost",
+          "Nine Evenings",
+          "Off-Key",
+          "Blessing-Cracked",
+          "Mirror-Shy",
+          "Almost-Here"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "festival_scavenger",
+          "title": "festival scavenger",
+          "glyph": "s",
+          "tags": [
+            "festival",
+            "scavenger",
+            "merchant"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "Bright streamers nest in the scavenger's hair, though the festival ended before either arrived.",
+            "A basket of abandoned celebrations smells of rain, sugar, and one small thunderstorm."
+          ],
+          "wants": [
+            "Find where the remembered festival is happening next and whether time is invited.",
+            "Trade away a mask that keeps choosing new faces while nobody watches."
+          ],
+          "wares": [
+            {
+              "item": "moon pearl",
+              "min": 1,
+              "max": 1
+            },
+            {
+              "item": "charcoal wand",
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 2,
+          "wildWeight": 1,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "lawless_gardener",
+          "title": "lawless gardener",
+          "glyph": "g",
+          "tags": [
+            "flowers",
+            "broken_law",
+            "folk_magic"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "Flowers turn their heads to follow the gardener's hands instead of the sun.",
+            "Bone-handled shears prune rules from plants and occasionally from conversations."
+          ],
+          "wants": [
+            "Persuade a new flower to stop enforcing a law nobody remembers passing.",
+            "Plant one impossible color somewhere marble will have to acknowledge it."
+          ],
+          "services": [
+            {
+              "id": "flower_path",
+              "name": "flower path",
+              "description": "A path whose blooms turn toward the destination, though distance disagrees.",
+              "effectKind": "create_route",
+              "targetHint": "a responsive wildflower path",
+              "tags": [
+                "route",
+                "wild_magic"
+              ]
+            }
+          ],
+          "centerWeight": 3,
+          "nearWeight": 4,
+          "wildWeight": 5,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "distance_hermit",
+          "title": "distance hermit",
+          "glyph": "h",
+          "tags": [
+            "hermit",
+            "distance",
+            "wild_magic"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "The hermit is always a few steps farther away than the ground allows.",
+            "A coat sewn from discarded horizons flaps in several incompatible winds."
+          ],
+          "wants": [
+            "Recover the near side of a friendship that wandered too far away.",
+            "Keep the straight road from discovering this crooked little home."
+          ],
+          "centerWeight": 0,
+          "nearWeight": 1,
+          "wildWeight": 10,
+          "knowledgeTier": 3
+        }
+      ]
+    }
+  ]
+}

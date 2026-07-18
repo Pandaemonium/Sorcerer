@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "vigovian_capital",
+      "settlementNames": [
+        "Vigovia",
+        "The Reasonable City",
+        "Odran's Marble Peace",
+        "The Charter Quarter",
+        "High Petition",
+        "Marble Concord"
+      ],
+      "hamletNames": [
+        "Outer Petition Camp",
+        "Licensed Cart Rest",
+        "Toll Rest",
+        "Census Camp",
+        "The Sanctioned Fair"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the Imperial Processional",
+      "roadTerrain": "processional_marble",
+      "districts": [
+        {
+          "id": "censor_gate",
+          "name": "Censor Gate",
+          "summary": "Inspection queues braid through white arches while charter lamps search carts for metaphor.",
+          "terrain": "gate_marble",
+          "featureName": "civic inspection arch",
+          "featureDescription": "Its lenses compare each passerby against a person the state would find easier.",
+          "featureGlyph": "A",
+          "featureMaterial": "marble",
+          "tags": [
+            "gate",
+            "censorate",
+            "inspection"
+          ],
+          "populationPercent": 125
+        },
+        {
+          "id": "inner_court",
+          "name": "Inner Court",
+          "summary": "Petitions, precedents, and palace traffic circle the calm center of imperial power.",
+          "terrain": "court_marble",
+          "featureName": "precedent fountain",
+          "featureDescription": "Licensed water repeats the shape of every ruling made within earshot.",
+          "featureGlyph": "O",
+          "featureMaterial": "marble",
+          "tags": [
+            "court",
+            "palace",
+            "petition"
+          ],
+          "populationPercent": 155
+        },
+        {
+          "id": "archive_quarter",
+          "name": "Archive Quarter",
+          "summary": "File bridges join sealed offices above alleys where copyists sell yesterday's official truth.",
+          "terrain": "archive_paving",
+          "featureName": "walking archive cabinet",
+          "featureDescription": "Brass feet let this cabinet follow the office currently responsible for it.",
+          "featureGlyph": "#",
+          "featureMaterial": "brass",
+          "tags": [
+            "archive",
+            "records",
+            "offices"
+          ],
+          "populationPercent": 145
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "withdrawn_monument",
+          "name": "the withdrawn monument",
+          "description": "An empty plinth commemorates a victory removed so thoroughly that pigeons avoid remembering it.",
+          "glyph": "!",
+          "material": "marble",
+          "tags": [
+            "monument",
+            "erased",
+            "capital"
+          ]
+        }
+      ]
+    }
+  ]
+}

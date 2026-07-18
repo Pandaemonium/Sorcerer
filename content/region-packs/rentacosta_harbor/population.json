@@ -1,0 +1,163 @@
+{
+  "populations": [
+    {
+      "regionId": "rentacosta_harbor",
+      "centerMean": 5.2,
+      "nearMean": 2.1,
+      "wildMean": 0.18,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 8,
+      "hermitChance": 3,
+      "names": {
+        "given": [
+          "Ari",
+          "Bela",
+          "Canto",
+          "Dela",
+          "Enzo",
+          "Lira",
+          "Maro",
+          "Sona",
+          "Tavio",
+          "Vela",
+          "Bruno",
+          "Cira",
+          "Delfo",
+          "Gino",
+          "Isa",
+          "Loro",
+          "Mena",
+          "Orio",
+          "Rina",
+          "Salvo"
+        ],
+        "bynames": [
+          "Low Tide",
+          "Black Ink",
+          "Bell-Shell",
+          "Salt Ledger",
+          "Second Voice",
+          "Pearl Ear",
+          "Deep Draft",
+          "Harbor-Sworn",
+          "Coin-Wet",
+          "Anchor-Kind",
+          "Manifest-True",
+          "Ninth Pier",
+          "Brine-Debt",
+          "Gull Market",
+          "Spice-Handed",
+          "Quay-Born"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "tide_broker",
+          "title": "low-tide broker",
+          "glyph": "b",
+          "tags": [
+            "tide",
+            "merchant",
+            "harbor"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "The broker's waterproof ledger prices cargo, songs, and favors by how soon the tide returns.",
+            "Shell weights click on a scale whose empty pan whispers offers."
+          ],
+          "wants": [
+            "Complete an exchange before low tide uncovers the clause everybody omitted.",
+            "Find a buyer for a pearl containing somebody else's last argument."
+          ],
+          "wares": [
+            {
+              "item": "moon pearl",
+              "min": 1,
+              "max": 2
+            },
+            {
+              "item": "grave salt",
+              "min": 1,
+              "max": 2
+            }
+          ],
+          "centerWeight": 6,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "sound_ink_pilot",
+          "title": "sound-ink pilot",
+          "glyph": "p",
+          "tags": [
+            "sound_ink",
+            "pilot",
+            "service_provider"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "Black notation curls over the pilot's knuckles and changes when the surf turns.",
+            "A rolled harbor song serves as chart, credential, and occasional threat."
+          ],
+          "wants": [
+            "Pilot one impossible cargo through a channel omitted from imperial charts.",
+            "Recover the missing bass line from the harbor before ships begin following its silence."
+          ],
+          "services": [
+            {
+              "id": "sung_channel",
+              "name": "sung harbor channel",
+              "description": "A navigable route encoded as intervals between bells and breaking waves.",
+              "effectKind": "create_route",
+              "goldCost": 3,
+              "targetHint": "a Rentacosta sung channel",
+              "tags": [
+                "route",
+                "sound_ink"
+              ]
+            }
+          ],
+          "centerWeight": 4,
+          "nearWeight": 5,
+          "wildWeight": 2,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "shell_listener",
+          "title": "shell listener",
+          "glyph": "l",
+          "tags": [
+            "shell",
+            "omens",
+            "shore"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "A necklace of unmatched shells gives contradictory accounts of the sea.",
+            "The listener keeps one ear salt-crusted for the living and one painted black for drowned voices."
+          ],
+          "wants": [
+            "Identify which drowned ship keeps dictating tomorrow's prices.",
+            "Return a speaking shell to the family it has been avoiding."
+          ],
+          "centerWeight": 2,
+          "nearWeight": 3,
+          "wildWeight": 6,
+          "knowledgeTier": 3
+        }
+      ]
+    }
+  ]
+}

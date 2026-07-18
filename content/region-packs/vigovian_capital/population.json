@@ -1,0 +1,212 @@
+{
+  "populations": [
+    {
+      "regionId": "vigovian_capital",
+      "centerMean": 5.8,
+      "nearMean": 2.6,
+      "wildMean": 0.35,
+      "centerRadius": 1,
+      "nearRadius": 3,
+      "maxResidents": 8,
+      "hermitChance": 1,
+      "names": {
+        "given": [
+          "Aster",
+          "Bela",
+          "Corin",
+          "Davia",
+          "Edras",
+          "Felice",
+          "Gavr",
+          "Iona",
+          "Maro",
+          "Neris",
+          "Orsin",
+          "Palla",
+          "Quinn",
+          "Rhea",
+          "Sabin",
+          "Tullia",
+          "Vale",
+          "Wren",
+          "Aurel",
+          "Cliona",
+          "Doran",
+          "Ester"
+        ],
+        "bynames": [
+          "White Ledger",
+          "Seventh Arch",
+          "Proper Measure",
+          "Blue Docket",
+          "of the Queue",
+          "Narrow Seal",
+          "Civic Bell",
+          "Petition-Worn",
+          "Marble Voice",
+          "First Column",
+          "of the Rolls",
+          "Grave Courtesy",
+          "Signed Twice",
+          "Throne-Adjacent",
+          "Cold Vellum",
+          "of the Census"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "bone_broker",
+          "title": "licensed bone-broker",
+          "glyph": "b",
+          "tags": [
+            "merchant",
+            "bone",
+            "licensed",
+            "empire"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "An ivory license hangs beside a tray of legal fragments and one fragment that keeps humming.",
+            "The broker prices every bone by provenance, resonance, and likelihood of scandal."
+          ],
+          "wants": [
+            "Acquire a singing fragment whose paperwork is cleaner than its history.",
+            "Keep the stall licensed without surrendering the contraband ancestor-knuckle under the scale."
+          ],
+          "wares": [
+            {
+              "item": "grave salt",
+              "min": 1,
+              "max": 3
+            },
+            {
+              "item": "moon pearl",
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 1,
+          "wildWeight": 0,
+          "requiredAtCenter": true,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "petition_clerk",
+          "title": "petition clerk",
+          "glyph": "c",
+          "tags": [
+            "clerk",
+            "petition",
+            "empire"
+          ],
+          "roles": [
+            "functionary",
+            "empire"
+          ],
+          "descriptions": [
+            "A ribboned clerk can estimate a petition's rejection date by touch.",
+            "Marble dust whitens the clerk's cuffs where citizens lean too close."
+          ],
+          "wants": [
+            "Move one impossible petition through the correct impossible office.",
+            "Prevent the queue from becoming a crowd and the crowd from becoming history."
+          ],
+          "centerWeight": 5,
+          "nearWeight": 3,
+          "wildWeight": 0,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "censor_clerk",
+          "title": "censor-clerk",
+          "glyph": "C",
+          "tags": [
+            "censorate",
+            "law",
+            "empire"
+          ],
+          "roles": [
+            "censorate",
+            "functionary",
+            "empire"
+          ],
+          "descriptions": [
+            "A portable brass frame waits to classify whatever the clerk fears next.",
+            "The clerk's calm voice has the practiced softness of a cell door closing."
+          ],
+          "wants": [
+            "Turn the latest magical incident into a category narrow enough to punish.",
+            "Find out which superior quietly profits from unlicensed wonders."
+          ],
+          "centerWeight": 4,
+          "nearWeight": 2,
+          "wildWeight": 1,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "squadron_mage",
+          "title": "off-duty squadron mage",
+          "glyph": "m",
+          "tags": [
+            "charter_mage",
+            "military",
+            "empire"
+          ],
+          "roles": [
+            "military",
+            "empire"
+          ],
+          "descriptions": [
+            "Regulation sigils still glow faintly under the mage's loosened collar.",
+            "One hand drums the exact casting cadence of a spell the mage pretends to hate."
+          ],
+          "wants": [
+            "Hear one piece of magic that does not sound like marching orders.",
+            "Avoid being recalled to a squadron whose last mission has been removed from the roster."
+          ],
+          "centerWeight": 2,
+          "nearWeight": 3,
+          "wildWeight": 1,
+          "hitPoints": [
+            10,
+            14
+          ],
+          "attack": [
+            2,
+            4
+          ],
+          "knowledgeTier": 3
+        },
+        {
+          "id": "petitioner",
+          "title": "provincial petitioner",
+          "glyph": "p",
+          "tags": [
+            "petitioner",
+            "outsider"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "Road dust survives stubbornly on clothes brushed for an imperial audience.",
+            "A sealed petition has been held so long that sweat has blurred the ruler's title."
+          ],
+          "wants": [
+            "Make somebody with a desk admit that {realm} has heard the petition.",
+            "Find a quicker route through the capital than obedience."
+          ],
+          "centerWeight": 4,
+          "nearWeight": 4,
+          "wildWeight": 1,
+          "knowledgeTier": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,162 @@
+{
+  "populations": [
+    {
+      "regionId": "vint_weaveways",
+      "centerMean": 5.0,
+      "nearMean": 2.0,
+      "wildMean": 0.2,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 8,
+      "hermitChance": 3,
+      "names": {
+        "given": [
+          "Amra",
+          "Bex",
+          "Cira",
+          "Dovin",
+          "Eli",
+          "Fara",
+          "Jessa",
+          "Varo",
+          "Hesper",
+          "Ione",
+          "Kelt",
+          "Lira",
+          "Mund",
+          "Nessa",
+          "Orin",
+          "Prima",
+          "Runa",
+          "Sable",
+          "Tavi",
+          "Yann"
+        ],
+        "bynames": [
+          "Loud Loom",
+          "Nine Colors",
+          "Counter-Knot",
+          "Blue Sleeve",
+          "Market Mouth",
+          "Warp-True",
+          "Dye-Stained",
+          "Long Selvage",
+          "Second Shuttle",
+          "Crimson Debt",
+          "Tight Weave",
+          "Frayed Oath",
+          "Gold Thread",
+          "Bolt-Rich",
+          "Cross-Stitch",
+          "Undyed"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "thread_broker",
+          "title": "thread broker",
+          "glyph": "t",
+          "tags": [
+            "thread",
+            "merchant",
+            "market"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "Sample knots crowd the broker's sleeves, each expressing a price and an objection.",
+            "The broker can insult four rival dyes without repeating a color."
+          ],
+          "wants": [
+            "Corner the market in a red thread that has started tying itself around liars.",
+            "Win an argument about whether imperial gray counts as a color or a threat."
+          ],
+          "wares": [
+            {
+              "item": "charcoal wand",
+              "min": 1,
+              "max": 1
+            },
+            {
+              "item": "red tincture",
+              "min": 1,
+              "max": 2
+            }
+          ],
+          "centerWeight": 6,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "requiredAtCenter": true,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "argumentative_dyer",
+          "title": "public dyer",
+          "glyph": "d",
+          "tags": [
+            "dye",
+            "argument",
+            "artisan"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "Both hands are purple today; yesterday's position was apparently yellow.",
+            "Steam from a dye pot gives every sentence a different colored halo."
+          ],
+          "wants": [
+            "Prove in public that the new imperial tariff is chemically illiterate.",
+            "Find the thief who stole a vat of blue and left behind an excellent rebuttal."
+          ],
+          "centerWeight": 5,
+          "nearWeight": 3,
+          "wildWeight": 1,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "loom_runner",
+          "title": "loom-runner",
+          "glyph": "l",
+          "tags": [
+            "loom",
+            "courier",
+            "woven"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "Messages woven into the runner's sash change emphasis whenever the wind disagrees.",
+            "A bundle of shuttle-rods knocks together like impatient teeth."
+          ],
+          "wants": [
+            "Deliver a disputed pattern before its meaning is voted into something safer.",
+            "Trace a loose red thread that keeps crossing roads before the runner does."
+          ],
+          "services": [
+            {
+              "id": "weaveway",
+              "name": "weaveway directions",
+              "description": "A route remembered as a sequence of cloth colors instead of turns.",
+              "effectKind": "create_route",
+              "targetHint": "a color-marked Vintan weaveway",
+              "tags": [
+                "route",
+                "thread"
+              ]
+            }
+          ],
+          "centerWeight": 2,
+          "nearWeight": 5,
+          "wildWeight": 4,
+          "knowledgeTier": 2
+        }
+      ]
+    }
+  ]
+}

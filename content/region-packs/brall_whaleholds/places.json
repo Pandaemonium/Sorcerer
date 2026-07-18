@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "brall_whaleholds",
+      "settlementNames": [
+        "Deep-Tale Hold",
+        "Harpoon Hall",
+        "Ragna's Whalehouse",
+        "Storm-Sworn Hold",
+        "Bone-Tale Landing",
+        "Cold Wake"
+      ],
+      "hamletNames": [
+        "Tarhand Quay",
+        "Third Cask",
+        "Gull Quay",
+        "Ale-Oath Row",
+        "Nine Fathoms"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the bone-post road",
+      "roadTerrain": "whalebone_cobbles",
+      "districts": [
+        {
+          "id": "harpoon_quay",
+          "name": "Harpoon Quay",
+          "summary": "Winches, black rope, and returning boats make every arrival sound heroic.",
+          "terrain": "tarred_quay",
+          "featureName": "communal harpoon winch",
+          "featureDescription": "The drum is broad enough to haul a whale or an especially stubborn version of events.",
+          "featureGlyph": "&",
+          "featureMaterial": "wood",
+          "tags": [
+            "harbor",
+            "gate",
+            "harpoon"
+          ],
+          "populationPercent": 120
+        },
+        {
+          "id": "tale_hall",
+          "name": "Tale-Hall Ward",
+          "summary": "Ale benches and carved rafters hold several mutually incompatible civic histories.",
+          "terrain": "hall_bone",
+          "featureName": "many-witness tale chair",
+          "featureDescription": "Every back-slat depicts a different person taking credit for the same rescue.",
+          "featureGlyph": "H",
+          "featureMaterial": "bone",
+          "tags": [
+            "hall",
+            "story",
+            "ale"
+          ],
+          "populationPercent": 150
+        },
+        {
+          "id": "scrimshaw_yards",
+          "name": "Scrimshaw Yards",
+          "summary": "Bone dust whitens busy workshops where debts become pictures and pictures become evidence.",
+          "terrain": "bone_chip_floor",
+          "featureName": "public carving rack",
+          "featureDescription": "Half-finished scenes wait for witnesses to argue them into completion.",
+          "featureGlyph": "#",
+          "featureMaterial": "bone",
+          "tags": [
+            "craft",
+            "scrimshaw",
+            "yard"
+          ],
+          "populationPercent": 115
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "walking_rib",
+          "name": "the walking whale rib",
+          "description": "A single enormous rib advances one finger-width inland after every storm.",
+          "glyph": "R",
+          "material": "bone",
+          "tags": [
+            "whale",
+            "bone",
+            "moving"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "gontark_crags",
+      "settlementNames": [
+        "Seven Warnings",
+        "Shaletooth",
+        "The Black Rope",
+        "Cliff Voice",
+        "Cold Ledge",
+        "Nine Omens"
+      ],
+      "hamletNames": [
+        "No Echo",
+        "Goat Debt",
+        "Loose Stone",
+        "Bitter Spring",
+        "Split Knuckle"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the warning path",
+      "roadTerrain": "marked_shale",
+      "districts": [
+        {
+          "id": "warning_gate",
+          "name": "Warning Gate",
+          "summary": "Travelers compare charms beneath signs that disagree about the safest direction.",
+          "terrain": "warning_shale",
+          "featureName": "seventh warning frame",
+          "featureDescription": "Six warnings hang visibly; the frame casts the shadow of a seventh.",
+          "featureGlyph": "A",
+          "featureMaterial": "shale",
+          "tags": [
+            "gate",
+            "warning",
+            "curse"
+          ],
+          "populationPercent": 95
+        },
+        {
+          "id": "rope_square",
+          "name": "Black-Rope Square",
+          "summary": "Guides, curse brokers, and goat disputes meet on a ledge wider than local honesty.",
+          "terrain": "rope_scored_stone",
+          "featureName": "communal curse map",
+          "featureDescription": "Black cords connect places by grievance rather than distance.",
+          "featureGlyph": "#",
+          "featureMaterial": "stone",
+          "tags": [
+            "square",
+            "curse",
+            "guides"
+          ],
+          "populationPercent": 125
+        },
+        {
+          "id": "shale_yards",
+          "name": "Shale Yards",
+          "summary": "Herder pens and charm workshops cling to terraces cut around older prohibitions.",
+          "terrain": "goat_worn_shale",
+          "featureName": "apology cairn",
+          "featureDescription": "Every stone bears an apology to a different cliff, several of them sarcastic.",
+          "featureGlyph": "^",
+          "featureMaterial": "shale",
+          "tags": [
+            "craft",
+            "goat",
+            "cairn"
+          ],
+          "populationPercent": 100
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "backward_watchtower",
+          "name": "the backward watchtower",
+          "description": "Its arrow slits face the mountain, watching for something expected to emerge from stone.",
+          "glyph": "T",
+          "material": "shale",
+          "tags": [
+            "tower",
+            "watch",
+            "curse"
+          ]
+        }
+      ]
+    }
+  ]
+}

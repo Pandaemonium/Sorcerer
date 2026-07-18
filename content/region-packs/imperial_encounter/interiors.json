@@ -1,0 +1,62 @@
+{
+  "interiors": [
+    {
+      "regionId": "imperial_encounter",
+      "bindings": [
+        {
+          "districtId": "evidence_yard",
+          "interiorId": "sealed_registry"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "sealed_registry",
+          "name": "Sealed Evidence Registry",
+          "kind": "archive",
+          "summary": "A cold records hall where confiscated objects are taught to become inventory numbers.",
+          "floorTerrain": "registry_tile",
+          "wallMaterial": "marble",
+          "accessPolicy": "restricted",
+          "requiredItem": "imperial cell key",
+          "tags": [
+            "archive",
+            "containment",
+            "evidence"
+          ],
+          "features": [
+            {
+              "name": "breathing evidence cabinet",
+              "description": "Its numbered drawers inhale whenever an undocumented wonder enters the room.",
+              "glyph": "#",
+              "material": "brass",
+              "tags": [
+                "evidence",
+                "cabinet"
+              ]
+            },
+            {
+              "name": "confiscation index wheel",
+              "description": "Thousands of red tabs orbit a blank category reserved for the player.",
+              "glyph": "O",
+              "material": "brass",
+              "tags": [
+                "index",
+                "law"
+              ]
+            },
+            {
+              "name": "scrubbed testimony desk",
+              "description": "Grooves in the marble show where witnesses gripped it before revising themselves.",
+              "glyph": "=",
+              "material": "marble",
+              "tags": [
+                "testimony",
+                "erased"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "populations": [
+    {
+      "regionId": "brall_whaleholds",
+      "centerMean": 4.6,
+      "nearMean": 1.8,
+      "wildMean": 0.2,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 7,
+      "hermitChance": 4,
+      "names": {
+        "given": [
+          "Aven",
+          "Bera",
+          "Hakon",
+          "Jori",
+          "Nio",
+          "Ragna",
+          "Siv",
+          "Tor",
+          "Ulfa",
+          "Vitr",
+          "Brand",
+          "Dagny",
+          "Eldr",
+          "Frey",
+          "Gunnar",
+          "Halla",
+          "Ingr",
+          "Kelda",
+          "Osk",
+          "Yrsa"
+        ],
+        "bynames": [
+          "Deep-Laugh",
+          "Bone-Tale",
+          "Tarhand",
+          "Three Harpoons",
+          "Ale-Oath",
+          "Storm-Sworn",
+          "Whale-Debt",
+          "Salt-Lung",
+          "Iron Keel",
+          "Cold Wake",
+          "Nine Fathoms",
+          "Blubber-Rich",
+          "Oath-Drunk",
+          "Gull-Fed",
+          "Rope-Scarred",
+          "Tide-Widow"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "bone_carver",
+          "title": "whalebone carver",
+          "glyph": "b",
+          "tags": [
+            "bone",
+            "artisan",
+            "merchant"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "Scrimshaw dust pales the carver's beard and every story improves under the knife.",
+            "A half-carved whale on the workboard appears to be judging the harbor."
+          ],
+          "wants": [
+            "Carve the true ending of a tale before its surviving witness improves it again.",
+            "Find bone that still remembers a song no charter inspector can classify."
+          ],
+          "wares": [
+            {
+              "item": "grave salt",
+              "min": 1,
+              "max": 3
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "requiredAtCenter": true,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "tale_witness",
+          "title": "hall tale-witness",
+          "glyph": "w",
+          "tags": [
+            "story",
+            "witness",
+            "ale"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "A whale-tooth tally marks every version of the witness's favorite disaster.",
+            "The witness laughs first, then checks who in the hall has earned the frightening part."
+          ],
+          "wants": [
+            "Find a stranger willing to improve a local story by surviving it.",
+            "Keep the occupation from replacing a ridiculous victory with an accurate loss."
+          ],
+          "centerWeight": 4,
+          "nearWeight": 3,
+          "wildWeight": 1,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "harpoon_mender",
+          "title": "harpoon mender",
+          "glyph": "m",
+          "tags": [
+            "harpoon",
+            "worker",
+            "harbor"
+          ],
+          "roles": [
+            "resident"
+          ],
+          "descriptions": [
+            "Tar-black cord circles both wrists where a snapped line once chose not to kill.",
+            "The mender tests each barb against an old heroic lie."
+          ],
+          "wants": [
+            "Mend the communal harpoon before the singing shadow returns offshore.",
+            "Recover a brass barb confiscated as prohibited military nostalgia."
+          ],
+          "centerWeight": 3,
+          "nearWeight": 5,
+          "wildWeight": 2,
+          "knowledgeTier": 1
+        }
+      ]
+    }
+  ]
+}

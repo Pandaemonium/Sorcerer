@@ -1,0 +1,158 @@
+{
+  "populations": [
+    {
+      "regionId": "stalnaz_highlands",
+      "centerMean": 4.2,
+      "nearMean": 1.5,
+      "wildMean": 0.18,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 7,
+      "hermitChance": 5,
+      "names": {
+        "given": [
+          "Asta",
+          "Bryn",
+          "Celyn",
+          "Dara",
+          "Eiran",
+          "Fenn",
+          "Gala",
+          "Iri",
+          "Joss",
+          "Lein",
+          "Mabon",
+          "Nesta",
+          "Oriel",
+          "Perrin",
+          "Rhian",
+          "Sulien",
+          "Talis",
+          "Ula",
+          "Vaun",
+          "Ysold"
+        ],
+        "bynames": [
+          "Blue Note",
+          "Afterlight",
+          "Snow-Tuned",
+          "Glass Palm",
+          "Third Echo",
+          "Cistern-Born",
+          "Chime-Kept",
+          "Pale Refrain",
+          "High Cistern",
+          "Frost Interval",
+          "Quartz Voice",
+          "Long Resonance",
+          "Ice-Fluent",
+          "Slate Chord",
+          "of Thin Air",
+          "Cold Register"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "light_tuner",
+          "title": "light tuner",
+          "glyph": "t",
+          "tags": [
+            "crystal",
+            "music",
+            "artisan",
+            "merchant"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "A tuning fork of blue crystal makes old sunlight stir in nearby pockets.",
+            "The tuner's coat is stitched with tiny pockets for notes too bright to carry barehanded."
+          ],
+          "wants": [
+            "Tune a cracked cistern before its stored summer becomes weather.",
+            "Hear whether the queen's unnamed heir has begun answering the mountain."
+          ],
+          "wares": [
+            {
+              "item": "moon pearl",
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "chorus_porter",
+          "title": "chorus porter",
+          "glyph": "p",
+          "tags": [
+            "porter",
+            "chorus",
+            "mountain"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "The porter carries crystal cases in a frame that hums against each footstep.",
+            "Frost beads along a load-rope whenever somebody nearby lies about music."
+          ],
+          "wants": [
+            "Deliver a dangerous harmony uphill without waking the avalanche that knows it.",
+            "Find a missing singer before rehearsal becomes a succession omen."
+          ],
+          "services": [
+            {
+              "id": "chorus_path",
+              "name": "chorus path",
+              "description": "A resonant path where safe footholds answer in thirds.",
+              "effectKind": "create_route",
+              "targetHint": "the singing stair toward Stalnaz",
+              "tags": [
+                "route",
+                "music"
+              ]
+            }
+          ],
+          "centerWeight": 3,
+          "nearWeight": 5,
+          "wildWeight": 2,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "snow_listener",
+          "title": "snow listener",
+          "glyph": "l",
+          "tags": [
+            "snow",
+            "hermit",
+            "omens"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "The listener's hood is full of tiny bells muted with wool.",
+            "One ear is painted blue to hear light; the other is bare for ordinary danger."
+          ],
+          "wants": [
+            "Learn why tonight's snow is repeating a royal cradle-song.",
+            "Keep the high quiet from being measured into an imperial resource."
+          ],
+          "centerWeight": 1,
+          "nearWeight": 2,
+          "wildWeight": 5,
+          "knowledgeTier": 3
+        }
+      ]
+    }
+  ]
+}

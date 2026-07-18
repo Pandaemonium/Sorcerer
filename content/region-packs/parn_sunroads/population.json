@@ -1,0 +1,157 @@
+{
+  "populations": [
+    {
+      "regionId": "parn_sunroads",
+      "centerMean": 4.0,
+      "nearMean": 1.5,
+      "wildMean": 0.16,
+      "centerRadius": 0,
+      "nearRadius": 3,
+      "maxResidents": 7,
+      "hermitChance": 7,
+      "names": {
+        "given": [
+          "Aru",
+          "Basa",
+          "Djen",
+          "Hara",
+          "Iset",
+          "Khemi",
+          "Nura",
+          "Sefu",
+          "Tama",
+          "Wadi",
+          "Anhur",
+          "Beket",
+          "Denn",
+          "Habi",
+          "Kesi",
+          "Meru",
+          "Nebt",
+          "Paser",
+          "Reni",
+          "Sabu"
+        ],
+        "bynames": [
+          "Noon Shade",
+          "Copper Sun",
+          "Third Well",
+          "Road-Born",
+          "White Scarf",
+          "Long Horizon",
+          "Dry Mile",
+          "Sand-Sworn",
+          "Dune-Debt",
+          "Caravan-Kind",
+          "Sun Ledger",
+          "Ninth Oasis",
+          "Bright Ash",
+          "Far Well",
+          "Heat-Patient",
+          "Star-Guided"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "shade_seller",
+          "title": "shade seller",
+          "glyph": "s",
+          "tags": [
+            "shade",
+            "merchant",
+            "market"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "Folded awnings at the seller's back hold distinct grades of afternoon.",
+            "A copper mirror measures how much sun each customer has already endured."
+          ],
+          "wants": [
+            "Recover a stolen square of royal shade before noon notices.",
+            "Sell enough cool shelter to buy water for a caravan the maps have abandoned."
+          ],
+          "wares": [
+            {
+              "item": "red tincture",
+              "min": 1,
+              "max": 3
+            }
+          ],
+          "centerWeight": 6,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "requiredAtCenter": true,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "sunroad_outrider",
+          "title": "sun-road outrider",
+          "glyph": "r",
+          "tags": [
+            "road",
+            "scout",
+            "service_provider"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "A white scarf shades a face mapped by salt, glare, and several unofficial roads.",
+            "The outrider's compass points toward the nearest promise of water rather than north."
+          ],
+          "wants": [
+            "Reach a departed caravan before its enemies realize it left yesterday.",
+            "Find which sun-road has begun returning travelers to the wrong century."
+          ],
+          "services": [
+            {
+              "id": "sunroad",
+              "name": "caravan sun-road",
+              "description": "A route timed by shade, wells, and the patience of the horizon.",
+              "effectKind": "create_route",
+              "targetHint": "a Parn caravan sun-road",
+              "tags": [
+                "route",
+                "desert"
+              ]
+            }
+          ],
+          "centerWeight": 3,
+          "nearWeight": 5,
+          "wildWeight": 6,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "well_singer",
+          "title": "well singer",
+          "glyph": "w",
+          "tags": [
+            "water",
+            "song",
+            "omen"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "A low humming bowl tests whether each well is water, memory, or both.",
+            "Blue beadwork at the throat records wells that answered in human voices."
+          ],
+          "wants": [
+            "Teach a bitter well a song that does not mention the occupation.",
+            "Learn why the third well sings the name of a traveler not yet born."
+          ],
+          "centerWeight": 4,
+          "nearWeight": 3,
+          "wildWeight": 4,
+          "knowledgeTier": 3
+        }
+      ]
+    }
+  ]
+}

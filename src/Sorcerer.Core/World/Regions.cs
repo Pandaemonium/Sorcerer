@@ -214,7 +214,37 @@ public sealed record RegionDefinition(
     RegionEncounterDefinition? Encounters = null,
     RegionPopulationGrammarDefinition? Population = null,
     RegionSettlementGrammarDefinition? Settlement = null,
-    RegionInteriorGrammarDefinition? Interiors = null);
+    RegionInteriorGrammarDefinition? Interiors = null,
+    RegionVocabulary? Vocabulary = null);
+
+/// <summary>
+/// WP1 (docs/CONTENT_SPRINT_PLAN.md): the cultural word-pools that generation used to select with
+/// hard-coded <c>region.Id switch</c> arms in TextureGrammar, ThreatArchetypeGenerator, and the
+/// promise helpers. Moving them onto region data means adding a region's flavour is pure authoring:
+/// no priority region needs an id branch for content selection. Every field is optional; an absent
+/// pool falls back to the shared realm/default behaviour, so unauthored regions are unchanged.
+/// Threat pools must avoid promise/oath/omen/prophecy tokens (see ThreatArchetypeGenerator).
+/// </summary>
+public sealed record RegionVocabulary(
+    IReadOnlyList<string> FixtureAdjectives,
+    IReadOnlyList<string> FixtureNouns,
+    string? TextureSubject,
+    string? TextureDescriptionTemplate,
+    IReadOnlyList<string> ThreatAdjectives,
+    IReadOnlyList<string> ThreatNouns,
+    string? ThreatEntryProse,
+    string? PromisedSiteName)
+{
+    public static readonly RegionVocabulary Empty = new(
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        null,
+        null,
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        null,
+        null);
+}
 
 public sealed class RegionRegistry
 {

@@ -778,12 +778,9 @@ public sealed partial class PromiseRealizationSystem
             return lower.Contains("hollowmere") ? "Hollowmere refuge" : "promised refuge";
         }
 
-        return region.Id switch
-        {
-            "hollowmere_margin" => "folded-road checkpoint",
-            "wild_border" => "promise-touched border stone",
-            _ => "promised waymark",
-        };
+        return string.IsNullOrWhiteSpace(region.Vocabulary?.PromisedSiteName)
+            ? "promised waymark"
+            : region.Vocabulary!.PromisedSiteName!;
     }
 
     private static string PromiseItemName(WorldPromise promise)

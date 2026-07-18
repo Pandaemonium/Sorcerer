@@ -1,0 +1,158 @@
+{
+  "interiors": [
+    {
+      "regionId": "hollowmere_margin",
+      "bindings": [
+        {
+          "districtId": "reed_market",
+          "interiorId": "memory_house"
+        },
+        {
+          "siteTag": "waystation",
+          "interiorId": "relay_waystation"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "relay_waystation",
+          "name": "Imperial Relay Waystation",
+          "kind": "waystation",
+          "summary": "A licensed post where the Empire's schedules change horses and the reaping is filed before it happens.",
+          "floorTerrain": "post_road_tile",
+          "wallMaterial": "timber",
+          "accessPolicy": "restricted",
+          "requiredItem": "imperial cell key",
+          "tags": [
+            "waystation",
+            "post",
+            "empire",
+            "reaping"
+          ],
+          "features": [
+            {
+              "name": "sweep dispatch case",
+              "description": "A charter-sealed case holds the season's reconciliation schedule; the seal recites sums when unlicensed hands come near.",
+              "glyph": "#",
+              "material": "brass",
+              "tags": [
+                "dispatch",
+                "schedule",
+                "charter_seal",
+                "sweep"
+              ],
+              "readable": "Provincial Reconciliation Sweep, seasonal schedule: settlements and dates in clerk-perfect marching order. Whoever holds this knows where the reaping walks next, and when.",
+              "claims": [
+                {
+                  "text": "The sweep schedule names every settlement the reaping will reconcile this season, in marching order.",
+                  "category": "document",
+                  "subject": "sweep schedule",
+                  "salience": 5,
+                  "confidence": 95,
+                  "playerVisible": true,
+                  "bindAsPromise": false,
+                  "tags": [
+                    "sweep_schedule",
+                    "reaping",
+                    "empire",
+                    "document"
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "requisition ledger",
+              "description": "Red-ruled pages list what the reaping has taken and from whom; several lines are deliberately blank where things escaped filing.",
+              "glyph": "=",
+              "material": "vellum",
+              "tags": [
+                "ledger",
+                "requisition",
+                "confiscation",
+                "blanks"
+              ],
+              "readable": "Requisition Ledger, Provincial Reconciliation Sweep: confiscations tagged for the capital vaults, each line a family's name beside what was taken from it. Some lines are blank.",
+              "claims": [
+                {
+                  "text": "A reed-cutter family's confiscated name-charm sits tagged for the capital vaults; the ledger records exactly which crate carries it.",
+                  "category": "item",
+                  "subject": "confiscated name-charm",
+                  "salience": 4,
+                  "confidence": 85,
+                  "playerVisible": true,
+                  "bindAsPromise": true,
+                  "promiseKind": "lead",
+                  "realizationKind": "item",
+                  "triggerHint": "travel",
+                  "tags": [
+                    "requisition",
+                    "confiscation",
+                    "reaping",
+                    "free_folk",
+                    "document"
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "relay signal bell",
+              "description": "A road-bell whose rope is knotted at a rider's reach; one pull tells the next post that something has gone wrong here.",
+              "glyph": "!",
+              "material": "bronze",
+              "tags": [
+                "bell",
+                "alarm",
+                "road"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "memory_house",
+          "name": "House of Borrowed Dryness",
+          "kind": "folk_house",
+          "summary": "Willow rooms shelter medicines, fugitives, and memories that cannot safely sleep together.",
+          "floorTerrain": "woven_reed_floor",
+          "wallMaterial": "willow",
+          "accessPolicy": "public",
+          "tags": [
+            "refuge",
+            "memory",
+            "folk_magic"
+          ],
+          "features": [
+            {
+              "name": "names-in-water hearth",
+              "description": "A shallow warm basin repeats household names without ever boiling.",
+              "glyph": "O",
+              "material": "clay",
+              "tags": [
+                "hearth",
+                "memory"
+              ]
+            },
+            {
+              "name": "three-purpose reed cupboard",
+              "description": "Its bundles are labeled roof, fever, and soldiers-at-the-door.",
+              "glyph": "#",
+              "material": "reed",
+              "tags": [
+                "medicine",
+                "shelter"
+              ]
+            },
+            {
+              "name": "red-thread guest bed",
+              "description": "One loose knot decides whether the sleeper is guest, kin, or hidden.",
+              "glyph": "=",
+              "material": "willow",
+              "tags": [
+                "refuge",
+                "guest"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

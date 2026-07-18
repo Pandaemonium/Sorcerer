@@ -1,0 +1,223 @@
+{
+  "regions": [
+    {
+      "id": "imperial_encounter",
+      "groundLoot": {
+        "min": 0,
+        "max": 1,
+        "emptyChance": 45,
+        "usefulChance": 15
+      },
+      "encounters": {
+        "ambientChance": 10
+      },
+      "name": "Marble Containment Yard",
+      "realmId": "empire",
+      "traditionId": "charter_geometry",
+      "imperialPresence": 90,
+      "terrainTags": [
+        "marble",
+        "law",
+        "containment"
+      ],
+      "voiceTags": [
+        "cold",
+        "bureaucratic",
+        "threatening"
+      ],
+      "wildnessBase": 0,
+      "floorTerrain": "floor",
+      "affordances": [
+        {
+          "id": "imperial_cover",
+          "text": "Marble walls create hard lines of sight and official blind spots.",
+          "tags": [
+            "stealth",
+            "law"
+          ]
+        }
+      ],
+      "voiceSummary": "Imperial Vigovia under marble law: censors measure and label every wonder, and boots move in unison. Keep outcomes cold, precise, and civic.",
+      "ambientLines": [
+        "You hear the rhythmic stamp of boots in unison.",
+        "A horn sounds three precise notes, then falls silent.",
+        "Iron scrapes against iron in perfect time."
+      ],
+      "props": {
+        "min": 3,
+        "max": 5,
+        "emptyChance": 0,
+        "denseChance": 10,
+        "denseBonus": 2,
+        "ensembleChance": 45,
+        "hookChance": 20,
+        "bases": [
+          {
+            "id": "survey_marker",
+            "name": "survey marker",
+            "glyph": "|",
+            "fixtureType": "official_marker",
+            "description": "Its measured grooves divide even empty air into accountable portions.",
+            "tags": [
+              "survey",
+              "law"
+            ]
+          },
+          {
+            "id": "evidence_table",
+            "name": "evidence table",
+            "glyph": "=",
+            "fixtureType": "furniture",
+            "description": "Wire squares indicate where confiscated wonders are supposed to stop being dangerous.",
+            "tags": [
+              "evidence",
+              "containment"
+            ],
+            "blocksMovement": true
+          },
+          {
+            "id": "permit_box",
+            "name": "permit box",
+            "glyph": "#",
+            "fixtureType": "storage",
+            "description": "Narrow slots accept precisely the forms that no prisoner here possesses.",
+            "tags": [
+              "permit",
+              "paper"
+            ]
+          },
+          {
+            "id": "inspection_lamp",
+            "name": "inspection lamp",
+            "glyph": "i",
+            "fixtureType": "lamp",
+            "description": "Its white charter-light leaves no flattering shadows.",
+            "tags": [
+              "light",
+              "inspection"
+            ],
+            "blocksMovement": false
+          }
+        ],
+        "materials": [
+          {
+            "id": "marble",
+            "text": "marble",
+            "material": "marble",
+            "description": "The stone is clean enough to make dirt feel accused.",
+            "tags": [
+              "marble"
+            ]
+          },
+          {
+            "id": "brass",
+            "text": "brass-bound",
+            "material": "brass",
+            "description": "Every fastening bears a maintenance date and an approving initial.",
+            "tags": [
+              "brass",
+              "official"
+            ]
+          },
+          {
+            "id": "charter_glass",
+            "text": "charter-glass",
+            "material": "glass",
+            "description": "Cold geometry waits inside the glass for an authorized hand.",
+            "tags": [
+              "glass",
+              "charter"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "numbered",
+            "text": "numbered",
+            "description": "A black file number has been renewed often enough to emboss the surface.",
+            "tags": [
+              "numbered"
+            ]
+          },
+          {
+            "id": "confiscated",
+            "text": "confiscation-red",
+            "description": "A red seal states that possession has been regularized.",
+            "tags": [
+              "confiscated"
+            ]
+          },
+          {
+            "id": "scrubbed",
+            "text": "over-scrubbed",
+            "description": "Some former stain survives only as a different shine.",
+            "tags": [
+              "clean",
+              "erased"
+            ]
+          },
+          {
+            "id": "misfiled",
+            "text": "misfiled",
+            "description": "One attached docket plainly belongs to a different object and nobody has corrected it.",
+            "tags": [
+              "bureaucratic_error"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 2,
+            "title": "Notice affixed to {name}",
+            "text": "NOTICE IS GIVEN that {name} remains subject to inspection under the current containment schedule.",
+            "tags": [
+              "notice",
+              "law"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 1,
+            "tags": [
+              "containment_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "intake_station",
+            "weight": 1,
+            "members": [
+              {
+                "base": "evidence_table",
+                "material": "marble",
+                "condition": "scrubbed",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "permit_box",
+                "material": "brass",
+                "condition": "misfiled",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "inspection_lamp",
+                "material": "charter_glass",
+                "condition": "numbered",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 0,
+        "anchorY": 0
+      }
+    }
+  ]
+}

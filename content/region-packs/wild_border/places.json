@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "wild_border",
+      "settlementNames": [
+        "Festival-Left",
+        "No Fixed Door",
+        "Tomorrow's Garden",
+        "Second Moon",
+        "Backward Path",
+        "Sugar Ghost"
+      ],
+      "hamletNames": [
+        "Late Shadow",
+        "Wrong Season",
+        "Unlit Window",
+        "Off-Key",
+        "Nine Evenings"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the path that answers",
+      "roadTerrain": "responsive_flowers",
+      "districts": [
+        {
+          "id": "moving_gate",
+          "name": "Moving Gate",
+          "summary": "A flower arch relocates between arrivals and insists this has always been the entrance.",
+          "terrain": "gate_blossom",
+          "featureName": "migratory flower arch",
+          "featureDescription": "Roots gather their soil into little bags whenever the road grows too certain.",
+          "featureGlyph": "A",
+          "featureMaterial": "living_wood",
+          "tags": [
+            "gate",
+            "flowers",
+            "moving"
+          ],
+          "populationPercent": 75
+        },
+        {
+          "id": "festival_after",
+          "name": "Festival After",
+          "summary": "Stalls, ribbons, and music remain vividly present despite the absence of any agreed festival.",
+          "terrain": "confetti_grass",
+          "featureName": "self-remembering dance floor",
+          "featureDescription": "Footprints perform last night's dances without feet.",
+          "featureGlyph": "=",
+          "featureMaterial": "wood",
+          "tags": [
+            "festival",
+            "market",
+            "memory"
+          ],
+          "populationPercent": 120
+        },
+        {
+          "id": "lawless_gardens",
+          "name": "Lawless Gardens",
+          "summary": "Gardeners cultivate colors, distances, and minor repeals of natural law.",
+          "terrain": "impossible_loam",
+          "featureName": "ordinance-eating topiary",
+          "featureDescription": "Its clipped mouth chews paper laws into bright migrating beetles.",
+          "featureGlyph": "&",
+          "featureMaterial": "plant",
+          "tags": [
+            "garden",
+            "broken_law",
+            "wild_magic"
+          ],
+          "populationPercent": 85
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "bone_circle_rain",
+          "name": "the bone circle where rain waits",
+          "description": "Bright rain hangs motionless inside a ring of antlers until somebody tells it where to fall.",
+          "glyph": "O",
+          "material": "bone",
+          "tags": [
+            "bone",
+            "rain",
+            "circle"
+          ]
+        }
+      ]
+    }
+  ]
+}

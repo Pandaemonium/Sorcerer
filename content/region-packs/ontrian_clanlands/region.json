@@ -1,0 +1,237 @@
+{
+  "regions": [
+    {
+      "id": "ontrian_clanlands",
+      "groundLoot": {
+        "min": 1,
+        "max": 3,
+        "emptyChance": 15,
+        "usefulChance": 25
+      },
+      "name": "Ontrian Clanlands",
+      "realmId": "ontria",
+      "traditionId": "ancestor_culture",
+      "imperialPresence": 22,
+      "terrainTags": [
+        "high_pasture",
+        "clan_hearth",
+        "clay",
+        "herbs"
+      ],
+      "voiceTags": [
+        "ancestral",
+        "communal",
+        "earthy",
+        "guarded"
+      ],
+      "wildnessBase": 4,
+      "floorTerrain": "herb_turf",
+      "affordances": [
+        {
+          "id": "living_clan_cultures",
+          "text": "Each clan keeps a distinct living yoghurt culture that carries inherited strengths and obligations.",
+          "tags": [
+            "ancestor",
+            "food",
+            "transformation",
+            "clan"
+          ]
+        },
+        {
+          "id": "chartered_rites",
+          "text": "Chartered shamans preserve public rites while private households remember older freedoms.",
+          "tags": [
+            "charter",
+            "shaman",
+            "tradition"
+          ]
+        }
+      ],
+      "voiceSummary": "Ontria is communal and ancestral: clay crocks kept alive longer than dynasties, high herbs, clan hospitality, and strengths understood as loans from the dead.",
+      "ambientLines": [
+        "A clay crock is greeted by name before any living guest.",
+        "Children argue over which ancestor made the rain smell of thyme.",
+        "A shaman checks an imperial seal, then performs the older gesture underneath it."
+      ],
+      "props": {
+        "min": 4,
+        "max": 8,
+        "emptyChance": 12,
+        "denseChance": 22,
+        "denseBonus": 4,
+        "ensembleChance": 55,
+        "hookChance": 18,
+        "bases": [
+          {
+            "id": "culture_crock",
+            "name": "clan culture-crock",
+            "glyph": "O",
+            "fixtureType": "ancestral_vessel",
+            "description": "The living culture inside is addressed as an elder and fed before guests.",
+            "tags": [
+              "culture",
+              "ancestor"
+            ]
+          },
+          {
+            "id": "strength_spoon",
+            "name": "strength-sharing spoon",
+            "glyph": "!",
+            "fixtureType": "ritual_tool",
+            "description": "Many tooth marks testify to generations of serious ceremonial tasting.",
+            "tags": [
+              "strength",
+              "ritual"
+            ],
+            "blocksMovement": false
+          },
+          {
+            "id": "herb_rack",
+            "name": "high-herb rack",
+            "glyph": "#",
+            "fixtureType": "work_fixture",
+            "description": "Mountain herbs hang in clan-specific orders no outsider reads correctly.",
+            "tags": [
+              "herbs",
+              "clan"
+            ]
+          },
+          {
+            "id": "ancestor_stool",
+            "name": "ancestor stool",
+            "glyph": "=",
+            "fixtureType": "hearth_furniture",
+            "description": "Nobody living sits here, though it is repaired more carefully than the others.",
+            "tags": [
+              "ancestor",
+              "hearth"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "hearth_clay",
+            "text": "hearth-clay",
+            "material": "clay",
+            "description": "Smoke-black clay retains the warmth of meals long finished.",
+            "tags": [
+              "clay",
+              "hearth"
+            ]
+          },
+          {
+            "id": "thyme_wood",
+            "text": "thyme-wood",
+            "material": "wood",
+            "description": "The grain releases a clean herbal smell under a thumbnail.",
+            "tags": [
+              "wood",
+              "thyme"
+            ]
+          },
+          {
+            "id": "wool_bound",
+            "text": "wool-bound",
+            "material": "wool",
+            "description": "Clan colors have faded differently on every wrapped layer.",
+            "tags": [
+              "wool",
+              "clan"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "elder_named",
+            "text": "elder-named",
+            "description": "A dead relative's everyday name appears where a maker's mark would be.",
+            "tags": [
+              "name",
+              "ancestor"
+            ]
+          },
+          {
+            "id": "charter_sealed",
+            "text": "charter-sealed",
+            "description": "An official seal permits the public rite and says nothing about the private one.",
+            "tags": [
+              "charter",
+              "rite"
+            ]
+          },
+          {
+            "id": "still_living",
+            "text": "warmly living",
+            "description": "A faint pulse of fermentation makes nearby dust tremble.",
+            "tags": [
+              "living_culture",
+              "ferment"
+            ]
+          },
+          {
+            "id": "inheritance_cracked",
+            "text": "inheritance-cracked",
+            "description": "The break has been mended with clay saved from the previous vessel.",
+            "tags": [
+              "inheritance",
+              "mended"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 1,
+            "title": "Clan names on {name}",
+            "text": "The names record who gave strength to the clan and one person whose contribution was refused.",
+            "tags": [
+              "ancestor_record",
+              "clan"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 2,
+            "tags": [
+              "ancestor_culture_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "clan_hearth",
+            "weight": 1,
+            "members": [
+              {
+                "base": "culture_crock",
+                "material": "hearth_clay",
+                "condition": "still_living",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "strength_spoon",
+                "material": "thyme_wood",
+                "condition": "elder_named",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "ancestor_stool",
+                "material": "wool_bound",
+                "condition": "inheritance_cracked",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": -10,
+        "anchorY": 8,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

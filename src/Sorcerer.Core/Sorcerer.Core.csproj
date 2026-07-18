@@ -4,8 +4,8 @@
     <AssemblyName>Sorcerer.Core</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="..\..\content\regions\*.json">
-      <LogicalName>Sorcerer.Core.Content.Regions.%(Filename)%(Extension)</LogicalName>
+    <EmbeddedResource Include="..\..\content\region-packs\**\*.json">
+      <LogicalName>Sorcerer.Core.Content.RegionPacks.%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="..\..\content\quests\*.json">
       <LogicalName>Sorcerer.Core.Content.Quests.%(Filename)%(Extension)</LogicalName>

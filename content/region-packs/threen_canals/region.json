@@ -1,0 +1,236 @@
+{
+  "regions": [
+    {
+      "id": "threen_canals",
+      "groundLoot": {
+        "min": 1,
+        "max": 2,
+        "emptyChance": 20,
+        "usefulChance": 30
+      },
+      "name": "Canals of Threen",
+      "realmId": "threen",
+      "traditionId": "artisan_letters",
+      "imperialPresence": 38,
+      "terrainTags": [
+        "canals",
+        "bridges",
+        "workshops",
+        "paper"
+      ],
+      "voiceTags": [
+        "literary",
+        "mannered",
+        "courteous",
+        "withholding"
+      ],
+      "wildnessBase": 2,
+      "floorTerrain": "canal_stone",
+      "affordances": [
+        {
+          "id": "performed_independence",
+          "text": "Threenians and imperial emissaries maintain independence as a shared courtesy with many exploitable seams.",
+          "tags": [
+            "diplomacy",
+            "client_realm",
+            "etiquette"
+          ]
+        },
+        {
+          "id": "artisan_exports",
+          "text": "Workshops turn local craft into finished goods, commissions, services, and trade routes.",
+          "tags": [
+            "craft",
+            "trade",
+            "service"
+          ]
+        }
+      ],
+      "voiceSummary": "Threen is literary and mannered, all canal light and finished craft, performing a beautiful independence that every courteous person knows not to examine too loudly.",
+      "ambientLines": [
+        "A bookseller ferries one sealed poem across a canal by itself.",
+        "An imperial emissary bows first; the Threenian official makes a study of accepting.",
+        "Workshop hammers keep time with a recital in the room above."
+      ],
+      "props": {
+        "min": 6,
+        "max": 10,
+        "emptyChance": 0,
+        "denseChance": 32,
+        "denseBonus": 5,
+        "ensembleChance": 58,
+        "hookChance": 20,
+        "bases": [
+          {
+            "id": "poem_ferry",
+            "name": "poem ferry-box",
+            "glyph": "~",
+            "fixtureType": "canal_fixture",
+            "description": "A tiny cable-ferry carries sealed pages between facing windows.",
+            "tags": [
+              "poem",
+              "canal"
+            ],
+            "blocksMovement": false
+          },
+          {
+            "id": "artisan_bench",
+            "name": "finisher's bench",
+            "glyph": "=",
+            "fixtureType": "workbench",
+            "description": "Shallow drawers hold the last beautiful parts that turn work into export.",
+            "tags": [
+              "artisan",
+              "export"
+            ]
+          },
+          {
+            "id": "courtesy_screen",
+            "name": "courtesy screen",
+            "glyph": "#",
+            "fixtureType": "diplomatic_fixture",
+            "description": "Painted reeds let two officials disagree without visibly sharing a room.",
+            "tags": [
+              "courtesy",
+              "diplomacy"
+            ]
+          },
+          {
+            "id": "canal_bollard",
+            "name": "canal oath-bollard",
+            "glyph": "|",
+            "fixtureType": "mooring",
+            "description": "Boat ropes share the post with ribbons from promises made before departure.",
+            "tags": [
+              "canal",
+              "oath"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "blue_tile",
+            "text": "blue-tile",
+            "material": "ceramic",
+            "description": "Glaze catches canal light and returns it improved.",
+            "tags": [
+              "tile",
+              "canal_light"
+            ]
+          },
+          {
+            "id": "lacquered_wood",
+            "text": "lacquered-wood",
+            "material": "wood",
+            "description": "Patient layers hide every join except the one the maker meant you to admire.",
+            "tags": [
+              "craft",
+              "lacquer"
+            ]
+          },
+          {
+            "id": "paper_inlay",
+            "text": "paper-inlaid",
+            "material": "paper",
+            "description": "Lines of miniature text ornament surfaces too useful for a whole book.",
+            "tags": [
+              "literature",
+              "paper"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "emissary_bowed",
+            "text": "emissary-bowed",
+            "description": "A small imperial seal has been placed lower than protocol strictly requires.",
+            "tags": [
+              "emissary",
+              "courtesy"
+            ]
+          },
+          {
+            "id": "canal_reflected",
+            "text": "canal-reflected",
+            "description": "Rippling light makes the workmanship appear to revise itself.",
+            "tags": [
+              "reflection",
+              "water"
+            ]
+          },
+          {
+            "id": "verse_marked",
+            "text": "verse-marked",
+            "description": "A popular line has been copied here with one politically meaningful word changed.",
+            "tags": [
+              "verse",
+              "politics"
+            ]
+          },
+          {
+            "id": "export_wrapped",
+            "text": "export-wrapped",
+            "description": "Fine cord and oilcloth wait for a buyer who has not yet arrived.",
+            "tags": [
+              "export",
+              "trade"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 3,
+            "title": "Canal verse on {name}",
+            "text": "The verse praises independent {realm} in a meter traditionally reserved for polite surrender.",
+            "tags": [
+              "literature",
+              "double_meaning"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 1,
+            "tags": [
+              "written_grace_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "canal_workshop_front",
+            "weight": 1,
+            "members": [
+              {
+                "base": "artisan_bench",
+                "material": "lacquered_wood",
+                "condition": "export_wrapped",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "poem_ferry",
+                "material": "paper_inlay",
+                "condition": "verse_marked",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "canal_bollard",
+                "material": "blue_tile",
+                "condition": "canal_reflected",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 3,
+        "anchorY": 12,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

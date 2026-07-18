@@ -1,0 +1,216 @@
+{
+  "populations": [
+    {
+      "regionId": "hollowmere_margin",
+      "centerMean": 4.5,
+      "nearMean": 1.7,
+      "wildMean": 0.22,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 7,
+      "hermitChance": 6,
+      "centers": [
+        {
+          "x": 1,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 4
+        }
+      ],
+      "names": {
+        "given": [
+          "Lio",
+          "Maren",
+          "Sella",
+          "Tovin",
+          "Edda",
+          "Rusk",
+          "Iven",
+          "Nim",
+          "Pella",
+          "Orra",
+          "Bael",
+          "Cressa",
+          "Dellan",
+          "Fenna",
+          "Gove",
+          "Halsa",
+          "Jory",
+          "Kesk",
+          "Wynn",
+          "Rowen",
+          "Sten",
+          "Willa"
+        ],
+        "bynames": [
+          "Reed-Memory",
+          "Eelwise",
+          "Wet Hem",
+          "Nine Knots",
+          "Under-Willow",
+          "Silt-Hand",
+          "Ferry-Sworn",
+          "Red Thread",
+          "Marsh-Kept",
+          "Low Water",
+          "Heron's Cousin",
+          "Two Oars",
+          "Bog-Iron",
+          "Rushlight",
+          "Drowned-Name",
+          "Reed-Debt"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "reed_apothecary",
+          "title": "reed apothecary",
+          "glyph": "h",
+          "tags": [
+            "merchant",
+            "healer",
+            "folk_magic",
+            "hollowmere"
+          ],
+          "roles": [
+            "merchant",
+            "service_provider",
+            "resident"
+          ],
+          "descriptions": [
+            "Bundles at the apothecary's belt distinguish fever-reed, roof-reed, and the reed burned when soldiers ask questions.",
+            "Wet green perfume follows the apothecary, with grave salt underneath."
+          ],
+          "wants": [
+            "Keep Hollowmere's quiet shelters supplied without teaching the occupiers which reeds hide doors.",
+            "Trade enough medicine to replace what the last patrol tipped into the water."
+          ],
+          "wares": [
+            {
+              "item": "red tincture",
+              "min": 1,
+              "max": 2
+            },
+            {
+              "item": "grave salt",
+              "min": 1,
+              "max": 3
+            }
+          ],
+          "services": [
+            {
+              "id": "reed_remedy",
+              "name": "reed remedy",
+              "description": "A private preparation for pain, fever, and the memory of pursuit.",
+              "effectKind": "record_memory",
+              "goldCost": 3,
+              "tags": [
+                "healing",
+                "folk_magic"
+              ]
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "ferry_oathkeeper",
+          "title": "ferry oathkeeper",
+          "glyph": "f",
+          "tags": [
+            "ferry",
+            "route",
+            "hollowmere"
+          ],
+          "roles": [
+            "service_provider",
+            "resident"
+          ],
+          "descriptions": [
+            "Crossing-notches run up both forearms, interrupted where one name was carefully cut away.",
+            "The oathkeeper smells of willow tar and water that has traveled farther than maps."
+          ],
+          "wants": [
+            "Guide dangerous travelers by crossings that cost the village least.",
+            "Learn who has been taking the unmarked ferry after moonset."
+          ],
+          "services": [
+            {
+              "id": "quiet_crossing",
+              "name": "quiet crossing",
+              "description": "The oathkeeper marks a reed-hidden route that avoids the loud bridges.",
+              "effectKind": "create_route",
+              "goldCost": 2,
+              "targetHint": "a reed-hidden Hollowmere crossing",
+              "tags": [
+                "route",
+                "refuge"
+              ]
+            }
+          ],
+          "centerWeight": 3,
+          "nearWeight": 5,
+          "wildWeight": 2,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "eel_cutter",
+          "title": "eel-cutter",
+          "glyph": "e",
+          "tags": [
+            "eel",
+            "worker",
+            "hollowmere"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "Silver scales freckle an oilskin apron; none belong to an ordinary eel.",
+            "A crescent knife moves between practical work and household omen."
+          ],
+          "wants": [
+            "Find what has been teaching the trap-eels to return imperial tags instead of fish.",
+            "Get one dry night to mend the household roof before the next occupation search."
+          ],
+          "centerWeight": 3,
+          "nearWeight": 4,
+          "wildWeight": 2,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "shelter_aunt",
+          "title": "shelter-aunt",
+          "glyph": "a",
+          "tags": [
+            "refuge",
+            "household",
+            "hollowmere"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "The aunt carries three door keys and denies that any fit a door.",
+            "Red thread at the cuff means hospitality; the knot in it means not yet."
+          ],
+          "wants": [
+            "Decide whether this fugitive is worth risking three hidden beds and a nephew in custody.",
+            "Get a warning to the next household before the inspection punt arrives."
+          ],
+          "centerWeight": 2,
+          "nearWeight": 3,
+          "wildWeight": 3,
+          "knowledgeTier": 3
+        }
+      ]
+    }
+  ]
+}

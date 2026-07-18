@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "ontrian_clanlands",
+      "settlementNames": [
+        "Many-Hearth",
+        "Ash Cousins",
+        "The Guest Rope",
+        "Ninth Fire",
+        "Long Memory",
+        "Stone Bowl"
+      ],
+      "hamletNames": [
+        "Old Branch",
+        "Third Ember",
+        "Grey Lineage",
+        "Root-True",
+        "Smoke-Named Camp"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the cousin road",
+      "roadTerrain": "hearthstone_path",
+      "districts": [
+        {
+          "id": "guest_gate",
+          "name": "Guest Gate",
+          "summary": "Arrival cords sort strangers into guest, debtor, cousin, danger, and unresolved.",
+          "terrain": "cord_marked_stone",
+          "featureName": "kinship tying-post",
+          "featureDescription": "Old cords tighten or loosen as people state their names beneath them.",
+          "featureGlyph": "Y",
+          "featureMaterial": "wood",
+          "tags": [
+            "gate",
+            "kinship",
+            "guest"
+          ],
+          "populationPercent": 115
+        },
+        {
+          "id": "many_hearths",
+          "name": "Many Hearths",
+          "summary": "Clan fires share one broad court while ancestors compete to improve the arrangements.",
+          "terrain": "ash_court",
+          "featureName": "council ember bowl",
+          "featureDescription": "Each clan contributes one coal; sparks consistently favor the absent families.",
+          "featureGlyph": "O",
+          "featureMaterial": "clay",
+          "tags": [
+            "court",
+            "hearth",
+            "ancestor"
+          ],
+          "populationPercent": 145
+        },
+        {
+          "id": "ancestor_lane",
+          "name": "Ancestor Lane",
+          "summary": "Shrines, genealogists, and discreet family arguments occupy houses built around old trees.",
+          "terrain": "root_paving",
+          "featureName": "branch-family shrine",
+          "featureDescription": "Carved faces change their resemblance according to who is currently apologizing.",
+          "featureGlyph": "+",
+          "featureMaterial": "wood",
+          "tags": [
+            "shrine",
+            "ancestor",
+            "family"
+          ],
+          "populationPercent": 115
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "orphan_hearth",
+          "name": "the orphan hearth",
+          "description": "A warm stone hearth waits in open country for a family nobody remembers losing.",
+          "glyph": "O",
+          "material": "stone",
+          "tags": [
+            "hearth",
+            "lost",
+            "ancestor"
+          ]
+        }
+      ]
+    }
+  ]
+}

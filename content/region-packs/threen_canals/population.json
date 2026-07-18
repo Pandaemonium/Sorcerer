@@ -1,0 +1,150 @@
+{
+  "populations": [
+    {
+      "regionId": "threen_canals",
+      "centerMean": 4.5,
+      "nearMean": 1.8,
+      "wildMean": 0.18,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 7,
+      "hermitChance": 4,
+      "names": {
+        "given": [
+          "Alo",
+          "Beni",
+          "Caro",
+          "Dessa",
+          "Enn",
+          "Fio",
+          "Luma",
+          "Tern",
+          "Gale",
+          "Ivo",
+          "Kesst",
+          "Lento",
+          "Nolo",
+          "Piera",
+          "Quen",
+          "Reni",
+          "Sabo",
+          "Vesna",
+          "Zell",
+          "Doma"
+        ],
+        "bynames": [
+          "Canal Letter",
+          "Copper Serif",
+          "Lockside",
+          "Wet Ink",
+          "Third Bridge",
+          "Patient Hand",
+          "Slow Current",
+          "Barge-Sworn",
+          "Ink-Debt",
+          "Low Lock",
+          "Margin-Kept",
+          "Sealed Post",
+          "Ninth Bridge",
+          "Reed-Paper",
+          "Quiet Sluice",
+          "of the Towpath"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "canal_engineer",
+          "title": "canal engineer",
+          "glyph": "e",
+          "tags": [
+            "canal",
+            "engineer",
+            "service_provider"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "Brass dividers span the engineer's belt beside a piece of chalk kept inexplicably dry.",
+            "The engineer listens to gate hinges as if they are dictating revisions."
+          ],
+          "wants": [
+            "Repair a lock whose water level has begun spelling accusations.",
+            "Keep one useful canal plan out of the occupation archive."
+          ],
+          "services": [
+            {
+              "id": "canal_route",
+              "name": "lockkeeper's passage",
+              "description": "A working route through service walks and low canal gates.",
+              "effectKind": "create_route",
+              "goldCost": 2,
+              "targetHint": "a Threen service-canal passage",
+              "tags": [
+                "route",
+                "canal"
+              ]
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 4,
+          "wildWeight": 1,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "lettering_apprentice",
+          "title": "lettering apprentice",
+          "glyph": "a",
+          "tags": [
+            "letters",
+            "artisan",
+            "ink"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "Practice alphabets climb both forearms, including one letter that refuses to stay put.",
+            "The apprentice's reed pen has been repaired with a sliver of canal-gate brass."
+          ],
+          "wants": [
+            "Design a public letterform the censors cannot read without speaking it aloud.",
+            "Recover a master's drowned portfolio before the ink learns the whole canal."
+          ],
+          "centerWeight": 5,
+          "nearWeight": 3,
+          "wildWeight": 1,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "mudlark_scribe",
+          "title": "mudlark scribe",
+          "glyph": "s",
+          "tags": [
+            "mudlark",
+            "scribe",
+            "canal"
+          ],
+          "roles": [
+            "resident"
+          ],
+          "descriptions": [
+            "Recovered letters dry from a rack-pack, addressed to houses pulled down decades ago.",
+            "Canal mud blackens the scribe's knees and preserves every discarded signature."
+          ],
+          "wants": [
+            "Return one waterlogged letter to a recipient officially dead but locally busy.",
+            "Find who is throwing fresh imperial orders into old canal mud."
+          ],
+          "centerWeight": 2,
+          "nearWeight": 4,
+          "wildWeight": 5,
+          "knowledgeTier": 2
+        }
+      ]
+    }
+  ]
+}

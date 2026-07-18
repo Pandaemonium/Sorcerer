@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "vint_weaveways",
+      "settlementNames": [
+        "Manycolor",
+        "Counterknot",
+        "The Public Loom",
+        "Warp-True",
+        "Crimson Row",
+        "The Long Selvage"
+      ],
+      "hamletNames": [
+        "Blue Sleeve",
+        "Nine Dyes",
+        "Gold Thread",
+        "Tight Weave",
+        "Undyed Quarter"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the red-thread way",
+      "roadTerrain": "woven_paving",
+      "districts": [
+        {
+          "id": "cloth_gate",
+          "name": "Cloth Gate",
+          "summary": "Travel cloaks and tariff banners argue in color before anyone opens their mouth.",
+          "terrain": "banner_paving",
+          "featureName": "tariff color-frame",
+          "featureDescription": "Every imported cloth looks briefly guilty beneath the frame's imperial gray thread.",
+          "featureGlyph": "A",
+          "featureMaterial": "wood",
+          "tags": [
+            "gate",
+            "cloth",
+            "tariff"
+          ],
+          "populationPercent": 120
+        },
+        {
+          "id": "argument_market",
+          "name": "Argument Market",
+          "summary": "Dyers and brokers sell thread by defending it loudly against every neighboring color.",
+          "terrain": "dyed_cobbles",
+          "featureName": "public rebuttal loom",
+          "featureDescription": "Anyone may add one row, provided it contradicts the pattern intelligently.",
+          "featureGlyph": "#",
+          "featureMaterial": "wood",
+          "tags": [
+            "market",
+            "argument",
+            "dye"
+          ],
+          "populationPercent": 165
+        },
+        {
+          "id": "loom_quarter",
+          "name": "Loom Quarter",
+          "summary": "Shuttle-rods clatter behind bright walls where patterns carry gossip faster than speech.",
+          "terrain": "thread_lanes",
+          "featureName": "street message loom",
+          "featureDescription": "Its cloth updates whenever a runner knots new information into the warp.",
+          "featureGlyph": "=",
+          "featureMaterial": "wood",
+          "tags": [
+            "craft",
+            "loom",
+            "messages"
+          ],
+          "populationPercent": 125
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "unraveling_road",
+          "name": "the unraveling road",
+          "description": "A strip of woven paving comes loose at sunset and is rolled back into place by dawn.",
+          "glyph": "~",
+          "material": "cloth",
+          "tags": [
+            "road",
+            "woven",
+            "impossible"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "imperial_encounter",
+      "settlementNames": [
+        "Containment Annex Nine",
+        "The West Intake",
+        "Marble Holding Ward",
+        "The Ledger Gate",
+        "East Intake",
+        "Compliance Yard"
+      ],
+      "hamletNames": [
+        "Survey Camp Seven",
+        "The Quiet Checkpoint",
+        "Checkpoint Twelve",
+        "The Filed Camp",
+        "Warrant Post"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 0,
+      "roadName": "the measured road",
+      "roadTerrain": "scored_marble_road",
+      "districts": [
+        {
+          "id": "intake_gate",
+          "name": "Intake Gate",
+          "summary": "Carts, confiscated wonders, and frightened clerks queue beneath numbered arches.",
+          "terrain": "intake_marble",
+          "featureName": "confiscation arch",
+          "featureDescription": "Brass measures in the arch record every object entering and leave a deliberate blank for those that escape.",
+          "featureGlyph": "A",
+          "featureMaterial": "marble",
+          "tags": [
+            "gate",
+            "containment",
+            "traffic"
+          ],
+          "populationPercent": 115
+        },
+        {
+          "id": "evidence_yard",
+          "name": "Evidence Yard",
+          "summary": "White lanes divide dangerous objects into categories whose boundaries keep changing.",
+          "terrain": "evidence_grid",
+          "featureName": "rotating evidence frame",
+          "featureDescription": "A charter-glass frame turns slowly toward whichever nearby thing is least documented.",
+          "featureGlyph": "#",
+          "featureMaterial": "glass",
+          "tags": [
+            "evidence",
+            "inspection",
+            "yard"
+          ],
+          "populationPercent": 90
+        },
+        {
+          "id": "clerks_row",
+          "name": "Clerks' Row",
+          "summary": "Narrow offices exchange forms through slots smaller than a human apology.",
+          "terrain": "office_tile",
+          "featureName": "after-hours docket hatch",
+          "featureDescription": "The hatch is shut, but fresh paper breathes through its seams.",
+          "featureGlyph": "=",
+          "featureMaterial": "brass",
+          "tags": [
+            "office",
+            "clerks",
+            "records"
+          ],
+          "populationPercent": 135
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "burned_registry",
+          "name": "the burned registry tower",
+          "description": "A survey tower burned from the inside; its brass index still calmly lists the missing flames.",
+          "glyph": "T",
+          "material": "charred_marble",
+          "tags": [
+            "tower",
+            "burned",
+            "records"
+          ]
+        }
+      ]
+    }
+  ]
+}

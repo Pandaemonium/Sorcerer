@@ -1,0 +1,112 @@
+{
+  "populations": [
+    {
+      "regionId": "imperial_encounter",
+      "centerMean": 2.8,
+      "nearMean": 1.2,
+      "wildMean": 0.2,
+      "centerRadius": 0,
+      "nearRadius": 1,
+      "maxResidents": 5,
+      "hermitChance": 1,
+      "names": {
+        "given": [
+          "Adra",
+          "Beren",
+          "Cassa",
+          "Damas",
+          "Elian",
+          "Fara",
+          "Galen",
+          "Hesta",
+          "Ismene",
+          "Junia",
+          "Kelos",
+          "Lucan",
+          "Marcia",
+          "Nevio",
+          "Ostia",
+          "Prisca",
+          "Quentis",
+          "Roana",
+          "Servil",
+          "Tacia",
+          "Valeria",
+          "Corvin"
+        ],
+        "bynames": [
+          "Ninth-Desk",
+          "Gray Ribbon",
+          "of Intake",
+          "Quiet Seal",
+          "Three Copies",
+          "Bell-Witness",
+          "Cold Margin",
+          "Sealed Docket",
+          "of the Ledger",
+          "Fourth Warrant",
+          "Iron Stamp",
+          "No Appeal",
+          "Filed Twice",
+          "Grey Cuff",
+          "of Compliance",
+          "Wax-True"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "intake_clerk",
+          "title": "intake clerk",
+          "glyph": "c",
+          "tags": [
+            "empire",
+            "clerk",
+            "containment"
+          ],
+          "roles": [
+            "functionary",
+            "empire"
+          ],
+          "descriptions": [
+            "A gray-sleeved clerk counts confiscated marvels without looking directly at them.",
+            "Three sharpened pencils and one private terror ride in the clerk's breast pocket."
+          ],
+          "wants": [
+            "Make this intake look routine enough that no superior asks what escaped.",
+            "Find the missing docket before the objects it describes become somebody else's promotion."
+          ],
+          "centerWeight": 4,
+          "nearWeight": 2,
+          "wildWeight": 0,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "censor_aide",
+          "title": "junior censor aide",
+          "glyph": "a",
+          "tags": [
+            "empire",
+            "censorate",
+            "inspection"
+          ],
+          "roles": [
+            "censorate",
+            "empire"
+          ],
+          "descriptions": [
+            "Charter-glass spectacles make the aide's blinking look geometric.",
+            "Red sealing wax stains two fingers; the third stain is not wax."
+          ],
+          "wants": [
+            "Identify one containable truth about the sorcerer before the senior censor arrives.",
+            "Keep wonder measurable, especially the wonder currently breathing nearby."
+          ],
+          "centerWeight": 3,
+          "nearWeight": 2,
+          "wildWeight": 1,
+          "knowledgeTier": 2
+        }
+      ]
+    }
+  ]
+}

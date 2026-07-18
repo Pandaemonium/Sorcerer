@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "ryolan_racefields",
+      "settlementNames": [
+        "Redwheel",
+        "The Witnessed Finish",
+        "Copper Rein",
+        "Broken Axle",
+        "Sunwitness",
+        "First Post"
+      ],
+      "hamletNames": [
+        "Second Lap",
+        "Dust Oath",
+        "Loose Girth",
+        "Copper Furlong",
+        "Mare's Word"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the public race-road",
+      "roadTerrain": "packed_red_earth",
+      "districts": [
+        {
+          "id": "starting_gate",
+          "name": "Starting Gate",
+          "summary": "Horses, wagers, and sworn witnesses crowd beneath copper starting bars.",
+          "terrain": "trampled_red_earth",
+          "featureName": "oath-starting frame",
+          "featureDescription": "Copper rings tighten when a rider intends to break the declared terms.",
+          "featureGlyph": "A",
+          "featureMaterial": "copper",
+          "tags": [
+            "gate",
+            "race",
+            "oath"
+          ],
+          "populationPercent": 135
+        },
+        {
+          "id": "witness_square",
+          "name": "Witness Square",
+          "summary": "Umpires hear disputes in public while dust preserves its own account underfoot.",
+          "terrain": "witness_clay",
+          "featureName": "finish testimony plinth",
+          "featureDescription": "Wheel marks appear across the clay top whenever somebody describes the disputed finish.",
+          "featureGlyph": "|",
+          "featureMaterial": "clay",
+          "tags": [
+            "court",
+            "witness",
+            "race"
+          ],
+          "populationPercent": 145
+        },
+        {
+          "id": "chariot_yards",
+          "name": "Chariot Yards",
+          "summary": "Axles, reins, horse-song, and competitive advice fill long red workshops.",
+          "terrain": "axle_ruts",
+          "featureName": "communal axle cradle",
+          "featureDescription": "The cradle rocks gently whenever a nearby wheel remembers speed.",
+          "featureGlyph": "=",
+          "featureMaterial": "wood",
+          "tags": [
+            "craft",
+            "chariot",
+            "horse"
+          ],
+          "populationPercent": 120
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "yesterdays_finish",
+          "name": "yesterday's finish line",
+          "description": "A white line crosses empty grass; hoofbeats arrive each dusk from a race nobody saw begin.",
+          "glyph": "-",
+          "material": "chalk",
+          "tags": [
+            "race",
+            "time",
+            "witness"
+          ]
+        }
+      ]
+    }
+  ]
+}

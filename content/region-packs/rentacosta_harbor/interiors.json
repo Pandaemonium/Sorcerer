@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "rentacosta_harbor",
+      "bindings": [
+        {
+          "districtId": "lowtide_exchange",
+          "interiorId": "submerged_exchange"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "submerged_exchange",
+          "name": "Exchange Below Low Tide",
+          "kind": "tide_market",
+          "summary": "A shell-vaulted market opens between tides to trade cargo, songs, and drowned testimony.",
+          "floorTerrain": "tidepool_mosaic",
+          "wallMaterial": "shell",
+          "accessPolicy": "public",
+          "tags": [
+            "trade",
+            "tide",
+            "sound_ink"
+          ],
+          "features": [
+            {
+              "name": "returning-water contract table",
+              "description": "Every agreement shortens as seawater climbs its legs.",
+              "glyph": "=",
+              "material": "brass",
+              "tags": [
+                "contract",
+                "tide"
+              ]
+            },
+            {
+              "name": "drowned voice cabinet",
+              "description": "Shell drawers preserve testimony in the speaker's exact saltwater voice.",
+              "glyph": "#",
+              "material": "shell",
+              "tags": [
+                "voice",
+                "drowned"
+              ]
+            },
+            {
+              "name": "channel-score basin",
+              "description": "Ripples rewrite the safe harbor melody minute by minute.",
+              "glyph": "O",
+              "material": "stone",
+              "tags": [
+                "sound_ink",
+                "route"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

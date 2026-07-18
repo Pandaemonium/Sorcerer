@@ -1,0 +1,262 @@
+{
+  "regions": [
+    {
+      "id": "wild_border",
+      "name": "Wild Border",
+      "realmId": "unruled",
+      "traditionId": "wild_color",
+      "imperialPresence": 15,
+      "terrainTags": [
+        "flowers",
+        "bone",
+        "rain",
+        "broken_law"
+      ],
+      "voiceTags": [
+        "lush",
+        "feral",
+        "dreamlike"
+      ],
+      "wildnessBase": 5,
+      "floorTerrain": "wild_grass",
+      "affordances": [
+        {
+          "id": "loose_reality",
+          "text": "Wild terrain makes transformations feel close at hand while attention and cost remain hard to predict.",
+          "tags": [
+            "wild_magic",
+            "risk",
+            "transformation"
+          ]
+        }
+      ],
+      "voiceSummary": "Deep wild country: dreamlike, gently impossible, jewel-bright. Light lingers, glass grows, and distances disagree. Describe outcomes with strange, vivid beauty.",
+      "ambientLines": [
+        "A voice hums a lullaby with no breath behind it.",
+        "Your shadow arrives half a step late.",
+        "Somewhere near, a festival is being remembered by the stones."
+      ],
+      "props": {
+        "min": 1,
+        "max": 7,
+        "emptyChance": 24,
+        "denseChance": 20,
+        "denseBonus": 6,
+        "ensembleChance": 55,
+        "hookChance": 25,
+        "bases": [
+          {
+            "id": "law_stone",
+            "name": "broken-law stone",
+            "glyph": "O",
+            "fixtureType": "wild_marker",
+            "description": "An obsolete rule is carved on one face and contradicted by the flowers growing through it.",
+            "tags": [
+              "law",
+              "flowers"
+            ]
+          },
+          {
+            "id": "rain_altar",
+            "name": "rain altar",
+            "glyph": "+",
+            "fixtureType": "wild_shrine",
+            "description": "Several kinds of weather have left offerings here for one another.",
+            "tags": [
+              "rain",
+              "altar"
+            ]
+          },
+          {
+            "id": "color_snare",
+            "name": "color snare",
+            "glyph": "&",
+            "fixtureType": "wild_tool",
+            "description": "Loose loops catch hues shed by passing birds, spells, and arguments.",
+            "tags": [
+              "color",
+              "snare"
+            ],
+            "blocksMovement": false
+          },
+          {
+            "id": "festival_post",
+            "name": "remembered festival-post",
+            "glyph": "|",
+            "fixtureType": "memory_fixture",
+            "description": "Faded ribbons dance to music the air has not played today.",
+            "tags": [
+              "festival",
+              "memory"
+            ]
+          },
+          {
+            "id": "boneflower_bed",
+            "name": "boneflower bed",
+            "glyph": "*",
+            "fixtureType": "living_fixture",
+            "description": "White stems click together and turn their blossoms toward spoken names.",
+            "tags": [
+              "bone",
+              "flowers"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "rain_bone",
+            "text": "rain-bone",
+            "material": "bone",
+            "description": "Porous white material drinks falling water and releases it upward later.",
+            "tags": [
+              "bone",
+              "rain"
+            ]
+          },
+          {
+            "id": "festival_glass",
+            "text": "festival-glass",
+            "material": "glass",
+            "description": "Jewel glass keeps colors belonging to celebrations that never happened here.",
+            "tags": [
+              "glass",
+              "festival"
+            ]
+          },
+          {
+            "id": "walking_wood",
+            "text": "walking-wood",
+            "material": "wood",
+            "description": "The grain shifts slowly enough to deny movement while never matching yesterday.",
+            "tags": [
+              "wood",
+              "movement"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "shadow_late",
+            "text": "late-shadowed",
+            "description": "Its shadow completes each motion after the object has stopped.",
+            "tags": [
+              "shadow",
+              "delay"
+            ]
+          },
+          {
+            "id": "flower_mouthed",
+            "text": "flower-mouthed",
+            "description": "Small flowers open from every hollow whenever someone lies nearby.",
+            "tags": [
+              "flowers",
+              "truth"
+            ]
+          },
+          {
+            "id": "weather_argued",
+            "text": "weather-argued",
+            "description": "Rain wets one side while warm dust collects on the other.",
+            "tags": [
+              "weather",
+              "contradiction"
+            ]
+          },
+          {
+            "id": "name_hungry",
+            "text": "name-hungry",
+            "description": "Scratches gather into almost-legible names when nobody looks directly.",
+            "tags": [
+              "names",
+              "hungry"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 1,
+            "title": "Words growing on {name}",
+            "text": "The living letters say the nearest honest road begins wherever the reader stops pretending to be lost.",
+            "tags": [
+              "living_text",
+              "route_hint"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 3,
+            "tags": [
+              "loose_reality_anchor",
+              "wild_magic"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "festival_afterimage",
+            "weight": 1,
+            "members": [
+              {
+                "base": "festival_post",
+                "material": "festival_glass",
+                "condition": "shadow_late",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "color_snare",
+                "material": "walking_wood",
+                "condition": "weather_argued",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "boneflower_bed",
+                "material": "rain_bone",
+                "condition": "flower_mouthed",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 0,
+        "anchorY": -11,
+        "seedJitter": 1
+      },
+      "vocabulary": {
+        "fixtureAdjectives": [
+          "flower-mouthed",
+          "rain-boned",
+          "color-bitten",
+          "law-broken"
+        ],
+        "fixtureNouns": [
+          "boneflower marker",
+          "rain altar",
+          "broken-law cairn",
+          "color snare"
+        ],
+        "textureSubject": "wild_border",
+        "textureDescription": "{name} treats rule and weather as negotiable neighbors under {ruler}.",
+        "threatAdjectives": [
+          "color-mad",
+          "law-broken",
+          "rain-boned",
+          "flower-mouthed"
+        ],
+        "threatNouns": [
+          "wanderer",
+          "drifter",
+          "pursuer",
+          "huntsman"
+        ],
+        "threatEntryProse": "Something that answers to no ledger and no law steps out of the color:",
+        "promisedSiteName": "promise-touched border stone"
+      }
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "regions": [
+    {
+      "id": "stalnaz_highlands",
+      "groundLoot": {
+        "min": 1,
+        "max": 3,
+        "emptyChance": 15,
+        "usefulChance": 25
+      },
+      "encounters": {
+        "ambientChance": 6
+      },
+      "name": "Stalnazan Singing Heights",
+      "realmId": "stalnaz",
+      "traditionId": "crystal_song",
+      "imperialPresence": 48,
+      "terrainTags": [
+        "crystal",
+        "mountain",
+        "snow",
+        "resonance"
+      ],
+      "voiceTags": [
+        "elegant",
+        "musical",
+        "patient",
+        "allusive"
+      ],
+      "wildnessBase": 3,
+      "floorTerrain": "blue_stone",
+      "affordances": [
+        {
+          "id": "stored_radiance",
+          "text": "Charged crystals can preserve one working for another hand or another hour.",
+          "tags": [
+            "crystal",
+            "stored_magic",
+            "reagent"
+          ]
+        },
+        {
+          "id": "queens_resonance",
+          "text": "Court music, chosen succession, and the celebrated first regicide make legitimacy a local instrument.",
+          "tags": [
+            "queen",
+            "succession",
+            "legitimacy"
+          ]
+        }
+      ],
+      "voiceSummary": "Stalnaz speaks through resonance, winter light, and patient refinement. Beauty is public power here, and every crystal may be holding somebody else's unfinished note.",
+      "ambientLines": [
+        "The crystal road gives back one footstep in harmony.",
+        "A window keeps yesterday's violet light after the sun has moved on.",
+        "Two distant musicians tune to the same note without seeing one another."
+      ],
+      "props": {
+        "min": 4,
+        "max": 8,
+        "emptyChance": 8,
+        "denseChance": 22,
+        "denseBonus": 4,
+        "ensembleChance": 50,
+        "hookChance": 20,
+        "bases": [
+          {
+            "id": "resonance_bench",
+            "name": "resonance bench",
+            "glyph": "=",
+            "fixtureType": "music_fixture",
+            "description": "Its graduated hollows let a tuner compare a crystal's answer against the mountain.",
+            "tags": [
+              "music",
+              "tuning"
+            ]
+          },
+          {
+            "id": "light_cistern",
+            "name": "light cistern",
+            "glyph": "O",
+            "fixtureType": "magic_storage",
+            "description": "Faceted walls collect spare daylight for evening rehearsals.",
+            "tags": [
+              "light",
+              "storage"
+            ]
+          },
+          {
+            "id": "heiress_plinth",
+            "name": "heiress plinth",
+            "glyph": "|",
+            "fixtureType": "civic_monument",
+            "description": "An empty name-panel waits with impeccable patience for the queen's eventual choice.",
+            "tags": [
+              "succession",
+              "queen"
+            ]
+          },
+          {
+            "id": "snow_harp",
+            "name": "snow harp",
+            "glyph": "#",
+            "fixtureType": "instrument",
+            "description": "Mountain wind plays it badly but with enormous confidence.",
+            "tags": [
+              "instrument",
+              "wind"
+            ],
+            "blocksMovement": false
+          }
+        ],
+        "materials": [
+          {
+            "id": "blue_crystal",
+            "text": "blue-crystal",
+            "material": "crystal",
+            "description": "Deep blue facets store a cool afterimage of every nearby gesture.",
+            "tags": [
+              "crystal",
+              "stored_magic"
+            ]
+          },
+          {
+            "id": "white_stone",
+            "text": "white-stone",
+            "material": "stone",
+            "description": "Fine mountain stone rings softly instead of cracking under cold.",
+            "tags": [
+              "stone",
+              "mountain"
+            ]
+          },
+          {
+            "id": "silver_wire",
+            "text": "silver-wired",
+            "material": "silver",
+            "description": "Hair-thin wire carries resonance between parts that never touch.",
+            "tags": [
+              "silver",
+              "resonance"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "afterglowing",
+            "text": "afterglowing",
+            "description": "Yesterday's amber light has not quite finished leaving it.",
+            "tags": [
+              "afterlight"
+            ]
+          },
+          {
+            "id": "queen_tuned",
+            "text": "queen-tuned",
+            "description": "A court tuner signed the underside with one precise musical phrase.",
+            "tags": [
+              "court",
+              "tuned"
+            ]
+          },
+          {
+            "id": "frost_sung",
+            "text": "frost-sung",
+            "description": "Frost gathers only along the notes the object prefers.",
+            "tags": [
+              "frost",
+              "song"
+            ]
+          },
+          {
+            "id": "hairline_cracked",
+            "text": "patiently cracked",
+            "description": "A fine fracture is being observed rather than repaired, as though it may resolve into art.",
+            "tags": [
+              "cracked",
+              "patient"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 1,
+            "title": "Tuning inscription on {name}",
+            "text": "The inscription records a charge in C-sharp, reserved for the next public need of {region}.",
+            "tags": [
+              "inscription",
+              "stored_magic"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 2,
+            "tags": [
+              "crystal_anchor",
+              "resonance"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "street_rehearsal",
+            "weight": 1,
+            "members": [
+              {
+                "base": "resonance_bench",
+                "material": "white_stone",
+                "condition": "queen_tuned",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "snow_harp",
+                "material": "silver_wire",
+                "condition": "frost_sung",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "light_cistern",
+                "material": "blue_crystal",
+                "condition": "afterglowing",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": -7,
+        "anchorY": -8,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

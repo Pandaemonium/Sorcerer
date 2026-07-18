@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "threen_canals",
+      "settlementNames": [
+        "Three Locks",
+        "Letterwater",
+        "Copper Serif",
+        "Ninth Bridge",
+        "Patient Lock",
+        "Towpath End"
+      ],
+      "hamletNames": [
+        "Low Bridge",
+        "Wet Ink",
+        "Reed-Paper",
+        "Quiet Sluice",
+        "Barge Rest"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the lockkeeper walk",
+      "roadTerrain": "canal_brick",
+      "districts": [
+        {
+          "id": "lock_gate",
+          "name": "Lock Gate",
+          "summary": "Barges wait under lettering that explains water's obligations in exquisite detail.",
+          "terrain": "lockside_brick",
+          "featureName": "speaking depth gauge",
+          "featureDescription": "Copper numerals announce the water level in a voice borrowed from the last engineer.",
+          "featureGlyph": "|",
+          "featureMaterial": "copper",
+          "tags": [
+            "gate",
+            "canal",
+            "engineering"
+          ],
+          "populationPercent": 115
+        },
+        {
+          "id": "letter_square",
+          "name": "Letter Square",
+          "summary": "Public inscriptions, apprentices, and legal copyists make civic language physically crowded.",
+          "terrain": "inscribed_stone",
+          "featureName": "unfinished civic alphabet",
+          "featureDescription": "One open space in the inscription waits for a letter nobody has designed safely.",
+          "featureGlyph": "L",
+          "featureMaterial": "stone",
+          "tags": [
+            "letters",
+            "square",
+            "civic"
+          ],
+          "populationPercent": 145
+        },
+        {
+          "id": "canal_workshops",
+          "name": "Canal Workshops",
+          "summary": "Gate teeth, reed pens, pumps, and bright brass parts occupy every dry surface.",
+          "terrain": "workshop_brick",
+          "featureName": "demonstration lock model",
+          "featureDescription": "Miniature gates redirect a thumb-width canal that nonetheless has a tide.",
+          "featureGlyph": "#",
+          "featureMaterial": "brass",
+          "tags": [
+            "craft",
+            "canal",
+            "workshop"
+          ],
+          "populationPercent": 125
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "drowned_alphabet",
+          "name": "the drowned alphabet",
+          "description": "Stone letters lie beneath clear canal water; fish arrange themselves into missing punctuation.",
+          "glyph": "?",
+          "material": "stone",
+          "tags": [
+            "letters",
+            "drowned",
+            "canal"
+          ]
+        }
+      ]
+    }
+  ]
+}

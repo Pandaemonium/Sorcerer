@@ -1,0 +1,157 @@
+{
+  "populations": [
+    {
+      "regionId": "ryolan_racefields",
+      "centerMean": 4.8,
+      "nearMean": 1.9,
+      "wildMean": 0.22,
+      "centerRadius": 0,
+      "nearRadius": 3,
+      "maxResidents": 8,
+      "hermitChance": 4,
+      "names": {
+        "given": [
+          "Ari",
+          "Boros",
+          "Cyra",
+          "Deyan",
+          "Esen",
+          "Kavi",
+          "Mira",
+          "Rolan",
+          "Sabo",
+          "Tevi",
+          "Ulan",
+          "Vasso",
+          "Anka",
+          "Denk",
+          "Feyo",
+          "Iska",
+          "Levko",
+          "Nadi",
+          "Ravik",
+          "Zoran"
+        ],
+        "bynames": [
+          "Red Wheel",
+          "Dust-Oath",
+          "Second Lap",
+          "Copper Rein",
+          "Sun Witness",
+          "Broken Axle",
+          "Fast Furlong",
+          "Whip-Kind",
+          "Mare's Word",
+          "Track-Debt",
+          "Loose Girth",
+          "First Post",
+          "Hoof-Lucky",
+          "Dust Purse",
+          "No Second",
+          "Stirrup-Sworn"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "chariot_groom",
+          "title": "chariot groom",
+          "glyph": "g",
+          "tags": [
+            "horse",
+            "chariot",
+            "merchant"
+          ],
+          "roles": [
+            "merchant",
+            "resident"
+          ],
+          "descriptions": [
+            "Red earth cakes the groom to the knees; the horses are cleaner and know it.",
+            "A split-second scar across the cheek records somebody else's famous finish."
+          ],
+          "wants": [
+            "Get a skittish oath-horse to accept a new driver before the public trial.",
+            "Replace a forbidden axle charm without admitting the old one worked."
+          ],
+          "wares": [
+            {
+              "item": "red tincture",
+              "min": 1,
+              "max": 2
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 4,
+          "wildWeight": 1,
+          "requiredAtCenter": true,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "oath_umpire",
+          "title": "race-oath umpire",
+          "glyph": "u",
+          "tags": [
+            "oath",
+            "witness",
+            "race"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "Copper oath-rings click up one arm, each tied to a disputed finish.",
+            "The umpire watches feet, wheels, weather, and promises with equal suspicion."
+          ],
+          "wants": [
+            "Settle a race whose winner arrived yesterday and whose horse arrives tomorrow.",
+            "Keep imperial betting law from deciding a question the dust already answered."
+          ],
+          "centerWeight": 4,
+          "nearWeight": 2,
+          "wildWeight": 1,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "field_rider",
+          "title": "field rider",
+          "glyph": "r",
+          "tags": [
+            "horse",
+            "road",
+            "scout"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "The rider's small horse wears witness-ribbons from villages beyond the visible road.",
+            "Dust has written a second map over the rider's red cloak."
+          ],
+          "wants": [
+            "Carry news across the fields before the road patrol edits it.",
+            "Find who cut the old race-road into a shape that points underground."
+          ],
+          "services": [
+            {
+              "id": "race_road",
+              "name": "fast field road",
+              "description": "A hard red-earth line used by riders who owe the main road nothing.",
+              "effectKind": "create_route",
+              "targetHint": "a fast Ryolan field road",
+              "tags": [
+                "route",
+                "horse"
+              ]
+            }
+          ],
+          "centerWeight": 2,
+          "nearWeight": 4,
+          "wildWeight": 5,
+          "knowledgeTier": 2
+        }
+      ]
+    }
+  ]
+}

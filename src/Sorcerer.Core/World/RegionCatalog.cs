@@ -36,11 +36,14 @@ public static class RegionCatalog
     {
         foreach (var root in CandidateRoots())
         {
-            var directory = Path.Combine(root, "content", "regions");
-            var registry = LoadFrom(directory);
-            if (registry.Regions.Count > 0)
+            var packsRoot = Path.Combine(root, "content", "region-packs");
+            if (ContentPackLoader.HasLoosePacks(packsRoot))
             {
-                return registry;
+                var registry = BuildRegistry(ContentPackLoader.LoadLoose(packsRoot));
+                if (registry.Regions.Count > 0)
+                {
+                    return registry;
+                }
             }
         }
 
@@ -53,42 +56,53 @@ public static class RegionCatalog
         return RegionRegistry.CreateMinimal();
     }
 
-    public static RegionRegistry LoadFrom(string directory)
+    /// <summary>Loads a region registry from a loose pack tree (a directory of
+    /// <c>&lt;region-id&gt;/pack.json</c> packs plus a shared root). Exposed for content-integrity
+    /// tests that point at development or fixture pack trees.</summary>
+    public static RegionRegistry LoadFromPacks(string packsRoot) =>
+        BuildRegistry(ContentPackLoader.LoadLoose(packsRoot));
+
+    public static RegionRegistry LoadBuiltIn() =>
+        BuildRegistry(ContentPackLoader.LoadEmbedded(typeof(RegionCatalog).Assembly));
+
+    private static RegionRegistry BuildRegistry(IReadOnlyList<ContentPackEntry> entries)
     {
         var registry = new RegionRegistry();
-        if (!Directory.Exists(directory))
+        var seenRegionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
         {
-            return registry;
-        }
-
-        foreach (var path in Directory.EnumerateFiles(directory, "*.json").OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            using var document = JsonDocument.Parse(entry.ReadText());
+            RejectDuplicateRegions(document.RootElement, seenRegionIds, entry);
             ReadDocument(document.RootElement, registry);
         }
 
         return registry;
     }
 
-    public static RegionRegistry LoadBuiltIn()
+    private static void RejectDuplicateRegions(
+        JsonElement root,
+        ISet<string> seenRegionIds,
+        ContentPackEntry entry)
     {
-        var registry = new RegionRegistry();
-        var assembly = typeof(RegionCatalog).Assembly;
-        foreach (var resourceName in assembly.GetManifestResourceNames()
-            .Where(name => name.Contains(".Content.Regions.", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+        if (!root.TryGetProperty("regions", out var regions) || regions.ValueKind != JsonValueKind.Array)
         {
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream is null)
+            return;
+        }
+
+        foreach (var region in regions.EnumerateArray())
+        {
+            var id = ReadString(region, "id", ReadString(region, "region_id", ""));
+            if (string.IsNullOrWhiteSpace(id))
             {
                 continue;
             }
 
-            using var document = JsonDocument.Parse(stream);
-            ReadDocument(document.RootElement, registry);
+            if (!seenRegionIds.Add(id))
+            {
+                throw new ContentPackException(
+                    $"Region id '{id}' is defined more than once (pack '{entry.PackId}', file '{entry.FileName}').");
+            }
         }
-
-        return registry;
     }
 
     private static void ReadDocument(JsonElement root, RegionRegistry registry)
@@ -185,7 +199,46 @@ public static class RegionCatalog
             ReadPlacement(root),
             ReadPropGrammar(root),
             ReadGroundLoot(root),
-            ReadEncounters(root));
+            ReadEncounters(root),
+            Vocabulary: ReadVocabulary(root));
+
+    private static RegionVocabulary? ReadVocabulary(JsonElement root)
+    {
+        var value = root.TryGetProperty("vocabulary", out var camel)
+            ? camel
+            : root.TryGetProperty("vocab", out var alt)
+                ? alt
+                : default;
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return new RegionVocabulary(
+            ReadStringList(value, "fixtureAdjectives", "fixture_adjectives"),
+            ReadStringList(value, "fixtureNouns", "fixture_nouns"),
+            ReadNullableStringValue(value, "textureSubject", "texture_subject"),
+            ReadNullableStringValue(value, "textureDescription", "texture_description"),
+            ReadStringList(value, "threatAdjectives", "threat_adjectives"),
+            ReadStringList(value, "threatNouns", "threat_nouns"),
+            ReadNullableStringValue(value, "threatEntryProse", "threat_entry_prose"),
+            ReadNullableStringValue(value, "promisedSiteName", "promised_site_name"));
+    }
+
+    private static string? ReadNullableStringValue(JsonElement root, string camel, string snake)
+    {
+        if (root.TryGetProperty(camel, out var value) && value.ValueKind == JsonValueKind.String)
+        {
+            return value.GetString();
+        }
+
+        if (root.TryGetProperty(snake, out var snakeValue) && snakeValue.ValueKind == JsonValueKind.String)
+        {
+            return snakeValue.GetString();
+        }
+
+        return null;
+    }
 
     private static IReadOnlyList<RegionAffordanceCard> ReadAffordances(JsonElement root)
     {

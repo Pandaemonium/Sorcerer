@@ -1,0 +1,150 @@
+{
+  "populations": [
+    {
+      "regionId": "gontark_crags",
+      "centerMean": 3.6,
+      "nearMean": 1.2,
+      "wildMean": 0.18,
+      "centerRadius": 0,
+      "nearRadius": 2,
+      "maxResidents": 6,
+      "hermitChance": 8,
+      "names": {
+        "given": [
+          "Arka",
+          "Brum",
+          "Caz",
+          "Dren",
+          "Eka",
+          "Gor",
+          "Mava",
+          "Tark",
+          "Ozk",
+          "Var",
+          "Drok",
+          "Esna",
+          "Grell",
+          "Hark",
+          "Ione",
+          "Krev",
+          "Nask",
+          "Pell",
+          "Rurr",
+          "Skarn"
+        ],
+        "bynames": [
+          "Shale-Tooth",
+          "Seven Warnings",
+          "Cliff Voice",
+          "Black Rope",
+          "Goat-Debt",
+          "No Echo",
+          "Scree-Born",
+          "Third Curse",
+          "Cold Ledge",
+          "Loose Stone",
+          "Ill-Wished",
+          "Crag-Sworn",
+          "Split Knuckle",
+          "Nine Omens",
+          "Sheer Drop",
+          "Bitter Spring"
+        ]
+      },
+      "archetypes": [
+        {
+          "id": "curse_guide",
+          "title": "curse-warning guide",
+          "glyph": "g",
+          "tags": [
+            "curse",
+            "guide",
+            "service_provider"
+          ],
+          "roles": [
+            "resident",
+            "service_provider"
+          ],
+          "descriptions": [
+            "Warning charms cover the guide from collar to boot; several warn against one another.",
+            "The guide points with a black rope rather than a finger, for local reasons."
+          ],
+          "wants": [
+            "Mark the new cliff-curse before a traveler gives it a more interesting name.",
+            "Find who removed the seventh warning from a path that only had six."
+          ],
+          "services": [
+            {
+              "id": "warning_path",
+              "name": "warning-marked path",
+              "description": "A crag route described by which curses to insult and which to thank.",
+              "effectKind": "create_route",
+              "goldCost": 2,
+              "targetHint": "a warning-marked Gontark path",
+              "tags": [
+                "route",
+                "curse"
+              ]
+            }
+          ],
+          "centerWeight": 5,
+          "nearWeight": 5,
+          "wildWeight": 3,
+          "requiredAtCenter": true,
+          "knowledgeTier": 3
+        },
+        {
+          "id": "shale_herder",
+          "title": "shale-goat herder",
+          "glyph": "h",
+          "tags": [
+            "goat",
+            "shale",
+            "herder"
+          ],
+          "roles": [
+            "resident",
+            "witness"
+          ],
+          "descriptions": [
+            "The herder's goats stand on angles that make architecture feel timid.",
+            "Shale chips in the coat pockets are sorted by omen, edge, and snackability."
+          ],
+          "wants": [
+            "Get a favorite goat down from a ledge visible only during arguments.",
+            "Keep the herd away from a new imperial road that smells cursed in a boring way."
+          ],
+          "centerWeight": 3,
+          "nearWeight": 4,
+          "wildWeight": 6,
+          "knowledgeTier": 2
+        },
+        {
+          "id": "cliff_exile",
+          "title": "cliff exile",
+          "glyph": "x",
+          "tags": [
+            "hermit",
+            "curse",
+            "exile"
+          ],
+          "roles": [
+            "resident"
+          ],
+          "descriptions": [
+            "A stone mask hangs at the exile's hip, facing inward.",
+            "The exile has built a neat home just beyond the point every warning says to stop."
+          ],
+          "wants": [
+            "Convince one curse to haunt the person who actually earned it.",
+            "Learn whether the valley still tells the story that made exile necessary."
+          ],
+          "centerWeight": 0,
+          "nearWeight": 1,
+          "wildWeight": 8,
+          "knowledgeTier": 3
+        }
+      ]
+    }
+  ]
+}

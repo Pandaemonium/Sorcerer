@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "traditions": [
+    {
+      "id": "charter_geometry",
+      "name": "Charter Geometry",
+      "tags": [
+        "charter",
+        "law",
+        "geometry",
+        "licensed"
+      ],
+      "magicTexture": "cold geometric light, exact notation, repeatable civic craft",
+      "costTexture": "permits, professional duty, institutional obedience"
+    },
+    {
+      "id": "wild_color",
+      "name": "Wild Color",
+      "tags": [
+        "wild",
+        "color",
+        "names",
+        "omens"
+      ],
+      "magicTexture": "bright, unruly, personal",
+      "costTexture": "debt, stain, altered names"
+    },
+    {
+      "id": "reed_memory",
+      "name": "Reed Memory",
+      "tags": [
+        "reeds",
+        "water",
+        "memory",
+        "refuge"
+      ],
+      "magicTexture": "water holding names, woven reeds, patient shelter",
+      "costTexture": "wet footprints, surrendered memories, debts to a household"
+    },
+    {
+      "id": "crystal_song",
+      "name": "Crystal Song",
+      "tags": [
+        "crystal",
+        "song",
+        "light",
+        "resonance"
+      ],
+      "magicTexture": "stored radiance released through exact music",
+      "costTexture": "cracked heirlooms, lost notes, brilliance held too long"
+    },
+    {
+      "id": "bone_song",
+      "name": "Bone Song",
+      "tags": [
+        "bone",
+        "song",
+        "scrimshaw",
+        "ancestors"
+      ],
+      "magicTexture": "whalebone resonance, carved deeds, ale-warm chorus",
+      "costTexture": "a true story, a broken carving, a debt to the dead"
+    },
+    {
+      "id": "blood_oath",
+      "name": "Blood Oath",
+      "tags": [
+        "blood",
+        "oath",
+        "honor",
+        "duel"
+      ],
+      "magicTexture": "living heat, first blood, witnessed promises",
+      "costTexture": "scars, public shame, an oath that must be kept"
+    },
+    {
+      "id": "woven_thread",
+      "name": "Woven Thread",
+      "tags": [
+        "cloth",
+        "knots",
+        "gossip",
+        "intrigue"
+      ],
+      "magicTexture": "meaning caught in hems, knots, scarves, and civic rumor",
+      "costTexture": "unraveled secrets, stained cloth, favors owed in public"
+    },
+    {
+      "id": "artisan_letters",
+      "name": "Artisan Letters",
+      "tags": [
+        "canals",
+        "literature",
+        "craft",
+        "courtesy"
+      ],
+      "magicTexture": "written grace, canal reflections, meticulous finished work",
+      "costTexture": "spoiled manuscripts, broken etiquette, beauty surrendered"
+    },
+    {
+      "id": "horse_song",
+      "name": "Horse-Singing",
+      "tags": [
+        "horses",
+        "breath",
+        "grass",
+        "kinship"
+      ],
+      "magicTexture": "low songs understood by horses and carried through grass",
+      "costTexture": "a prized mount's trust, a long road, a secret overheard"
+    },
+    {
+      "id": "ancestor_culture",
+      "name": "Ancestor Culture",
+      "tags": [
+        "ancestors",
+        "clans",
+        "yoghurt",
+        "inheritance"
+      ],
+      "magicTexture": "living cultures carrying the strengths of generations",
+      "costTexture": "a personal strength passed on, clan obligation, ritual appetite"
+    },
+    {
+      "id": "curse_craft",
+      "name": "Gontark Curse-Craft",
+      "tags": [
+        "curse",
+        "horn",
+        "goatfolk",
+        "gods"
+      ],
+      "magicTexture": "sharp names, horn-scratched prohibitions, patient malice",
+      "costTexture": "reciprocal misfortune, a god's notice, a reputation for murder"
+    },
+    {
+      "id": "sound_ink",
+      "name": "Sound and Ink",
+      "tags": [
+        "music",
+        "tattoos",
+        "desert",
+        "caravans"
+      ],
+      "magicTexture": "rhythm made visible in ink and carried between camps",
+      "costTexture": "lost verses, altered tattoos, thirst, a road abandoned"
+    },
+    {
+      "id": "tide_trade",
+      "name": "Tidecraft",
+      "tags": [
+        "tide",
+        "ships",
+        "languages",
+        "exchange"
+      ],
+      "magicTexture": "salt bargains, code-switched names, knots tested by weather",
+      "costTexture": "cargo cast overboard, a season away, favors in three ports"
+    }
+  ]
+}

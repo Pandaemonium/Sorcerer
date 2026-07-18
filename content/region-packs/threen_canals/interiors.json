@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "threen_canals",
+      "bindings": [
+        {
+          "districtId": "letter_square",
+          "interiorId": "civic_letterhouse"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "civic_letterhouse",
+          "name": "Civic Letterhouse",
+          "kind": "scriptorium",
+          "summary": "Engineers and scribes design letters capable of surviving water, law, and public use.",
+          "floorTerrain": "inked_tile",
+          "wallMaterial": "brick",
+          "accessPolicy": "public",
+          "tags": [
+            "letters",
+            "canal",
+            "scriptorium"
+          ],
+          "features": [
+            {
+              "name": "unapproved alphabet wall",
+              "description": "One letter repeatedly escapes its chalk box to modify nearby notices.",
+              "glyph": "L",
+              "material": "stone",
+              "tags": [
+                "alphabet",
+                "wild"
+              ]
+            },
+            {
+              "name": "canal-pressure writing desk",
+              "description": "Water beneath the tabletop powers a pen that never lifts.",
+              "glyph": "=",
+              "material": "brass",
+              "tags": [
+                "engineering",
+                "writing"
+              ]
+            },
+            {
+              "name": "drowned portfolio rack",
+              "description": "Pages drip upward toward the ceiling and remain perfectly legible.",
+              "glyph": "#",
+              "material": "wood",
+              "tags": [
+                "portfolio",
+                "water"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

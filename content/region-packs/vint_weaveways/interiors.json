@@ -1,0 +1,61 @@
+{
+  "interiors": [
+    {
+      "regionId": "vint_weaveways",
+      "bindings": [
+        {
+          "districtId": "argument_market",
+          "interiorId": "counterloom"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "counterloom",
+          "name": "The Counterloom",
+          "kind": "public_workshop",
+          "summary": "A civic loom where every pattern must survive contradiction before becoming cloth.",
+          "floorTerrain": "woven_workshop",
+          "wallMaterial": "wood",
+          "accessPolicy": "public",
+          "tags": [
+            "loom",
+            "argument",
+            "public"
+          ],
+          "features": [
+            {
+              "name": "rebuttal shuttle",
+              "description": "It refuses any thread whose color cannot defend itself.",
+              "glyph": "/",
+              "material": "wood",
+              "tags": [
+                "shuttle",
+                "argument"
+              ]
+            },
+            {
+              "name": "minority-pattern frame",
+              "description": "The losing design is preserved here until fashion admits its mistake.",
+              "glyph": "#",
+              "material": "wood",
+              "tags": [
+                "pattern",
+                "memory"
+              ]
+            },
+            {
+              "name": "tariff-gray dye sink",
+              "description": "Official gray separates into seven prohibited colors when washed.",
+              "glyph": "O",
+              "material": "stone",
+              "tags": [
+                "dye",
+                "tariff"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

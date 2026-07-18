@@ -1,0 +1,211 @@
+{
+  "interiors": [
+    {
+      "regionId": "vigovian_capital",
+      "bindings": [
+        {
+          "districtId": "inner_court",
+          "interiorId": "odran_palace"
+        },
+        {
+          "districtId": "archive_quarter",
+          "interiorId": "living_archive"
+        },
+        {
+          "siteTag": "waystation",
+          "interiorId": "capital_relay_waystation"
+        }
+      ],
+      "definitions": [
+        {
+          "id": "capital_relay_waystation",
+          "name": "Imperial Relay Waystation",
+          "kind": "waystation",
+          "summary": "A licensed post where the Empire's schedules change horses and the reaping is filed before it happens.",
+          "floorTerrain": "post_road_tile",
+          "wallMaterial": "marble",
+          "accessPolicy": "restricted",
+          "requiredItem": "imperial cell key",
+          "tags": [
+            "waystation",
+            "post",
+            "empire",
+            "reaping"
+          ],
+          "features": [
+            {
+              "name": "sweep dispatch case",
+              "description": "A charter-sealed case holds the season's reconciliation schedule; the seal recites sums when unlicensed hands come near.",
+              "glyph": "#",
+              "material": "brass",
+              "tags": [
+                "dispatch",
+                "schedule",
+                "charter_seal",
+                "sweep"
+              ],
+              "readable": "Provincial Reconciliation Sweep, seasonal schedule: settlements and dates in clerk-perfect marching order. Whoever holds this knows where the reaping walks next, and when.",
+              "claims": [
+                {
+                  "text": "The sweep schedule names every settlement the reaping will reconcile this season, in marching order.",
+                  "category": "document",
+                  "subject": "sweep schedule",
+                  "salience": 5,
+                  "confidence": 95,
+                  "playerVisible": true,
+                  "bindAsPromise": false,
+                  "tags": [
+                    "sweep_schedule",
+                    "reaping",
+                    "empire",
+                    "document"
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "requisition ledger",
+              "description": "Red-ruled pages list what the reaping has taken and from whom; several lines are deliberately blank where things escaped filing.",
+              "glyph": "=",
+              "material": "vellum",
+              "tags": [
+                "ledger",
+                "requisition",
+                "confiscation",
+                "blanks"
+              ],
+              "readable": "Requisition Ledger, Provincial Reconciliation Sweep: confiscations tagged for the capital vaults, each line a family's name beside what was taken from it. Some lines are blank.",
+              "claims": [
+                {
+                  "text": "A reed-cutter family's confiscated name-charm sits tagged for the capital vaults; the ledger records exactly which crate carries it.",
+                  "category": "item",
+                  "subject": "confiscated name-charm",
+                  "salience": 4,
+                  "confidence": 85,
+                  "playerVisible": true,
+                  "bindAsPromise": true,
+                  "promiseKind": "lead",
+                  "realizationKind": "item",
+                  "triggerHint": "travel",
+                  "tags": [
+                    "requisition",
+                    "confiscation",
+                    "reaping",
+                    "free_folk",
+                    "document"
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "relay signal bell",
+              "description": "A road-bell whose rope is knotted at a rider's reach; one pull tells the next post that something has gone wrong here.",
+              "glyph": "!",
+              "material": "bronze",
+              "tags": [
+                "bell",
+                "alarm",
+                "road"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "odran_palace",
+          "name": "Palace of Reasonable Peace",
+          "kind": "palace",
+          "summary": "White chambers turn fear into procedure before it can reach the throne.",
+          "floorTerrain": "palace_marble",
+          "wallMaterial": "marble",
+          "accessPolicy": "restricted",
+          "requiredItem": "imperial cell key",
+          "tags": [
+            "palace",
+            "court",
+            "empire"
+          ],
+          "features": [
+            {
+              "name": "petition weather ceiling",
+              "description": "Clouds of rejected requests drift behind charter-glass and rain only on unauthorized visitors.",
+              "glyph": "~",
+              "material": "glass",
+              "tags": [
+                "petition",
+                "weather"
+              ]
+            },
+            {
+              "name": "precedent throne",
+              "description": "The seat is built from rulings rather than stone; each armrest cites the other.",
+              "glyph": "T",
+              "material": "marble",
+              "tags": [
+                "throne",
+                "precedent"
+              ],
+              "blocksMovement": true
+            },
+            {
+              "name": "merciful decree furnace",
+              "description": "Unissued mercies burn with a clean blue flame that warms nobody.",
+              "glyph": "F",
+              "material": "brass",
+              "tags": [
+                "decree",
+                "fire"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "living_archive",
+          "name": "Archive of Moving Responsibility",
+          "kind": "archive",
+          "summary": "File bridges and mobile cabinets follow whichever office is currently to blame.",
+          "floorTerrain": "archive_tile",
+          "wallMaterial": "marble",
+          "accessPolicy": "restricted",
+          "requiredItem": "imperial cell key",
+          "tags": [
+            "archive",
+            "records",
+            "empire"
+          ],
+          "features": [
+            {
+              "name": "ambulatory docket cabinet",
+              "description": "Brass feet carry it one room away whenever its contents become relevant.",
+              "glyph": "#",
+              "material": "brass",
+              "tags": [
+                "docket",
+                "moving"
+              ]
+            },
+            {
+              "name": "sealed contradiction table",
+              "description": "Two true reports lie beneath glass because filing either would invalidate the room.",
+              "glyph": "=",
+              "material": "glass",
+              "tags": [
+                "contradiction",
+                "records"
+              ]
+            },
+            {
+              "name": "responsibility index",
+              "description": "Every official name points carefully toward a different official name.",
+              "glyph": "I",
+              "material": "vellum",
+              "tags": [
+                "index",
+                "bureaucracy"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

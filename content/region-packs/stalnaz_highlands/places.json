@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "stalnaz_highlands",
+      "settlementNames": [
+        "Bluecrown",
+        "Afterlight Stair",
+        "Queen's Resonance",
+        "Glass Cistern",
+        "Third Echo",
+        "Palecrown"
+      ],
+      "hamletNames": [
+        "Frost Third",
+        "Cistern Choir",
+        "Chime Hollow",
+        "Snow Interval",
+        "Quartz Rest"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the singing stair",
+      "roadTerrain": "resonant_stone",
+      "districts": [
+        {
+          "id": "echo_gate",
+          "name": "Echo Gate",
+          "summary": "Porters tune their loads before the mountain is allowed to hear them.",
+          "terrain": "echo_stone",
+          "featureName": "gate tuning fork",
+          "featureDescription": "The blue fork hums the true weight of every burden passing beneath it.",
+          "featureGlyph": "Y",
+          "featureMaterial": "crystal",
+          "tags": [
+            "gate",
+            "echo",
+            "porters"
+          ],
+          "populationPercent": 105
+        },
+        {
+          "id": "light_cisterns",
+          "name": "Light-Cistern Court",
+          "summary": "Faceted towers store afternoon for workshops, concerts, and royal emergencies.",
+          "terrain": "afterlit_crystal",
+          "featureName": "public light cistern",
+          "featureDescription": "Amber daylight sleeps behind blue facets and rolls over in response to song.",
+          "featureGlyph": "O",
+          "featureMaterial": "crystal",
+          "tags": [
+            "light",
+            "court",
+            "cistern"
+          ],
+          "populationPercent": 140
+        },
+        {
+          "id": "tuner_steps",
+          "name": "Tuners' Steps",
+          "summary": "Open workshops test cracked crystal against snow, bells, and opinionated wind.",
+          "terrain": "workshop_scree",
+          "featureName": "communal resonance bench",
+          "featureDescription": "Graduated hollows compare a crystal's answer to the mountain's oldest note.",
+          "featureGlyph": "=",
+          "featureMaterial": "white_stone",
+          "tags": [
+            "craft",
+            "music",
+            "workshop"
+          ],
+          "populationPercent": 125
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "silent_avalanche",
+          "name": "the silent avalanche",
+          "description": "A white wall of snow hangs motionless above the path until somebody sings the missing note.",
+          "glyph": "^",
+          "material": "snow",
+          "tags": [
+            "avalanche",
+            "silence",
+            "omen"
+          ]
+        }
+      ]
+    }
+  ]
+}

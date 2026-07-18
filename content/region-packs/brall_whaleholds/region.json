@@ -1,0 +1,265 @@
+{
+  "regions": [
+    {
+      "id": "brall_whaleholds",
+      "groundLoot": {
+        "min": 1,
+        "max": 2,
+        "emptyChance": 20,
+        "usefulChance": 30
+      },
+      "name": "Brall Whaleholds",
+      "realmId": "brall",
+      "traditionId": "bone_song",
+      "imperialPresence": 52,
+      "terrainTags": [
+        "whalebone",
+        "harbor",
+        "ale",
+        "scrimshaw"
+      ],
+      "voiceTags": [
+        "warm",
+        "ale_loud",
+        "story_drunk",
+        "escalating"
+      ],
+      "wildnessBase": 3,
+      "floorTerrain": "salt_plank",
+      "affordances": [
+        {
+          "id": "singing_bone",
+          "text": "Worked whalebone holds vibration, carved stories, and old martial pride.",
+          "tags": [
+            "bone",
+            "sound",
+            "ancestors"
+          ]
+        },
+        {
+          "id": "collaborative_tales",
+          "text": "A witnessed deed can grow quickly when each teller improves somebody else's part.",
+          "tags": [
+            "rumor",
+            "legend",
+            "brall"
+          ]
+        }
+      ],
+      "voiceSummary": "Brall is whalebone, salt, ale, and stories told louder for the benefit of the person beside you. Keep it warm, physical, and generous even when pride has teeth.",
+      "ambientLines": [
+        "A carved roof-rib hums when the harbor wind changes.",
+        "Someone in the next hold improves a story you have not heard yet.",
+        "Ale foam runs along a scrimshaw groove and completes the pictured wave."
+      ],
+      "props": {
+        "min": 5,
+        "max": 9,
+        "emptyChance": 5,
+        "denseChance": 28,
+        "denseBonus": 5,
+        "ensembleChance": 55,
+        "hookChance": 18,
+        "bases": [
+          {
+            "id": "harpoon_winch",
+            "name": "harpoon winch",
+            "glyph": "&",
+            "fixtureType": "harbor_tool",
+            "description": "The drum is broad enough to haul a whale or an especially stubborn story.",
+            "tags": [
+              "harpoon",
+              "harbor"
+            ]
+          },
+          {
+            "id": "tale_bench",
+            "name": "tale-bench",
+            "glyph": "=",
+            "fixtureType": "hall_furniture",
+            "description": "Each seat-back depicts a different witness improving the same impossible event.",
+            "tags": [
+              "story",
+              "hall"
+            ]
+          },
+          {
+            "id": "scrimshaw_post",
+            "name": "scrimshaw tally-post",
+            "glyph": "|",
+            "fixtureType": "record",
+            "description": "Tiny carved scenes account for debts through heroic exaggeration.",
+            "tags": [
+              "scrimshaw",
+              "debt"
+            ]
+          },
+          {
+            "id": "ale_cooler",
+            "name": "ale-cooling rack",
+            "glyph": "#",
+            "fixtureType": "work_fixture",
+            "description": "Sea wind passes through wet slats and leaves the casks sweating cold.",
+            "tags": [
+              "ale",
+              "work"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "whalebone",
+            "text": "whalebone",
+            "material": "bone",
+            "description": "Old bone answers knocks with a note too deep for its size.",
+            "tags": [
+              "whalebone",
+              "resonance"
+            ]
+          },
+          {
+            "id": "tarred_oak",
+            "text": "tarred-oak",
+            "material": "wood",
+            "description": "Black pitch keeps salt out and old handprints in.",
+            "tags": [
+              "oak",
+              "tar"
+            ]
+          },
+          {
+            "id": "ship_brass",
+            "text": "ship-brass",
+            "material": "brass",
+            "description": "The metal is green at the edges and bright where nervous hands rub it.",
+            "tags": [
+              "brass",
+              "salt"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "ale_stained",
+            "text": "ale-stained",
+            "description": "A sweet brown tide-line marks several evenings nobody recalls consistently.",
+            "tags": [
+              "ale",
+              "stained"
+            ]
+          },
+          {
+            "id": "hero_carved",
+            "text": "hero-carved",
+            "description": "A local hero appears twice their proper height and deservedly so.",
+            "tags": [
+              "hero",
+              "legend"
+            ]
+          },
+          {
+            "id": "charter_tagged",
+            "text": "charter-tagged",
+            "description": "An imperial tag certifies that no prohibited human bone was used.",
+            "tags": [
+              "charter",
+              "occupation"
+            ]
+          },
+          {
+            "id": "storm_singing",
+            "text": "storm-singing",
+            "description": "A trapped harbor note swells whenever clouds gather offshore.",
+            "tags": [
+              "storm",
+              "song"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 2,
+            "title": "Carving on {name}",
+            "text": "The carving claims three strangers once lifted {name} together, though each figure is plainly somebody local.",
+            "tags": [
+              "tall_tale",
+              "legend_seed"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 1,
+            "tags": [
+              "bone_song_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "harbor_story_corner",
+            "weight": 1,
+            "members": [
+              {
+                "base": "harpoon_winch",
+                "material": "tarred_oak",
+                "condition": "storm_singing",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "tale_bench",
+                "material": "whalebone",
+                "condition": "ale_stained",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "scrimshaw_post",
+                "material": "ship_brass",
+                "condition": "hero_carved",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": -12,
+        "anchorY": 0,
+        "seedJitter": 1
+      },
+      "vocabulary": {
+        "fixtureAdjectives": [
+          "bone-carved",
+          "salt-scoured",
+          "storm-sworn",
+          "tallow-lit"
+        ],
+        "fixtureNouns": [
+          "whalebone tally-post",
+          "tide-witness stone",
+          "harpoon shrine",
+          "tale-witness chair"
+        ],
+        "textureSubject": "brall",
+        "textureDescription": "{name} keeps a whalehold's memory of debts and deeds, under {ruler}'s cold and distant reach.",
+        "threatAdjectives": [
+          "storm-sworn",
+          "ice-bitten",
+          "harpoon-scarred",
+          "bone-braided"
+        ],
+        "threatNouns": [
+          "reaver",
+          "debt-caller",
+          "wreck-picker",
+          "oarbreaker"
+        ],
+        "threatEntryProse": "Sea-boots crunch the frozen shingle, and a Bralli grievance walks up out of the cold:",
+        "promisedSiteName": "bone-post waymark"
+      }
+    }
+  ]
+}

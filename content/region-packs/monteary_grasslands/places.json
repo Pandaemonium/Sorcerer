@@ -1,0 +1,90 @@
+{
+  "settlements": [
+    {
+      "regionId": "monteary_grasslands",
+      "settlementNames": [
+        "White Rein",
+        "Longgrass Hearth",
+        "Mare's Listening",
+        "Open Sky",
+        "Two Wells",
+        "Green Mile"
+      ],
+      "hamletNames": [
+        "Foal-Kin",
+        "West Wind",
+        "Tall Barley",
+        "Far Fence",
+        "Seed-Keeper's Rest"
+      ],
+      "primaryRadius": 1,
+      "hamletCount": 1,
+      "roadName": "the herd road",
+      "roadTerrain": "short_grass_track",
+      "districts": [
+        {
+          "id": "herd_gate",
+          "name": "Herd Gate",
+          "summary": "Low rails guide horses gently while humans queue with considerably less dignity.",
+          "terrain": "hoof_packed_grass",
+          "featureName": "listening rail",
+          "featureDescription": "White wood carries the unease of every horse touching the far end.",
+          "featureGlyph": "-",
+          "featureMaterial": "wood",
+          "tags": [
+            "gate",
+            "horse",
+            "herd"
+          ],
+          "populationPercent": 105
+        },
+        {
+          "id": "grass_hearth",
+          "name": "Grass-Hearth Common",
+          "summary": "Herb wine, horse counsel, and open cooking fires gather beneath an enormous sky.",
+          "terrain": "common_grass",
+          "featureName": "wind tasting mast",
+          "featureDescription": "Braided herbs identify which pasture the arriving wind crossed last.",
+          "featureGlyph": "Y",
+          "featureMaterial": "wood",
+          "tags": [
+            "common",
+            "herbs",
+            "wind"
+          ],
+          "populationPercent": 135
+        },
+        {
+          "id": "tack_quarter",
+          "name": "Tack Quarter",
+          "summary": "Soft leatherwork and grass braid are fitted to animals consulted before customers.",
+          "terrain": "braided_floor",
+          "featureName": "communal dream saddle",
+          "featureDescription": "No horse has worn it, but each sleeping nearby adds a new road to the tooling.",
+          "featureGlyph": "=",
+          "featureMaterial": "leather",
+          "tags": [
+            "craft",
+            "horse",
+            "dream"
+          ],
+          "populationPercent": 110
+        }
+      ],
+      "landmarks": [
+        {
+          "id": "standing_gallop",
+          "name": "the standing gallop",
+          "description": "A herd-shaped fold in the grass races east without changing location.",
+          "glyph": "G",
+          "material": "grass",
+          "tags": [
+            "horse",
+            "wind",
+            "impossible"
+          ]
+        }
+      ]
+    }
+  ]
+}

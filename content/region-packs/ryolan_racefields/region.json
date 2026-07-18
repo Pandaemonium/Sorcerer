@@ -1,0 +1,236 @@
+{
+  "regions": [
+    {
+      "id": "ryolan_racefields",
+      "groundLoot": {
+        "min": 1,
+        "max": 2,
+        "emptyChance": 20,
+        "usefulChance": 30
+      },
+      "name": "Ryolan Racefields",
+      "realmId": "ryolan",
+      "traditionId": "blood_oath",
+      "imperialPresence": 58,
+      "terrainTags": [
+        "red_earth",
+        "arena",
+        "chariot",
+        "blood"
+      ],
+      "voiceTags": [
+        "formal",
+        "honor_weighted",
+        "blunt",
+        "fervent"
+      ],
+      "wildnessBase": 2,
+      "floorTerrain": "packed_red_earth",
+      "affordances": [
+        {
+          "id": "witnessed_oaths",
+          "text": "Promises made before a crowd carry more leverage and more danger than private assurances.",
+          "tags": [
+            "oath",
+            "witness",
+            "honor"
+          ]
+        },
+        {
+          "id": "chariot_factions",
+          "text": "Team loyalties cross households and districts, offering instant fellowship or an avoidable fight.",
+          "tags": [
+            "chariot",
+            "faction",
+            "crowd"
+          ]
+        }
+      ],
+      "voiceSummary": "Ryolan is blunt ceremony over hot blood: first cuts, chosen teams, public oaths, and arguments that become duels before anyone calls them quarrels.",
+      "ambientLines": [
+        "A chariot crowd roars beyond the ridge, then groans as one body.",
+        "Fresh palm-blood darkens the dust beside a carefully witnessed oath.",
+        "Two strangers compare team colors before deciding whether to be civil."
+      ],
+      "props": {
+        "min": 4,
+        "max": 8,
+        "emptyChance": 8,
+        "denseChance": 30,
+        "denseBonus": 5,
+        "ensembleChance": 55,
+        "hookChance": 16,
+        "bases": [
+          {
+            "id": "oath_stone",
+            "name": "oath-stone",
+            "glyph": "O",
+            "fixtureType": "witness_marker",
+            "description": "A shallow palm hollow faces the crowd rather than the speaker.",
+            "tags": [
+              "oath",
+              "witness"
+            ]
+          },
+          {
+            "id": "chariot_rail",
+            "name": "chariot rail",
+            "glyph": "-",
+            "fixtureType": "race_fixture",
+            "description": "Team colors overlap where supporters repaint it after disputed victories.",
+            "tags": [
+              "chariot",
+              "team"
+            ],
+            "blocksMovement": false
+          },
+          {
+            "id": "duel_rack",
+            "name": "duelist's weapon-rack",
+            "glyph": "#",
+            "fixtureType": "arena_fixture",
+            "description": "Paired slots keep every blade beside the weapon chosen against it.",
+            "tags": [
+              "duel",
+              "weapons"
+            ]
+          },
+          {
+            "id": "blood_basin",
+            "name": "first-blood basin",
+            "glyph": "U",
+            "fixtureType": "ritual_fixture",
+            "description": "Clean water waits to receive the cut that makes a challenge public.",
+            "tags": [
+              "blood",
+              "ritual"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "red_stone",
+            "text": "red-stone",
+            "material": "stone",
+            "description": "Iron-rich stone darkens almost black when wet.",
+            "tags": [
+              "red_earth",
+              "stone"
+            ]
+          },
+          {
+            "id": "chariot_bronze",
+            "text": "chariot-bronze",
+            "material": "bronze",
+            "description": "Scraped bronze carries paint from half the realm's teams.",
+            "tags": [
+              "bronze",
+              "chariot"
+            ]
+          },
+          {
+            "id": "oath_leather",
+            "text": "oath-leather",
+            "material": "leather",
+            "description": "The hide is stamped with names of witnesses rather than makers.",
+            "tags": [
+              "leather",
+              "witness"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "team_painted",
+            "text": "team-painted",
+            "description": "Fresh color declares a loyalty older paint refuses to surrender.",
+            "tags": [
+              "team",
+              "paint"
+            ]
+          },
+          {
+            "id": "first_blooded",
+            "text": "first-blooded",
+            "description": "One dark thumbprint has been left deliberately unwashed.",
+            "tags": [
+              "blood",
+              "honor"
+            ]
+          },
+          {
+            "id": "oath_bound",
+            "text": "oath-bound",
+            "description": "A knotted cord shows that somebody's promise remains unsettled.",
+            "tags": [
+              "oath",
+              "binding"
+            ]
+          },
+          {
+            "id": "crowd_dented",
+            "text": "crowd-dented",
+            "description": "The damage maps exactly where spectators leaned during a famous finish.",
+            "tags": [
+              "crowd",
+              "race"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 1,
+            "title": "Witnessed oath on {name}",
+            "text": "Before the people of {region}, the marked hand swore to return what was taken before the next race.",
+            "tags": [
+              "oath_record",
+              "promise_seed"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 1,
+            "tags": [
+              "blood_oath_anchor"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "roadside_duel",
+            "weight": 1,
+            "members": [
+              {
+                "base": "oath_stone",
+                "material": "red_stone",
+                "condition": "oath_bound",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "duel_rack",
+                "material": "oath_leather",
+                "condition": "first_blooded",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "chariot_rail",
+                "material": "chariot_bronze",
+                "condition": "team_painted",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": 8,
+        "anchorY": -7,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

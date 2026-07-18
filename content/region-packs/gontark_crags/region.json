@@ -1,0 +1,239 @@
+{
+  "regions": [
+    {
+      "id": "gontark_crags",
+      "groundLoot": {
+        "min": 1,
+        "max": 3,
+        "emptyChance": 15,
+        "usefulChance": 25
+      },
+      "encounters": {
+        "ambientChance": 8
+      },
+      "name": "Gontark Crags",
+      "realmId": "gontark",
+      "traditionId": "curse_craft",
+      "imperialPresence": 32,
+      "terrainTags": [
+        "crag",
+        "goat_path",
+        "thorn",
+        "shrine"
+      ],
+      "voiceTags": [
+        "spare",
+        "wary",
+        "sharp",
+        "devout"
+      ],
+      "wildnessBase": 4,
+      "floorTerrain": "pale_shale",
+      "affordances": [
+        {
+          "id": "feared_curses",
+          "text": "A curse is dangerous social force as well as magic; offering one for pay marks the speaker like a hired killer.",
+          "tags": [
+            "curse",
+            "reputation",
+            "service"
+          ]
+        },
+        {
+          "id": "goat_paths",
+          "text": "Narrow crag paths reward climbing, forced movement, and bodies built for bad footing.",
+          "tags": [
+            "terrain",
+            "movement",
+            "height"
+          ]
+        }
+      ],
+      "voiceSummary": "Gontark is spare and sharp: horned people on pale crags, their own gods close at hand, and curses treated with the sober fear due any murder weapon.",
+      "ambientLines": [
+        "Hooves click along a path that appears too narrow for a shadow.",
+        "A horn-scratched warning names no victim, which is worse.",
+        "Someone leaves milk at a cliff shrine and does not look over the edge."
+      ],
+      "props": {
+        "min": 2,
+        "max": 6,
+        "emptyChance": 22,
+        "denseChance": 15,
+        "denseBonus": 3,
+        "ensembleChance": 45,
+        "hookChance": 18,
+        "bases": [
+          {
+            "id": "curse_post",
+            "name": "curse-warning post",
+            "glyph": "|",
+            "fixtureType": "warning",
+            "description": "Scratched prohibitions explain everything except who was warned.",
+            "tags": [
+              "curse",
+              "warning"
+            ]
+          },
+          {
+            "id": "milk_shrine",
+            "name": "cliff milk-shrine",
+            "glyph": "+",
+            "fixtureType": "shrine",
+            "description": "A shallow horn cup faces the drop and is never found empty by morning.",
+            "tags": [
+              "shrine",
+              "gods"
+            ]
+          },
+          {
+            "id": "thorn_gate",
+            "name": "thorn-path gate",
+            "glyph": "#",
+            "fixtureType": "path_fixture",
+            "description": "Interlocked thorn canes admit horns more readily than shoulders.",
+            "tags": [
+              "thorn",
+              "goat_path"
+            ]
+          },
+          {
+            "id": "horn_anvil",
+            "name": "horn-worker's anvil",
+            "glyph": "=",
+            "fixtureType": "work_fixture",
+            "description": "Its curved face fits tools made for materials other smiths avoid naming.",
+            "tags": [
+              "horn",
+              "craft"
+            ]
+          }
+        ],
+        "materials": [
+          {
+            "id": "pale_shale",
+            "text": "pale-shale",
+            "material": "stone",
+            "description": "Thin stone flakes keep sharp writing longer than paint.",
+            "tags": [
+              "shale",
+              "crag"
+            ]
+          },
+          {
+            "id": "black_horn",
+            "text": "black-horn",
+            "material": "horn",
+            "description": "Polished horn reflects faces with the eyes slightly wrong.",
+            "tags": [
+              "horn",
+              "reflection"
+            ]
+          },
+          {
+            "id": "thornwood",
+            "text": "thornwood",
+            "material": "wood",
+            "description": "Every cut branch has grown one last defensive hook.",
+            "tags": [
+              "thorn",
+              "wood"
+            ]
+          }
+        ],
+        "conditions": [
+          {
+            "id": "god_notched",
+            "text": "god-notched",
+            "description": "Three notches invoke a local god and a fourth appears to argue.",
+            "tags": [
+              "gods",
+              "notches"
+            ]
+          },
+          {
+            "id": "victim_blank",
+            "text": "victim-blank",
+            "description": "A deliberate empty space is more threatening than a written name.",
+            "tags": [
+              "curse",
+              "unnamed"
+            ]
+          },
+          {
+            "id": "milk_white",
+            "text": "milk-whitened",
+            "description": "Repeated offerings have left a clean mineral skin.",
+            "tags": [
+              "offering",
+              "milk"
+            ]
+          },
+          {
+            "id": "imperial_chipped",
+            "text": "imperial-chipped",
+            "description": "An official seal has been removed with patient, technically non-magical violence.",
+            "tags": [
+              "imperial",
+              "defiance"
+            ]
+          }
+        ],
+        "hooks": [
+          {
+            "kind": "readable",
+            "weight": 1,
+            "title": "Warning cut into {name}",
+            "text": "The warning forbids payment for curses and advises debtors to fear gifts offered without a price.",
+            "tags": [
+              "curse_law",
+              "warning"
+            ]
+          },
+          {
+            "kind": "anchor",
+            "weight": 2,
+            "tags": [
+              "curse_anchor",
+              "gontark_gods"
+            ]
+          }
+        ],
+        "ensembles": [
+          {
+            "id": "cliff_warning",
+            "weight": 1,
+            "members": [
+              {
+                "base": "curse_post",
+                "material": "pale_shale",
+                "condition": "victim_blank",
+                "x": 0,
+                "y": 0
+              },
+              {
+                "base": "milk_shrine",
+                "material": "black_horn",
+                "condition": "milk_white",
+                "x": 1,
+                "y": 0
+              },
+              {
+                "base": "thorn_gate",
+                "material": "thornwood",
+                "condition": "god_notched",
+                "x": 0,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "placement": {
+        "anchorX": -12,
+        "anchorY": -7,
+        "seedJitter": 1
+      }
+    }
+  ]
+}

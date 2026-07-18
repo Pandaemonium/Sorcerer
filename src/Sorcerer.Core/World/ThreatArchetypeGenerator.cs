@@ -36,44 +36,12 @@ public static class ThreatArchetypeGenerator
         "procedurally overdue",
     };
 
-    private static readonly string[] HollowmereAdjectives =
-    {
-        "reed-drowned",
-        "mire-throated",
-        "water-memoried",
-        "eelglass-eyed",
-    };
-
-    private static readonly string[] WildAdjectives =
-    {
-        "color-mad",
-        "law-broken",
-        "rain-boned",
-        "flower-mouthed",
-    };
-
     private static readonly string[] ImperialNouns =
     {
         "enforcer",
         "file-closer",
         "informant",
         "claims agent",
-    };
-
-    private static readonly string[] HollowmereNouns =
-    {
-        "grudge-walker",
-        "debtor",
-        "mire warden",
-        "silt hunter",
-    };
-
-    private static readonly string[] WildNouns =
-    {
-        "wanderer",
-        "drifter",
-        "pursuer",
-        "huntsman",
     };
 
     public static ThreatArchetype Generate(WorldPromise promise, RegionDefinition region, RealmProfile realm, IRng rng)
@@ -126,29 +94,27 @@ public static class ThreatArchetypeGenerator
         return lower.Contains("soldier") || lower.Contains("empire") || lower.Contains("imperial");
     }
 
-    private static IReadOnlyList<string> AdjectivesFor(RegionDefinition region) =>
-        region.Id switch
-        {
-            "hollowmere_margin" => HollowmereAdjectives,
-            "wild_border" => WildAdjectives,
-            _ => ImperialAdjectives,
-        };
+    private static IReadOnlyList<string> AdjectivesFor(RegionDefinition region)
+    {
+        var vocab = region.Vocabulary?.ThreatAdjectives;
+        return vocab is { Count: > 0 } ? vocab : ImperialAdjectives;
+    }
 
-    private static IReadOnlyList<string> NounsFor(RegionDefinition region) =>
-        region.Id switch
-        {
-            "hollowmere_margin" => HollowmereNouns,
-            "wild_border" => WildNouns,
-            _ => ImperialNouns,
-        };
+    private static IReadOnlyList<string> NounsFor(RegionDefinition region)
+    {
+        var vocab = region.Vocabulary?.ThreatNouns;
+        return vocab is { Count: > 0 } ? vocab : ImperialNouns;
+    }
 
-    private static string FlavorTextFor(RegionDefinition region, RealmProfile realm) =>
-        region.Id switch
-        {
-            "hollowmere_margin" => $"The reeds part, and something with a long memory steps through under {realm.Ruler}'s quiet watch:",
-            "wild_border" => "Something that answers to no ledger and no law steps out of the color:",
-            _ => "A file has come due, and someone has arrived to close it:",
-        };
+    private static string FlavorTextFor(RegionDefinition region, RealmProfile realm)
+    {
+        var prose = region.Vocabulary?.ThreatEntryProse;
+        return string.IsNullOrWhiteSpace(prose)
+            ? "A file has come due, and someone has arrived to close it:"
+            : prose!.Replace("{ruler}", realm.Ruler, StringComparison.OrdinalIgnoreCase)
+                .Replace("{status}", realm.Status, StringComparison.OrdinalIgnoreCase)
+                .Replace("{realm}", realm.Name, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string Pick(IReadOnlyList<string> values, IRng rng) =>
         values[Math.Clamp(rng.NextInt(0, values.Count), 0, values.Count - 1)];
