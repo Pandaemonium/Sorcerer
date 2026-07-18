@@ -145,6 +145,7 @@ public sealed partial class GameSession
             RumorsCommand => Engine.Rumors(),
             CharacterCommand => Engine.CharacterSheet(),
             TalkCommand talk => await TalkAsync(talk, cancellationToken),
+            GroupTalkCommand groupTalk => GroupTalk(groupTalk.Text),
             GiveCommand give => Engine.Give(give.Item, give.Target),
             RecruitCommand recruit => Engine.Recruit(recruit.Target),
             BondsCommand bonds => Engine.Bonds(bonds.Target),

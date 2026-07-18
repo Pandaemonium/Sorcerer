@@ -60,6 +60,7 @@ public static class TextCommandParser
             "rumors" or "gossip" => new RumorsCommand(),
             "character" or "sheet" or "profile" => new CharacterCommand(),
             "talk" or "say" or "speak" => new TalkCommand(rest),
+            "group" or "group-talk" or "grouptalk" or "gather" => new GroupTalkCommand(rest),
             "give" or "gift" => ParseGive(rest),
             "recruit" => new RecruitCommand(NullIfEmpty(rest)),
             "bonds" or "bond" => new BondsCommand(NullIfEmpty(rest)),

@@ -81,6 +81,11 @@ public sealed record CharacterCommand() : GameCommand;
 
 public sealed record TalkCommand(string Text) : GameCommand;
 
+/// <summary>WP6: open the floor to the nearby group — the player plus two to four eligible
+/// participants exchange short, state-grounded utterances (a Bralli tale-circle one-up, a Hollowmere
+/// disagreement) through the shared command surface.</summary>
+public sealed record GroupTalkCommand(string Text = "") : GameCommand;
+
 public sealed record GiveCommand(string Item, string? Target = null) : GameCommand;
 
 public sealed record RecruitCommand(string? Target = null) : GameCommand;

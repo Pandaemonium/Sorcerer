@@ -449,6 +449,7 @@ public static class Program
                 "rumors" or "gossip" => new RumorsCommand(),
                 "character" or "sheet" or "profile" => new CharacterCommand(),
                 "talk" or "say" or "speak" => new TalkCommand(ReadString(root, "text", "")),
+                "group" or "group_talk" or "grouptalk" or "gather" => new GroupTalkCommand(ReadString(root, "text", "")),
                 "give" or "gift" => new GiveCommand(ReadString(root, "item", ""), ReadNullableString(root, "target")),
                 "recruit" => new RecruitCommand(ReadNullableString(root, "target")),
                 "bonds" or "bond" => new BondsCommand(ReadNullableString(root, "target")),
